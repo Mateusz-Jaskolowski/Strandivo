@@ -115,7 +115,8 @@ it can (lists of files or features). CI checks that every path in backticks here
   makes a real one for files going to other software.
 - **UniProt** (`src/lib/uniprot.ts`) is the one thing the app fetches from the internet, and
   only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's own `fetch`; the
-  API allows any origin). A construct's protein is rarely the entry's (both mRNAs Q9UKG4
+  API allows any origin; `connect-src` in the Content Security Policy names it, so the
+  page can reach nothing else). A construct's protein is rarely the entry's (both mRNAs Q9UKG4
   cites differ from it, one in length), so residues are never taken at face value: the
   CDS's translation is aligned locally with gaps, and regions are carried across. Under
   `MIN_IDENTITY` nothing is placed, since a wrong accession would otherwise mark the wrong
@@ -439,6 +440,14 @@ it can (lists of files or features). CI checks that every path in backticks here
 
 ## Traps
 
+- **Content Security Policy** (`csp` and `devCsp` in `src-tauri/tauri.conf.json`): scripts
+  only from the app's own files, so no inline `<script>`, `on…` attributes, `javascript:`
+  links or `eval`. Inline styles are allowed, as `style` attributes are used throughout;
+  Tauri is told not to add nonces to `style-src` (`dangerousDisableAssetCspModification`),
+  as a nonce there turns `'unsafe-inline'` off. An address the app talks to goes into
+  `connect-src` in both policies, or the shell blocks it. Text from files reaches the page
+  only as text: `h()` in `src/ui/dom.ts` can't set HTML, and `innerHTML` is for constant
+  markup only. Code scanning (CodeQL) looks for this on every pull request.
 - **Undo can arrive twice**: the page sees ⌘Z/Ctrl+Z and so does the native menu item,
   in either order depending on the platform. `fromMenu` in `src/doc/document.ts` skips a
   menu command the page just handled. Keep that in mind when adding shortcuts.

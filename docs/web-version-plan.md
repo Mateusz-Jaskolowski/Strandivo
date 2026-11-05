@@ -234,12 +234,28 @@ Needs parts 2 and 3: a web version that can't open a file isn't worth publishing
   `npm run build:web`, then `wrangler pages deploy dist --branch main`. Run by hand on any
   branch, it deploys to that branch's preview address (`<branch>.strandivo-app.pages.dev`)
   instead, which never touches `app.strandivo.com`. It needs a Cloudflare token that can
-  only deploy Pages, kept as a repository secret.
+  only deploy Pages, kept as a repository secret. The workflow sets `permissions:
+  contents: read`, as `build.yml` does, so a job holding that secret can't also write to
+  the repository.
 - **Headers** (`public-web/_headers`, copied into `dist` only by the web build): a Content
-  Security Policy whose `connect-src` allows only the page's own origin and
-  `https://rest.uniprot.org`, so the browser itself refuses to send anything elsewhere,
-  whatever a future change or a dependency tries; `Referrer-Policy: no-referrer`;
-  `index.html` never cached, everything with a hash in its name cached for a year.
+  Security Policy that starts from the desktop's (`src-tauri/tauri.conf.json`), without
+  the shell's `ipc:` addresses:
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self';
+  style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self';
+  connect-src 'self' https://rest.uniprot.org; object-src 'none'; frame-src 'none';
+  frame-ancestors 'none'; base-uri 'none'; form-action 'none'`.
+  `connect-src` allows only the page's own origin and UniProt, so the browser itself
+  refuses to send anything elsewhere, whatever a future change or a dependency tries; it
+  also limits `?open=<url>` to files on `app.strandivo.com`, so a link can't make the page
+  open a file from somewhere else. `script-src` has no `'unsafe-inline'`: a file's text
+  that ever reached the page as HTML still couldn't run, which matters more here than on
+  the desktop, as a script on the page could write through every file handle the user has
+  allowed. `'wasm-unsafe-eval'` is what lets the worker compile the core and allows no
+  JavaScript `eval`. `frame-ancestors` only works as a header, which is why the desktop
+  has none. Also `Referrer-Policy: no-referrer`; `index.html` never cached, everything with
+  a hash in its name cached for a year. From then on the browser check (`e2e/web.mjs`)
+  serves `dist` with the headers in `_headers`, so a violation fails CI before it reaches
+  users.
 - **A page left open across a deployment** still runs the old version, whose hashed files
   are gone from the new deployment. The worker and the `.wasm` are fetched when the page
   loads, not when first used, so alignment keeps working in an old page; a lazy import that

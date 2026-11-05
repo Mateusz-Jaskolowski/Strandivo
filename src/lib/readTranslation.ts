@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // A read's translation in a coding frame, for the Reads tab's alignment. The frame comes
 // from the reference, so a read's messy start doesn't matter: translation starts at the
 // first in-frame codon in a good stretch, whichever strand the read is on, and goes along

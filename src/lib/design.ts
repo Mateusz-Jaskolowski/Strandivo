@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Designing a PCR primer pair to amplify a region, optionally with 5′ additions such as
 // restriction sites.
 

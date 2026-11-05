@@ -322,6 +322,9 @@ it can (lists of files or features). CI checks that every path in backticks here
   design tokens in `src/styles.css`.
 - **Commits**: Conventional Commits (`feat(scope): summary` and a short body saying what
   and why), one logical change each, under your own name. Never rewrite pushed commits.
+- **Licence headers**: every `.ts`, `.mjs`, `.css`, `.rs` and `.sh` file starts with the
+  copyright and `SPDX-License-Identifier: GPL-3.0-or-later` lines (`CONTRIBUTING.md`),
+  checked by `.github/scripts/check-headers.sh`. A new file copies them from any other.
 
 ## Checking work
 

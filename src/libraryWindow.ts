@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Primer Library window: every primer the lab keeps, for all plasmids. Names, sequences
 // and notes are edited in place; Import and Export move the list in and out as text.
 

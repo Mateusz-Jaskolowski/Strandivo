@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Extending and trimming primers. Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";

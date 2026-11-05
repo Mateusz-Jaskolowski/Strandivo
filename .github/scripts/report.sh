@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Runs a shell command and posts its full output as notice annotations (up to 10 chunks),
 # so it can be read through the GitHub API. Used by the "Diagnostics" workflow.
 set -uo pipefail

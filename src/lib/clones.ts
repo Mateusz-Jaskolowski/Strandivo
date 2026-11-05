@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Guessing which reads are of one clone from their names. Sequencing providers name files
 // from the user's sample name and the primer, often with a plate well, a date, an order
 // number or a running number. Reads of one clone share everything but the primer and the

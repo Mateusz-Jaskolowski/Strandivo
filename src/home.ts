@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Home, the first tab of the main window: the construct library. It lists the sequence
 // files in the user's folders (and their subfolders) with what each construct carries and
 // a short note, next to Open, New sequence and recent files. Opening one adds a tab.

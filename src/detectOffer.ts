@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Which files the user has waved away the "look for features" offer on, kept in this
 // app's local storage like the remembered read checks (src/readChecks.ts). Without this a
 // sparsely annotated plasmid would ask again every time it was opened.

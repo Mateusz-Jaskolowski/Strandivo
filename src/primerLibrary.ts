@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The lab's primer library, shared by every window. Kept in the app's local storage like
 // the settings, and edited in its own window (src/libraryWindow.ts); Export and Import make
 // copies for backup and for sharing with the lab.

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Feature detection against real files in `testdata/`.
 //!
 //! The cases here are the ones that separate finding a part from placing a read: a part

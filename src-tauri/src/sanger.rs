@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Bridge between the frontend and `seqcore`'s Sanger alignment (JSON in, JSON out).
 
 use seqcore::consensus::{self, CloneResult, ConflictKind};

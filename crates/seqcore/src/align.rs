@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Seeded local alignment with affine gap penalties (Smith-Waterman-Gotoh).
 //!
 //! Reads are short (≈1 kb) and references range from a few kb (plasmids) to a few Mb

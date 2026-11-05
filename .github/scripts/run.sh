@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Runs a command and, if it fails, repeats the end of its output as a GitHub annotation.
 # Annotations can be read through the GitHub API without downloading the full logs.
 #

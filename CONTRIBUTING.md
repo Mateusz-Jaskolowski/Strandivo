@@ -51,3 +51,16 @@ and licence to `testdata/README.md`.
 
 Strandivo is GPL-3.0-or-later. By contributing, you agree that your contribution is
 licensed the same way.
+
+### Licence headers
+
+Every source file starts with these two lines, in the file's own comment style (after a
+`#!` line, if there is one):
+
+```
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+```
+
+`npm run check` and CI fail when a file is missing them
+(`.github/scripts/check-headers.sh`).

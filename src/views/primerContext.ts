@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The bases around the selected primer, in the Primers tab: both strands with the primer
 // drawn over the bases it pairs with (its tail hanging off the 5′ end, mismatches marked),
 // other primers and features nearby. Either end of the part that binds can be dragged, or

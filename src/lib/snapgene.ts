@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Extra data from SnapGene .dna files that the generic parser skips: primers, and which
 // parts of a feature are gaps (introns) rather than part of it.
 //

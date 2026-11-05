@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // End-to-end check of the real desktop app on Linux.
 //
 // Launches the built app through tauri-driver (WebDriver), clicks through the main

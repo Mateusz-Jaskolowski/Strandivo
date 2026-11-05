@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Builds the parts catalog from tools/catalog-sources.tsv.
 //
 //   node tools/build-catalog.mjs [--out <file>] [--cache <dir>] [--only <id,id>]

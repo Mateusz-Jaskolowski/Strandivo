@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What a clone carries, from its consensus: mutations named in protein notation inside a
 // CDS (codon by codon, so two changes in one codon are one amino-acid change) and as DNA
 // changes outside one, whether it has a stop or a frameshift, what its reads cover, what

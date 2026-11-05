@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // FASTQ: reads with a quality per base, as nanopore services send them. Pure, so it is
 // unit-tested.
 

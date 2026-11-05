@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Tiny DOM helpers (no framework needed for the app's own UI).
 
 type Child = Node | string | number | null | undefined | false;

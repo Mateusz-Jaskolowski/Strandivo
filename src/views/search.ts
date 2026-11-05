@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Toolbar search: finds bases (on both strands, across the origin) or features, primers
 // and enzymes by name, and selects the result.
 

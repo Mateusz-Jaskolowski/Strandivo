@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Keeping a check of reads: the reads of a sequence, how they are grouped into clones and
 // the settings used, as the app remembers them per file and as a check file (.svcheck)
 // saved next to the reads for sharing. A check file holds paths relative to itself, so

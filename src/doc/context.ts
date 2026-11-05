@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What the views of one document window share: the store, display options, and a few
 // window-level actions (switching tabs, read coverage from the Sanger view).
 

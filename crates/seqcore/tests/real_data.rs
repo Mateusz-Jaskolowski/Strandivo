@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Tests against real sequencing files in `testdata/` (see testdata/README.md for sources).
 
 use seqcore::abif;

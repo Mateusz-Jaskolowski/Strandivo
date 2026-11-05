@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Simulate cloning dialog. The open file is the vector; inserts come from the other
 // open files or files chosen here. Restriction and ligation, Gibson, In-Fusion or Golden
 // Gate, with the product shown as the choices change and opened in a new tab.

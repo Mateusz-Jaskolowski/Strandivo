@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The site-directed mutagenesis dialog: a change (an amino acid of a CDS, or bases to
 // substitute, insert or delete), the layout of the primers, and the designed pair to review
 // before it is added. The design itself is `src/lib/mutagenesis.ts`.

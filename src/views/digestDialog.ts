@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Digest dialog: choose enzymes, see the fragments and how they would run on an
 // agarose gel. The open file is the first lane; other open files (or the same file with
 // other enzymes) can be added as more lanes. Any fragment opens as a new unsaved tab.

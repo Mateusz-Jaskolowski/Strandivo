@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // In-window modal dialog with any number of buttons (native dialogs only offer two).
 
 import { h } from "./dom.ts";

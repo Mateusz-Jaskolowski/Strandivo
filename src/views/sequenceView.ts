@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Sequence tab: both strands in rows, with cut sites, primers, features and
 // translations lined up under the bases. Only the rows on screen are drawn. Supports
 // selecting with mouse and keyboard, typing and deleting bases, and the clipboard.

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // A document: one sequence file in a tab of the main window, shown as Map, Sequence,
 // Primers, Reads and Info views around a shared selection, with an outline on the left
 // and an inspector on the right. The main window (src/mainWindow.ts) owns the window

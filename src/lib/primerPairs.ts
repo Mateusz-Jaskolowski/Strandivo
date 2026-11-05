@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Pairs of a file's primers that face each other, with what they would amplify: the Pairs
 // view under the Primers tab's list. The product itself comes from pcr.ts, so a pair here
 // and the PCR product dialog can't disagree. Each primer's Tm is passed in rather than

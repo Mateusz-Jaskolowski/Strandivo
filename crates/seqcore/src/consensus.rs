@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! One sequence per clone from all of its reads (forward and reverse, overlapping or not).
 //!
 //! Every aligned read leaves a [`Call`] per reference position it covers. At each position

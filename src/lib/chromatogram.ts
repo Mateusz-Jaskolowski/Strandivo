@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Re-orienting and cutting chromatograms so a read can be shown on the reference strand.
 // Pure functions (no imports) so they can be unit-tested with plain Node.
 

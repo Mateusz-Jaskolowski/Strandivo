@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Stacks several read-vs-reference alignments into one multiple alignment, so all reads
 // can be shown under a single reference (like SnapGene's "align to reference" view).
 //

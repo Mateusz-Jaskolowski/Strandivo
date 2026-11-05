@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Things computed from the document for drawing: feature colours, cut sites, codons.
 // Results are cached on the sequence so redraws stay cheap.
 

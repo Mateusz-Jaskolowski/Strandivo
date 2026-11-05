@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The sidebar's sections (left of a file): their order and which are folded, as kept in
 // Settings. Dragging a heading and the Settings list both go through `moveSection`.
 

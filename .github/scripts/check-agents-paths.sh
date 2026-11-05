@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Fails if AGENTS.md names a file or folder (in `backticks`) that doesn't exist, so the
 # agent guide can't quietly go stale after a rename. Only paths with a "/" or a file
 # extension are checked; commands and code like `npm test` are skipped.

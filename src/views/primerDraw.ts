@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // One primer over a row of bases, drawn the same way in the Sequence tab and the Primers tab:
 // its own bases in a box against the strand it pairs with, an arrowhead at the 3′ end and,
 // raised off the strand in a band, its name, its 5′ tail and its changes (always in red).

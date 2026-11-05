@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Mixed clones and poor reads, from double peaks in the traces. A colony with two plasmids
 // gives reads with two peaks wherever the plasmids differ: in a library, from the first
 // variable region on, and everywhere after it if the two differ in length. Peaks are

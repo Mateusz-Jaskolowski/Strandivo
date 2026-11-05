@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What a plate of clones says as a library: how many are different, how many are broken,
 // how fast mutations came in, which ones recur and which codons turned up at degenerate
 // sites. Worked out from each clone's `CloneVariants`. Pure, so it is unit-tested.

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Everything that talks to the desktop shell lives here, with a plain-browser fallback
 // so the interface can also be developed with `npm run dev` in a normal browser.
 

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import "./polyfills.ts";
 import "./styles.css";
 import { replaceContextMenus, windowInfo } from "./platform.ts";

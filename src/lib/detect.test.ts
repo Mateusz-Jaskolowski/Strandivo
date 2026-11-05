@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The review step of feature detection: grouping, how a row reads, and what accepting
 // turns into. Run with: npm test
 import { test } from "node:test";

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The reads the app remembers for each file, so a check isn't lost when its tab is closed:
 // their paths, how they were grouped into clones and when. Kept in this app's local
 // storage, like Home's notes, so the sequence file itself never changes. Check files

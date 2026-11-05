@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Get regions from UniProt: look up an entry, compare it with the CDS's own protein and
 // offer what can be placed. A task with a start and an end, so it is a dialog. Nothing
 // reaches the document until Add is pressed, and then all of it is one undo step.

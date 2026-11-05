@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The TeselaGen packages ship plain JavaScript; these declarations cover what we use.
 
 declare const __APP_VERSION__: string;

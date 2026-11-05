@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Regions of a protein: helices, topological domains and signal peptides marked inside a
 // CDS rather than as features of their own, so a membrane protein stays one feature. They
 // live in the CDS's /strandivo_regions qualifier, one value per region, numbered in

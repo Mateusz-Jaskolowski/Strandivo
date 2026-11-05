@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Quality trimming of Sanger reads.
 
 /// Modified Mott algorithm (as used by phred/phrap and most Sanger tools).

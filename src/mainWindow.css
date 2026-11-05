@@ -1,3 +1,6 @@
+/* Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+   SPDX-License-Identifier: GPL-3.0-or-later */
+
 /* Main window (sv-*): the app bar with Home and a tab per open file, and Home's construct
    library. Uses the tokens defined at the top of styles.css. */
 

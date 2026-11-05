@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Site-directed mutagenesis: a primer pair that writes a change into a plasmid as it copies
 // the whole of it. Two layouts, as the two common kits use them:
 // - back to back (Q5 SDM): the primers' 5′ ends meet at the change and don't overlap; the

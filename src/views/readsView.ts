@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Reads tab: sequencing reads on the left, grouped into clones, coverage, the alignment
 // with traces and the list of differences in the middle, and details of the selected read
 // or clone on the right.

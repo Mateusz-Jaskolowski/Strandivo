@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What the right-click menus offer, as data. The views work out what was clicked (and
 // select it first), the document runs the chosen action. No DOM here, so the lists are
 // unit-tested.

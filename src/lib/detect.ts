@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The review step of feature detection: how a suggestion reads, and what accepting it adds
 // to the document. The search itself runs in the Rust core
 // (crates/seqcore/src/annotate.rs); this is only the part between it and the user, so it

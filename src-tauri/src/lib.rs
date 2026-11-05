@@ -247,7 +247,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         name: Some(APP_NAME.to_string()),
         version: Some(app.package_info().version.to_string()),
         license: Some("GPL-3.0-or-later".to_string()),
-        comments: Some("Free, open-source plasmid editor and Sanger read checker.".to_string()),
+        comments: Some("Plan, build and check your plasmids.".to_string()),
         website: Some("https://strandivo.com".to_string()),
         website_label: Some("strandivo.com".to_string()),
         ..Default::default()

@@ -1,7 +1,10 @@
 # Strandivo
 
-A free, open-source desktop app for working with plasmids and checking Sanger sequencing
-results — a SnapGene-style tool for Mac and Windows. [strandivo.com](https://strandivo.com)
+**Plan, build and check your plasmids.**
+
+A free, open-source plasmid editor for Mac and Windows, in the spirit of SnapGene: maps and
+sequence editing, primers and cloning, and sequence verification with Sanger and
+whole-plasmid reads. [strandivo.com](https://strandivo.com)
 
 - **Open your files**: SnapGene `.dna`, GenBank, FASTA, SBOL, GFF, Geneious and `.ab1` traces
 - **Construct library**: Home lists every construct in your folders (and their subfolders)

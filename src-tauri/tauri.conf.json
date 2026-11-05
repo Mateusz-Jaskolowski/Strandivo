@@ -20,8 +20,8 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
-    "shortDescription": "Plasmid maps, sequence editing and Sanger read verification",
-    "longDescription": "A free, open-source desktop app for viewing and editing plasmid and DNA sequences (SnapGene .dna, GenBank, FASTA) and for checking Sanger sequencing reads against a construct.",
+    "shortDescription": "Free, open-source plasmid editor: maps, primers, cloning and sequence verification",
+    "longDescription": "A free, open-source plasmid editor for Mac and Windows: plasmid maps and sequence editing, primers, digests and cloning simulation, and sequence verification with Sanger and whole-plasmid reads.",
     "copyright": "© 2026 Mateusz Jaskolowski and Strandivo contributors. Licensed under GPL-3.0-or-later.",
     "icon": [
       "icons/32x32.png",

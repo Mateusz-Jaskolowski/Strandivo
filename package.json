@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "license": "GPL-3.0-or-later",
-  "description": "Free, open-source desktop app for plasmid maps, sequence editing and Sanger read verification",
+  "description": "Free, open-source plasmid editor: maps, primers, cloning and sequence verification",
   "homepage": "https://strandivo.com",
   "repository": { "type": "git", "url": "https://github.com/Mateusz-Jaskolowski/Strandivo.git" },
   "scripts": {

@@ -83,12 +83,23 @@ jobs:
         with:
           workspaces: |
             crates/seqcore -> target
+            crates/seqcore-json -> target
             src-tauri -> target
           key: checks
 
       - name: Alignment core tests
         working-directory: crates/seqcore
         run: ../../.github/scripts/run.sh "Alignment core tests" cargo test --release
+
+      # The shell's clippy doesn't lint its path dependencies, so this crate gets its own.
+      - name: Core JSON tests and lint
+        if: ${{ !cancelled() }}
+        env:
+          ANNOTATE_WARNINGS: "^(warning|error)"
+        working-directory: crates/seqcore-json
+        run: |
+          ../../.github/scripts/run.sh "Core JSON tests" cargo test --release
+          ../../.github/scripts/run.sh "Core JSON lint" cargo clippy --all-targets
 
       - name: Install JavaScript dependencies
         id: npm

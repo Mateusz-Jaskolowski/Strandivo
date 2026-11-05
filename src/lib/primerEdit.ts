@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Moving a primer's ends along its template: extending or trimming the part that binds,
 // base by base, at its 3′ or 5′ end. The tail and any deliberate changes are kept, unless
 // trimming reaches a change, which goes with the bases trimmed.

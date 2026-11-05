@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Variable regions: features a library replaces or varies (CDRs, NNK sites, a framework
 // with a few known versions), marked in the file as /strandivo_variable="<design>". Reads
 // are aligned with them as N, so their edges come out right, and a clone's bases there are

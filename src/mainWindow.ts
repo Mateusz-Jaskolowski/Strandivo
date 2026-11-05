@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The main window: an app bar with Home and a tab for each open file, and the current tab
 // below it. Only one file shows at a time; each keeps its own views, selection and undo.
 // This module owns the window itself (title, keys, native menu, dropped files, closing)

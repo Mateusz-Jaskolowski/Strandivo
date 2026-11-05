@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Runs what the right-click menus offer (`src/lib/contextMenu.ts` decides what that is)
 // with the same functions as the inspector and the toolbar.
 

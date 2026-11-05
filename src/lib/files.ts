@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // File-name helpers (pure).
 
 export function basename(path: string): string {

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Converting between the file parser's sequence JSON (TeselaGen bio-parsers) and the
 // document model. Fields the model doesn't use are kept and written back unchanged.
 

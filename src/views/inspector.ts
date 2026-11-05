@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Right sidebar: everything about the current selection (a feature, primer, cut site or a
 // range of bases), with editing and the actions that apply to it.
 

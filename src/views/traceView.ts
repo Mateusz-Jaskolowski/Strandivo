@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Reads tab's alignment: ruler, features, translation and reference on top, then each
 // read with its trace, quality bars and bases. Drawn on a canvas, and only the columns in
 // view, so long alignments scroll smoothly.

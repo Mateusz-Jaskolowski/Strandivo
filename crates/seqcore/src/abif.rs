@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Minimal reader for ABIF (.ab1/.abi/.fsa) sequencing trace files.
 //!
 //! Format reference: Applied Biosystems, "ABIF File Format Specification".

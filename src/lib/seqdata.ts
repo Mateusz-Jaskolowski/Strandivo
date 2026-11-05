@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The document model: a sequence with its features and primers, and the edits that can be
 // made to it. Pure functions with no DOM, so they are easy to test.
 //

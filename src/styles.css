@@ -1,5 +1,8 @@
+/* Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+   SPDX-License-Identifier: GPL-3.0-or-later */
+
 :root {
-  /* Design tokens (see the redesign canvas). Dark values are opt-in via data-theme="dark". */
+  /* Design tokens. Dark values are opt-in via data-theme="dark". */
   color-scheme: light;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;

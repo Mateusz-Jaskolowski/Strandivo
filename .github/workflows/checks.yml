@@ -33,6 +33,9 @@ jobs:
       - name: Agent guide mentions only files that exist
         run: .github/scripts/check-agents-paths.sh
 
+      - name: Every source file has the licence header
+        run: .github/scripts/check-headers.sh
+
       - uses: actions/setup-node@v5
         with:
           node-version: 22

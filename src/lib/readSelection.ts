@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Selecting several reads and clones in the Reads tab's list. Items are the list's rows in
 // order, by read id and clone key, so a selection outlives realigning, which changes read
 // indices. Picking itself is in picks.ts, shared with the Primers tab's list; here it is

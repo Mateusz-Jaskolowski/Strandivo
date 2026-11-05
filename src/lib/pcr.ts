@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // PCR products: what a forward and a reverse primer amplify from a template, and the
 // product as a new document (features and primers inside it carried over). Pure functions.
 

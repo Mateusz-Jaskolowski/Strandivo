@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Double peaks: measured on the library's real reads, and turned into mixes, poor reads
 // and unreliable calls on made-up ones.
 

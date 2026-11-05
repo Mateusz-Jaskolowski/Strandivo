@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Primer properties: melting temperature, GC content, quality checks and binding sites.
 //
 // Tm is SantaLucia (1998) unified nearest-neighbour parameters with primer3's default

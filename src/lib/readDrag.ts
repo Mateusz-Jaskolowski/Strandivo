@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What dropping reads in the Reads tab's list means. The list is groups of reads (a clone,
 // or one read alone), and the view only says where the pointer is. No DOM here, so every
 // case is unit-tested.

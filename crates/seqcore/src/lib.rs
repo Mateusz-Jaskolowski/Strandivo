@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Core sequence analysis used by the desktop app.
 //!
 //! Everything here runs locally and has no dependencies, so it can be tested

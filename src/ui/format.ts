@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Number formatting for the interface: 1,234,567. One shared formatter, because
 // Number.toLocaleString builds a new one on every call, which is slow in long lists.
 

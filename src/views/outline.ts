@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Left sidebar: the document's primers, cut sites and features, filterable and clickable.
 // Its sections fold when their heading is clicked and move when it is dragged; both are
 // kept in Settings (`sidebar`), so every file and window shows them the same way.

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Map tab: a circular (or linear) map of the sequence drawn as SVG, with features,
 // primers and cut sites, labels laid out so they don't overlap, and selection by clicking
 // annotations or dragging around the map.

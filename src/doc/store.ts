@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Per-window document state: the sequence data, the selection and undo history. Views
 // subscribe to changes and redraw what they need.
 

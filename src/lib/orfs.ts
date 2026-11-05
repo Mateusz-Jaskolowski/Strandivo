@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Open reading frames: from a start codon to the next stop in the same frame, on both
 // strands. Computed on the fly for drawing, never saved with the file.
 

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Plasmid information kept inside the file: lab fields ("Stored at", "Sequence verified",
 // …) stored as a GenBank structured comment, plus what can be read off the features.
 // Pure functions so they can be unit-tested with plain Node.

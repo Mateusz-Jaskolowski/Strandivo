@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Stroke icons used across the document window (24×24 grid, drawn with currentColor).
 
 const PATHS = {

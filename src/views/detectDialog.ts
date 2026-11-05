@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Detect features: look for known parts in the open sequence and offer them. A task with
 // a start and an end, so it is a dialog rather than a view. Nothing reaches the document
 // until Add is pressed, and then all of it goes in as one undo step.

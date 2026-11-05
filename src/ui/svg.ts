@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Small helpers for building SVG and measuring text.
 
 const NS = "http://www.w3.org/2000/svg";

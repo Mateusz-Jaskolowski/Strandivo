@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The construct library behind Home: the folders of plasmid files it lists, what was read
 // from each file (so only new or changed files are read again), and the short notes typed
 // on Home. Kept in this app's local storage, like the settings and the primer library;

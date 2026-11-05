@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The parts catalog is generated into crates/seqcore/data/parts.tsv and searched by the
 // Rust core, but what the user ends up seeing goes through this folder: `detectFromFeatures`
 // fills Home's contents column and the Info tab's markers, and it matches on a feature's

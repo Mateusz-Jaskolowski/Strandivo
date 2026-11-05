@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Cloning simulation: digests, ligation, overlap assembly and Golden Gate. Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";

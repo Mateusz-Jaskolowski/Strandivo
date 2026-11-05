@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Summary view of the Reads tab: a library's numbers, a bar per position with mutations
 // (clicking one lists its clones), and the codons seen at degenerate sites.
 

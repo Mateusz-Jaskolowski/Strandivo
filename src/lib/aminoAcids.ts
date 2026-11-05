@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Amino acids coloured by their chemistry, as in Clustal X (simplified: Clustal's rules
 // that depend on the rest of an alignment column don't apply to a single sequence).
 

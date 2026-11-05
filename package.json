@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "license": "GPL-3.0-or-later",
-  "description": "Free, open-source desktop app for plasmid maps, sequence editing and Sanger read verification",
+  "description": "Free, open-source plasmid editor: maps, primers, cloning and sequence verification",
   "homepage": "https://strandivo.com",
   "repository": { "type": "git", "url": "https://github.com/Mateusz-Jaskolowski/Strandivo.git" },
   "scripts": {
@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/lib/*.test.ts",
-    "check": "bash .github/scripts/check-agents-paths.sh && node --check e2e/run.mjs && npm run typecheck && npm test && npm run build && cargo test --release --manifest-path crates/seqcore/Cargo.toml && cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml",
+    "check": "bash .github/scripts/check-agents-paths.sh && bash .github/scripts/check-headers.sh && node --check e2e/run.mjs && npm run typecheck && npm test && npm run build && cargo test --release --manifest-path crates/seqcore/Cargo.toml && cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml",
     "tauri": "tauri",
     "app:dev": "tauri dev",
     "app:build": "tauri build"

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Primers tab: where this plasmid's primers bind and a table with Tm and checks. Adding
 // primers, the PCR product and primer design open as dialogs (primerDialogs.ts).
 

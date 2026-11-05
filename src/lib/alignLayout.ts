@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Layout of the Reads tab's alignment: every aligned read (or piece of a read that crosses
 // the origin) stacked under one reference, with the lookups the drawing code needs.
 // Pure functions, so they can be unit-tested with plain Node.

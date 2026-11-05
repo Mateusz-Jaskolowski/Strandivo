@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What a difference does to the features it falls in: coding consequences and coverage.
 // Pure functions so they can be tested with plain Node.
 

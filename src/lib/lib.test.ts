@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Run with: npm test  (Node 22+, no dependencies needed)
 import { test } from "node:test";
 import assert from "node:assert/strict";

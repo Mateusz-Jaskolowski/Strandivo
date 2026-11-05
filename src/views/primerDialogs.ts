@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Task dialogs of the Primers tab: add primers from the lab library or by sequence, preview
 // the PCR product of two primers, and design a pair (with restriction sites) for a region.
 // Each opens over the window, does one thing and closes; the tab itself only shows primers.

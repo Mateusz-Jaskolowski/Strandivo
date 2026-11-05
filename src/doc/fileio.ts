@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Reading and writing sequence files with TeselaGen's parsers.
 
 import { anyToJson, jsonToFasta, jsonToGenbank } from "@teselagen/bio-parsers";

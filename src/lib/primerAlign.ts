@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // How a primer pairs with its site, base by base: which bases match, which differ, which
 // the primer inserts or skips, and which make up its 5′ tail. A primer's `start..end` is the
 // stretch of template it pairs with, changes included (as SnapGene stores a binding site);

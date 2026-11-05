@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What a plate of clones adds up to, from made-up clones of pUC19. Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";

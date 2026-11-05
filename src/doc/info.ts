@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // "Plasmid info" tab: basic facts about the sequence, what its features tell us, and lab
 // fields (storage, verification, …) saved inside the file.
 

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Picking several rows of a list with ⌘ or Ctrl, or Shift. Rows are ids in the order the
 // list shows them, never indices, so a selection outlives the list being worked out again
 // (realigning reads changes their indices; sorting or filtering primers changes their rows).

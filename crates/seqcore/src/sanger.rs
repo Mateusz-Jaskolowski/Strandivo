@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! "Check my sequencing reads against my construct."
 //!
 //! For each Sanger read: quality-trim it, find where it maps on the reference (either

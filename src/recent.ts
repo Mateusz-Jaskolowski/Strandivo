@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Recently opened files (shared by all windows: they use the same storage).
 
 const KEY = "ps.recentFiles";

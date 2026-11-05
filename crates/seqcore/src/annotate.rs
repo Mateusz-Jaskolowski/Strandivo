@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Finding known parts of the catalog in a sequence.
 //!
 //! This is not the same problem as placing a sequencing read, so it does not reuse the

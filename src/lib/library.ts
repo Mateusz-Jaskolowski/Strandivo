@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The lab's primer library: reading and writing primer lists, a starter set of common
 // sequencing primers, and finding which library primers bind a sequence. Pure functions.
 

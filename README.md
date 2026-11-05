@@ -1,7 +1,10 @@
 # Strandivo
 
-A free, open-source desktop app for working with plasmids and checking Sanger sequencing
-results — a SnapGene-style tool for Mac and Windows. [strandivo.com](https://strandivo.com)
+**Plan, build and check your plasmids.**
+
+A free, open-source plasmid editor for Mac and Windows, in the spirit of SnapGene: maps and
+sequence editing, primers and cloning, and sequence verification with Sanger and
+whole-plasmid reads. [strandivo.com](https://strandivo.com)
 
 - **Open your files**: SnapGene `.dna`, GenBank, FASTA, SBOL, GFF, Geneious and `.ab1` traces
 - **Construct library**: Home lists every construct in your folders (and their subfolders)
@@ -183,5 +186,21 @@ says how to take part.
 
 ## Licence
 
-GPL-3.0-or-later. Strandivo uses TeselaGen's bio-parsers and sequence-utils (MIT) and
+    Strandivo: a free, open-source plasmid editor with sequence verification.
+    Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+
+    This program is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License as published by the Free Software
+    Foundation, either version 3 of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with this
+    program. If not, see <https://www.gnu.org/licenses/>.
+
+The full licence is in [`LICENSE`](LICENSE). Contact: hello@strandivo.com.
+
+Strandivo uses TeselaGen's bio-parsers and sequence-utils (MIT) and
 [Tauri](https://tauri.app) (MIT/Apache-2.0).

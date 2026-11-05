@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The construct library: what the Home view shows about each file in the user's folders.
 // Pure functions so they can be unit-tested with plain Node.
 

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Sequencing reads checked against the open sequence: loading them, aligning them in the
 // Rust core, and summarising the results for the Reads tab, the inspector and Info.
 // No DOM here; the views listen for changes.

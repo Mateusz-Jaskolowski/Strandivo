@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // App settings, shared by all windows (stored in this app's local storage) and edited in
 // the Settings window. Windows are told about changes so they apply immediately.
 

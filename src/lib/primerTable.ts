@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The Primers tab's table: sorting its rows and the text "Copy for ordering" makes. No DOM
 // here, so it is unit-tested.
 

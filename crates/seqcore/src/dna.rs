@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Small DNA helpers.
 
 /// Upper-cases a sequence, turns U into T and drops whitespace, digits and gap characters.

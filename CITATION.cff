@@ -3,8 +3,9 @@ message: If you use Strandivo in your research, please cite it as below.
 type: software
 title: Strandivo
 abstract: >-
-  A free, open-source desktop app for plasmid maps, sequence editing, primers and checking
-  Sanger and whole-plasmid sequencing reads.
+  A free, open-source plasmid editor: plasmid maps and sequence editing, primers,
+  digests and cloning simulation, and sequence verification with Sanger and
+  whole-plasmid reads.
 authors:
   - family-names: Jaskolowski
     given-names: Mateusz

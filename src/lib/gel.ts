@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Virtual digests and how their fragments would run on an agarose gel.
 
 import { digest, fragmentLength, type Fragment } from "./cloning.ts";

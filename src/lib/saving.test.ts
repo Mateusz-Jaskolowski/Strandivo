@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Saving and reopening: every sequence file in testdata/ must come back unchanged, also
 // after edits. Run with: npm test
 import { test } from "node:test";

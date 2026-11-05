@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // What UniProt says about a protein, placed on a CDS. A construct's protein is rarely
 // UniProt's exactly: both mRNAs that entry Q9UKG4 cites differ from it, one by a residue
 // more, and tags, fusions and truncations are the norm. So residues are never taken at face

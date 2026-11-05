@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Cloning simulation: cutting sequences into fragments with their ends, and joining the
 // fragments by restriction and ligation, overlap assembly (Gibson, In-Fusion) or Golden
 // Gate. Products are new linear or circular documents that carry every fragment's

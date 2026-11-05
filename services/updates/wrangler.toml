@@ -1,0 +1,11 @@
+# The updates Worker at updates.strandivo.com. Deploy from the repository's root with:
+#   npx wrangler@4 deploy --config services/updates/wrangler.toml
+name = "strandivo-updates"
+main = "src/index.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = false
+routes = [{ pattern = "updates.strandivo.com", custom_domain = true }]
+
+# No request logs: the privacy page promises that update checks keep nothing but counts.
+[observability]
+enabled = false

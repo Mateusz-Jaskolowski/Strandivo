@@ -148,7 +148,7 @@ Requirements: [Node.js 22+](https://nodejs.org), [Rust](https://rustup.rs), and 
 ```sh
 npm install
 npm run app:dev     # run the app with live reload
-npm run app:build   # build an installer for this computer
+npm run app:build   # build an installer for this computer (unsigned, without update files)
 ```
 
 Tests:

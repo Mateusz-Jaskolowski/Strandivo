@@ -1,0 +1,73 @@
+# Builds the installers for one platform and uploads them as an artifact. Used by
+# build.yml for unsigned test builds and for signed release builds; only the latter pass
+# a signing key, and only from the `release` environment. Third-party actions are pinned
+# to commits, since in a release build they run while the key is loaded.
+name: Build the app
+description: Build Strandivo's installers for one platform and upload them
+inputs:
+  name: { description: Platform name for messages, required: true }
+  target: { description: Rust target triple, required: true }
+  bundles: { description: Tauri bundle types, required: true }
+  artifact: { description: Artifact name suffix, required: true }
+  arch: { description: Architecture in update file names (aarch64 or x64), required: true }
+  signing-key: { description: The update signing key; empty for an unsigned build, required: false, default: "" }
+  signing-password: { description: The signing key's password, required: false, default: "" }
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+      with:
+        node-version: 22
+
+    - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-11-05
+      with:
+        toolchain: stable
+        targets: ${{ inputs.target }}
+
+    - name: Install Linux libraries
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+        sudo -E apt-get update -q
+        sudo -E apt-get install -y -q -o Acquire::Retries=3 libwebkit2gtk-4.1-dev librsvg2-dev patchelf libfuse2
+
+    - name: Install JavaScript dependencies
+      shell: bash
+      run: .github/scripts/run.sh "npm install" npm install --no-audit --no-fund
+
+    - name: Build app
+      shell: bash
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.signing-key }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.signing-password }}
+      run: |
+        # Without a key, leave the update files out: the build would stop for want of one.
+        unsigned=()
+        [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || unsigned=(--config src-tauri/tauri.unsigned.conf.json)
+        .github/scripts/run.sh "Build ${{ inputs.name }}" npm run tauri -- build \
+          --target ${{ inputs.target }} --bundles ${{ inputs.bundles }} "${unsigned[@]}"
+
+    - name: Collect installers and update files
+      shell: bash
+      run: |
+        bundle=src-tauri/target/${{ inputs.target }}/release/bundle
+        mkdir -p out
+        shopt -s nullglob
+        for f in "$bundle"/dmg/*.dmg "$bundle"/nsis/*.exe "$bundle"/nsis/*.exe.sig \
+                 "$bundle"/deb/*.deb "$bundle"/appimage/*.AppImage "$bundle"/appimage/*.AppImage.sig; do
+          cp "$f" out/
+        done
+        # Both Mac builds name their update file Strandivo.app.tar.gz; give each its version and
+        # architecture so they can sit side by side in one release.
+        version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+        for f in "$bundle"/macos/*.app.tar.gz "$bundle"/macos/*.app.tar.gz.sig; do
+          cp "$f" "out/$(basename "$f" | sed "s/\.app\.tar\.gz/_${version}_${{ inputs.arch }}.app.tar.gz/")"
+        done
+        ls -l out
+
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: strandivo-${{ inputs.artifact }}
+        if-no-files-found: error
+        path: out/*

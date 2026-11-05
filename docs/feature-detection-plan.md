@@ -6,7 +6,7 @@ is built.
 
 ## What we want
 
-The biggest gap against SnapGene. A plain FASTA or a sparsely annotated GenBank file opens
+The biggest gap in the app. A plain FASTA or a sparsely annotated GenBank file opens
 with a bare map, an empty row on Home and no markers on the Info tab, although most of
 what is in a plasmid is well known: promoters, resistance genes, origins, tags,
 fluorescent proteins.

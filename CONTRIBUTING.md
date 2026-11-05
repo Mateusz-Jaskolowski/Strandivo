@@ -13,8 +13,8 @@ security problems privately, as `SECURITY.md` says, never in a public issue.
 - **New features or larger changes**: open an issue first, so we can agree on where the
   feature goes before you build it. The app keeps windows uncluttered on purpose, and
   `AGENTS.md` ("Where things go") explains how.
-- The priorities are the map and editing, then Sanger checking, then primers, then cloning
-  simulation.
+- The priorities are the map and editing, then sequence verification, then primers, then
+  cloning simulation.
 
 ## Working on the code
 

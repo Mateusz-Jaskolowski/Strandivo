@@ -1,11 +1,12 @@
 # Strandivo: guide for coding agents
 
 Strandivo is a free (GPL-3.0) desktop app for plasmid maps, sequence editing, primers and
-checking Sanger reads, in the spirit of SnapGene. It is a Tauri v2 app: a TypeScript
-interface (Vite, no UI framework) over a small Rust shell and a dependency-free Rust core.
-Users are biologists on Mac and Windows. Priorities: map and editing, then Sanger checking,
-then primers, then cloning simulation. `README.md` describes the app for users, and
-`CONTRIBUTING.md` how people take part and who maintains it.
+sequence verification. It is a Tauri v2 app: a TypeScript interface (Vite, no UI
+framework) over a small Rust shell and a dependency-free Rust core. Users are biologists,
+mostly on Mac and Windows; Linux builds too, and it is where CI runs. Priorities: map and
+editing, then sequence verification, then primers, then cloning simulation. `README.md`
+describes the app for users, and `CONTRIBUTING.md` how people take part and who maintains
+it.
 
 **Keep this file true.** A change that makes something here wrong updates it in the same
 commit. Write down what the code can't tell you (conventions, decisions, traps), not what

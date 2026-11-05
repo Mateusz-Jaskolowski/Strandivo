@@ -20,6 +20,10 @@ on:
   push:
     tags: ["v*"]
 
+# Read-only unless a job says otherwise: only drafting the release writes.
+permissions:
+  contents: read
+
 jobs:
   plan:
     name: Choose platforms

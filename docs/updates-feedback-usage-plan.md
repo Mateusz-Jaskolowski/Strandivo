@@ -1,7 +1,8 @@
 # Updates, feedback and usage statistics: plan
 
-Status: planned (November 2026), nothing built yet; every decision below is made. Each
-part below is one branch and one PR. What is said here about services and the law was read
+Status: every decision below is made (November 2026). Part 1 is built: the release
+workflow and the updates Worker, which go live with 0.2.0. The other parts are planned.
+Each part below is one branch and one PR. What is said here about services and the law was read
 on 4 November 2026; check it again before each part is built. The legal notes are a
 reading of published guidance, not legal advice.
 

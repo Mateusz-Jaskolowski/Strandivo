@@ -366,7 +366,27 @@ it can (lists of files or features). CI checks that every path in backticks here
   same way; delete any branch it pushes afterwards.
 - Installers (`.github/workflows/build.yml`) are built for a version tag, which also drafts a
   release, or when a maintainer runs the workflow; not on every push, as a full set takes
-  most of an hour.
+  most of an hour. Both use `.github/actions/build-app/action.yml`. A tag's builds are
+  signed and make the update files; a manual run's are not
+  (`src-tauri/tauri.unsigned.conf.json`, which `npm run app:build` uses too, since a build
+  with update files stops when there is no key).
+- **Releases and the update key**: the key that signs updates is a secret of the `release`
+  environment only (`v*` tags may use it, a maintainer approves each run, and the "Protect
+  release tags" ruleset lets only admins create, move or delete `v*` tags). Never give it
+  to `.github/workflows/checks.yml`, a `pull_request_target` workflow or a manual run, and
+  keep the release jobs' third-party actions pinned to commits, as they run beside it.
+  Losing the key strands every install: it is backed up outside GitHub. A release is
+  `npm run version <x.y.z>`, a commit, a `v<x.y.z>` tag on it, approving the run, then
+  publishing the draft; `check-version` in `.github/scripts/release.mjs` fails a tag that
+  doesn't match the three files, and `latest-json` writes the manifest from the `.sig`
+  files the builds made.
+- **`updates.strandivo.com`** is built into every copy (`plugins.updater` in
+  `src-tauri/tauri.conf.json`), so it must never change; the Worker behind it
+  (`services/updates/`) hands over the published release's latest.json, or 204 for no
+  update when there is none. The app's version, OS and processor come in the query for
+  counting (part 5 of `docs/updates-feedback-usage-plan.md`); the Worker keeps nothing else
+  and logs nothing. Deploy it with
+  `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
 - From a cloud session the npm and crates registries may be blocked: Rust in `src-tauri/`
   then only compiles in CI, and CI is the final word.
 

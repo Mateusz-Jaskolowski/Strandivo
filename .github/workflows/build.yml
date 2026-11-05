@@ -1,9 +1,16 @@
 name: Build installers
 
 # A full set of installers takes most of an hour, so they are built only when asked for:
-#   - pushing a version tag like v0.2.0 (builds everything and drafts a GitHub Release), or
-#   - Actions tab → "Build installers" → "Run workflow" (choose which platforms).
-# Download the result from the run page, under "Artifacts".
+#   - pushing a version tag like v0.2.0: every platform, signed, with the update files and
+#     latest.json, and a draft GitHub Release. Publishing the draft is what gives the update
+#     to installed copies, through updates.strandivo.com.
+#   - Actions tab → "Build installers" → "Run workflow": the platforms you pick, unsigned and
+#     without update files, for testing. Download them from the run page, under "Artifacts".
+#
+# The update signing key is a secret of the `release` environment only: v* tags may use it,
+# a maintainer approves each run, and only maintainers may create v* tags. So only the
+# signed build jobs below ever hold it, never a pull request or a manual run. Third-party
+# actions are pinned to commits, since they run beside the key.
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +27,9 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
   plan:
     name: Choose platforms
@@ -32,10 +42,10 @@ jobs:
         env:
           CHOICE: ${{ github.event_name == 'push' && 'all' || inputs.platforms }}
         run: |
-          arm='{"name":"macOS (Apple Silicon)","os":"macos-latest","target":"aarch64-apple-darwin","bundles":"app,dmg","artifact":"mac-apple-silicon"}'
-          intel='{"name":"macOS (Intel)","os":"macos-latest","target":"x86_64-apple-darwin","bundles":"app,dmg","artifact":"mac-intel"}'
-          win='{"name":"Windows","os":"windows-latest","target":"x86_64-pc-windows-msvc","bundles":"nsis","artifact":"windows"}'
-          linux='{"name":"Linux","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage","artifact":"linux"}'
+          arm='{"name":"macOS (Apple Silicon)","os":"macos-latest","target":"aarch64-apple-darwin","bundles":"app,dmg","artifact":"mac-apple-silicon","arch":"aarch64"}'
+          intel='{"name":"macOS (Intel)","os":"macos-latest","target":"x86_64-apple-darwin","bundles":"app,dmg","artifact":"mac-intel","arch":"x64"}'
+          win='{"name":"Windows","os":"windows-latest","target":"x86_64-pc-windows-msvc","bundles":"nsis","artifact":"windows","arch":"x64"}'
+          linux='{"name":"Linux","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"deb,appimage","artifact":"linux","arch":"x64"}'
           case "$CHOICE" in
             mac-apple-silicon) list="[$arm]" ;;
             mac) list="[$arm,$intel]" ;;
@@ -45,8 +55,19 @@ jobs:
           esac
           echo "include=$list" >> "$GITHUB_OUTPUT"
 
+  # A release must say the same version everywhere, or the updater would be told one
+  # thing by latest.json and another by the app it installs.
+  check-version:
+    name: Tag matches the version
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - run: node .github/scripts/release.mjs check-version "$GITHUB_REF_NAME"
+
   build:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.name }} (unsigned)
+    if: github.event_name == 'workflow_dispatch'
     needs: plan
     strategy:
       fail-fast: false
@@ -55,61 +76,62 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: ./.github/actions/build-app
         with:
-          node-version: 22
+          name: ${{ matrix.name }}
+          target: ${{ matrix.target }}
+          bundles: ${{ matrix.bundles }}
+          artifact: ${{ matrix.artifact }}
+          arch: ${{ matrix.arch }}
 
-      - uses: dtolnay/rust-toolchain@stable
+  build-signed:
+    name: ${{ matrix.name }} (signed)
+    if: github.event_name == 'push'
+    needs: [plan, check-version]
+    environment: release
+    strategy:
+      fail-fast: true
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.include) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          targets: ${{ matrix.target }}
-
-      - uses: swatinem/rust-cache@v2
+          persist-credentials: false
+      - uses: ./.github/actions/build-app
         with:
-          workspaces: src-tauri -> target
-          key: ${{ matrix.target }}
-
-      - name: Install Linux libraries
-        if: runner.os == 'Linux'
-        run: |
-          export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
-          sudo -E apt-get update -q
-          sudo -E apt-get install -y -q -o Acquire::Retries=3 libwebkit2gtk-4.1-dev librsvg2-dev patchelf libfuse2
-
-      - name: Install JavaScript dependencies
-        shell: bash
-        run: .github/scripts/run.sh "npm install" npm install --no-audit --no-fund
-
-      - name: Build app
-        shell: bash
-        run: .github/scripts/run.sh "Build ${{ matrix.name }}" npm run tauri -- build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: strandivo-${{ matrix.artifact }}
-          if-no-files-found: error
-          path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
-            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+          name: ${{ matrix.name }}
+          target: ${{ matrix.target }}
+          bundles: ${{ matrix.bundles }}
+          artifact: ${{ matrix.artifact }}
+          arch: ${{ matrix.arch }}
+          signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          signing-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
   release:
     name: Draft release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: build-signed
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - name: Write latest.json
+        run: node .github/scripts/release.mjs latest-json dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > dist/latest.json
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           draft: true
-          files: dist/*
+          files: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.deb
+            dist/*.AppImage
+            dist/*.app.tar.gz
+            dist/latest.json
           generate_release_notes: true

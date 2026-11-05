@@ -1,7 +1,7 @@
 # Strandivo in a browser: plan
 
-Status: planned (November 2026), nothing built yet. Each part below is one branch and one
-PR. It comes after the first public release (0.2.0) and the website (part 6 of
+Status: planned (November 2026). Part 1 is built (#4); the rest waits for 0.2.0 and the
+website. Each part below is one branch and one PR. It comes after the first public release (0.2.0) and the website (part 6 of
 `docs/updates-feedback-usage-plan.md`). What is said here about browsers was read on
 5 November 2026; check it again before each part is built.
 

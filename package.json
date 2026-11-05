@@ -12,11 +12,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/lib/*.test.ts",
+    "test": "node --test --experimental-strip-types src/lib/*.test.ts .github/scripts/*.test.mjs services/updates/*.test.mjs",
     "check": "bash .github/scripts/check-agents-paths.sh && bash .github/scripts/check-headers.sh && node --check e2e/run.mjs && npm run typecheck && npm test && npm run build && cargo test --release --manifest-path crates/seqcore/Cargo.toml && cargo test --release --manifest-path crates/seqcore-json/Cargo.toml && cargo clippy --all-targets --manifest-path crates/seqcore-json/Cargo.toml && cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml",
     "tauri": "tauri",
     "app:dev": "tauri dev",
-    "app:build": "tauri build"
+    "app:build": "tauri build --config src-tauri/tauri.unsigned.conf.json",
+    "version": "node tools/set-version.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.0",

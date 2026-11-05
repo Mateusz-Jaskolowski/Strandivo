@@ -156,6 +156,7 @@ Tests:
 ```sh
 npm test                                   # interface logic
 (cd crates/seqcore && cargo test --release) # alignment core
+(cd crates/seqcore-json && cargo test --release) # what the interface sees of it
 ```
 
 ## Project layout
@@ -172,6 +173,7 @@ says how to take part.
 | `src/lib/` | Pure logic with unit tests: sequence edits, primers and Tm, primer design, mutagenesis and PCR products, enzymes, ORFs, digests and gels, cloning simulation, alignment layout, codon effects, construct summaries |
 | `src-tauri/` | Desktop shell (Rust/Tauri): windows, menus, file associations, folder listing, commands |
 | `crates/seqcore/` | Trimming, alignment, difference calling, and the parts catalog and its search for feature detection (Rust, no dependencies) |
+| `crates/seqcore-json/` | The core's requests and responses as the interface sees them (JSON) |
 | `tools/` | The curated list of catalog sources and the script that builds the catalog from it |
 | `docs/` | Plans and notes: the parts catalog's sources and terms, clone checking, feature detection, updates and feedback |
 | `testdata/` | Real `.ab1`/`.dna` files used by the tests, with their sources |

@@ -36,8 +36,13 @@ it can (lists of files or features). CI checks that every path in backticks here
   summarises the results.
 - `src/platform.ts` is the only code that talks to the shell, with plain-browser fallbacks.
 - `src-tauri/src/lib.rs`: windows, native menus, file associations, file commands, listing
-  the library's folders.
-  `src-tauri/src/sanger.rs` passes alignment requests to the core as JSON.
+  the library's folders. Its alignment and detection commands hand typed requests to
+  `crates/seqcore-json/`.
+- `crates/seqcore-json/` is what the interface sees of the core: the requests and
+  responses of alignment and detection, with their JSON field names, and `align_json` and
+  `detect_json` for callers that pass strings. The shell uses it and so will the
+  WebAssembly build, so the two can't disagree about a field. It needs serde, which is why
+  it is not part of `crates/seqcore/`.
 - `crates/seqcore/`: .ab1 reading, quality trimming, seeded Smith-Waterman-Gotoh
   alignment, alignment of long reads along a chain of seeds, difference calling and each
   clone's consensus (`crates/seqcore/src/consensus.rs`), the catalog of common plasmid
@@ -330,7 +335,8 @@ it can (lists of files or features). CI checks that every path in backticks here
 ## Checking work
 
 - `npm test` (unit tests in `src/lib/`), `npm run typecheck`, `npm run build`.
-- `cd crates/seqcore && cargo test --release` for the alignment core.
+- `cd crates/seqcore && cargo test --release` for the alignment core, and the same in
+  `crates/seqcore-json/` for the JSON it answers with.
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
   list and the regenerated catalog together.

@@ -5,9 +5,6 @@
 //! associations, the construct library's folder listing, the Sanger alignment commands
 //! and feature detection.
 
-mod annotate;
-mod sanger;
-
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -489,20 +486,22 @@ fn write_file(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn align_reads(request: sanger::AlignRequest) -> Result<sanger::AlignResponse, String> {
-    tauri::async_runtime::spawn_blocking(move || sanger::align(request))
+async fn align_reads(request: seqcore_json::AlignRequest) -> Result<seqcore_json::AlignResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || seqcore_json::align(request))
         .await
         .map_err(|e| format!("Alignment failed: {e}"))
 }
 
 #[tauri::command]
 fn catalog_version() -> &'static str {
-    seqcore::parts::catalog_version()
+    seqcore_json::catalog_version()
 }
 
 #[tauri::command]
-async fn detect_features(request: annotate::DetectRequest) -> Result<annotate::DetectResponse, String> {
-    tauri::async_runtime::spawn_blocking(move || annotate::detect(request))
+async fn detect_features(
+    request: seqcore_json::DetectRequest,
+) -> Result<seqcore_json::DetectResponse, String> {
+    tauri::async_runtime::spawn_blocking(move || seqcore_json::detect(request))
         .await
         .map_err(|e| format!("Feature detection failed: {e}"))
 }

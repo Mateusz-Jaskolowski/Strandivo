@@ -2,8 +2,8 @@
 
 **Plan, build and check your plasmids.**
 
-A free, open-source plasmid editor for Mac and Windows: maps and sequence editing, primers
-and cloning, and sequence verification with Sanger and whole-plasmid reads. [strandivo.com](https://strandivo.com)
+A free, open-source plasmid editor for Mac, Windows and Linux: maps and sequence editing,
+primers and cloning, and sequence verification with Sanger and whole-plasmid reads. [strandivo.com](https://strandivo.com)
 
 - **Open your files**: SnapGene `.dna`, GenBank, FASTA, SBOL, GFF, Geneious and `.ab1` traces
 - **Construct library**: Home lists every construct in your folders (and their subfolders)
@@ -96,6 +96,10 @@ xattr -dr com.apple.quarantine "/Applications/Strandivo.app"
 ```
 
 On Windows, SmartScreen may show "Windows protected your PC" → **More info → Run anyway**.
+
+On Linux, install the `.deb` (Debian, Ubuntu and their relatives), or make the AppImage
+executable (`chmod +x Strandivo_*.AppImage`) and run it. Strandivo needs WebKitGTK 4.1, which
+current Ubuntu, Debian and Fedora releases include.
 
 ## Using it
 

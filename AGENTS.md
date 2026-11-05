@@ -2,8 +2,8 @@
 
 Strandivo is a free (GPL-3.0) desktop app for plasmid maps, sequence editing, primers and
 sequence verification. It is a Tauri v2 app: a TypeScript interface (Vite, no UI
-framework) over a small Rust shell and a dependency-free Rust core. Users are biologists on
-Mac and Windows. Priorities: map and
+framework) over a small Rust shell and a dependency-free Rust core. Users are biologists,
+mostly on Mac and Windows; Linux builds too, and it is where CI runs. Priorities: map and
 editing, then sequence verification, then primers, then cloning simulation. `README.md`
 describes the app for users, and `CONTRIBUTING.md` how people take part and who maintains
 it.

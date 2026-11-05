@@ -183,5 +183,21 @@ says how to take part.
 
 ## Licence
 
-GPL-3.0-or-later. Strandivo uses TeselaGen's bio-parsers and sequence-utils (MIT) and
+    Strandivo: a free, open-source plasmid editor with sequence verification.
+    Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+
+    This program is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License as published by the Free Software
+    Foundation, either version 3 of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along with this
+    program. If not, see <https://www.gnu.org/licenses/>.
+
+The full licence is in [`LICENSE`](LICENSE). Contact: hello@strandivo.com.
+
+Strandivo uses TeselaGen's bio-parsers and sequence-utils (MIT) and
 [Tauri](https://tauri.app) (MIT/Apache-2.0).

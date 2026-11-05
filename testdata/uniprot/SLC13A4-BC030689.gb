@@ -1,0 +1,61 @@
+LOCUS       BC030689                2909 bp    mRNA    linear   HUM 01-JAN-2004
+DEFINITION  Homo sapiens solute carrier family 13, member 4, mRNA.
+ACCESSION   BC030689
+FEATURES             Location/Qualifiers
+     source          1..2909
+                     /organism="Homo sapiens"
+     CDS             691..2571
+                     /gene="SLC13A4"
+                     /label="SLC13A4"
+                     /db_xref="UniProtKB/Swiss-Prot:Q9UKG4"
+ORIGIN
+        1 ctgctttgca ggcccaggct caaggcaaat tataagtagg gaaccaattt gagggaaaga
+       61 catgtgaaca gagttaaggt accacgtcct gggagcgacc agcagcccca cctgaagtcc
+      121 gcatgcaact ctgacaagct caggtgcttg ttttaaggaa aggggctact agagtcttac
+      181 caacagcgag cccaggtggg agatgaaaca ggtactcccc aaaataggtc atccgaggga
+      241 ggaaaactga tggagagcac aatgtgctct gagcgttttt aatgttttta agcttttaaa
+      301 tgatttcttc aaggccgagc agcagcagca aaggtgtggc ttaaaggatt aagggggttt
+      361 ctgctgacac ctagaatgaa gttactctat tactaatcaa gccgagagga ggcccactat
+      421 gcccccgttt atcatccttt cccagttcct ttttgctggt cacaaaacga tgctcatcaa
+      481 tcccacctaa agcaggaggc caggagccca gcctcttgta gaaacagcga gggtataact
+      541 gccctcccgt tctgccccca agacgaagga ggactctcgg aagccaagaa aggtttaaga
+      601 agtctttctg gatagagagc agtgcccagg caggaagcct ttcgccggca gagcggggtc
+      661 caaggacgag ctggagagga cagaggcgcg atgggcctgc tgcagggcct gctccgagtc
+      721 cggaagctgc tgctggtcgt ctgcgtcccg ctcctgctgc tgcctctgcc cgtcctccac
+      781 cccagcagcg aggcctcgtg tgcttacgtg ctgatcgtga ctgctgtgta ctgggtgtcg
+      841 gaggcagtgc ctctgggagc tgcagccctg gtgccggcct tcctttaccc gttcttcgga
+      901 gtcctccggt ccaatgaggt ggcggcggag tacttcaaga acaccacgct gctgctggtg
+      961 ggggtcatct gcgtggcggc tgccgtggag aagtggaacc tgcataagcg cattgctctg
+     1021 cgcatggtct tgatggccgg agccaagccg ggcatgctgc tgctctgctt catgtgctgt
+     1081 accacgttgc tgtccatgtg gctgtccaac acctccacca ccgccatggt gatgcccatc
+     1141 gtggaggccg tgctgcagga gctggtcagt gctgaggacg agcagctcgt ggcgggcaac
+     1201 tccaacaccg aagaggccga acccatcagt ctggatgtaa agaacagcca accttctctg
+     1261 gaactcatct ttgtcaatga agagtccaac gcagacctca ccactctgat gcacaacgag
+     1321 aacctgaatg gtgtgccctc gatcaccaac cccatcaaaa ctgcaaacca acaccagggc
+     1381 aagaagcaac acccatccca ggaaaagcca caagtcctga cccgcagccc caggaagcag
+     1441 aagctgaaca gaaagtacag gtcccaccat gaccagatga tctgcaagtg cctctccctg
+     1501 agcatatcct actccgctac cattggcggc ctgaccacca tcatcggcac ctccaccagc
+     1561 ctcatcttcc tggaacactt caacaaccag tatccagccg cagaggtggt gaactttggc
+     1621 acctggttcc tcttcagctt ccccatatcc ctcatcatgc tggtggtcag ctggttctgg
+     1681 atgcactggc tgttcctggg ctgcaatttt aaagagacct gctctctgag caagaagaag
+     1741 aagaccaaaa gggaacagtt gtcagagaag aggatccaag aagaatatga aaaactggga
+     1801 gacattagct acccagaaat ggtgactgga tttttcttca tcctgatgac cgtactgtgg
+     1861 tttacccggg agcctggctt tgtccctggc tgggattctt tctttgaaaa gaaaggctac
+     1921 cgtactgatg ccacagtctc tgtcttcctt ggcttcctcc tcttcctcat tccagcgaag
+     1981 aagccctgct ttgggaaaaa gaatgatgga gagaaccagg agcactcact ggggaccgag
+     2041 cccatcatca cgtggaagga cttccagaag accatgccct gggagattgt cattctggtt
+     2101 gggggaggct atgctctggc ttctggtagc aagagctctg gcctctctac atggattggg
+     2161 aaccagatgt tgtccctgag cagcctccca ccgtgggctg tcaccctgct ggcatgcatc
+     2221 ctcgtgtcca ttgtcactga gtttgtgagc aacccagcaa ccatcaccat cttcctgccc
+     2281 atcctgtgca gcctgtctga aacgctgcac attaaccccc tctacaccct gatcccagtc
+     2341 accatgtgca tctcctttgc agtgatgctg cctgtgggca atccccctaa tgccatcgtc
+     2401 ttcagctatg ggcactgcca gatcaaagat atggtgaaag ctggcctggg agtcaacgtt
+     2461 attggactgg tgatagtaat ggtggccatc aacacctggg gagttagcct cttccacctg
+     2521 gacacttacc cagcatgggc gagggtcagc aacatcactg atcaagccta acgccaagtg
+     2581 tacaaactgg cccaaccaca ggagctgcca gtatccagca gtatctggac cacaggcaaa
+     2641 gaaaaccact aggaccacca ggagcacaca accccagacc cacgccggag ggcatccctc
+     2701 caccagaaga ttccgccacc tcaagtgaac tgcaggaatc ctccaacaac cacaaacaca
+     2761 tgcttcgctg ttagtgtctt cttcctgccc tcagcaccac agctcaagaa aacctaaagt
+     2821 ttcaatacaa gccataggct cacagaaaaa gaaaaagaaa ataaaaatta aattaaaaaa
+     2881 aaagaagaca aagaaaaaaa aaaaaaaaa
+//

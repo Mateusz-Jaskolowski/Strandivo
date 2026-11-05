@@ -1,0 +1,101 @@
+# The curated list behind the parts catalog. `tools/build-catalog.mjs` reads this, fetches
+# the bases and writes crates/seqcore/data/parts.tsv. This file is the curation; the
+# generated one is derived and should never be edited by hand.
+#
+# Columns
+#   id        stable slug, also the catalog's key
+#   name      what the app shows, and what src/lib/labinfo.ts matches on: see
+#             docs/feature-catalog.md before changing one
+#   type      GenBank feature type
+#   molecule  `dna`, or `protein` for an entry searched in all six frames. A tag's DNA
+#             varies with the codons someone chose, so a peptide entry is the reliable way
+#             to find one; the DNA rows cover the common choices too.
+#   from      where the bases come from:
+#               ncbi:ACC:gene=NAME     the record's own CDS (or gene) with that /gene
+#               ncbi:ACC:TYPE@a..b     that feature, asserting the record still says a..b
+#               ncbi:ACC:a..b          plain coordinates, 1-based inclusive
+#               ncbi:ACC:complement(a..b)
+#               amrfinder:SYMBOL       first allele of that gene symbol in AMR_CDS.fa
+#               uniprot:ACC            that Swiss-Prot entry's residues
+#               fpbase:NAME            that FPbase protein's residues
+#               literal                the bases in this row
+#               defined:ACC:a..b       a record's bases, but an extent we decided
+#                                      ourselves because the record marks the feature as a
+#                                      single base; `reference` must justify the extent
+#   sequence  only for `literal` rows: the bases, or residues for a protein row
+#   protein   expected translation; the generator fails if the bases don't give it, which
+#             is how a typo in a hand-entered tag gets caught
+#   reference `PMID n` or `DOI x`. Leave it empty where the source carries its own — an
+#             `ncbi` row takes the record's primary reference, `uniprot` the entry's and
+#             `fpbase` the protein's DOI, so those are right by construction. A `literal`
+#             row has nothing to fetch, and a `defined` row needs the paper that justifies
+#             the extent, so for those it is required and hand-curated.
+#   citation  first author, year and journal of that `reference`, required whenever
+#             `reference` is hand-curated. The generator looks the PMID or DOI up and
+#             fails the build unless the author and year agree, which is what stops a
+#             citation from drifting onto the wrong paper.
+#   note      one line for the catalog and the review dialog
+#
+id	name	type	molecule	from	sequence	protein	reference	citation	note
+ampr	AmpR	CDS	dna	ncbi:J01749:gene=bla					TEM-1 beta-lactamase of pBR322; ampicillin and carbenicillin resistance
+teta	TetA	CDS	dna	ncbi:J01749:gene=tet					Tetracycline efflux protein of pBR322
+rop	Rop	CDS	dna	ncbi:J01749:1915..2106					Rop/Rom, lowers the copy number of ColE1-type origins
+p15a-ori	p15A ori	rep_origin	dna	ncbi:X06403:rep_origin@581..1493					Medium-copy origin of pACYC184; compatible with ColE1-type origins
+ori	ori	rep_origin	dna	defined:J01749:2534..3122			PMID 6156450	Itoh 1980 Proc Natl Acad Sci U S A	ColE1/pMB1 origin, shared by pBR322 and the pUC vectors. Extent is the RNA II transcript region up to the RNase H cleavage site, which J01749 marks as a single base at 2535
+f1-ori	f1 ori	rep_origin	dna	defined:V00606:5501..6005			PMID 6282703	Beck 1981 Gene	Intergenic region of phage f1, carrying the (+) and (-) strand origins. Extent is what lies between gene IV (ends 5500) and gene II (starts 6006) in V00606
+laci	lacI	CDS	dna	ncbi:J01636:gene=lacI					Lac repressor
+lacz	lacZ	CDS	dna	ncbi:J01636:gene=lacZ					Beta-galactosidase; the lacZ-alpha fragment of pUC vectors matches its start
+lac-operator	lac operator	protein_bind	dna	ncbi:J01636:1246..1266					Where the Lac repressor binds
+cap-site	CAP binding site	protein_bind	dna	ncbi:J01636:1162..1199					Activates the lac promoter when bound by CAP
+kanr	KanR	CDS	dna	amrfinder:aph(3')-Ia			PMID 31427293	Feldgarden 2019 Antimicrob Agents Chemother	Aminoglycoside phosphotransferase; kanamycin resistance
+neor	NeoR	CDS	dna	amrfinder:aph(3')-IIa			PMID 31427293	Feldgarden 2019 Antimicrob Agents Chemother	aph(3')-IIa; kanamycin in bacteria, G418/neomycin in eukaryotes
+cmr	CmR	CDS	dna	amrfinder:catA1			PMID 31427293	Feldgarden 2019 Antimicrob Agents Chemother	Chloramphenicol acetyltransferase
+specr	SpecR	CDS	dna	amrfinder:aadA1			PMID 31427293	Feldgarden 2019 Antimicrob Agents Chemother	Aminoglycoside adenylyltransferase; spectinomycin and streptomycin
+zeor	BleoR	CDS	dna	amrfinder:bleO			PMID 31427293	Feldgarden 2019 Antimicrob Agents Chemother	bleO, a bacterial bleomycin-binding protein. Not the Sh ble of eukaryotic zeocin vectors, which AMRFinderPlus does not carry
+gentr	GentR	CDS	dna	amrfinder:aac(3)-Ia			PMID 31427293	Feldgarden 2019 Antimicrob Agents Chemother	Aminoglycoside acetyltransferase; gentamicin resistance
+ermr	ErmR	CDS	dna	amrfinder:erm(C)			PMID 31427293	Feldgarden 2019 Antimicrob Agents Chemother	23S rRNA methyltransferase; erythromycin resistance
+t7-promoter	T7 promoter	promoter	dna	literal	TAATACGACTCACTATAG		PMID 6864790	Dunn 1983 J Mol Biol	Promoter for bacteriophage T7 RNA polymerase
+t3-promoter	T3 promoter	promoter	dna	literal	AATTAACCCTCACTAAAG		PMID 6574450	Bailey 1983 Proc Natl Acad Sci U S A	Promoter for bacteriophage T3 RNA polymerase
+sp6-promoter	SP6 promoter	promoter	dna	literal	ATTTAGGTGACACTATAG		PMID 3010240	Brown 1986 Nucleic Acids Res	Promoter for bacteriophage SP6 RNA polymerase
+t7-terminator	T7 terminator	terminator	dna	literal	CTAGCATAACCCCTTGGGGCCTCTAAACGGGTCTTGAGGGGTTTTTTG		PMID 6864790	Dunn 1983 J Mol Biol	T-phi transcription terminator of bacteriophage T7
+his6	6xHis	misc_feature	dna	literal	CACCACCACCACCACCAC	HHHHHH	DOI 10.1038/nbt1188-1321	Hochuli 1988 Nature Biotechnology	Six-histidine tag for nickel affinity purification
+his6-cat	6xHis	misc_feature	dna	literal	CATCACCATCACCATCAC	HHHHHH	DOI 10.1038/nbt1188-1321	Hochuli 1988 Nature Biotechnology	Six-histidine tag, the CATCAC codon variant
+his8	8xHis	misc_feature	dna	literal	CATCACCATCACCATCACCATCAC	HHHHHHHH	DOI 10.1038/nbt1188-1321	Hochuli 1988 Nature Biotechnology	Eight-histidine tag
+flag	FLAG	misc_feature	dna	literal	GACTACAAAGACGATGACGACAAG	DYKDDDDK	DOI 10.1038/nbt1088-1204	Hopp 1988 Bio/Technology	FLAG epitope tag
+flag3	3xFLAG	misc_feature	dna	literal	GACTACAAAGACCATGACGGTGATTATAAAGATCATGACATCGATTACAAGGATGACGATGACAAG	DYKDHDGDYKDHDIDYKDDDDK	PMID 10769759	Hernan 2000 Biotechniques	Three tandem FLAG epitopes
+ha	HA	misc_feature	dna	literal	TACCCATACGATGTTCCAGATTACGCT	YPYDVPDYA	PMID 6204768	Wilson 1984 Cell	Influenza haemagglutinin epitope tag
+myc	Myc	misc_feature	dna	literal	GAACAAAAACTCATCTCAGAAGAGGATCTG	EQKLISEEDL	PMID 3915782	Evan 1985 Mol Cell Biol	c-Myc epitope tag
+v5	V5	misc_feature	dna	literal	GGTAAGCCTATCCCTAACCCTCTCCTCGGTCTCGATTCTACG	GKPIPNPLLGLDST	PMID 1713260	Southern 1991 J Gen Virol	V5 epitope tag from SV5
+strep2	Strep-Tag II	misc_feature	dna	literal	TGGAGCCACCCGCAGTTCGAAAAA	WSHPQFEK	PMID 8636976	Schmidt 1996 J Mol Biol	Streptavidin-binding tag
+tev-site	TEV site	misc_feature	dna	literal	GAAAACCTGTATTTTCAGGGC	ENLYFQG	PMID 3409865	Dougherty 1988 EMBO J	TEV protease cleavage site. The virus's own junction is ENLYFQ|S; ENLYFQ|G is the engineered form used in constructs
+thrombin-site	Thrombin site	misc_feature	dna	literal	CTGGTGCCGCGCGGCAGC	LVPRGS	PMID 2863141	Chang 1985 Eur J Biochem	Thrombin cleavage site. A consensus recognition sequence, not a stretch of prothrombin or fibrinogen
+sv40-nls	SV40 NLS	misc_feature	dna	literal	CCAAAAAAGAAGAGAAAGGTA	PKKKRKV	PMID 6096007	Kalderon 1984 Cell	Nuclear localisation signal of SV40 large T antigen
+p2a	P2A	misc_feature	dna	literal	GGAAGCGGAGCTACTAACTTCAGCCTGCTGAAGCAGGCTGGAGACGTGGAGGAGAACCCTGGACCT	GSGATNFSLLKQAGDVEENPGP	PMID 21602908	Kim 2011 PLoS One	Self-cleaving peptide of porcine teschovirus-1. ATNFSLLKQAGDVEENPGP is the virus's; the leading GSG is an added linker
+t2a	T2A	misc_feature	dna	literal	GGAAGCGGAGAGGGCAGAGGAAGTCTGCTAACATGCGGTGACGTCGAGGAGAATCCTGGCCCA	GSGEGRGSLLTCGDVEENPGP	PMID 21602908	Kim 2011 PLoS One	Self-cleaving peptide of Thosea asigna virus. EGRGSLLTCGDVEENPGP is the virus's; the leading GSG is an added linker
+loxp	loxP	misc_recomb	dna	literal	ATAACTTCGTATAATGTATGCTATACGAAGTTAT		PMID 6954485	Hoess 1982 Proc Natl Acad Sci U S A	Cre recombinase target site
+frt	FRT	misc_recomb	dna	literal	GAAGTTCCTATTCTCTAGAAAGTATAGGAACTTC		PMID 2997780	Senecoff 1985 Proc Natl Acad Sci U S A	Flp recombinase target site
+egfp	EGFP	CDS	protein	fpbase:EGFP					Enhanced green fluorescent protein; the DNA varies with the codons chosen, so only the protein is reliable
+mneongreen	mNeonGreen	CDS	protein	fpbase:mNeonGreen					Bright green fluorescent protein from Branchiostoma lanceolatum
+mcherry	mCherry	CDS	protein	fpbase:mCherry					Monomeric red fluorescent protein
+mscarlet	mScarlet	CDS	protein	fpbase:mScarlet					Bright monomeric red fluorescent protein
+mruby3	mRuby3	CDS	protein	fpbase:mRuby3					Bright monomeric red fluorescent protein
+eyfp	EYFP	CDS	protein	fpbase:EYFP					Enhanced yellow fluorescent protein
+mturquoise2	mTurquoise2	CDS	protein	fpbase:mTurquoise2					Bright monomeric cyan fluorescent protein
+tagbfp	TagBFP	CDS	protein	fpbase:TagBFP					Monomeric blue fluorescent protein
+tdtomato	tdTomato	CDS	protein	fpbase:tdTomato					Tandem dimer red fluorescent protein; its two halves are nearly identical
+cas9	Cas9	CDS	protein	uniprot:Q99ZW2					Streptococcus pyogenes Cas9 nuclease
+mbp	MBP	CDS	protein	uniprot:P0AEX9					Maltose-binding protein, used as a solubility tag. The entry is full-length MalE, so a construct without the signal peptide matches it from residue 27
+gst	GST	CDS	protein	uniprot:P08515					Schistosoma japonicum glutathione S-transferase, the GST fusion tag
+cre	Cre	CDS	protein	uniprot:P06956					Cre recombinase of phage P1, which acts on loxP
+t7-rnap	T7 RNA polymerase	CDS	protein	uniprot:P00573					Transcribes from the T7 promoter
+sumo	SUMO	CDS	protein	uniprot:Q12306					Yeast Smt3, the SUMO solubility and cleavage tag. The entry is the full protein, so a mature SUMO fusion matches its start
+his6-aa	6xHis	misc_feature	protein	literal	HHHHHH		DOI 10.1038/nbt1188-1321	Hochuli 1988 Nature Biotechnology	Six-histidine tag as a peptide, so any choice of codons is found
+flag-aa	FLAG	misc_feature	protein	literal	DYKDDDDK		DOI 10.1038/nbt1088-1204	Hopp 1988 Bio/Technology	FLAG epitope as a peptide
+ha-aa	HA	misc_feature	protein	literal	YPYDVPDYA		PMID 6204768	Wilson 1984 Cell	HA epitope as a peptide
+myc-aa	Myc	misc_feature	protein	literal	EQKLISEEDL		PMID 3915782	Evan 1985 Mol Cell Biol	c-Myc epitope as a peptide
+v5-aa	V5	misc_feature	protein	literal	GKPIPNPLLGLDST		PMID 1713260	Southern 1991 J Gen Virol	V5 epitope as a peptide
+strep2-aa	Strep-Tag II	misc_feature	protein	literal	WSHPQFEK		PMID 8636976	Schmidt 1996 J Mol Biol	Streptavidin-binding tag as a peptide
+tev-aa	TEV site	misc_feature	protein	literal	ENLYFQG		PMID 3409865	Dougherty 1988 EMBO J	TEV cleavage site as a peptide. ENLYFQ is the virus's own; the final G is the engineered P1' residue
+nls-aa	SV40 NLS	misc_feature	protein	literal	PKKKRKV		PMID 6096007	Kalderon 1984 Cell	SV40 nuclear localisation signal as a peptide
+p2a-aa	P2A	misc_feature	protein	literal	GSGATNFSLLKQAGDVEENPGP		PMID 21602908	Kim 2011 PLoS One	P2A as a peptide. The virus's own is ATNFSLLKQAGDVEENPGP; the leading GSG is an added linker
+t2a-aa	T2A	misc_feature	protein	literal	GSGEGRGSLLTCGDVEENPGP		PMID 21602908	Kim 2011 PLoS One	T2A as a peptide. The virus's own is EGRGSLLTCGDVEENPGP; the leading GSG is an added linker

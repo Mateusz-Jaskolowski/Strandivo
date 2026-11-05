@@ -1,0 +1,143 @@
+name: Checks
+
+# Runs on every push, on Linux only (the cheapest runners). One job tests the alignment
+# core and the interface logic, type-checks and lints, builds the Linux app, then clicks
+# through it on a virtual display with WebDriver (e2e/run.mjs). Screenshots and a report
+# go to the `e2e-results` branch, or for a pull request from a fork (whose token can't
+# push) to the run's artifacts. Installers are built by build.yml, for a version tag.
+#
+# Steps run through .github/scripts/run.sh, which repeats a failing step's output as an
+# annotation so it can be read through the GitHub API.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Agent guide mentions only files that exist
+        run: .github/scripts/check-agents-paths.sh
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # Ubuntu's mirror is sometimes slow enough (10 s a package) to stop the install. The
+      # packages are kept in ~/apt-archives, restored from the last run, so most runs
+      # download only what changed, and a retry carries on from what was downloaded.
+      - name: Restore downloaded Linux packages
+        id: apt-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-archives
+          key: apt-noble-${{ hashFiles('.github/workflows/checks.yml') }}
+          restore-keys: apt-noble-
+
+      - name: Install Linux libraries, WebKit WebDriver and a virtual display
+        id: libs
+        timeout-minutes: 25
+        run: |
+          export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+          mkdir -p ~/apt-archives/partial
+          .github/scripts/run.sh "apt update" timeout 180 sudo -E apt-get update -q
+          apt_install() {
+            timeout 420 sudo -E apt-get install -y -q --no-install-recommends \
+              -o Acquire::Retries=3 -o Dir::Cache::Archives="$HOME/apt-archives" \
+              libwebkit2gtk-4.1-dev librsvg2-dev webkit2gtk-driver xvfb dbus dbus-x11 \
+              xauth fonts-dejavu-core
+          }
+          export -f apt_install
+          apt_install || apt_install || .github/scripts/run.sh "apt install" apt_install
+          sudo chown -R "$USER" ~/apt-archives
+
+      - name: Keep downloaded Linux packages for the next run
+        if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.apt-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-cache.outputs.cache-primary-key }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates/seqcore -> target
+            src-tauri -> target
+          key: checks
+
+      - name: Alignment core tests
+        working-directory: crates/seqcore
+        run: ../../.github/scripts/run.sh "Alignment core tests" cargo test --release
+
+      - name: Install JavaScript dependencies
+        id: npm
+        if: ${{ !cancelled() }}
+        run: .github/scripts/run.sh "npm install" npm install --no-audit --no-fund
+
+      - name: Interface logic tests
+        if: ${{ !cancelled() && steps.npm.outcome == 'success' }}
+        run: .github/scripts/run.sh "Interface logic tests" npm test
+
+      - name: Type check interface
+        if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
+        run: .github/scripts/run.sh "Type check" npm run typecheck
+
+      - name: Build the app (debug build, needed for WebDriver)
+        if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
+        run: .github/scripts/run.sh "Build Linux app" npm run tauri -- build --debug --no-bundle
+
+      - name: Lint desktop shell
+        if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
+        env:
+          ANNOTATE_WARNINGS: "^(warning|error)"
+        working-directory: src-tauri
+        run: ../.github/scripts/run.sh "Desktop shell lint" cargo clippy --all-targets
+
+      - name: Install tauri-driver
+        if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
+        run: command -v tauri-driver || .github/scripts/run.sh "install tauri-driver" cargo install tauri-driver --locked
+
+      - name: Click through the app
+        if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
+        env:
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          NO_AT_BRIDGE: "1"
+        run: dbus-run-session -- xvfb-run -a -s "-screen 0 1600x1000x24" node e2e/run.mjs src-tauri/target/debug/strandivo e2e-out
+
+      - name: Publish screenshots and report
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        run: |
+          [ -d e2e-out ] || exit 0
+          cd e2e-out
+          git init -q -b e2e-results
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "End-to-end results for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" e2e-results
+
+      - name: Keep screenshots and report with the run (pull requests from forks)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: e2e-out
+          if-no-files-found: ignore

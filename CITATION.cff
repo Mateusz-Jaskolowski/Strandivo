@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: If you use Strandivo in your research, please cite it as below.
+type: software
+title: Strandivo
+abstract: >-
+  A free, open-source desktop app for plasmid maps, sequence editing, primers and checking
+  Sanger and whole-plasmid sequencing reads.
+authors:
+  - family-names: Jaskolowski
+    given-names: Mateusz
+    orcid: "https://orcid.org/0000-0001-6618-7048"
+contact:
+  - name: Strandivo maintainers
+    email: hello@strandivo.com
+license: GPL-3.0-or-later
+url: https://strandivo.com
+repository-code: https://github.com/Mateusz-Jaskolowski/Strandivo
+keywords:
+  - plasmid
+  - molecular cloning
+  - Sanger sequencing
+  - primer design
+  - bioinformatics

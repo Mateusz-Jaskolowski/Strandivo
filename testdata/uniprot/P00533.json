@@ -1,0 +1,171 @@
+{
+ "entryType": "UniProtKB reviewed (Swiss-Prot)",
+ "primaryAccession": "P00533",
+ "proteinDescription": {
+  "recommendedName": {
+   "fullName": {
+    "evidences": [
+     {
+      "evidenceCode": "ECO:0000305"
+     }
+    ],
+    "value": "Epidermal growth factor receptor"
+   },
+   "ecNumbers": [
+    {
+     "evidences": [
+      {
+       "evidenceCode": "ECO:0000269",
+       "source": "PubMed",
+       "id": "32926474"
+      }
+     ],
+     "value": "2.7.10.1"
+    }
+   ]
+  },
+  "alternativeNames": [
+   {
+    "fullName": {
+     "value": "Proto-oncogene c-ErbB-1"
+    }
+   },
+   {
+    "fullName": {
+     "value": "Receptor tyrosine-protein kinase erbB-1"
+    }
+   }
+  ],
+  "flag": "Precursor"
+ },
+ "genes": [
+  {
+   "geneName": {
+    "evidences": [
+     {
+      "evidenceCode": "ECO:0000303",
+      "source": "PubMed",
+      "id": "32926474"
+     },
+     {
+      "evidenceCode": "ECO:0000312",
+      "source": "HGNC",
+      "id": "HGNC:3236"
+     }
+    ],
+    "value": "EGFR"
+   },
+   "synonyms": [
+    {
+     "value": "ERBB"
+    },
+    {
+     "value": "ERBB1"
+    },
+    {
+     "value": "HER1"
+    }
+   ]
+  }
+ ],
+ "features": [
+  {
+   "type": "Signal",
+   "location": {
+    "start": {
+     "value": 1,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 24,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "15340161"
+    },
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "6328312"
+    },
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "Reference",
+     "id": "Ref.16"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 25,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 645,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 646,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 668,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 669,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1210,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  }
+ ],
+ "sequence": {
+  "value": "MRPSGTAGAALLALLAALCPASRALEEKKVCQGTSNKLTQLGTFEDHFLSLQRMFNNCEVVLGNLEITYVQRNYDLSFLKTIQEVAGYVLIALNTVERIPLENLQIIRGNMYYENSYALAVLSNYDANKTGLKELPMRNLQEILHGAVRFSNNPALCNVESIQWRDIVSSDFLSNMSMDFQNHLGSCQKCDPSCPNGSCWGAGEENCQKLTKIICAQQCSGRCRGKSPSDCCHNQCAAGCTGPRESDCLVCRKFRDEATCKDTCPPLMLYNPTTYQMDVNPEGKYSFGATCVKKCPRNYVVTDHGSCVRACGADSYEMEEDGVRKCKKCEGPCRKVCNGIGIGEFKDSLSINATNIKHFKNCTSISGDLHILPVAFRGDSFTHTPPLDPQELDILKTVKEITGFLLIQAWPENRTDLHAFENLEIIRGRTKQHGQFSLAVVSLNITSLGLRSLKEISDGDVIISGNKNLCYANTINWKKLFGTSGQKTKIISNRGENSCKATGQVCHALCSPEGCWGPEPRDCVSCRNVSRGRECVDKCNLLEGEPREFVENSECIQCHPECLPQAMNITCTGRGPDNCIQCAHYIDGPHCVKTCPAGVMGENNTLVWKYADAGHVCHLCHPNCTYGCTGPGLEGCPTNGPKIPSIATGMVGALLLLLVVALGIGLFMRRRHIVRKRTLRRLLQERELVEPLTPSGEAPNQALLRILKETEFKKIKVLGSGAFGTVYKGLWIPEGEKVKIPVAIKELREATSPKANKEILDEAYVMASVDNPHVCRLLGICLTSTVQLITQLMPFGCLLDYVREHKDNIGSQYLLNWCVQIAKGMNYLEDRRLVHRDLAARNVLVKTPQHVKITDFGLAKLLGAEEKEYHAEGGKVPIKWMALESILHRIYTHQSDVWSYGVTVWELMTFGSKPYDGIPASEISSILEKGERLPQPPICTIDVYMIMVKCWMIDADSRPKFRELIIEFSKMARDPQRYLVIQGDERMHLPSPTDSNFYRALMDEEDMDDVVDADEYLIPQQGFFSSPSTSRTPLLSSLSATSNNSTVACIDRNGLQSCPIKEDSFLQRYSSDPTGALTEDSIDDTFLPVPEYINQSVPKRPAGSVQNPVYHNQPLNPAPSRDPHYQDPHSTAVGNPEYLNTVQPTCVNSTFDSPAHWAQKGSHQISLDNPDYQQDFFPKEAKPNGIFKGSTAENAEYLRVAPQSSEFIGA",
+  "length": 1210,
+  "molWeight": 134277,
+  "crc64": "D8A2A50B4EFB6ED2",
+  "md5": "99D03B567DBCDD7FB0DD21FB40D5D283"
+ },
+ "extraAttributes": {
+  "uniParcId": "UPI000003E750"
+ }
+}

@@ -1,0 +1,275 @@
+{
+ "entryType": "UniProtKB reviewed (Swiss-Prot)",
+ "primaryAccession": "Q9UKG4",
+ "proteinDescription": {
+  "recommendedName": {
+   "fullName": {
+    "value": "Solute carrier family 13 member 4"
+   }
+  },
+  "alternativeNames": [
+   {
+    "fullName": {
+     "value": "Na(+)/sulfate cotransporter SUT-1"
+    }
+   },
+   {
+    "fullName": {
+     "value": "NaS2"
+    }
+   }
+  ]
+ },
+ "genes": [
+  {
+   "geneName": {
+    "value": "SLC13A4"
+   },
+   "synonyms": [
+    {
+     "value": "SUT1"
+    }
+   ]
+  }
+ ],
+ "features": [
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 13,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 33,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 52,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 72,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 77,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 97,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 113,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 133,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 274,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 294,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 309,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 329,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 372,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 392,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 414,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 434,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 466,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 486,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 499,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 519,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 543,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 563,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 590,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 610,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000255"
+    }
+   ]
+  }
+ ],
+ "sequence": {
+  "value": "MGLLQGLLRVRKLLLVVCVPLLLLPLPVLHPSSEASCAYVLIVTAVYWVSEAVPLGAAALVPAFLYPFFGVLRSNEVAAEYFKNTTLLLVGVICVAAAVEKWNLHKRIALRMVLMAGAKPGMLLLCFMCCTTLLSMWLSNTSTTAMVMPIVEAVLQELVSAEDEQLVAGNSNTEEAEPISLDVKNSQPSLELIFVNEESNADLTTLMHNENLNGVPSITNPIKTANQHQGKKQHPSQEKPQVLTPSPRKQKLNRKYRSHHDQMICKCLSLSISYSATIGGLTTIIGTSTSLIFLEHFNNQYPAAEVVNFGTWFLFSFPISLIMLVVSWFWMHWLFLGCNFKETCSLSKKKKTKREQLSEKRIQEEYEKLGDISYPEMVTGFFFILMTVLWFTREPGFVPGWDSFFEKKGYRTDATVSVFLGFLLFLIPAKKPCFGKKNDGENQEHSLGTEPIITWKDFQKTMPWEIVILVGGGYALASGSKSSGLSTWIGNQMLSLSSLPPWAVTLLACILVSIVTEFVSNPATITIFLPILCSLSETLHINPLYTLIPVTMCISFAVMLPVGNPPNAIVFSYGHCQIKDMVKAGLGVNVIGLVIVMVAINTWGVSLFHLDTYPAWARVSNITDQA",
+  "length": 626,
+  "molWeight": 69358,
+  "crc64": "D84A18376DFAFA2B",
+  "md5": "9306BF15388AE81D53A87EBBEEE90AEB"
+ },
+ "extraAttributes": {
+  "uniParcId": "UPI00000343D9"
+ }
+}

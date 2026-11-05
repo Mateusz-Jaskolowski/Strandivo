@@ -1,0 +1,50 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thanks for reporting it. Please don't attach sequences or reads you can't share
+        publicly: issues are public. A made-up or public sequence that shows the problem is
+        just as good.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      placeholder: |
+        1. Open a GenBank file with …
+        2. Click …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Strandivo version
+      description: In Strandivo → About Strandivo (Help → About on Windows and Linux).
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Computer
+      options:
+        - Mac with Apple silicon (M1 or later)
+        - Mac with Intel
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Screenshots, the file type, or an error message.

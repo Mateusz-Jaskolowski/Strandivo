@@ -1,0 +1,484 @@
+/* Main window (sv-*): the app bar with Home and a tab per open file, and Home's construct
+   library. Uses the tokens defined at the top of styles.css. */
+
+.sv-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 var(--sans);
+}
+.sv-shell button,
+.sv-shell input {
+  font-family: inherit;
+}
+.sv-shell :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.sv-shell-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sv-shell-body > .sv-app {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sv-shell-loading {
+  margin: auto;
+}
+
+/* Settings and the primer library over the tabs (in a browser; the app gives them windows). */
+.sv-shell-body {
+  position: relative;
+}
+.sv-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.sv-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.sv-panel-library {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sv-panel-library > .sv-app {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sv-panel-library .sv-libwin-head {
+  padding-right: 56px; /* room for the close button */
+}
+.sv-panel-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 1;
+}
+
+/* ---------- app bar ---------- */
+.sv-appbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 8px 0 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.sv-mac-titlebar .sv-appbar {
+  padding-left: 80px; /* room for the window buttons */
+}
+.sv-doctabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sv-doctabs::-webkit-scrollbar {
+  display: none;
+}
+/* A tab is the same colour as the toolbar under it and sits on it. */
+.sv-apptab,
+.sv-doctab {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  box-sizing: border-box;
+  margin-bottom: -1px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.sv-apptab {
+  gap: 6px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.sv-apptab:hover,
+.sv-doctab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.sv-apptab.sv-on,
+.sv-doctab.sv-on {
+  background: var(--side);
+  border-color: var(--line);
+  color: var(--text);
+  font-weight: 600;
+}
+.sv-doctab {
+  flex: 0 1 200px;
+  min-width: 110px;
+  max-width: 220px;
+  padding: 0 4px 0 0;
+}
+.sv-doctab-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sv-doctab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Unsaved changes: a dot after the name. */
+.sv-doctab-dirty .sv-doctab-main::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.sv-doctab-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  opacity: 0;
+}
+.sv-doctab:hover .sv-doctab-close,
+.sv-doctab.sv-on .sv-doctab-close,
+.sv-doctab-close:focus-visible {
+  opacity: 1;
+}
+.sv-doctab-close:hover {
+  background: var(--line-2);
+  color: var(--text);
+}
+.sv-appbar-tools {
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  gap: 2px;
+}
+
+/* ---------- Home: the construct library ---------- */
+.sv-home {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  border-top: 1px solid var(--line);
+  margin-top: -1px;
+}
+.sv-home-side {
+  flex: 0 0 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 10px 16px;
+  background: var(--side);
+  border-right: 1px solid var(--line);
+}
+.sv-home-side .sv-section-head {
+  padding-left: 6px;
+}
+.sv-home-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px 6px;
+}
+.sv-home-actions .sv-btn {
+  flex: 1 1 0;
+  justify-content: center;
+}
+.sv-home-folders,
+.sv-home-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sv-home-folders > p,
+.sv-home-recent > p {
+  margin: 2px 6px;
+}
+.sv-home-folder {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 4px 0 6px;
+  border-radius: 6px;
+  color: var(--text-2);
+}
+.sv-home-folder:hover {
+  background: var(--hover);
+}
+.sv-home-folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.sv-home-folder .sv-count {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.sv-home-folder .sv-icon-btn {
+  opacity: 0;
+}
+.sv-home-folder:hover .sv-icon-btn,
+.sv-home-folder .sv-icon-btn:focus-visible {
+  opacity: 1;
+}
+.sv-link-btn {
+  align-self: flex-start;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.sv-link-btn:hover {
+  text-decoration: underline;
+}
+.sv-home-recent-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.sv-home-recent-item:hover {
+  background: var(--hover);
+}
+.sv-home-recent-name,
+.sv-home-recent-dir {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sv-home-recent-name {
+  font-weight: 500;
+}
+.sv-home-recent-dir {
+  font-size: 11.5px;
+  color: var(--text-3);
+  /* Keeps the end of a long path, which names the folder. */
+  direction: rtl;
+  text-align: left;
+}
+.sv-home-hint {
+  margin: auto 6px 0;
+  padding-top: 12px;
+  line-height: 1.45;
+}
+.sv-home-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sv-home-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px 12px;
+}
+.sv-home-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+.sv-home-title .sv-count {
+  color: var(--text-3);
+}
+.sv-home-search {
+  margin-left: auto;
+  width: 300px;
+  padding: 0;
+}
+.sv-home-search > .sv-icon {
+  left: 9px;
+}
+.sv-home-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 20px 20px;
+}
+.sv-home-table {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+}
+.sv-home-table td {
+  vertical-align: top;
+}
+.sv-home-table tbody tr {
+  cursor: default;
+}
+.sv-home-group th,
+.sv-home-subgroup th {
+  background: var(--side);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.sv-home-group th {
+  padding-top: 10px;
+}
+.sv-home-subgroup th {
+  padding-left: 14px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.sv-home-subgroup .sv-icon {
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.sv-home-name {
+  white-space: normal;
+  min-width: 160px;
+}
+.sv-home-open {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.sv-home-open:hover {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+.sv-home-unreadable .sv-home-open {
+  color: var(--text-3);
+}
+.sv-home-verified {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: var(--chip);
+  font-size: 11px;
+  line-height: 18px;
+}
+.sv-home-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.sv-home-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.sv-home-bad {
+  background: var(--diff-soft);
+  color: var(--diff);
+}
+.sv-home-contents {
+  min-width: 180px;
+  white-space: normal;
+  color: var(--text-2);
+}
+.sv-home-note-cell {
+  width: 30%;
+  min-width: 180px;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+.sv-home-note {
+  width: 100%;
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
+}
+.sv-home-note:hover {
+  border-color: var(--line-2);
+}
+.sv-home-note:focus {
+  border-color: var(--accent);
+  background: var(--field);
+}
+.sv-home-empty {
+  max-width: 500px;
+  margin: 56px auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+  text-align: center;
+}
+.sv-home-empty > .sv-icon {
+  color: var(--text-3);
+}
+.sv-home-empty h2 {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 16px;
+}
+.sv-home-empty p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sv-home-detected {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}

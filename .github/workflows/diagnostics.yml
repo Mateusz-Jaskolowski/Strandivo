@@ -1,0 +1,43 @@
+name: Diagnostics
+
+# Manually triggered helper for development: installs dependencies and runs one shell
+# command, posting its output as annotations on the run.
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: Shell command to run after npm install
+        required: true
+      os:
+        description: Runner
+        type: choice
+        options: [ubuntu-24.04, macos-latest, windows-latest]
+        default: ubuntu-24.04
+      install:
+        description: Run npm install first
+        type: boolean
+        default: true
+
+# May push a throwaway branch (e.g. a built interface for UI testing).
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install JavaScript dependencies
+        if: ${{ inputs.install }}
+        shell: bash
+        run: npm install --no-audit --no-fund > /dev/null 2>&1 || echo "::warning::npm install failed"
+      - name: Run command
+        shell: bash
+        env:
+          CMD: ${{ inputs.command }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .github/scripts/report.sh "$CMD"

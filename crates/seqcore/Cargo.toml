@@ -1,0 +1,9 @@
+[package]
+name = "seqcore"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Sequence analysis core: Sanger read trimming, alignment to a reference and difference calling"
+
+# Intentionally dependency-free so it builds and tests offline and stays easy to audit.
+[dependencies]

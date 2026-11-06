@@ -43,7 +43,10 @@ export const USAGE_EVENTS = {
   reads_aligned: { why: "How many reads people check at once, and whether long reads matter yet.", props: { reads: "count", kind: ["sanger", "long", "both"] } },
   check_saved: { why: "Whether people keep their checks as files.", props: {} },
   update_installed: { why: "How quickly a new version reaches people.", props: {} },
-  error: { why: "How often something goes wrong, by kind; never the message, which can name a file.", props: { kind: ["uncaught", "rejection", "command"] } }
+  error: {
+    why: "How often something goes wrong, by kind, crashes included (counted on the next launch); never the message, which can name a file.",
+    props: { kind: ["uncaught", "rejection", "command", "crash"] }
+  }
 } as const satisfies Record<string, EventSpec>;
 
 export type UsageEventName = keyof typeof USAGE_EVENTS;

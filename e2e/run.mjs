@@ -1204,6 +1204,28 @@ async function main() {
     check("Open on GitHub asks for that issue by its number", await s.waitFor("window.__e2eFeedback.issues[0] === 7", 3000));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+
+    // --- a crash last time: the strip, and the bug report it opens, shown before sending ---
+    const crashFile = `window.__strandivoCrash = JSON.stringify({ format: 1, version: "0.4.0", os: "linux", arch: "x86_64", time: 1793957400, thread: "tokio-runtime-worker", location: "reqwest-0.13.0/src/async_impl/client.rs:2311:5", message: "Could not read /home/anna/Lab plasmids/pSecret.gb" });`;
+    const takeCrash = () => s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.checkCrash().then(() => done(true), e => done(String(e)));");
+    await s.exec(crashFile);
+    await takeCrash();
+    const crashStrip = "document.querySelector('.sv-crash:not([hidden])')";
+    check("A crash last time is offered in a strip under the app bar", await s.waitFor(`/quit unexpectedly last time/.test(${crashStrip}?.textContent ?? '')`, 3000));
+    check("Nothing about it is sent on its own", (await s.exec("return window.__e2eFeedback.reports.length")) === 1);
+    await s.click("//*[contains(@class,'sv-crash')]//button[normalize-space()='Report it…']", "xpath");
+    check("Report it… opens Report a Bug about the crash", await s.waitFor("document.querySelector('.sv-dialog-title')?.textContent === 'Send feedback' && document.querySelector('input[aria-label=\"Summary\"]')?.value === 'Strandivo quit unexpectedly' && document.querySelector('.sv-feedback [aria-pressed=\"true\"]')?.textContent === 'Bug'", 3000));
+    const crashShown = await s.exec("const pre = document.querySelector('.sv-feedback-crash'); return pre && !pre.hidden ? pre.textContent : ''");
+    check("The crash is shown in full before sending, without the file's path", /Strandivo 0\.4\.0, 2026-11-06 09:30:00 UTC/.test(crashShown) && /client\.rs:2311:5/.test(crashShown) && /Could not read <path>/.test(crashShown) && !/anna|pSecret/.test(crashShown), crashShown.slice(0, 200));
+    await s.shot("12d-crash-report");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Send']", "xpath");
+    const crashSent = await s.waitFor("window.__e2eFeedback.reports.length === 2", 3000) ? await s.exec("return window.__e2eFeedback.reports[1]") : null;
+    check("Send sends the crash as it was shown, and no path", crashSent?.crash?.location === "reqwest-0.13.0/src/async_impl/client.rs:2311:5" && crashSent.crash.message === "Could not read <path>" && crashSent.errors === null && !/anna|pSecret/.test(JSON.stringify(crashSent)), JSON.stringify(crashSent)?.slice(0, 240));
+    check("Once sent, the strip goes", await s.waitFor("document.querySelector('.sv-crash')?.hidden === true", 3000));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await takeCrash();
+    check("A crash is offered once", await s.exec("return document.querySelector('.sv-crash').hidden === true"));
     await s.exec("delete window.__strandivoFeedback;");
 
     // --- usage statistics: through the hook, so CI never sends any ---
@@ -1217,6 +1239,15 @@ async function main() {
     const usage = await s.exec("return window.__e2eUsage");
     const names = usage.map(e => e.name);
     check("Turned on, the app counts its start and what is used", names.includes("app_started") && usage.some(e => e.name === "view_shown" && e.props.view === "primers"), JSON.stringify(usage).slice(0, 240));
+    // A crash last time is counted, by its kind alone; Dismiss forgets it.
+    await s.exec(crashFile);
+    await takeCrash();
+    await s.waitFor(`!!${crashStrip}`, 3000);
+    await s.click("//*[contains(@class,'sv-crash')]//button[normalize-space()='Dismiss']", "xpath");
+    check("Dismiss hides the crash strip", await s.waitFor("document.querySelector('.sv-crash')?.hidden === true", 3000));
+    await flush();
+    usage.push(...(await s.exec("return window.__e2eUsage")).slice(usage.length));
+    check("A crash is counted as an error of kind crash, without its message", usage.some(e => e.name === "error" && e.props.kind === "crash" && Object.keys(e.props).length === 1), JSON.stringify(usage.filter(e => e.name === "error")));
     check("Events carry listed words alone, never a file's name or path", usage.length > 0 && !/pUC19|annotated|\/|\\/.test(JSON.stringify(usage.map(e => e.props))), JSON.stringify(usage.map(e => e.props)).slice(0, 200));
     await s.exec("window.__strandivo.setView('map');");
     await s.exec("window.__strandivo.saveSettings({ shareUsage: false });");

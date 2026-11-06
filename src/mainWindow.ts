@@ -19,11 +19,12 @@ import { openDocument, type DocTab, type OpenSequence } from "./doc/document.ts"
 import { Home } from "./home.ts";
 import { loadSettings, saveSettings, type Settings } from "./settings.ts";
 import { startUpdates } from "./updates.ts";
+import { startCrashOffer } from "./crash.ts";
 import { flushUsage, startUsage, track } from "./usage.ts";
 import { fileFormat } from "./lib/usage.ts";
 import { openWelcome } from "./welcome.ts";
 import { needsWelcome } from "./lib/welcome.ts";
-import type { FeedbackKind } from "./lib/feedback.ts";
+import type { CrashReport, FeedbackKind } from "./lib/feedback.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
@@ -78,9 +79,12 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   // Counting starts once the welcome window, which asks about it, has closed.
   startUsage(welcome);
   const updates = startUpdates(welcome);
+  // If the app crashed last time, a strip offers to report it (src/crash.ts).
+  const crashes = startCrashOffer((crash, sent) => void feedback("bug", { crash, sent }), welcome);
+  void crashes.check();
   const dropText = h("span");
   const dropOverlay = h("div", { class: "ps-drop-overlay" }, h("div", null, icon("reads"), dropText));
-  root.replaceChildren(h("div", { class: "sv-shell" }, appBar, updates.el, content, dropOverlay));
+  root.replaceChildren(h("div", { class: "sv-shell" }, appBar, updates.el, crashes.el, content, dropOverlay));
 
   // ---------- Settings and libraries over the tabs (browser only) ----------
   // The desktop app opens them as windows. Home, a tab, the same button, × or Esc close them.
@@ -367,9 +371,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   });
 
   /** Help → Send Feedback… (an idea, unless chosen) and Report a Bug…, about what is open. */
-  async function feedback(kind: FeedbackKind) {
+  async function feedback(kind: FeedbackKind, crashed?: { crash: CrashReport; sent(): void }) {
     const { openFeedback } = await import("./views/feedbackDialog.ts");
-    await openFeedback(kind, active?.doc?.feedbackContext?.() ?? { view: "Home", file: null });
+    await openFeedback(kind, active?.doc?.feedbackContext?.() ?? { view: "Home", file: null }, crashed);
   }
 
   // Driven by the end-to-end tests (e2e/run.mjs): the window's own actions, plus those of
@@ -394,6 +398,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     openWelcome: () => openWelcome(home, true),
     /** Help → Send Feedback… or Report a Bug…, as the menu does. */
     openFeedback: (kind: FeedbackKind = "idea") => feedback(kind),
+    /** Takes a crash again, as at start: from `window.__strandivoCrash` in e2e. */
+    checkCrash: () => crashes.check(),
     /** Sends queued usage events now, to `window.__strandivoTrack` in e2e. */
     flushUsage: () => flushUsage()
   };

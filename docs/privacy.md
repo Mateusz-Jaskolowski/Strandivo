@@ -51,8 +51,10 @@ only when you click Send. The dialog shows everything that goes with it before y
 
 Two more things go only if you tick them, and both are off each time the dialog opens:
 
-- **Recent errors**: what went wrong in the app's window lately, with file paths
-  removed. The dialog shows them as they will be sent.
+- **Recent errors**: what went wrong in the app's windows in the past week, at most the
+  last 20, with file paths removed. The dialog shows them as they will be sent. They are
+  kept on your computer, so a report after a crash still has them, and dropped after a
+  week.
 - **The open file**, as GenBank.
 
 The service files your report as an issue in Strandivo's repository on GitHub, where
@@ -67,6 +69,20 @@ to hello@strandivo.com.
 
 If a report can't be sent, nothing leaves the app: you can copy it, or email it to
 feedback@strandivo.com from your own mail app instead.
+
+## Reporting a crash
+
+If Strandivo quits unexpectedly, it writes down why, in a small file in the app's own
+folder on your computer: the error's message, where in Strandivo's code it happened,
+which part of the app was running (its thread), the app's version, the operating system
+and the processor, and the time. Nothing is sent then.
+
+The next time it opens, the app reads that file once and deletes it, and a strip under
+the app bar says "Strandivo quit unexpectedly last time." Dismiss forgets it. Report it…
+opens Report a Bug with **Why it quit** ticked and shown in full, as it will be sent: the
+message with file paths removed, where in the code, the thread, the version that quit and
+the time. It goes only if you click Send, as part of a bug report (see Sending feedback),
+and you can untick it first. Recent errors stay off unless you tick them.
 
 ## Usage statistics
 
@@ -98,8 +114,8 @@ so none can hold a name, a sequence or anything you typed:
 - `check_saved`: a read check was saved as a file.
 - `update_installed`: the app was updated to a new version.
 - `error`: something went wrong in the app's window, with `kind` (a script error, a
-  promise nobody caught or a command that failed); never the message, which could name a
-  file.
+  promise nobody caught, a command that failed, or a crash, counted when the app next
+  opens); never the message, which could name a file.
 
 Every event also carries the app's version, the operating system and its version, the
 time, and a session number: a random number the app makes when it starts and drops after
@@ -129,6 +145,6 @@ handles each visit to deliver the page.
 
 - No usage statistics unless you turn them on, and then only the events listed above.
 - No account, no sign-in, no identifier for your copy of the app.
-- No crash reports and no error messages are sent on their own: messages go only in a
-  feedback report, and only if you tick them. With usage statistics on, an error is
-  counted by its kind alone.
+- No crash reports and no error messages are sent on their own: they go only in a bug
+  report you send, and only as shown in it. With usage statistics on, an error or a crash
+  is counted by its kind alone.

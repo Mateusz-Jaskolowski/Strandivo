@@ -3,9 +3,10 @@
 
 //! Desktop shell: one main window with a tab per document, native menus, file
 //! associations, the construct library's folder listing, the Sanger alignment commands,
-//! feature detection and updates (`updates.rs`).
+//! feature detection, updates (`updates.rs`) and what a crash leaves (`crash.rs`).
 
 mod app_data;
+mod crash;
 mod feedback;
 mod usage;
 mod updates;
@@ -583,6 +584,8 @@ fn files_from_args(args: impl IntoIterator<Item = String>) -> Vec<PathBuf> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // First, so a panic anywhere after this is kept for the next launch (crash.rs).
+    crash::install();
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
@@ -629,6 +632,7 @@ pub fn run() {
             updates::restart_to_update,
             updates::open_whats_new,
             updates::take_update_failure,
+            crash::take_crash_report,
             feedback::system_info,
             feedback::open_issue,
             feedback::email_feedback,
@@ -637,6 +641,7 @@ pub fn run() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+            crash::set_folder(&handle);
             let menu = build_menu(&handle)?;
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| {

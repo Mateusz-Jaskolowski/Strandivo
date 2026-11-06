@@ -9,7 +9,7 @@
 // maintainer alone, with the issue's link. It keeps nothing and logs nothing
 // (wrangler.toml); how often one network sends is held back by Cloudflare's rate limiter.
 
-import { describeSystem, FEEDBACK_KINDS, reportProblem } from "../../../src/lib/feedback.ts";
+import { crashLines, describeSystem, FEEDBACK_KINDS, reportProblem } from "../../../src/lib/feedback.ts";
 
 export const REPO = "Mateusz-Jaskolowski/Strandivo";
 /** A report with the largest file the app attaches, as JSON, and some room. */
@@ -46,6 +46,8 @@ export function issueBody(r) {
   const lines = [`**${kind}**, sent from the app.`, ""];
   if (r.details) lines.push(fenced(r.details), "");
   lines.push("| | |", "| --- | --- |", `| App | ${describeSystem(r.app)} |`, `| Open view | ${r.view} |`, "");
+  // Older copies send no crash; everything in it is fenced, though the app made it.
+  if (r.crash) lines.push("The app quit unexpectedly, and this is what it noted, with file paths removed:", "", fenced(crashLines(r.crash).join("\n")), "");
   if (r.errors?.length) lines.push("Recent errors, with file paths removed:", "", fenced(r.errors.join("\n")), "");
   const private_ = [r.email ? "an email address for an answer" : "", r.file ? "the open file" : ""].filter(Boolean);
   if (private_.length) lines.push(`_The reporter sent ${private_.join(" and ")}, which went to the maintainer alone._`, "");

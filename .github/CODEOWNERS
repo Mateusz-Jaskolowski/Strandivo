@@ -16,10 +16,12 @@
 /src-tauri/tauri.unsigned.conf.json   @Mateusz-Jaskolowski
 /src-tauri/capabilities/              @Mateusz-Jaskolowski
 
-# Live without a release: the Worker behind updates.strandivo.com, which every installed
-# copy asks, and the website, which goes live on every push to main, with what it is
+# Live without a release: the Workers behind updates.strandivo.com, which every installed
+# copy asks, and feedback.strandivo.com (with the rules it bundles), and the website, which goes live on every push to main, with what it is
 # written from (its generator, its pages' sources and the privacy page).
 /services/updates/                    @Mateusz-Jaskolowski
+/services/feedback/                   @Mateusz-Jaskolowski
+/src/lib/feedback.ts                  @Mateusz-Jaskolowski
 /site/                                @Mateusz-Jaskolowski
 /tools/build-site.mjs                 @Mateusz-Jaskolowski
 /tools/site/                          @Mateusz-Jaskolowski

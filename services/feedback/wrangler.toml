@@ -1,0 +1,28 @@
+# The feedback Worker at feedback.strandivo.com. Deploy from the repository's root with:
+#   npx wrangler@4 deploy --config services/feedback/wrangler.toml
+# It needs two secrets, set once (services/feedback/README.md):
+#   npx wrangler@4 secret put GITHUB_TOKEN --config services/feedback/wrangler.toml
+#   npx wrangler@4 secret put MAINTAINER_EMAIL --config services/feedback/wrangler.toml
+name = "strandivo-feedback"
+main = "src/index.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = false
+routes = [{ pattern = "feedback.strandivo.com", custom_domain = true }]
+
+# No request logs: a report is filed and forgotten, as the privacy page says.
+[observability]
+enabled = false
+
+# How often one network may send: 5 a minute, counted by Cloudflare in each location.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "2101"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+# Email to the maintainer's address, which must be a verified destination of Email Routing
+# on strandivo.com. The address itself is the MAINTAINER_EMAIL secret, so it isn't public.
+[[send_email]]
+name = "MAILER"

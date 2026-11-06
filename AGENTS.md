@@ -113,10 +113,11 @@ it can (lists of files or features). CI checks that every path in backticks here
   edge can still move that edge, as it clips a feature's own end. Each also keeps the
   entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
   makes a real one for files going to other software.
-- **UniProt** (`src/lib/uniprot.ts`) is the one thing the page fetches from the internet, and
-  only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's own `fetch`; the
-  API allows any origin; `connect-src` in the Content Security Policy names it, so the
-  page can reach nothing else). The update check is the shell's, not the page's (below). A construct's protein is rarely the entry's (both mRNAs Q9UKG4
+- **UniProt** (`src/lib/uniprot.ts`) is one of the two things the page fetches from the
+  internet, and only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's
+  own `fetch`; the API allows any origin); the other is a feedback report the user sends
+  (below). `connect-src` in the Content Security Policy names both, so the page can reach
+  nothing else. The update check is the shell's, not the page's (below). A construct's protein is rarely the entry's (both mRNAs Q9UKG4
   cites differ from it, one in length), so residues are never taken at face value: the
   CDS's translation is aligned locally with gaps, and regions are carried across. Under
   `MIN_IDENTITY` nothing is placed, since a wrong accession would otherwise mark the wrong
@@ -139,6 +140,22 @@ it can (lists of files or features). CI checks that every path in backticks here
   password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
   strip under the app bar, never a dialog. e2e fakes the shell with
   `window.__strandivoUpdate`, so it never reaches the server.
+- **Feedback** (Help → Send Feedback… and Report a Bug…, `src/views/feedbackDialog.ts`):
+  the page posts the report to `feedback.strandivo.com` (`services/feedback/`), which
+  files it as a GitHub issue with a token that can only write issues. Issues are public,
+  so **the reporter's email address and an attached file never go in one**: the Worker
+  emails them to the maintainer alone (Email Routing, to a verified address kept as a
+  secret), and what the reporter wrote is fenced as plain text, so it can't mention
+  anyone or link anywhere. What a report may hold is `src/lib/feedback.ts`, which the
+  Worker bundles too, so the two can't disagree; change it and deploy the Worker in the
+  same PR. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`,
+  in memory only: uncaught errors, rejected promises and failed shell commands) and the
+  open file are off until ticked, and errors lose their file paths (`scrubPaths`, which
+  takes a path under a home or volume folder to the end of its line, as folder names have
+  spaces). The shell opens only addresses it builds: an issue from its number, an email
+  to feedback@strandivo.com with the page's text as subject and body. e2e fakes the
+  service with `window.__strandivoFeedback`. On a Mac, Welcome and Check for Updates stay
+  in the app menu, where 0.2.0's notes put them; the Help menu has the rest.
 - **The welcome window** (`src/welcome.ts`) opens on first launch as a dialog over the
   main window, not a window of its own, since what it asks acts on the main window (Home's
   folders, holding back the update check, which waits for it). A choice users must make,
@@ -435,6 +452,11 @@ it can (lists of files or features). CI checks that every path in backticks here
   counting (part 5 of `docs/updates-feedback-usage-plan.md`); the Worker keeps nothing else
   and logs nothing. Deploy it with
   `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
+- **`feedback.strandivo.com`** is built into every copy from the release that adds it (`FEEDBACK_URL` in
+  `src/platform.ts`), so it must keep answering. Its Worker (`services/feedback/`) needs
+  a fine-grained token with only Issues: write on this repository and the maintainer's
+  address, both as Worker secrets, never in the repository; its README says how to set
+  it up. Deploy it with `npx wrangler@4 deploy --config services/feedback/wrangler.toml`.
 - **The website**, `strandivo.com`, is the plain files in `site/` on Cloudflare Pages (a
   project named `strandivo`), with no build step, so its Content Security Policy
   (`site/_headers`) allows only its own images, stylesheet and one script,

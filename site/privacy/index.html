@@ -62,6 +62,20 @@
     <p>When you choose to install an update, the app downloads it from GitHub, where Strandivo's releases are published. GitHub sees that download as it sees any other, under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
     <h2 id="looking-up-a-protein-in-uniprot">Looking up a protein in UniProt</h2>
     <p>When you look up a UniProt entry for a protein's regions, the app asks UniProt (<code>rest.uniprot.org</code>, run by EMBL-EBI and its partners) for that one entry, by its accession, such as P42212. Nothing else goes with it: not the sequence, not the file. It happens only when you ask. UniProt's own <a href="https://www.uniprot.org/help/privacy">privacy notice</a> covers what it keeps.</p>
+    <h2 id="sending-feedback">Sending feedback</h2>
+    <p>Help → Send Feedback… and Report a Bug… send what you write to <code>feedback.strandivo.com</code>, only when you click Send. The dialog shows everything that goes with it before you send:</p>
+    <ul>
+      <li>what kind it is (a bug, an idea or a question), your summary and your details;</li>
+      <li>the app's version, the operating system and its version, and the processor;</li>
+      <li>which part of the app was open, such as Home or the Map.</li>
+    </ul>
+    <p>Two more things go only if you tick them, and both are off each time the dialog opens:</p>
+    <ul>
+      <li><strong>Recent errors</strong>: what went wrong in the app's window lately, with file paths removed. The dialog shows them as they will be sent.</li>
+      <li><strong>The open file</strong>, as GenBank.</li>
+    </ul>
+    <p>The service files your report as an issue in Strandivo's repository on GitHub, where anyone can read it, and tells you its number. Your email address, if you give one, and the open file, if you attach it, never go in the issue: they are emailed to the maintainer alone, with the issue's link, so the maintainer can answer you. The service keeps nothing itself and has no logs. To stop floods it lets each network send a few reports a minute, which Cloudflare counts for that minute and forgets. GitHub keeps the issue under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>; the email stays in the maintainer's mailbox. To have an issue or an email removed, write to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
+    <p>If a report can't be sent, nothing leaves the app: you can copy it, or email it to <a href="mailto:feedback@strandivo.com">feedback@strandivo.com</a> from your own mail app instead.</p>
     <h2 id="opening-the-website">Opening the website</h2>
     <p>What's new… and some help items open strandivo.com or GitHub in your web browser. The app sends nothing itself; your browser visits the page as it would any other.</p>
     <h2 id="this-website">This website</h2>
@@ -70,7 +84,7 @@
     <ul>
       <li>No usage statistics are sent. If they are added, they will be off until you turn them on, and this page will list every one before any copy sends them.</li>
       <li>No account, no sign-in, no identifier for your copy of the app.</li>
-      <li>No crash reports and no error reports are sent on their own.</li>
+      <li>No crash reports and no error reports are sent on their own: errors go only in a feedback report, and only if you tick them.</li>
     </ul>
   </main>
 

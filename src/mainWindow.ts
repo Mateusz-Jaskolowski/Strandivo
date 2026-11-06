@@ -21,6 +21,7 @@ import { loadSettings, saveSettings, type Settings } from "./settings.ts";
 import { startUpdates } from "./updates.ts";
 import { openWelcome } from "./welcome.ts";
 import { needsWelcome } from "./lib/welcome.ts";
+import type { FeedbackKind } from "./lib/feedback.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
@@ -313,6 +314,10 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       void openWelcome(home, true);
       return;
     }
+    if (id === "feedback" || id === "report-bug") {
+      void feedback(id === "report-bug" ? "bug" : "idea");
+      return;
+    }
     if (active?.doc) {
       active.doc.menu(id);
       return;
@@ -343,6 +348,12 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     return true;
   });
 
+  /** Help → Send Feedback… (an idea, unless chosen) and Report a Bug…, about what is open. */
+  async function feedback(kind: FeedbackKind) {
+    const { openFeedback } = await import("./views/feedbackDialog.ts");
+    await openFeedback(kind, active?.doc?.feedbackContext?.() ?? { view: "Home", file: null });
+  }
+
   // Driven by the end-to-end tests (e2e/run.mjs): the window's own actions, plus those of
   // the document in the current tab.
   const shellHook = {
@@ -362,7 +373,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     /** What the main window does at start after an update. */
     announceUpdate: () => updates.announce(),
     /** Help → Welcome…, as the menu does. */
-    openWelcome: () => openWelcome(home, true)
+    openWelcome: () => openWelcome(home, true),
+    /** Help → Send Feedback… or Report a Bug…, as the menu does. */
+    openFeedback: (kind: FeedbackKind = "idea") => feedback(kind)
   };
   Object.defineProperty(window, "__strandivo", { configurable: true, get: () => ({ ...shellHook, ...(active?.doc?.testHook ?? {}) }) });
 

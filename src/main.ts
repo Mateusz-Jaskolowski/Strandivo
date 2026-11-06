@@ -4,6 +4,7 @@
 import "./polyfills.ts";
 import "./styles.css";
 import { replaceContextMenus, windowInfo } from "./platform.ts";
+import { startErrorLog } from "./feedback.ts";
 import { toast } from "./ui/dom.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
 import { useTmSettings } from "./lib/primers.ts";
@@ -22,6 +23,8 @@ async function boot() {
   replaceContextMenus();
   // Every window works out Tm and translates the way Settings say; registered first, so
   // windows that redraw on a settings change already see the new choice.
+  // Kept in memory for a bug report's "Recent errors" (src/feedback.ts); sent only if ticked.
+  startErrorLog();
   useTmSettings(loadSettings().tm);
   useAmberSuppression(loadSettings().amberAsQ);
   void onSettingsChanged(s => {

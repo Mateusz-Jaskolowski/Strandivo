@@ -76,8 +76,11 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
 - **Updates** from inside the app: it checks once a day (a setting) and installs a new
   version only when you choose. A welcome window on first launch asks about it and helps
   you add your construct folders and a primer library
+- **Feedback** from inside the app: Help → Send Feedback… sends a bug, an idea or a
+  question, with no GitHub account needed, and shows everything that goes with it first
 - **Private**: everything runs on your computer and your files never leave it. The app
-  goes online only to check for updates and to look up a UniProt entry you ask for;
+  goes online only to check for updates, to look up a UniProt entry you ask for and to
+  send feedback you write;
   [strandivo.com/privacy](https://strandivo.com/privacy/) lists exactly what each sends
 
 ## Download
@@ -186,6 +189,7 @@ says how to take part.
 | `crates/seqcore-json/` | The core's requests and responses as the interface sees them (JSON) |
 | `tools/` | Scripts run by hand: the parts catalog and its curated sources, the app icon, `npm run version`, and the website's pages (`npm run site`, from `tools/site/`) |
 | `services/updates/` | The Cloudflare Worker behind `updates.strandivo.com` |
+| `services/feedback/` | The Cloudflare Worker behind `feedback.strandivo.com`, which files reports as issues |
 | `site/` | The website, `strandivo.com`: plain files on Cloudflare Pages, most of them written by `npm run site` |
 | `CHANGELOG.md` | Each release's notes; their first paragraph is what the app shows in What's new |
 | `docs/` | Plans and notes: the parts catalog's sources and terms, clone checking, feature detection, updates and feedback |
@@ -193,7 +197,6 @@ says how to take part.
 
 ## Roadmap
 
-- Send feedback and bug reports from the app
 - Anonymous usage statistics, with a choice at first launch and a setting
 - Golden Gate primer design (adding sites and overhangs to PCR inserts)
 - Export maps and sequences as PDF, SVG or PNG

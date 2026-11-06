@@ -26,6 +26,8 @@
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/icon.png">
   <link rel="stylesheet" href="/styles.css">
+  <!-- Puts the visitor's own system's download first; see the file. -->
+  <script type="module" src="/download.js"></script>
 </head>
 <body>
   <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
@@ -59,7 +61,7 @@
         say so.
       </p>
       <div class="actions">
-        <a class="button primary" href="/download/">Download</a>
+        <a class="button primary" href="/download/" data-download-button>Download</a>
         <a class="button" href="/changes/">What's new</a>
         <a class="button" href="https://github.com/Mateusz-Jaskolowski/Strandivo">Source on GitHub</a>
       </div>
@@ -92,8 +94,8 @@
   </main>
 
   <footer class="foot">
-    <p>Strandivo is free software under the GPL-3.0. This site has no cookies, no scripts
-    and no tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
+    <p>Strandivo is free software under the GPL-3.0. This site has no cookies and no
+    tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
     <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
     <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
   </footer>

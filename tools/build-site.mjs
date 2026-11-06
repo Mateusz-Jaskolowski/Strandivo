@@ -7,7 +7,7 @@
 //   npm run site            write them
 //   npm run site -- --check fail if any is out of date (the quick checks run this)
 //
-// The site stays plain files with no scripts and no build step on Cloudflare, so what
+// The site stays plain files with no build step on Cloudflare, so what
 // would change with each release is made here and committed: What's new from
 // CHANGELOG.md, Privacy from docs/privacy.md, and every page's header and footer from one
 // place. Home, Download and the 404 page are written in tools/site/. The Download page's
@@ -109,7 +109,7 @@ const NAV = [
 ];
 
 /** A whole page: the head, the bar with the site's links, the body and the footer. */
-export function page({ path, title, description, body, source, noindex = false }) {
+export function page({ path, title, description, body, source, noindex = false, script = false }) {
   const url = `${SITE}/${path}`;
   const nav = NAV.map(([href, label]) => `      <a class="bar-link"${href === `/${path}` ? ' aria-current="page"' : ""} href="${href}">${label}</a>`).join("\n");
   const meta = noindex
@@ -144,7 +144,9 @@ ${meta}
        others sit in folders. -->
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/icon.png">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css">${script ? `
+  <!-- Puts the visitor's own system's download first; see the file. -->
+  <script type="module" src="/download.js"></script>` : ""}
 </head>
 <body>
   <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
@@ -165,8 +167,8 @@ ${nav}
 ${body.trim()}
 
   <footer class="foot">
-    <p>Strandivo is free software under the GPL-3.0. This site has no cookies, no scripts
-    and no tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
+    <p>Strandivo is free software under the GPL-3.0. This site has no cookies and no
+    tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
     <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
     <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
   </footer>
@@ -204,15 +206,49 @@ ${markdown(text)
   </main>`;
 }
 
-/** Home, Download and the 404 page: tools/site/<name>.html, with {{downloads}} filled in. */
+const download = file => `${REPO}/releases/latest/download/${file}`;
+const fileFor = (os, part) => DOWNLOADS.find(d => d.os === os && d.file.includes(part)).file;
+
+/**
+ * The download for the visitor's own system, one block per system, all hidden:
+ * site/download.js shows the one that matches, so without it the page is unchanged.
+ */
+export function suggestedBlock() {
+  return `      <div class="suggested" id="suggested" hidden>
+        <div data-os="mac" hidden>
+          <a class="button primary big" href="${download(fileFor("mac", "aarch64"))}">Download for Mac</a>
+          <p class="note">For Macs with Apple silicon (M1 or later), which is nearly every Mac
+          since 2020. Choose Apple menu → About This Mac: a “Processor” line instead of
+          “Chip” means Intel. <a href="${download(fileFor("mac", "x64"))}">Download for a Mac with Intel</a></p>
+        </div>
+        <div data-os="windows" hidden>
+          <a class="button primary big" href="${download(fileFor("windows", "setup"))}">Download for Windows</a>
+          <p class="note">For 64-bit Windows 10 and 11. It installs for you alone, without an
+          administrator.</p>
+        </div>
+        <div data-os="linux" hidden>
+          <div class="actions">
+            <a class="button primary big" href="${download(fileFor("linux", ".deb"))}">Download the .deb</a>
+            <a class="button primary big" href="${download(fileFor("linux", "AppImage"))}">Download the AppImage</a>
+          </div>
+          <p class="note">The .deb is for Debian, Ubuntu and their relatives; the AppImage runs
+          on other systems.</p>
+        </div>
+      </div>`;
+}
+
+/**
+ * Home, Download and the 404 page: tools/site/<name>.html, with {{downloads}} (every
+ * installer) and {{suggested}} (the visitor's own, see suggestedBlock) filled in.
+ */
 export function fill(template) {
   // The note at the top of each is for whoever edits it, not for the page.
-  return template.replace(/^\s*<!--[\s\S]*?-->\s*\n/, "").replace(/\{\{downloads\}\}/g, () => {
+  return template.replace(/^\s*<!--[\s\S]*?-->\s*\n/, "").replace(/\{\{suggested\}\}/g, suggestedBlock).replace(/\{\{downloads\}\}/g, () => {
     const groups = { mac: "Mac", windows: "Windows", linux: "Linux" };
     return Object.entries(groups)
       .map(([os, name]) => {
         const links = DOWNLOADS.filter(d => d.os === os)
-          .map(d => `          <a class="button${os === "mac" && d.file.includes("aarch64") ? " primary" : ""}" href="${REPO}/releases/latest/download/${d.file}">${escapeHtml(d.label)}</a>`)
+          .map(d => `          <a class="button${os === "mac" && d.file.includes("aarch64") ? " primary" : ""}" href="${download(d.file)}">${escapeHtml(d.label)}</a>`)
           .join("\n");
         return `      <div class="download" id="${os}">
         <h2>${name}</h2>
@@ -234,14 +270,16 @@ export function build(root) {
       title: "Strandivo: plan, build and check your plasmids",
       description: "A free, open-source plasmid editor for Mac, Windows and Linux: maps and sequence editing, primers and cloning, and sequence verification with Sanger and whole-plasmid reads.",
       body: fill(read("tools/site/home.html")),
-      source: "tools/site/home.html"
+      source: "tools/site/home.html",
+      script: true
     }),
     "download/index.html": page({
       path: "download/",
       title: "Download Strandivo",
       description: "Download Strandivo, the free plasmid editor, for Mac (Apple silicon and Intel), Windows and Linux.",
       body: fill(read("tools/site/download.html")),
-      source: "tools/site/download.html"
+      source: "tools/site/download.html",
+      script: true
     }),
     "changes/index.html": page({
       path: "changes/",

@@ -331,7 +331,8 @@ framework. Three pages to start with:
   `CHANGELOG.md`. Every copy from 0.2.0 on opens that address, so it must keep working;
   until the page exists, `site/_redirects` sends it to the GitHub releases.
 
-**As built**: the site keeps no scripts and no build step on Cloudflare, so its strict
+**As built**: the site keeps no build step on Cloudflare and one script of its own
+(`site/download.js`, which puts the visitor's system's download first), so its strict
 Content Security Policy stays. Instead `tools/build-site.mjs` (`npm run site`) writes
 every page and the result is committed: What's new from `CHANGELOG.md`, Privacy from
 `docs/privacy.md`, and Home, Download and the 404 page from `tools/site/`, each with the

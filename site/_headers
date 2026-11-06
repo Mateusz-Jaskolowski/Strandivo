@@ -1,7 +1,8 @@
-# Cloudflare Pages response headers. The site is plain files with no scripts, so its
-# Content Security Policy allows only its own images and stylesheet.
+# Cloudflare Pages response headers. The site is plain files, so its Content Security
+# Policy allows only its own images, stylesheet and one script (download.js, which puts the
+# visitor's own system's download first): nothing inline and nothing from elsewhere.
 /*
-  Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 

@@ -436,8 +436,13 @@ it can (lists of files or features). CI checks that every path in backticks here
   and logs nothing. Deploy it with
   `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
 - **The website**, `strandivo.com`, is the plain files in `site/` on Cloudflare Pages (a
-  project named `strandivo`), with no build step and no scripts, so its Content Security
-  Policy (`site/_headers`) allows only its own images and stylesheet. Its colours copy the
+  project named `strandivo`), with no build step, so its Content Security Policy
+  (`site/_headers`) allows only its own images, stylesheet and one script,
+  `site/download.js`, which puts the visitor's own system's download first. That script
+  only shows what the page already holds, hidden: without it every download shows, and it
+  sends and stores nothing (the Privacy page says so; keep both true). A browser can't
+  tell an Apple silicon Mac from an Intel one, so Macs get Apple silicon first, with Intel
+  just under it. Its colours copy the
   app's tokens, as the site can't load `src/styles.css`. Its pages are written by
   `tools/build-site.mjs` (`npm run site`) and committed: What's new from `CHANGELOG.md`,
   Privacy from `docs/privacy.md`, and Home, Download and the 404 page from

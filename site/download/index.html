@@ -26,6 +26,8 @@
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/icon.png">
   <link rel="stylesheet" href="/styles.css">
+  <!-- Puts the visitor's own system's download first; see the file. -->
+  <script type="module" src="/download.js"></script>
 </head>
 <body>
   <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
@@ -51,7 +53,30 @@
     installed, Strandivo offers each new one and installs it when you say so. See
     <a href="/changes/">what's new</a>.</p>
 
-    <div class="downloads">
+      <div class="suggested" id="suggested" hidden>
+        <div data-os="mac" hidden>
+          <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_aarch64.dmg">Download for Mac</a>
+          <p class="note">For Macs with Apple silicon (M1 or later), which is nearly every Mac
+          since 2020. Choose Apple menu → About This Mac: a “Processor” line instead of
+          “Chip” means Intel. <a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_x64.dmg">Download for a Mac with Intel</a></p>
+        </div>
+        <div data-os="windows" hidden>
+          <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_x64-setup.exe">Download for Windows</a>
+          <p class="note">For 64-bit Windows 10 and 11. It installs for you alone, without an
+          administrator.</p>
+        </div>
+        <div data-os="linux" hidden>
+          <div class="actions">
+            <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_amd64.deb">Download the .deb</a>
+            <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_amd64.AppImage">Download the AppImage</a>
+          </div>
+          <p class="note">The .deb is for Debian, Ubuntu and their relatives; the AppImage runs
+          on other systems.</p>
+        </div>
+      </div>
+
+    <h2 id="all-downloads-title" hidden>Other systems</h2>
+    <div class="downloads" id="all-downloads">
       <div class="download" id="mac">
         <h2>Mac</h2>
         <div class="actions">
@@ -113,8 +138,8 @@
   </main>
 
   <footer class="foot">
-    <p>Strandivo is free software under the GPL-3.0. This site has no cookies, no scripts
-    and no tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
+    <p>Strandivo is free software under the GPL-3.0. This site has no cookies and no
+    tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
     <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
     <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
   </footer>

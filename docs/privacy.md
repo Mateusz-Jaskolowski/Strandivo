@@ -46,8 +46,10 @@ sends nothing itself; your browser visits the page as it would any other.
 
 ## This website
 
-strandivo.com has no cookies, no scripts and no tracking. It is served by Cloudflare,
-which handles each visit to deliver the page.
+strandivo.com has no cookies and no tracking. Its one script, on the home and Download
+pages, asks your browser which system it runs on, so that the right download comes
+first; it sends nothing and stores nothing. The site is served by Cloudflare, which
+handles each visit to deliver the page.
 
 ## What the app doesn't do
 

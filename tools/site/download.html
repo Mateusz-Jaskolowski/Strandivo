@@ -1,5 +1,6 @@
 <!-- The Download page's body. {{downloads}} becomes the links to the newest release's
-     installers (DOWNLOADS in .github/scripts/release.mjs). tools/build-site.mjs adds the
+     installers (DOWNLOADS in .github/scripts/release.mjs), and {{suggested}} the one for
+     the visitor's own system, which site/download.js shows. tools/build-site.mjs adds the
      head, the bar and the footer; run npm run site after editing. The first-launch notes
      are the README's ("First launch on a Mac"): change both together. -->
   <main class="prose">
@@ -8,7 +9,10 @@
     installed, Strandivo offers each new one and installs it when you say so. See
     <a href="/changes/">what's new</a>.</p>
 
-    <div class="downloads">
+{{suggested}}
+
+    <h2 id="all-downloads-title" hidden>Other systems</h2>
+    <div class="downloads" id="all-downloads">
 {{downloads}}
     </div>
 

@@ -311,7 +311,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
     // Usage statistics: once per dialog, when it first shows a digest.
     if (!counted && lane.enzymes.length) {
       counted = true;
-      track("dialog_completed", { dialog: "digest" });
+      track("digest_simulated");
     }
     const summary = r.uncut ? "Uncut" : plural(r.fragments.length, "fragment");
     const ladderSelect = h(

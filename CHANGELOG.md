@@ -20,6 +20,11 @@ the version and starts a new, empty Unreleased.
   Report a Bug with what it noted, shown in full and with file paths removed; nothing is
   sent until you click Send. Recent errors are now kept for a week, so a report after a
   crash can still include them if you tick them.
+- **Usage statistics**, if you share them, count a little more, still only as fixed words
+  and ranges: saving, adding features and primers, adding reads, how long a file's
+  sequence is and how long alignment takes, and three choices in Settings. Each view is
+  counted once each time the app opens, not at every switch. The Privacy page lists every
+  event and what it carries.
 
 ## 0.3.1
 

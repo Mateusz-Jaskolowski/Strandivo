@@ -560,7 +560,7 @@ export function openCloningDialog(ctx: DocContext) {
           onclick: () => {
             if (!product) return;
             dlg.close();
-            track("dialog_completed", { dialog: "cloning", method });
+            track("cloning_simulated", { method });
             ctx.openNew(product);
           }
         },

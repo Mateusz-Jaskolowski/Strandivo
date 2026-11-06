@@ -150,6 +150,7 @@ export function openLibraryPicker(ctx: DocContext) {
     if (!added.length) return;
     const last = added[added.length - 1];
     ctx.store.apply({ ...d, primers: [...d.primers, ...added] }, added.length === 1 ? "Add primer" : "Add primers", { range: { start: last.start, end: last.end }, focus: { kind: "primer", id: last.id } });
+    added.forEach(() => track("primer_added", { how: "library" }));
     dlg.close();
     toast(`Added ${added.length === 1 ? added[0].name : plural(added.length, "primer")}${multi.length ? `. ${multi.join(", ")} ${multi.length === 1 ? "binds" : "bind"} more than one place; added at the first.` : "."}`, "success", multi.length ? 6000 : 3500);
   };
@@ -301,6 +302,7 @@ export function openAddBySequence(ctx: DocContext) {
     const primerName = name.value.trim() || `Primer ${d.primers.length + 1}`;
     const p: SeqPrimer = { id: newId("p"), name: uniqueName(primerName, d.primers.map(x => x.name)), start: s.start, end: s.end, strand: s.strand, bases: b, notes: {}, raw: {} };
     ctx.store.apply({ ...d, primers: [...d.primers, p] }, "Add primer", { range: { start: p.start, end: p.end }, focus: { kind: "primer", id: p.id } });
+    track("primer_added", { how: "sequence" });
     if (save.checked) primerLibrary.add([{ name: primerName, bases: b, notes: "" }]);
     dlg.close();
     if (sites.length > 1) toast(`It binds ${sites.length} places; added at the first (${fmt(s.start + 1)}).`, "info", 5000);
@@ -410,7 +412,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     // Usage statistics: once per dialog, when it first shows a product.
     if (product && !counted) {
       counted = true;
-      track("dialog_completed", { dialog: "pcr_product" });
+      track("pcr_product_made");
     }
     const actions: Node[] = [];
     let result: Node[] = [];
@@ -663,7 +665,7 @@ export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null =
     const second = make(r);
     ctx.store.apply({ ...d, primers: [...d.primers, first, second] }, "Add designed primers", { range: { start: first.start, end: first.end }, focus: { kind: "primer", id: first.id } });
     dlg.close();
-    track("dialog_completed", { dialog: "primer_design" });
+    track("primers_designed");
     toast(`Added ${first.name} (${f.primer.tm.toFixed(1)} °C) and ${second.name} (${r.primer.tm.toFixed(1)} °C)${product ? ` for a ${fmt(product.length)} bp product` : ""}.`, "success", 5000);
   };
 

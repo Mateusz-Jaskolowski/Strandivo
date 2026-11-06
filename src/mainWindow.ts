@@ -28,6 +28,9 @@ import type { CrashReport, FeedbackKind } from "./lib/feedback.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
+/** Home, a drop on the window, or anything else (Open…, the system, a check file). */
+type OpenedFrom = "home" | "drop" | "other";
+
 interface Tab {
   /** The file asked for (null = a new sequence); the document's own path once loaded. */
   path: string | null;
@@ -35,6 +38,8 @@ interface Tab {
   data?: SeqData;
   /** A check file's reads, to add once the file is open. */
   check?: ReadCheck;
+  /** Where it was opened from, for usage statistics. */
+  from?: OpenedFrom;
   doc: DocTab | null;
   el: HTMLElement;
   main: HTMLButtonElement;
@@ -51,7 +56,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   /** The tab shown; null is Home. */
   let active: Tab | null = null;
 
-  const home = new Home({ open: paths => open(paths) });
+  const home = new Home({ open: paths => open(paths, "home") });
   const homeButton = h(
     "button",
     { type: "button", role: "tab", class: "sv-apptab sv-apptab-home", title: `Home: your constructs (${isMac ? "⇧⌘H" : "Ctrl+Shift+H"})`, onclick: () => activate(null) },
@@ -154,7 +159,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   }
 
   /** Opens files in tabs (null = a new sequence); a file that is already open is shown. */
-  function open(paths: (string | null)[]) {
+  function open(paths: (string | null)[], from: OpenedFrom = "other") {
     let last: Tab | null = null;
     for (const path of paths) {
       if (path && extension(path) === CHECK_EXTENSION) {
@@ -167,6 +172,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
         continue;
       }
       const t = newTab(path);
+      t.from = from;
       tabs.push(t);
       tabList.appendChild(t.el);
       last = t;
@@ -226,7 +232,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     }
     t.doc = doc;
     // Its format, from the name; never the name itself. A product made in the app isn't counted.
-    if (t.path) track("file_opened", { format: fileFormat(t.path) });
+    const data = doc.sequence?.().data;
+    if (t.path) track("file_opened", { format: fileFormat(t.path), from: t.from, length: data && data.sequence.length / 1000, topology: data && (data.circular ? "circular" : "linear") });
     refreshTab(t);
     if (t === active) show();
   }
@@ -351,7 +358,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   void onFileDrop(
     paths => {
       if (active?.doc) void active.doc.drop(paths);
-      else open(paths);
+      else open(paths, "drop");
     },
     state => {
       dropText.textContent = active?.doc ? "Drop .ab1 files to check them against this sequence · other files open in new tabs" : "Drop files to open them";

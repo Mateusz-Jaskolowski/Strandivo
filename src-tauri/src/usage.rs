@@ -7,9 +7,15 @@
 //! a session number, and posts them.
 //!
 //! The key is built in from `APTABASE_APP_KEY` when a release is built, and only then, so
-//! development builds, CI and e2e builds have none and send nothing. A fork building from
-//! the source has none either. Events are checked again here, so that whatever reaches the
-//! page can still send nothing but listed words.
+//! CI and e2e builds have none and send nothing. A fork building from the source has none
+//! either. Events are checked again here, so that whatever reaches the page can still send
+//! nothing but listed words.
+//!
+//! Aptabase keeps Debug events apart from Release ones (its dashboard's bug and rocket
+//! icons). A release candidate's are Debug, so trying one never mixes with what people do,
+//! and so are a development build's, which sends only if its developer builds it with the
+//! key (`APTABASE_APP_KEY=… npm run app:dev`), to try the whole path before a release:
+//! 0.3.0's crash was in code only a build with the key reached.
 
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -24,12 +30,15 @@ const MAX_EVENTS: usize = 25;
 /// A new session after this long without events, as Aptabase's own SDKs do.
 const SESSION_IDLE: Duration = Duration::from_secs(4 * 60 * 60);
 
-/// The key, if this is a release build that was given one for the EU region.
+/// The key, if this build was given one for the EU region.
 fn app_key() -> Option<&'static str> {
-    if cfg!(debug_assertions) {
-        return None;
-    }
     valid_key(option_env!("APTABASE_APP_KEY")?)
+}
+
+/// Whether events go to Aptabase's Debug mode: from a development build, or from a release
+/// candidate (a version with a pre-release part, such as 0.4.0-rc.1).
+fn is_debug(version: &str) -> bool {
+    cfg!(debug_assertions) || version.contains('-')
 }
 
 fn valid_key(key: &str) -> Option<&str> {
@@ -105,7 +114,7 @@ fn event_body(e: &UsageEvent, session: u64, version: &str, os: &str, os_version:
         "sessionId": session.to_string(),
         "eventName": e.name,
         "systemProps": {
-            "isDebug": false,
+            "isDebug": is_debug(version),
             "osName": os,
             "osVersion": os_version,
             "appVersion": version,
@@ -164,6 +173,12 @@ mod tests {
     #[test]
     fn the_client_builds_before_any_update_check() {
         assert!(http_client("0.0.0").is_ok());
+    }
+
+    #[test]
+    fn release_candidates_go_to_debug_mode() {
+        assert!(is_debug("0.4.0-rc.1"));
+        assert_eq!(is_debug("0.4.0"), cfg!(debug_assertions));
     }
 
     #[test]

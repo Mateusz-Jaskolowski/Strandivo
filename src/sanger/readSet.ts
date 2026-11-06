@@ -17,6 +17,7 @@ import { consequenceIn, describeDifference, featuresAt, type Consequence } from 
 import type { Chromatogram, CloneDifference, CloneResult, Conflict, Difference, DiffKind, Feature, ReadResult } from "../lib/types.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { toast } from "../ui/dom.ts";
+import { readFormat } from "../lib/usage.ts";
 import { track } from "../usage.ts";
 
 export interface ReferenceInfo {
@@ -122,6 +123,7 @@ export class ReadSet {
    */
   async addFiles(files: PickedFile[], clones?: (string | null)[]) {
     const failed: string[] = [];
+    const before = this.reads.length;
     // Saved groups are named #g1, #g2… in each check: keep two checks' groups apart.
     const batch = this.nextId;
     for (const [i, f] of files.entries()) {
@@ -145,6 +147,7 @@ export class ReadSet {
       }
     }
     if (failed.length) toast(`Couldn't read ${failed.length} file(s). ${failed[0]}`, "error", 6000);
+    if (this.reads.length > before) track("reads_added", { format: readFormat(files.map(f => f.path || f.name)), reads: this.reads.length - before });
     // Names read together show which parts vary, so guess again with every name.
     const guesses = guessClones(this.reads.map(r => r.name));
     this.reads = this.reads.map((r, i) => ({ ...r, guess: guesses[i] }));
@@ -356,6 +359,7 @@ export class ReadSet {
     try {
       const n = ref.sequence.length;
       const regions = variableFeatures(ref.features);
+      const startedAt = performance.now();
       const response = await alignReads({
         reference: ref.sequence,
         circular: ref.circular,
@@ -372,7 +376,12 @@ export class ReadSet {
         this.counted = this.reads.length;
         // As the core tells them apart: long is a read with no trace over 1.6 kb.
         const long = this.reads.filter(r => !r.chromatogram && r.sequence.length > 1600).length;
-        track("reads_aligned", { reads: this.reads.length, kind: long === 0 ? "sanger" : long === this.reads.length ? "long" : "both" });
+        track("reads_aligned", {
+          reads: this.reads.length,
+          kind: long === 0 ? "sanger" : long === this.reads.length ? "long" : "both",
+          took: (performance.now() - startedAt) / 1000,
+          variable: regions.length ? "yes" : "no"
+        });
       }
       this.alignedVersion = ref.version;
       this.consequences.clear();

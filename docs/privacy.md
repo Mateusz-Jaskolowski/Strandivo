@@ -94,34 +94,60 @@ turning it off sends nothing either, not even that you turned it off; anything w
 be sent is dropped at once.
 
 When it is on, the app sends these events, and nothing else. Every detail an event carries
-is one of a few fixed words or a number put in a range (0, 1, 2–5, 6–20 or more than 20),
-so none can hold a name, a sequence or anything you typed:
+is one of a few fixed words or a number put in a range, so none can hold a name, a
+sequence or anything you typed. A count's ranges are 0, 1, 2–5, 6–20 and more than 20;
+other numbers have their own few ranges, given below.
 
 - `app_started`: the app was opened, with `arch`, the processor (Apple silicon or ARM,
-  Intel or AMD).
+  Intel or AMD); `installed`, how long ago this copy was first opened (its first day,
+  first week, first month or longer: the date itself stays on your computer); and
+  `folders`, how many folders Home lists, as a range.
+- `settings_chosen`: once each time the app opens, three choices from Settings: `tm`, the
+  Tm method; `amber`, whether TAG is read as Q; and `bases`, whether bases are shown in
+  upper case, lower case or as in the file.
 - `file_opened`: a file was opened, with `format`, its kind (GenBank, SnapGene, FASTA,
-  EMBL or other), worked out from its name; never the name itself.
-- `view_shown`: one of a file's five views was shown, with `view` (Map, Sequence,
-  Primers, Reads or Info).
-- `dialog_completed`: a tool made or added something, with `dialog` (a digest, cloning, primer
-  design, a PCR product, mutagenesis primers or finding known parts), the `method` for
-  cloning and mutagenesis (such as Gibson or overlapping), and for found parts `parts`,
-  how many were added, as a range.
-- `primer_pairs`: the Primers tab's Pairs view was shown, or its Export list was used, as
-  `action`.
+  EMBL or other), worked out from its name, never the name itself; `from`, whether it
+  was opened from Home, dropped on the window or opened another way; `length`, its
+  sequence's length (under 5 kb, 5–15 kb, 15–50 kb or longer); and `topology`, circular
+  or linear.
+- `file_saved`: a file was saved or exported, with `format` (GenBank or FASTA) and `how`
+  (saved, or exported as a copy).
+- `view_used`: one of a file's five views was used, with `view` (Map, Sequence, Primers,
+  Reads or Info); once a view each time the app opens.
+- `feature_added`: a feature was added, with `how`: from the selection, from an ORF or
+  from a protein's region.
+- `features_detected`: known parts found in a sequence were added, with `found`, how
+  many, as a range.
+- `primer_added`: a primer was added, with `how`: from the selection, typed in, or from
+  the primer library.
+- `primers_designed`, `pcr_product_made`, `digest_simulated`: primer design, the PCR
+  product dialog or a digest was used to the end.
+- `mutagenesis_designed`: mutagenesis primers were made, with `layout`, back to back or
+  overlapping.
+- `cloning_simulated`: a cloning was simulated, with `method` (restriction, Gibson,
+  In-Fusion or Golden Gate).
+- `primer_pairs_shown`, `primer_pairs_exported`: the Primers tab's Pairs view was shown,
+  or its Export list was used.
+- `reads_added`: reads were added to a file, with `format` (AB1, FASTA, FASTQ, GenBank or
+  a mix) and `reads`, how many, as a range.
 - `reads_aligned`: reads were checked against a sequence, with `reads`, how many, as a
-  range, and `kind`, whether Sanger reads, long reads or both.
+  range; `kind`, whether Sanger reads, long reads or both; `took`, how long it took
+  (under a second, 1–5 seconds, 5–30 seconds or longer); and `variable`, whether the
+  sequence has variable regions.
 - `check_saved`: a read check was saved as a file.
 - `update_installed`: the app was updated to a new version.
-- `error`: something went wrong in the app's window, with `kind` (a script error, a
-  promise nobody caught, a command that failed, or a crash, counted when the app next
+- `error_caught`: something went wrong in the app's window, with `kind` (a script error,
+  a promise nobody caught, a command that failed, or a crash, counted when the app next
   opens); never the message, which could name a file.
 
 Every event also carries the app's version, the operating system and its version, the
 time, and a session number: a random number the app makes when it starts and drops after
 four hours without events. It is never stored, so it can't link one day's use to the next.
-Events are sent every 30 seconds while the app is open. A copy built for testing or
-development sends none.
+Events are sent every 30 seconds while the app is open. A test version (a release
+candidate, such as 0.4.0-rc.1) marks its events as tests, which Aptabase keeps apart from
+everyone else's. A copy built by the project's checks sends none, and neither does one
+built from the source, unless whoever builds it adds the project's key, which only its
+maintainers have; theirs are marked as tests too.
 
 They go to [Aptabase](https://aptabase.com), an open-source service for app statistics,
 in its EU region. Like any server, it sees the address the events come from: it uses it

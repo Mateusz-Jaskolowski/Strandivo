@@ -389,6 +389,8 @@ it can (lists of files or features). CI checks that every path in backticks here
   release tags" ruleset lets only admins create, move or delete `v*` tags). Never give it
   to `.github/workflows/checks.yml`, a `pull_request_target` workflow or a manual run, and
   keep the release jobs' third-party actions pinned to commits, as they run beside it.
+  `.github/CODEOWNERS` names who reviews what runs beside it or reaches users without a
+  release (the site, the updates Worker); a new file of that kind goes in it too.
   Losing the key strands every install: it is backed up outside GitHub. A release is
   `npm run version <x.y.z>`, a commit, a `v<x.y.z>` tag on it, approving the run, then
   publishing the draft; `check-version` in `.github/scripts/release.mjs` fails a tag that

@@ -1,0 +1,25 @@
+# Files where one unreviewed change does the most damage. A pull request that touches any
+# of them asks their owner for a review. Add a file here when it runs beside the update
+# signing key, decides what the app's page may do, or reaches users without a release.
+
+# Workflows, the build action and release scripts: the signed builds run them beside the
+# update signing key. This file too, so no one can take themselves off it unseen.
+/.github/                             @Mateusz-Jaskolowski
+
+# What every build runs: npm scripts and Vite's config run in the signed builds too.
+/package.json                         @Mateusz-Jaskolowski
+/vite.config.ts                       @Mateusz-Jaskolowski
+
+# The shell's security settings: the Content Security Policy, the updater's public key
+# and address, and which shell commands the page may call.
+/src-tauri/tauri.conf.json            @Mateusz-Jaskolowski
+/src-tauri/tauri.unsigned.conf.json   @Mateusz-Jaskolowski
+/src-tauri/capabilities/              @Mateusz-Jaskolowski
+
+# Live without a release: the Worker behind updates.strandivo.com, which every installed
+# copy asks, and the website, which goes live on every push to main.
+/services/updates/                    @Mateusz-Jaskolowski
+/site/                                @Mateusz-Jaskolowski
+
+# Where security problems are reported.
+/SECURITY.md                          @Mateusz-Jaskolowski

@@ -565,7 +565,7 @@ export class MapView {
     // Cut sites.
     if (o.cutsites) {
       const cuts = s("g", { class: "sv-map-cut" });
-      for (const c of cutSites(d, o.enzymeSet)) {
+      for (const c of cutSites(d, o)) {
         const a = ang(c.cut);
         const [x1, y1] = pt(a, BAND_OUT);
         const [x2, y2] = pt(a, tickOut);
@@ -684,7 +684,7 @@ export class MapView {
     const cutFont = `400 ${labelPx * CUT_SCALE}px ${mono}`;
 
     // Enzyme label rows, from the backbone upwards.
-    const cuts = o.cutsites ? cutSites(d, o.enzymeSet) : [];
+    const cuts = o.cutsites ? cutSites(d, o) : [];
     const rows: number[] = [];
     const placed = cuts.map(c => {
       const text = c.enzyme;
@@ -1047,7 +1047,7 @@ export class MapView {
     } else if (f.kind === "primer") range = d.primers.find(x => x.id === f.id) ?? null;
     else if (f.kind === "orf") range = orfs(d, this.ctx.options.orfOptions).find(x => x.id === f.id) ?? null;
     else {
-      const c = cutSites(d, this.ctx.options.enzymeSet).find(x => x.id === f.id);
+      const c = cutSites(d, this.ctx.options).find(x => x.id === f.id);
       if (c) range = { start: c.start, end: c.end };
     }
     if (range) this.ctx.store.selectRange({ start: range.start, end: range.end }, f, "map");

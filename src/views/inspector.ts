@@ -128,7 +128,7 @@ export class Inspector {
     } else if (focus?.kind === "cutsite" && enzymes) {
       content = this.pickedEnzymes(enzymes);
     } else if (focus?.kind === "cutsite") {
-      const c = cutSites(d, this.ctx.options.enzymeSet).find(x => x.id === focus.id);
+      const c = cutSites(d, this.ctx.options).find(x => x.id === focus.id);
       content = c && range ? this.cutsite(c.id) : this.overview();
     } else if (focus?.kind === "orf") {
       const o = orfs(d, this.ctx.options.orfOptions).find(x => x.id === focus.id);
@@ -351,7 +351,7 @@ export class Inspector {
           )
         );
     }
-    const cuts = cutSites(d, this.ctx.options.enzymeSet).filter(c => rangeWithin({ start: c.start, end: c.end }, f, n));
+    const cuts = cutSites(d, this.ctx.options).filter(c => rangeWithin({ start: c.start, end: c.end }, f, n));
     if (cuts.length) {
       inside.push(
         h(
@@ -680,7 +680,7 @@ export class Inspector {
   /** Links to an enzyme's sites, each selecting that site; the one selected is plain text. */
   private siteLinks(enzyme: string): HTMLElement {
     const focus = this.ctx.store.selection.focus;
-    const sites = cutSites(this.ctx.store.data, this.ctx.options.enzymeSet).filter(x => x.enzyme === enzyme);
+    const sites = cutSites(this.ctx.store.data, this.ctx.options).filter(x => x.enzyme === enzyme);
     return h(
       "span",
       { class: "sv-site-links" },
@@ -698,7 +698,7 @@ export class Inspector {
 
   /** Enzymes picked with ⌘/Ctrl-click, ready to digest with. */
   private pickedEnzymes(enzymes: string[]): Node[] {
-    const sites = cutSites(this.ctx.store.data, this.ctx.options.enzymeSet);
+    const sites = cutSites(this.ctx.store.data, this.ctx.options);
     const count = (e: string) => sites.filter(x => x.enzyme === e).length;
     return [
       h(
@@ -714,7 +714,7 @@ export class Inspector {
 
   private cutsite(id: string): Node[] {
     const d = this.ctx.store.data;
-    const c = cutSites(d, this.ctx.options.enzymeSet).find(x => x.id === id)!;
+    const c = cutSites(d, this.ctx.options).find(x => x.id === id)!;
     return [
       h(
         "div",

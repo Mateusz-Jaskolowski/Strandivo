@@ -31,7 +31,7 @@ import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts
 import { basesIn, newId, rangeLength, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData, type SeqPrimer } from "../lib/seqdata.ts";
 import { PRIMER_BASES } from "../lib/contextMenu.ts";
 import { gcPercent } from "../lib/labinfo.ts";
-import type { EnzymeSet } from "../lib/enzymes.ts";
+import { isLabSet, type EnzymeSet } from "../lib/enzymes.ts";
 import { ALTERNATIVE_STARTS, type OrfOptions } from "../lib/orfs.ts";
 import type { Feature } from "../lib/types.ts";
 import { describeDifference } from "../lib/genetics.ts";
@@ -56,7 +56,8 @@ import { openDetectDialog } from "../views/detectDialog.ts";
 import { regionsOf } from "../lib/regions.ts";
 import { dismissOffer, offerDismissed } from "../detectOffer.ts";
 import { looksUnannotated } from "../lib/detect.ts";
-import { enzymeOf } from "../lib/enzymePick.ts";
+import { enzymeOf, prunePick } from "../lib/enzymePick.ts";
+import { cutSites } from "./analysis.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
 import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
@@ -97,6 +98,7 @@ function loadViewOptions(settings: Settings): ViewOptions {
     labelSize: settings.labelSize,
     linearMap: false,
     ...saved,
+    labEnzymes: enzymeLibrary.names,
     orfOptions: orfOptions(settings),
     caseMode: settings.sequenceCase
   };
@@ -714,14 +716,26 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     readsView.refresh();
     if (tab === "info") infoPanel.render();
   });
+  // The lab's stock changes what lab sets show and what the Digest dialog offers. Notes and
+  // locations keep the same names, so they redraw nothing.
+  let libraryError = enzymeLibrary.error;
   const offEnzymeLibrary = enzymeLibrary.onChange(() => {
-    if (ctx.options.enzymeSet === "lab") {
-      // A removed enzyme may be selected. Notes and locations leave a valid pick alone.
-      const { focus, enzymes } = store.selection;
-      if (focus?.kind === "cutsite" && (!enzymeLibrary.names.includes(enzymeOf(focus.id)) || enzymes?.some(e => !enzymeLibrary.names.includes(e))))
-        store.select({ range: store.selection.range }, "enzyme-library");
-      opts.set({});
+    const names = enzymeLibrary.names;
+    if (names === ctx.options.labEnzymes) {
+      // The outline says when the library couldn't be loaded.
+      if (enzymeLibrary.error !== libraryError && isLabSet(ctx.options.enzymeSet)) opts.set({});
+      libraryError = enzymeLibrary.error;
+      return;
     }
+    libraryError = enzymeLibrary.error;
+    // A picked enzyme may have left the stock: drop just that one.
+    const next = prunePick(store.selection, cutSites(store.data, { ...ctx.options, labEnzymes: names }));
+    if (next)
+      store.select(
+        next.site ? { range: { start: next.site.start, end: next.site.end }, focus: { kind: "cutsite", id: next.site.id }, enzymes: next.enzymes } : { range: null, caret: store.selection.caret },
+        "enzyme-library"
+      );
+    opts.set({ labEnzymes: names });
   });
 
   // ---------- keyboard ----------

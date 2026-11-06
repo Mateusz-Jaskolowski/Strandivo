@@ -55,7 +55,8 @@ export function cutsFor(sequence: string, circular: boolean, enzymes: string[]):
   const names = new Set(enzymes);
   const out: Cut[] = [];
   const seen = new Set<string>();
-  for (const h of scanSites(sequence, circular)) {
+  // Named enzymes outside the curated list (a lab's stock) are searched for too.
+  for (const h of scanSites(sequence, circular, enzymes)) {
     if (!names.has(h.enzyme)) continue;
     let top = h.cut;
     let bottom = h.bottomCut;

@@ -26,6 +26,8 @@ export interface ViewOptions {
   orfs: boolean;
   orfOptions: OrfOptions;
   enzymeSet: EnzymeSet;
+  /** The lab's stocked enzymes (the enzyme library), for lab sets and the Digest dialog. */
+  labEnzymes: readonly string[];
   mapRotation: number;
   /** 1…8, how much larger than fitting the window the map is drawn. */
   mapZoom: number;

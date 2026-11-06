@@ -267,7 +267,7 @@ export class SequenceView {
     const rowCount = Math.max(1, Math.ceil(n / W));
     const sans = fontStack("sans");
     const enzFont = `500 10px ${sans}`;
-    const sites = o.cutsites ? cutSites(d, o.enzymeSet) : [];
+    const sites = o.cutsites ? cutSites(d, o) : [];
     const byRowSites: CutSite[][] = Array.from({ length: rowCount }, () => []);
     for (const c of sites) {
       const base = Math.min(n - 1, Math.max(0, c.cut - 1));
@@ -917,7 +917,7 @@ export class SequenceView {
     } else if (f.kind === "primer") r = d.primers.find(x => x.id === f.id) ?? null;
     else if (f.kind === "orf") r = orfs(d, this.ctx.options.orfOptions).find(x => x.id === f.id) ?? null;
     else {
-      const c = cutSites(d, this.ctx.options.enzymeSet).find(x => x.id === f.id);
+      const c = cutSites(d, this.ctx.options).find(x => x.id === f.id);
       if (c) r = { start: c.start, end: c.end };
     }
     if (r) this.ctx.store.selectRange({ start: r.start, end: r.end }, f, "sequence");

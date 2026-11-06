@@ -13,7 +13,7 @@ import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
-import { ENZYME_SETS, type EnzymeSet } from "../lib/enzymes.ts";
+import { ENZYME_SETS, isLabSet, type EnzymeSet } from "../lib/enzymes.ts";
 import { fmt } from "../ui/format.ts";
 import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
 import { dropGap, moveSection, SIDEBAR_SECTIONS, type SidebarSection } from "../lib/sidebar.ts";
@@ -264,7 +264,8 @@ export class Outline {
       { class: "sv-select-quiet", "aria-label": "Which enzymes to show", onchange: (e: Event) => this.ctx.setOptions({ enzymeSet: (e.target as HTMLSelectElement).value as EnzymeSet }) },
       ENZYME_SETS.map(s => h("option", { value: s.id, selected: s.id === this.ctx.options.enzymeSet }, s.label))
     );
-    const sites = cutSites(d, this.ctx.options.enzymeSet).filter(c => this.matches(c.enzyme));
+    const sites = cutSites(d, this.ctx.options).filter(c => this.matches(c.enzyme));
+    const lab = isLabSet(this.ctx.options.enzymeSet);
     const chips = sites.map(c =>
       h(
         "button",
@@ -308,8 +309,8 @@ export class Outline {
           h("div", null,
             chips.length
               ? h("div", { class: "sv-enzyme-chips" }, chips)
-              : empty(this.ctx.options.enzymeSet === "none" ? "Enzymes are hidden." : this.filter ? "No matching enzymes." : this.ctx.options.enzymeSet === "lab" && enzymeLibrary.error ? "The enzyme library couldn't be loaded." : this.ctx.options.enzymeSet === "lab" && !enzymeLibrary.all.length ? "Your lab enzyme library is empty." : "None of these enzymes cut."),
-            this.ctx.options.enzymeSet === "lab" ? h("button", { class: "sv-btn sv-btn-small sv-btn-quiet sv-lab-enzymes-edit", type: "button", onclick: () => void openEnzymeLibrary() }, "Edit lab enzymes…") : ""
+              : empty(this.ctx.options.enzymeSet === "none" ? "Enzymes are hidden." : this.filter ? "No matching enzymes." : lab && enzymeLibrary.error ? "The enzyme library couldn't be loaded." : lab && !enzymeLibrary.all.length ? "Your lab enzyme library is empty." : "None of these enzymes cut."),
+            lab ? h("button", { class: "sv-btn sv-btn-small sv-btn-quiet sv-lab-enzymes-edit", type: "button", onclick: () => void openEnzymeLibrary() }, "Edit lab enzymes…") : ""
           )
         )
     };

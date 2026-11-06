@@ -131,7 +131,7 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       }
       return;
     case "copy-site": {
-      const c = target.kind === "cutsite" ? cutSites(d, ctx.options.enzymeSet).find(x => x.id === target.id) : undefined;
+      const c = target.kind === "cutsite" ? cutSites(d, ctx.options).find(x => x.id === target.id) : undefined;
       if (c) host.copy(c.site.toUpperCase(), `${c.enzyme} site`);
       return;
     }

@@ -1,7 +1,8 @@
 name: Quick checks
 
 # The checks that take seconds and need nothing installed: that the agent guide names only
-# files that exist, and that every source file has the licence header. They run on every
+# files that exist, that every source file has the licence header, and that the website's
+# security.txt isn't about to expire (its date is renewed by hand). They run on every
 # push and pull request, including the docs and website changes that checks.yml skips,
 # since a docs change is just what breaks the guide's paths. `npm run check:quick` runs
 # the same locally.
@@ -31,3 +32,6 @@ jobs:
 
       - name: Every source file has the licence header
         run: .github/scripts/check-headers.sh
+
+      - name: The website's security.txt is not about to expire
+        run: node .github/scripts/check-security-txt.mjs

@@ -4,3 +4,7 @@
   Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+
+# RFC 9116 asks for this media type and charset.
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8

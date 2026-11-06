@@ -351,7 +351,8 @@ it can (lists of files or features). CI checks that every path in backticks here
   checks except the e2e, in a minute or two. Run it before every push where Rust is
   installed; CI stays the final word and the only place the e2e runs. A change to nothing
   but docs, Markdown, the website or `CITATION.cff` needs only `npm run check:quick` (the
-  guide's paths and the licence headers, in seconds), as CI then runs only that too.
+  guide's paths, the licence headers and the website's security.txt, in seconds), as CI
+  then runs only that too.
 - In a browser, `npm run dev` (or any static server on the built `dist` folder) shows Home,
   and opens a file in a tab with `?open=<path or URL>`. Reads only align there if the page
   defines `window.__strandivoAlign` (returning `{ reads, clones }` as the core does), and Home lists folders only if it defines
@@ -411,6 +412,9 @@ it can (lists of files or features). CI checks that every path in backticks here
   email obfuscation rewrites addresses on the proxied domain (not on `pages.dev`) into
   a script the policy blocks, so a page's body sits inside `<!--email_off-->` comments;
   a new page needs them too, or its addresses read "[email protected]".
+  `site/.well-known/security.txt` repeats `SECURITY.md` for scanners, and its `Expires`
+  must be moved on by hand each year: `.github/scripts/check-security-txt.mjs` fails the
+  quick checks from 30 days before it.
 - From a cloud session the npm and crates registries may be blocked: Rust in `src-tauri/`
   then only compiles in CI, and CI is the final word.
 

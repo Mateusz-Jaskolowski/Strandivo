@@ -16,6 +16,10 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+If Strandivo quits unexpectedly, it now offers to report the crash the next time it opens,
+and shows everything it would send before anything goes. Usage statistics, if you share
+them, count a little more, still only as fixed words and ranges.
+
 - **Crash reports**: if Strandivo quits unexpectedly, it notes why on your computer, and
   the next time it opens a strip under the app bar offers to report it. Report it… opens
   Report a Bug with what it noted, shown in full and with file paths removed; nothing is

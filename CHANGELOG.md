@@ -34,6 +34,11 @@ them, count a little more, still only as fixed words and ranges.
   that did nothing there: Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+, and the rest.
 - **Menu bar on Windows** stays light, like the rest of the window, instead of switching
   from dark to light when another window such as Settings opened.
+- **Cut sites at the end of a row** in the Sequence tab stay inside it: an enzyme that cuts
+  right at a row's edge is shown at the start of the next row, beside the rest of its site,
+  and a cut on the bottom strand that falls in the next row is drawn there.
+- **Codon shading** in the Sequence tab alternates evenly again: the first codon of a
+  feature or row was sometimes partly shaded.
 
 ## 0.3.1
 

@@ -59,8 +59,12 @@ const ORF_LANE = 9;
 
 interface EnzymeMark {
   site: CutSite;
+  /** The top strand's cut, and where its label starts (kept inside the row). */
   x: number;
+  labelX: number;
+  /** Where the leader runs to on the bottom strand: the bottom cut, or the row's edge when that is in another row. */
   bottomX: number;
+  bottomHere: boolean;
   level: number;
 }
 
@@ -77,6 +81,8 @@ interface RowLayout {
   height: number;
   yEnz: number;
   enzymes: EnzymeMark[];
+  /** Bottom-strand cuts of sites labelled in the row before or after: a leader from the row's edge. */
+  cutTails: { from: number; to: number }[];
   enzLevels: number;
   /** Primer lanes, the one nearest the strand first. */
   fwd: PrimerLane[];
@@ -268,10 +274,20 @@ export class SequenceView {
     const sans = fontStack("sans");
     const enzFont = `500 10px ${sans}`;
     const sites = o.cutsites ? cutSites(d, o) : [];
-    const byRowSites: CutSite[][] = Array.from({ length: rowCount }, () => []);
+    // A cut is a boundary between bases; one on a row's edge goes in the row where the other
+    // strand's cut is too, so its leader stays in the row.
+    const rowOf = (b: number, toward: number) => (b > 0 && b < n && b % W === 0 && toward >= b ? b / W : Math.floor(Math.min(n - 1, Math.max(0, b - 1)) / W));
+    const byRowSites: { site: CutSite; dx: number; bottomRow: number }[][] = Array.from({ length: rowCount }, () => []);
+    const cutTails: { from: number; to: number }[][] = Array.from({ length: rowCount }, () => []);
     for (const c of sites) {
-      const base = Math.min(n - 1, Math.max(0, c.cut - 1));
-      byRowSites[Math.floor(base / W)]?.push(c);
+      // How far the bottom cut lies from the top one, the short way round on a circle.
+      let dx = c.bottomCut - c.cut;
+      if (d.circular && Math.abs(dx) > n / 2) dx -= Math.sign(dx) * n;
+      const bottom = c.cut + dx < 0 ? c.cut + dx + n : c.cut + dx > n ? c.cut + dx - n : c.cut + dx;
+      const row = rowOf(c.cut, c.cut + dx);
+      const bottomRow = rowOf(bottom, bottom - dx);
+      byRowSites[row]?.push({ site: c, dx, bottomRow });
+      if (bottomRow !== row) cutTails[bottomRow]?.push({ from: dx > 0 ? 0 : Math.min(W, n - bottomRow * W), to: bottom - bottomRow * W });
     }
     // Each primer's piece in each row it reaches: its site and its 5′ tail, left of a forward
     // primer and right of a reverse one.
@@ -325,15 +341,19 @@ export class SequenceView {
       const r1 = Math.min(n - 1, r0 + W - 1);
       // Enzyme labels, stacked so they don't overlap.
       const levelsEnd: number[] = [];
+      const len = r1 - r0 + 1;
       const enzymes: EnzymeMark[] = byRowSites[r]
-        .sort((a, b) => a.cut - b.cut)
-        .map(site => {
+        .sort((a, b) => a.site.cut - b.site.cut)
+        .map(({ site, dx, bottomRow }) => {
           const x = site.cut - r0;
           const w = chW(site.enzyme, enzFont) + 0.8;
+          // A label near the row's end ends at it, its leader under its last letters.
+          const labelX = Math.max(0, Math.min(x, W - w));
           let level = 0;
-          while (levelsEnd[level] !== undefined && x - 0.3 < levelsEnd[level]) level++;
-          levelsEnd[level] = x + w;
-          return { site, x, bottomX: site.bottomCut - r0, level };
+          while (levelsEnd[level] !== undefined && labelX - 0.3 < levelsEnd[level]) level++;
+          levelsEnd[level] = labelX + w;
+          const bottomHere = bottomRow === r;
+          return { site, x, labelX, bottomX: bottomHere ? x + dx : dx > 0 ? len : 0, bottomHere, level };
         });
       const enzLevels = levelsEnd.length;
       // Primers in lanes, a base apart; a lane gets a raised band only where a piece needs one.
@@ -392,7 +412,7 @@ export class SequenceView {
         y += FEATURE_H + (coding ? CAPTION : 0) + 3;
       }
       y += 12;
-      this.rows.push({ start: r0, end: r1, height: y, yEnz, enzymes, enzLevels, fwd, yTop, yBot, yRuler, rev, yOrf, orfs: orfBars, features, laneY });
+      this.rows.push({ start: r0, end: r1, height: y, yEnz, enzymes, cutTails: cutTails[r], enzLevels, fwd, yTop, yBot, yRuler, rev, yOrf, orfs: orfBars, features, laneY });
       this.offsets.push(this.offsets[r] + y);
     }
   }
@@ -469,7 +489,7 @@ export class SequenceView {
     // Cut sites.
     for (const m of row.enzymes) {
       const ly = row.yEnz + (row.enzLevels - 1 - m.level) * 13;
-      const label = abs(`left:${ch(m.x)};top:${ly}px;margin-left:-2px`, span("sv-cut-label", m.site.enzyme));
+      const label = abs(`left:${ch(m.labelX)};top:${ly}px;margin-left:-2px`, span("sv-cut-label", m.site.enzyme));
       label.dataset.kind = "cutsite";
       label.dataset.id = m.site.id;
       label.title = `${m.site.enzyme} · ${m.site.site.toUpperCase()} · cuts after ${fmt(m.site.cut)}`;
@@ -481,7 +501,16 @@ export class SequenceView {
         const lo = Math.min(m.x, m.bottomX);
         const hi = Math.max(m.x, m.bottomX);
         if (hi > lo) track.appendChild(abs(`left:${ch(lo)};top:${row.yBot}px;width:${ch(hi - lo)};height:1px`, "")).classList.add("sv-cut-line");
-        track.appendChild(abs(`left:${ch(m.bottomX)};top:${row.yBot}px;width:1px;height:18px`, "")).classList.add("sv-cut-line");
+        if (m.bottomHere) track.appendChild(abs(`left:${ch(m.bottomX)};top:${row.yBot}px;width:1px;height:18px`, "")).classList.add("sv-cut-line");
+      }
+    }
+    // Bottom-strand cuts of sites labelled in the next or last row, reached from the row's edge.
+    if (o.complement) {
+      for (const t of row.cutTails) {
+        const lo = Math.min(t.from, t.to);
+        const hi = Math.max(t.from, t.to);
+        if (hi > lo) track.appendChild(abs(`left:${ch(lo)};top:${row.yBot}px;width:${ch(hi - lo)};height:1px`, "")).classList.add("sv-cut-line");
+        track.appendChild(abs(`left:${ch(t.to)};top:${row.yBot}px;width:1px;height:18px`, "")).classList.add("sv-cut-line");
       }
     }
 
@@ -626,17 +655,18 @@ export class SequenceView {
             track.appendChild(box);
           }
         } else {
-          // Codon shading and amino acids, centred on each codon.
+          // Codon shading and amino acids, centred on each codon. Every other codon gets a box
+          // of its own, in a layer cut to the bar's shape: a repeating background lost its
+          // phase at the bar's left edge, which shaded a part of the first codon.
           const line = new Array(bar.b + 1).fill(" ");
-          let shadeFrom: number | null = null;
+          const shade = abs(`left:${ch(bar.a)};width:${ch(bar.b - bar.a + 1)};top:${ly}px;height:${lh}px;pointer-events:none;${clipPath && !notchLeft && !notchRight ? clipPath : ""}`);
           for (const c of cs) {
             line[c.mid - row.start] = c.aa;
-            if (shadeFrom === null && c.index % 2 === 0) shadeFrom = Math.min(c.lo, c.hi) - row.start;
+            if (c.index % 2 === 1) continue;
+            const a = Math.max(bar.a, c.mid - 1 - row.start);
+            const b = Math.min(bar.b, c.mid + 1 - row.start);
+            shade.appendChild(abs(`left:${ch(a - bar.a)};width:${ch(b - a + 1)};top:0;height:100%;background:rgba(0,0,0,.09)`));
           }
-          const offset = shadeFrom === null ? 0 : (((shadeFrom - bar.a) % 6) + 6) % 6;
-          const shade = abs(
-            `left:${ch(bar.a)};width:${ch(bar.b - bar.a + 1)};top:${ly}px;height:${lh}px;background:repeating-linear-gradient(90deg,rgba(0,0,0,.09) 0 3ch,transparent 3ch 6ch);background-position:${ch(offset)} 0;pointer-events:none;${clipPath && !notchLeft && !notchRight ? clipPath : ""}`
-          );
           track.appendChild(shade);
           const letters = abs(`left:0;top:${ly}px;line-height:${lh}px;color:${st.text}`, line.join("").replace(/\s+$/, ""));
           letters.className = "sv-aa";

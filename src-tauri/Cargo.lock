@@ -3516,6 +3516,7 @@ name = "strandivo"
 version = "0.2.1"
 dependencies = [
  "os_info",
+ "reqwest",
  "seqcore-json",
  "serde",
  "serde_json",

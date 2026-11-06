@@ -19,6 +19,8 @@ import { openDocument, type DocTab, type OpenSequence } from "./doc/document.ts"
 import { Home } from "./home.ts";
 import { loadSettings, saveSettings, type Settings } from "./settings.ts";
 import { startUpdates } from "./updates.ts";
+import { flushUsage, startUsage, track } from "./usage.ts";
+import { fileFormat } from "./lib/usage.ts";
 import { openWelcome } from "./welcome.ts";
 import { needsWelcome } from "./lib/welcome.ts";
 import type { FeedbackKind } from "./lib/feedback.ts";
@@ -72,6 +74,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   const content = h("div", { class: "sv-shell-body" });
   // The welcome window opens over everything on first launch; the update check waits for it.
   const welcome = needsWelcome(loadSettings().welcomeSeen) ? openWelcome(home) : Promise.resolve();
+  // Counting starts once the welcome window, which asks about it, has closed.
+  startUsage(welcome);
   const updates = startUpdates(welcome);
   const dropText = h("span");
   const dropOverlay = h("div", { class: "ps-drop-overlay" }, h("div", null, icon("reads"), dropText));
@@ -207,6 +211,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       return;
     }
     t.doc = doc;
+    // Its format, from the name; never the name itself. A product made in the app isn't counted.
+    if (t.path) track("file_opened", { format: fileFormat(t.path) });
     refreshTab(t);
     if (t === active) show();
   }
@@ -345,6 +351,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       activate(t);
       if (!(await t.doc.confirmClose())) return false;
     }
+    // What is queued goes now, if it can within a second; statistics never hold a quit up.
+    await Promise.race([flushUsage(), new Promise(r => setTimeout(r, 1000))]);
     return true;
   });
 
@@ -375,7 +383,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     /** Help → Welcome…, as the menu does. */
     openWelcome: () => openWelcome(home, true),
     /** Help → Send Feedback… or Report a Bug…, as the menu does. */
-    openFeedback: (kind: FeedbackKind = "idea") => feedback(kind)
+    openFeedback: (kind: FeedbackKind = "idea") => feedback(kind),
+    /** Sends queued usage events now, to `window.__strandivoTrack` in e2e. */
+    flushUsage: () => flushUsage()
   };
   Object.defineProperty(window, "__strandivo", { configurable: true, get: () => ({ ...shellHook, ...(active?.doc?.testHook ?? {}) }) });
 

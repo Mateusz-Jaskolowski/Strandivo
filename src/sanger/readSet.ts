@@ -17,6 +17,7 @@ import { consequenceIn, describeDifference, featuresAt, type Consequence } from 
 import type { Chromatogram, CloneDifference, CloneResult, Conflict, Difference, DiffKind, Feature, ReadResult } from "../lib/types.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { toast } from "../ui/dom.ts";
+import { track } from "../usage.ts";
 
 export interface ReferenceInfo {
   name: string;
@@ -83,6 +84,8 @@ export class ReadSet {
   trimCutoff = loadSettings().trimCutoff;
   private amberAsQ = loadSettings().amberAsQ;
   running = false;
+  /** How many reads usage statistics last counted, so aligning again after an edit doesn't count. */
+  private counted = 0;
   /** Asked to align while aligning: go again with what changed. */
   private again = false;
   private consequences = new Map<Difference, Consequence[]>();
@@ -365,6 +368,12 @@ export class ReadSet {
       this.results = response.reads.map(r => ({ ...r, ...splitVariable(r.differences, regions, n) }));
       this.clones = response.clones.map(c => ({ ...c, ...splitVariable(c.differences, regions, n) }));
       this.sortClones();
+      if (this.reads.length !== this.counted) {
+        this.counted = this.reads.length;
+        // As the core tells them apart: long is a read with no trace over 1.6 kb.
+        const long = this.reads.filter(r => !r.chromatogram && r.sequence.length > 1600).length;
+        track("reads_aligned", { reads: this.reads.length, kind: long === 0 ? "sanger" : long === this.reads.length ? "long" : "both" });
+      }
       this.alignedVersion = ref.version;
       this.consequences.clear();
       const annotated = ref.features.filter(f => !isSource(f));

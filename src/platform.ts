@@ -9,6 +9,7 @@ import type { DetectRequest, DetectResponse } from "./lib/detect.ts";
 import { changesUrl } from "./lib/changelog.ts";
 import type { FeedbackReport, SystemInfo } from "./lib/feedback.ts";
 import { recordError } from "./feedback.ts";
+import type { UsageEvent } from "./lib/usage.ts";
 
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -319,6 +320,35 @@ export async function openIssue(number: number): Promise<void> {
   if (hook) return hook.openIssue?.(number);
   if (isDesktop) return invoke<void>("open_issue", { number });
   window.open(`https://github.com/Mateusz-Jaskolowski/Strandivo/issues/${number}`, "_blank", "noopener");
+}
+
+/** The usage statistics' list on the website's Privacy page (Settings' "What is sent"). */
+export const USAGE_PAGE = "https://strandivo.com/privacy#usage-statistics";
+
+export async function openUsagePage(): Promise<void> {
+  if (isDesktop) return invoke<void>("open_project_page", { which: "privacy-usage" });
+  window.open(USAGE_PAGE, "_blank", "noopener");
+}
+
+/** e2e receives usage events here instead of the shell. */
+type UsageHook = (events: UsageEvent[]) => void;
+const usageHook = () => (window as unknown as { __strandivoTrack?: UsageHook }).__strandivoTrack;
+
+/**
+ * Hands queued events (src/usage.ts) to the shell, which sends them to Aptabase if this
+ * copy is a release build with the key built in. Not through `invoke`, whose failures are
+ * kept as recent errors: a failed send must not become an error event of its own.
+ */
+export async function sendUsage(events: UsageEvent[]): Promise<void> {
+  const hook = usageHook();
+  if (hook) return hook(events);
+  if (!isDesktop) return;
+  try {
+    const { invoke: raw } = await import("@tauri-apps/api/core");
+    await raw("send_usage", { events });
+  } catch {
+    // Statistics are dropped rather than retried.
+  }
 }
 
 /** Starts an email to feedback@strandivo.com in the user's mail app, with the report in it. */

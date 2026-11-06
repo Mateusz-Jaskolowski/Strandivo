@@ -56,7 +56,7 @@
       <li>the operating system, such as macOS or Windows;</li>
       <li>the processor, such as Apple silicon or Intel.</li>
     </ul>
-    <p>Like any connection on the internet, it also comes from your network's address. The service answers with the newest version's details and keeps nothing: it doesn't record the question, the address or anything else, and it has no logs. It runs on Cloudflare, which carries the connection.</p>
+    <p>Like any connection on the internet, it also comes from your network's address. The service answers with the newest version's details. All it keeps is a count: one more check that day for that version, operating system and processor, which tells roughly how many copies are in use. It doesn't record the address or anything that tells one copy from another, and it has no logs. It runs on Cloudflare, which carries the connection.</p>
     <p>You can turn automatic checks off in the welcome window or in Settings → Updates and privacy. Check for Updates… still works when you ask.</p>
     <h2 id="installing-an-update">Installing an update</h2>
     <p>When you choose to install an update, the app downloads it from GitHub, where Strandivo's releases are published. GitHub sees that download as it sees any other, under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
@@ -76,15 +76,31 @@
     </ul>
     <p>The service files your report as an issue in Strandivo's repository on GitHub, where anyone can read it, and tells you its number. Your email address, if you give one, and the open file, if you attach it, never go in the issue: they are emailed to the maintainer alone, with the issue's link, so the maintainer can answer you. The service keeps nothing itself and has no logs. To stop floods it lets each network send a few reports a minute, which Cloudflare counts for that minute and forgets. GitHub keeps the issue under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>; the email stays in the maintainer's mailbox. To have an issue or an email removed, write to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
     <p>If a report can't be sent, nothing leaves the app: you can copy it, or email it to <a href="mailto:feedback@strandivo.com">feedback@strandivo.com</a> from your own mail app instead.</p>
+    <h2 id="usage-statistics">Usage statistics</h2>
+    <p>From Strandivo 0.3.0 the app can count which of its features are used, and on which systems, so that work goes where it helps most. It is <strong>off unless you turn it on</strong>: the welcome window asks, and &quot;Share anonymous usage statistics&quot; in Settings → Updates and privacy turns it on or off at any time. Until you turn it on, nothing is sent, and turning it off sends nothing either, not even that you turned it off; anything waiting to be sent is dropped at once.</p>
+    <p>When it is on, the app sends these events, and nothing else. Every detail an event carries is one of a few fixed words or a number put in a range (0, 1, 2–5, 6–20 or more than 20), so none can hold a name, a sequence or anything you typed:</p>
+    <ul>
+      <li><code>app_started</code>: the app was opened, with <code>arch</code>, the processor (Apple silicon or ARM, Intel or AMD).</li>
+      <li><code>file_opened</code>: a file was opened, with <code>format</code>, its kind (GenBank, SnapGene, FASTA, EMBL or other), worked out from its name; never the name itself.</li>
+      <li><code>view_shown</code>: one of a file's five views was shown, with <code>view</code> (Map, Sequence, Primers, Reads or Info).</li>
+      <li><code>dialog_completed</code>: a tool made or added something, with <code>dialog</code> (a digest, cloning, primer design, a PCR product, mutagenesis primers or finding known parts), the <code>method</code> for cloning and mutagenesis (such as Gibson or overlapping), and for found parts <code>parts</code>, how many were added, as a range.</li>
+      <li><code>primer_pairs</code>: the Primers tab's Pairs view was shown, or its Export list was used, as <code>action</code>.</li>
+      <li><code>reads_aligned</code>: reads were checked against a sequence, with <code>reads</code>, how many, as a range, and <code>kind</code>, whether Sanger reads, long reads or both.</li>
+      <li><code>check_saved</code>: a read check was saved as a file.</li>
+      <li><code>update_installed</code>: the app was updated to a new version.</li>
+      <li><code>error</code>: something went wrong in the app's window, with <code>kind</code> (a script error, a promise nobody caught or a command that failed); never the message, which could name a file.</li>
+    </ul>
+    <p>Every event also carries the app's version, the operating system and its version, the time, and a session number: a random number the app makes when it starts and drops after four hours without events. It is never stored, so it can't link one day's use to the next. Events are sent every 30 seconds while the app is open. A copy built for testing or development sends none.</p>
+    <p>They go to <a href="https://aptabase.com">Aptabase</a>, an open-source service for app statistics, in its EU region. Like any server, it sees the address the events come from: it uses it to tell the country and region, and to count visitors a day with a code that changes every day, and it doesn't keep the address. Aptabase's own <a href="https://aptabase.com/legal/privacy">privacy policy</a> covers what it keeps.</p>
     <h2 id="opening-the-website">Opening the website</h2>
     <p>What's new… and some help items open strandivo.com or GitHub in your web browser. The app sends nothing itself; your browser visits the page as it would any other.</p>
     <h2 id="this-website">This website</h2>
     <p>strandivo.com has no cookies and no tracking. Its one script, on the home and Download pages, asks your browser which system it runs on, so that the right download comes first; it sends nothing and stores nothing. The site is served by Cloudflare, which handles each visit to deliver the page.</p>
     <h2 id="what-the-app-doesn-t-do">What the app doesn't do</h2>
     <ul>
-      <li>No usage statistics are sent. If they are added, they will be off until you turn them on, and this page will list every one before any copy sends them.</li>
+      <li>No usage statistics unless you turn them on, and then only the events listed above.</li>
       <li>No account, no sign-in, no identifier for your copy of the app.</li>
-      <li>No crash reports and no error reports are sent on their own: errors go only in a feedback report, and only if you tick them.</li>
+      <li>No crash reports and no error messages are sent on their own: messages go only in a feedback report, and only if you tick them. With usage statistics on, an error is counted by its kind alone.</li>
     </ul>
   </main>
 

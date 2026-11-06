@@ -9,6 +9,7 @@ import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
 import { openDialog } from "../ui/modal.ts";
+import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
 import { parseSequenceFile } from "../doc/fileio.ts";
 import { fromParsed } from "../doc/convert.ts";
@@ -560,6 +561,7 @@ export function openCloningDialog(ctx: DocContext) {
           onclick: () => {
             if (!product) return;
             dlg.close();
+            track("dialog_completed", { dialog: "cloning", method });
             ctx.openNew(product);
           }
         },

@@ -177,6 +177,8 @@ async function main() {
     // A fresh install: the welcome window opens over the file that started the app. Update
     // checks are counted through the hook, which answers that there is none.
     await s.exec("window.__e2eChecks = 0; window.__strandivoUpdate = { check: async () => { window.__e2eChecks++; return null; }, download: async () => {}, restart: async () => {} };");
+    // Usage statistics go to the hook, never to the shell; e2e builds have no key anyway.
+    await s.exec("window.__e2eUsage = []; window.__strandivoTrack = events => { window.__e2eUsage.push(...events); };");
     check("The file opens in a tab with its map", await s.waitFor("document.querySelector('.sv-map-svgel .sv-map-feature')", 30000));
     const welcomeShown = await s.waitFor("/Welcome to Strandivo/.test(document.querySelector('.sv-dialog-title')?.textContent)", 5000);
     check("On first launch the welcome window opens over the file", welcomeShown && JSON.stringify(await s.exec("return window.__strandivo.tabs()")) === '["pUC19-annotated.gb"]');
@@ -184,10 +186,11 @@ async function main() {
       await s.shot("00-welcome");
       await s.click("//label[contains(@class,'sv-welcome-option')][contains(., 'common sequencing primers')]//input", "xpath");
       check("Nothing is checked online while the welcome window is open", (await s.exec("return window.__e2eChecks")) === 0);
+      check("It asks about usage statistics, unticked", (await s.exec("const box = Array.from(document.querySelectorAll('.sv-welcome-option')).find(l => /anonymous usage statistics/.test(l.textContent))?.querySelector('input'); return box ? box.checked : null;")) === false);
       await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Start using Strandivo']", "xpath");
       check("Start using Strandivo closes it", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
-      const chosen = await s.exec("const st = JSON.parse(localStorage.getItem('strandivo.settings') || '{}'); return { seen: st.welcomeSeen, updates: st.checkForUpdates, primers: JSON.parse(localStorage.getItem('strandivo.primerLibrary') || '[]').length };");
-      check("Its choices land in the settings, and an unticked box adds nothing", chosen.seen >= 1 && chosen.updates === true && chosen.primers === 0, JSON.stringify(chosen));
+      const chosen = await s.exec("const st = JSON.parse(localStorage.getItem('strandivo.settings') || '{}'); return { seen: st.welcomeSeen, updates: st.checkForUpdates, usage: st.shareUsage, primers: JSON.parse(localStorage.getItem('strandivo.primerLibrary') || '[]').length };");
+      check("Its choices land in the settings, and an unticked box adds nothing", chosen.seen >= 2 && chosen.updates === true && chosen.usage === false && chosen.primers === 0, JSON.stringify(chosen));
       check("Once it closes, the update check runs", await s.waitFor("window.__e2eChecks === 1", 9000), `${await s.exec("return window.__e2eChecks")} checks`);
     }
     await s.exec("delete window.__strandivoUpdate;");
@@ -1131,6 +1134,25 @@ async function main() {
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await s.exec("delete window.__strandivoFeedback;");
+
+    // --- usage statistics: through the hook, so CI never sends any ---
+    const flush = () => s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.flushUsage().then(() => done(window.__e2eUsage.length), e => done(String(e)));");
+    await s.exec("window.__strandivo.showTab(0); window.__strandivo.setView('sequence');");
+    check("Nothing is counted while statistics are off, errors included", (await flush()) === 0, `${await s.exec("return window.__e2eUsage.length")} events`);
+    await s.exec("window.__strandivo.saveSettings({ shareUsage: true });");
+    await sleep(300);
+    await s.exec("window.__strandivo.setView('primers');");
+    await flush();
+    const usage = await s.exec("return window.__e2eUsage");
+    const names = usage.map(e => e.name);
+    check("Turned on, the app counts its start and what is used", names.includes("app_started") && usage.some(e => e.name === "view_shown" && e.props.view === "primers"), JSON.stringify(usage).slice(0, 240));
+    check("Events carry listed words alone, never a file's name or path", usage.length > 0 && !/pUC19|annotated|\/|\\/.test(JSON.stringify(usage.map(e => e.props))), JSON.stringify(usage.map(e => e.props)).slice(0, 200));
+    await s.exec("window.__strandivo.setView('map');");
+    await s.exec("window.__strandivo.saveSettings({ shareUsage: false });");
+    await sleep(300);
+    await s.exec("window.__strandivo.setView('sequence');");
+    check("Turned off, what was queued is dropped and nothing more goes", (await flush()) === usage.length, `${await s.exec("return window.__e2eUsage.length")} events, ${usage.length} before`);
+    await s.exec("window.__strandivo.setView('map'); delete window.__strandivoTrack;");
 
     // --- Home: the construct library ---
     await s.exec("window.__strandivo.showHome()");

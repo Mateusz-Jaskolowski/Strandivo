@@ -42,14 +42,21 @@ pub fn system_info<R: Runtime>(app: AppHandle<R>) -> SystemInfo {
     }
 }
 
-/// The links in the Help menu.
+/// The links in the Help menu, and Settings' "What is sent" (the Privacy page's list of
+/// usage statistics); the page names one of these, never an address.
 pub fn open_page<R: Runtime>(app: &AppHandle<R>, which: &str) {
     let url = match which {
         "website" => WEBSITE.to_string(),
         "github" => REPO.to_string(),
+        "privacy-usage" => format!("{WEBSITE}/privacy#usage-statistics"),
         _ => return,
     };
     let _ = app.opener().open_url(url, None::<&str>);
+}
+
+#[tauri::command]
+pub fn open_project_page<R: Runtime>(app: AppHandle<R>, which: String) {
+    open_page(&app, &which);
 }
 
 /// A sent report's issue, from its number.

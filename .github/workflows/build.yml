@@ -113,6 +113,9 @@ jobs:
           artifact: ${{ matrix.artifact }}
           arch: ${{ matrix.arch }}
           signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # A variable of the `release` environment: not secret (every copy carries it), but
+          # only release builds should send statistics.
+          aptabase-key: ${{ vars.APTABASE_APP_KEY }}
           signing-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
   release:

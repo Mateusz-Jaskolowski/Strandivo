@@ -7,6 +7,7 @@
 
 import { h, toast } from "../ui/dom.ts";
 import { openDialog } from "../ui/modal.ts";
+import { track } from "../usage.ts";
 import { canDetectFeatures, detectFeatures } from "../platform.ts";
 import type { DocContext } from "../doc/context.ts";
 import {
@@ -98,6 +99,7 @@ export function openDetectDialog(ctx: DocContext) {
       { range: { start: first.start, end: first.end }, focus: { kind: "feature", id: first.id } }
     );
     dlg.close();
+    track("dialog_completed", { dialog: "detection", parts: features.length });
     toast(`Added ${plural(features.length, "feature")}. Undo takes them all back.`, "success", 4000);
   });
 

@@ -12,6 +12,8 @@ inputs:
   arch: { description: Architecture in update file names (aarch64 or x64), required: true }
   signing-key: { description: The update signing key; empty for an unsigned build, required: false, default: "" }
   signing-password: { description: The signing key's password, required: false, default: "" }
+  # Built into the app (src-tauri/src/usage.rs); only release builds pass it, so test builds send nothing.
+  aptabase-key: { description: Aptabase app key for usage statistics; empty for none, required: false, default: "" }
 runs:
   using: composite
   steps:
@@ -41,6 +43,7 @@ runs:
       env:
         TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.signing-key }}
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.signing-password }}
+        APTABASE_APP_KEY: ${{ inputs.aptabase-key }}
       run: |
         # Without a key, leave the update files out: the build would stop for want of one.
         unsigned=()

@@ -25,3 +25,8 @@ test("someone who saw an older window is asked only what is new", () => {
   const newest = WELCOME_PARTS.filter(p => p.since === WELCOME_VERSION).map(p => p.part);
   if (WELCOME_VERSION > 1) assert.deepEqual(welcomeParts(WELCOME_VERSION - 1, false), newest);
 });
+
+test("people who installed before usage statistics are asked about them alone", () => {
+  assert.deepEqual(welcomeParts(1, false), ["usage"]);
+  assert.equal(needsWelcome(1), true);
+});

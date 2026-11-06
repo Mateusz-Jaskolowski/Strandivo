@@ -10,11 +10,13 @@
 // That is how someone who installed before usage statistics existed gets asked about them
 // rather than having them start with an update.
 
-export type WelcomePart = "updates" | "constructs" | "primers";
+export type WelcomePart = "updates" | "usage" | "constructs" | "primers";
 
 /** Each part, in the order shown, and the version of the window that first asked it. */
 export const WELCOME_PARTS: { part: WelcomePart; since: number }[] = [
   { part: "updates", since: 1 },
+  // Usage statistics (0.3.0): asked of everyone, including those who installed before.
+  { part: "usage", since: 2 },
   { part: "constructs", since: 1 },
   { part: "primers", since: 1 }
 ];

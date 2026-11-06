@@ -7,7 +7,7 @@ import { h } from "./ui/dom.ts";
 import { DEFAULT_LAB_FIELDS, DEFAULT_SETTINGS, loadSettings, onSettingsChanged, saveSettings, type Settings } from "./settings.ts";
 import { DEFAULT_SIDEBAR_ORDER, moveSection, SIDEBAR_SECTIONS } from "./lib/sidebar.ts";
 import { iconSvg } from "./ui/icons.ts";
-import { setWindowTitle } from "./platform.ts";
+import { openUsagePage, setWindowTitle } from "./platform.ts";
 import { DEFAULT_CONDITIONS, TM_METHODS, usesConditions, type TmConditions, type TmMethod } from "./lib/primers.ts";
 
 const TRIM_LEVELS: [string, number][] = [
@@ -344,6 +344,16 @@ export function mountSettings(root: HTMLElement, embedded = false) {
         "Updates",
         "Once a day, Strandivo asks updates.strandivo.com for the latest version, telling it your version and system; it keeps no record of who asked. An update installs only when you choose.",
         check("Check for updates automatically", s.checkForUpdates !== false, v => commit({ ...s, checkForUpdates: v }))
+      ),
+      row(
+        "Usage statistics",
+        "Which features are used, and on which systems: never your files, sequences or names, and nothing that tells you apart. Turning it off stops it at once.",
+        h(
+          "div",
+          null,
+          check("Share anonymous usage statistics", s.shareUsage === true, v => commit({ ...s, shareUsage: v })),
+          h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void openUsagePage() }, "What is sent")
+        )
       )
     )
   ];

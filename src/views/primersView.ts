@@ -5,6 +5,7 @@
 // primers, the PCR product and primer design open as dialogs (primerDialogs.ts).
 
 import { h, toast } from "../ui/dom.ts";
+import { track } from "../usage.ts";
 import { iconSvg, primerIcon } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
 import { featureStyles, primerAlignment, primerColors } from "../doc/analysis.ts";
@@ -104,7 +105,10 @@ export class PrimersView {
       button("PCR product…", null, () => openPcrDialog(ctx)),
       h("span", { class: "sv-push" }),
       button("Copy for ordering…", "copy", () => openOrderDialog(ctx, this.shownOrder)),
-      button("Export list…", null, () => void exportPrimerList(ctx, this.exportRows()))
+      button("Export list…", null, () => {
+        track("primer_pairs", { action: "exported" });
+        void exportPrimerList(ctx, this.exportRows());
+      })
     );
     this.el = h(
       "div",
@@ -273,6 +277,7 @@ export class PrimersView {
           onclick: () => {
             if (this.listView === v) return;
             this.listView = v;
+            if (v === "pairs") track("primer_pairs", { action: "shown" });
             this.renderBody();
             this.markSelected();
           }

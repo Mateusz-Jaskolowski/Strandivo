@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects. Every copy of the app opens /changes#v<version> for a
+# version's notes (changesUrl in src/lib/changelog.ts), so that address must keep working.
+# Until the site has its own What's new page (part 6), it goes to the GitHub releases.
+/changes  https://github.com/Mateusz-Jaskolowski/Strandivo/releases  302
+/changes/ https://github.com/Mateusz-Jaskolowski/Strandivo/releases  302

@@ -13,6 +13,8 @@ export interface UpdateMemory {
   lastCheck?: number;
   /** A version the user chose to skip: automatic checks don't offer it again. */
   skipped?: string;
+  /** The version this copy last started as, to say when it has been updated. */
+  shownVersion?: string;
 }
 
 /** Whether an automatic check is due. A clock set back counts as due, or it could wait for weeks. */
@@ -31,6 +33,12 @@ export function progressText(downloaded: number, total: number | null | undefine
   return `Downloading… ${(downloaded / 1e6).toFixed(1)} MB`;
 }
 
+/**
+ * Whether to say "Strandivo was updated to …" on this start: only when an earlier version
+ * started here before, so a first install says nothing.
+ */
+export const wasUpdated = (memory: UpdateMemory, current: string) => memory.shownVersion !== undefined && memory.shownVersion !== current;
+
 /** Reads what was remembered, ignoring anything malformed. */
 export function parseMemory(text: string | null): UpdateMemory {
   try {
@@ -38,6 +46,7 @@ export function parseMemory(text: string | null): UpdateMemory {
     const m: UpdateMemory = {};
     if (typeof v?.lastCheck === "number") m.lastCheck = v.lastCheck;
     if (typeof v?.skipped === "string") m.skipped = v.skipped;
+    if (typeof v?.shownVersion === "string") m.shownVersion = v.shownVersion;
     return m;
   } catch {
     return {};

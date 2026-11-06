@@ -19,7 +19,8 @@ use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-const RELEASES: &str = "https://github.com/Mateusz-Jaskolowski/Strandivo/releases";
+/// Each version's notes on the website (`changesUrl` in src/lib/changelog.ts says the same).
+const CHANGES: &str = "https://strandivo.com/changes";
 
 #[derive(Default)]
 pub struct UpdateState {
@@ -158,17 +159,24 @@ pub fn restart_to_update<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     Ok(())
 }
 
-/// Opens the found update's release page in the browser. The page names no address, so
-/// this can't be used to open anything else.
+/// Whether `v` is a version as releases write it (0.3.0, 0.3.0-rc.1), so it can go in an
+/// address as it is.
+fn is_version(v: &str) -> bool {
+    let (core, pre) = v.split_once('-').unwrap_or((v, ""));
+    let parts: Vec<&str> = core.split('.').collect();
+    parts.len() == 3
+        && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+        && (v.len() == core.len() || (!pre.is_empty() && pre.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')))
+}
+
+/// Opens a version's notes on strandivo.com in the browser. The page passes only a version,
+/// which is checked, so this can't be used to open any other address.
 #[tauri::command]
-pub fn open_release_notes<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    let version = {
-        let state = app.state::<SharedUpdates>();
-        let st = state.lock().unwrap();
-        st.found.as_ref().map(|(u, _)| u.version.clone()).ok_or("There is no update to show.")?
-    };
-    let url = format!("{RELEASES}/tag/v{version}");
-    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+pub fn open_whats_new<R: Runtime>(app: AppHandle<R>, version: String) -> Result<(), String> {
+    if !is_version(&version) {
+        return Err(format!("\"{version}\" isn't a version."));
+    }
+    app.opener().open_url(format!("{CHANGES}#v{version}"), None::<&str>).map_err(|e| e.to_string())
 }
 
 /// Why the last install failed, once.
@@ -210,6 +218,21 @@ pub fn finish_quit<R: Runtime>(app: &AppHandle<R>) -> bool {
             let mut st = state.lock().unwrap();
             st.failed = Some(format!("Couldn't install Strandivo {}: {e}", update.version));
             false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_version;
+
+    #[test]
+    fn only_versions_reach_the_address() {
+        for ok in ["0.3.0", "10.20.30", "0.3.0-rc.1", "1.0.0-beta-2"] {
+            assert!(is_version(ok), "{ok}");
+        }
+        for bad in ["", "0.3", "0.3.0.1", "v0.3.0", "0.3.0-", "0.3.0/../x", "0.3.0#a", "0.3.0-a b", "a.b.c"] {
+            assert!(!is_version(bad), "{bad}");
         }
     }
 }

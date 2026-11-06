@@ -141,9 +141,12 @@ Built differently from the plan below in four ways:
 - **The shell holds the update, not the page.** Its own commands check, download and
   restart; the updater plugin's commands aren't in the capability, and there is no
   `tauri-plugin-process`, as the shell restarts itself. The page can't install anything.
-- **What's new opens the release page** (through `tauri-plugin-opener`, from Rust only),
-  rather than a dialog: latest.json is written when the draft is made, before its notes
-  are edited, so its notes are only a link.
+- **What's new is a small dialog with the short notes**, and "More on strandivo.com"
+  opens `strandivo.com/changes#v<version>` (through `tauri-plugin-opener`, from Rust only,
+  which checks the version). The notes are written in `CHANGELOG.md` before the version is
+  bumped: its first paragraph goes in latest.json and the whole section is the GitHub
+  release. After an update, the first start says "Strandivo was updated to …" in the same
+  strip, with What's new built in from the same file; a first install says nothing.
 - **Only Restart installs.** A cancelled quit keeps the download for the next Restart, but
   an ordinary quit doesn't install it: on Windows that would bring up an installer the
   user didn't ask for.
@@ -323,6 +326,9 @@ framework. Three pages to start with:
   the README (the unsigned-app steps until installers are signed).
 - **Privacy**: generated from `docs/privacy.md` when the site is built, so there is one
   list of what the app sends. The welcome window and Settings link here.
+- **What's new** at `/changes`, a section per version with an `id` of `v<version>`, from
+  `CHANGELOG.md`. Every copy from 0.2.0 on opens that address, so it must keep working;
+  until the page exists, `site/_redirects` sends it to the GitHub releases.
 
 It comes after the first public release, when there is something to download. Until then
 a single placeholder page (built November 2026) says the app is in development and links

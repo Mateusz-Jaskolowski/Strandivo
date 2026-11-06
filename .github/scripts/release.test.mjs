@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { latestJson, versionProblems, versions } from "./release.mjs";
+import { changelogProblem, latestJson, versionProblems, versions } from "./release.mjs";
 
 const files = {
   "Strandivo_0.2.0_aarch64.app.tar.gz": "",
@@ -38,6 +38,15 @@ test("latest.json names each platform's signed file and its signature", () => {
     url: "https://github.com/owner/Strandivo/releases/download/v0.2.0/Strandivo_0.2.0_amd64.deb"
   });
   assert.match(j.notes, /releases\/tag\/v0\.2\.0$/);
+  assert.equal(latestJson({ files, tag: "v0.2.0", repo: "o/r", notes: "Faster maps." }).notes, "Faster maps.");
+});
+
+test("a release needs short notes in the changelog", () => {
+  const log = "# What's new\n\nIntro.\n\n## 0.3.0\n\nFaster maps\nand primers.\n\n- details\n\n## 0.2.0\n\n- only details\n";
+  assert.equal(changelogProblem("v0.3.0", log), null);
+  assert.match(changelogProblem("v0.4.0", log), /no "## 0\.4\.0" section/);
+  assert.equal(changelogProblem("v0.2.0", log), null);
+  assert.match(changelogProblem("v0.5.0", "## 0.5.0\n\nSee example.com.\n"), /name an address/);
 });
 
 test("latest.json refuses a release missing a platform or a signature", () => {

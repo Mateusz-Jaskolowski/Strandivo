@@ -6,6 +6,7 @@
 
 import type { AlignResponse } from "./lib/types.ts";
 import type { DetectRequest, DetectResponse } from "./lib/detect.ts";
+import { changesUrl } from "./lib/changelog.ts";
 
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -194,7 +195,8 @@ export interface UpdateHook {
   check(): Promise<UpdateInfo | null>;
   download(onProgress: (p: UpdateProgress) => void): Promise<void>;
   restart(): Promise<void>;
-  releaseNotes?(): Promise<void>;
+  /** Stands in for opening a version's notes on strandivo.com. */
+  whatsNew?(version: string): Promise<void>;
 }
 
 const updateHook = () => (window as unknown as { __strandivoUpdate?: UpdateHook }).__strandivoUpdate;
@@ -226,11 +228,22 @@ export function restartToUpdate(): Promise<void> {
   return invoke<void>("restart_to_update");
 }
 
-/** Opens the found update's release page in the browser. */
-export function openReleaseNotes(): Promise<void> {
+/** Opens a version's notes on strandivo.com in the browser (the shell checks the version). */
+export async function openWhatsNew(version: string): Promise<void> {
   const hook = updateHook();
-  if (hook) return hook.releaseNotes?.() ?? Promise.resolve();
-  return invoke<void>("open_release_notes");
+  if (hook) return hook.whatsNew?.(version);
+  if (isDesktop) return invoke<void>("open_whats_new", { version });
+  window.open(changesUrl(version), "_blank", "noopener");
+}
+
+/** This copy's version; null in a browser, which has none. */
+export async function appVersion(): Promise<string | null> {
+  if (!isDesktop) return null;
+  try {
+    return await (await import("@tauri-apps/api/app")).getVersion();
+  } catch {
+    return null;
+  }
 }
 
 /** Why the last install failed, if it did; asked once when the main window opens. */

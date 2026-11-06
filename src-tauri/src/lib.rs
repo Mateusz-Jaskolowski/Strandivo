@@ -578,7 +578,7 @@ pub fn run() {
             updates::check_update,
             updates::download_update,
             updates::restart_to_update,
-            updates::open_release_notes,
+            updates::open_whats_new,
             updates::take_update_failure
         ])
         .setup(|app| {

@@ -280,8 +280,8 @@ Needs parts 2 and 3: a web version that can't open a file isn't worth publishing
   - *Updates*: none to install; a reload is the latest release. The welcome window has no
     Updates section in a browser, Settings no update choice, and the Help menu no Check for
     Updates….
-  - *Welcome window*: shown on a first visit, kept in the same `welcome: { version }`
-    setting; Your constructs offers Add folder… only where part 4 works.
+  - *Welcome window*: shown on a first visit, kept in the same `welcomeSeen` setting
+    (`src/lib/welcome.ts`); Your constructs offers Add folder… only where part 4 works.
   - *Feedback*: the same dialog; the Worker at `feedback.strandivo.com` must allow
     `app.strandivo.com` as an origin (CORS), and the report says "web" and the browser
     family (Chrome, Edge, Safari, Firefox) and version, never the whole user-agent string.

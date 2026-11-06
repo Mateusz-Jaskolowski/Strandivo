@@ -1054,22 +1054,43 @@ async function main() {
     } else check("The parent opens for the whole-plasmid read", false);
 
     // --- updates: a made-up version through the hook, so CI never asks the update server ---
-    await s.exec(`window.__e2eUpdate = { restarts: 0 };
+    await s.exec(`window.__e2eUpdate = { restarts: 0, notesFor: [] };
       window.__strandivoUpdate = {
-        check: async () => ({ version: "9.9.9", currentVersion: "0.1.0", notes: null, ready: false }),
+        check: async () => ({ version: "9.9.9", currentVersion: "0.1.0", notes: "Faster maps.\\n<b>New</b> primer tools.", ready: false }),
         download: async onProgress => { onProgress({ downloaded: 4e6, total: 8e6 }); onProgress({ downloaded: 8e6, total: 8e6 }); },
-        restart: async () => { window.__e2eUpdate.restarts++; }
+        restart: async () => { window.__e2eUpdate.restarts++; },
+        whatsNew: async version => { window.__e2eUpdate.notesFor.push(version); }
       };`);
     await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.checkForUpdates().then(() => done(true), e => done(String(e)));");
     const updateStrip = "document.querySelector('.sv-update:not([hidden])')";
     check("A new version is offered in a strip, not a dialog", await s.waitFor(`/Strandivo 9\\.9\\.9 is available/.test(${updateStrip}?.textContent) && !document.querySelector('.sv-dialog')`, 5000), await s.exec(`return ${updateStrip}?.textContent ?? 'no strip'`));
     await s.shot("12a-update-offered");
+    await s.click("//*[contains(@class,'sv-update')]//button[normalize-space()=\"What's new…\"]", "xpath");
+    const notes = await s.waitFor("/What's new in Strandivo 9\\.9\\.9/.test(document.querySelector('.sv-dialog-title')?.textContent)", 3000)
+      ? await s.exec("return { lines: Array.from(document.querySelectorAll('.sv-dialog .sv-whats-new')).map(p => p.textContent), bold: !!document.querySelector('.sv-dialog b') }")
+      : null;
+    check("What's new shows the update's short notes in the app, as text", notes && JSON.stringify(notes.lines) === JSON.stringify(["Faster maps.", "<b>New</b> primer tools."]) && !notes.bold, JSON.stringify(notes));
+    await s.shot("12b-whats-new");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='More on strandivo.com']", "xpath");
+    check("More on strandivo.com asks for that version's notes", await s.waitFor("window.__e2eUpdate.notesFor[0] === '9.9.9'", 3000));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await s.click("//*[contains(@class,'sv-update')]//button[normalize-space()='Install and restart']", "xpath");
     check("Install and restart downloads it, then quits the way ⌘Q does", await s.waitFor("window.__e2eUpdate.restarts === 1", 5000));
     // The hook doesn't quit, as a kept unsaved tab wouldn't: the strip offers to restart again.
     check("If the app stays open, the strip offers to restart", await s.waitFor(`/9\\.9\\.9 is ready to install/.test(${updateStrip}?.textContent)`, 3000), await s.exec(`return ${updateStrip}?.textContent ?? 'no strip'`));
     await s.click("//*[contains(@class,'sv-update')]//button[normalize-space()='Later']", "xpath");
     check("Later hides the strip", await s.waitFor("document.querySelector('.sv-update')?.hidden === true", 3000));
+
+    // After an update: the start says so once, in the same strip.
+    await s.exec("localStorage.setItem('strandivo.updates', JSON.stringify({ shownVersion: '0.0.1' }));");
+    await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.announceUpdate().then(() => done(true), e => done(String(e)));");
+    check("After an update the strip says which version it is now", await s.waitFor(`/Strandivo was updated to \\d/.test(${updateStrip}?.textContent)`, 3000), await s.exec(`return ${updateStrip}?.textContent ?? 'no strip'`));
+    await s.click("//*[contains(@class,'sv-update')]//button[normalize-space()=\"What's new…\"]", "xpath");
+    check("Its What's new opens the dialog", await s.waitFor("/What's new in Strandivo/.test(document.querySelector('.sv-dialog-title')?.textContent)", 3000));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
+    await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.announceUpdate().then(() => done(true), e => done(String(e)));");
+    check("It says so only once", await s.exec("return document.querySelector('.sv-update').hidden === true"));
     await s.exec("delete window.__strandivoUpdate;");
 
     // --- Home: the construct library ---

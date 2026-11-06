@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { changesUrl, looksLikeAddress, notesFor, parseChangelog, releaseUnreleased, shortNotes, summaryProblem } from "./changelog.ts";
+import { changesUrl, isPrerelease, looksLikeAddress, notesFor, parseChangelog, releaseNotesFor, releaseUnreleased, shortNotes, summaryProblem, unreleasedProblem } from "./changelog.ts";
 
 const sample = `# What's new
 
@@ -82,4 +82,20 @@ test("Unreleased isn't released without short notes the app can show", () => {
   assert.match(problem("## 0.2.0\n\nOld.\n")!, /no "## Unreleased"/);
   assert.match(problem("## Unreleased\n\nNew.\n", "next")!, /isn't a version/);
   assert.equal(summaryProblem("Faster maps and new primer tools."), null);
+});
+
+test("a release candidate goes out with Unreleased's notes, a release with its own", () => {
+  const log = "## Unreleased\n\nFaster maps.\n\n- Labels.\n\n## 0.3.0\n\nOld.\n";
+  assert.ok(isPrerelease("0.4.0-rc.1") && !isPrerelease("0.4.0") && !isPrerelease("next-1"));
+  assert.deepEqual(releaseNotesFor(log, "0.4.0-rc.1"), { version: "0.4.0-rc.1", summary: "Faster maps.", details: "- Labels." });
+  assert.equal(releaseNotesFor(log, "0.4.0"), null);
+  assert.equal(releaseNotesFor(log, "0.3.0")?.summary, "Old.");
+  // A candidate with a section of its own (written by hand) keeps it.
+  assert.equal(releaseNotesFor("## 0.4.0-rc.1\n\nOwn.\n\n## Unreleased\n\nOther.\n", "0.4.0-rc.1")?.summary, "Own.");
+  // Nothing under Unreleased: no notes, so the release scripts stop.
+  assert.equal(releaseNotesFor("## Unreleased\n\n## 0.3.0\n\nOld.\n", "0.4.0-rc.1")?.summary, "");
+  assert.equal(unreleasedProblem(log), null);
+  assert.match(unreleasedProblem("## Unreleased\n\n- Only bullets.\n")!, /is a list/);
+  // Unreleased never shows up as a version, so the website is the same with or without it.
+  assert.deepEqual(parseChangelog(log).map(n => n.version), ["0.3.0"]);
 });

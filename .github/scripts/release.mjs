@@ -15,14 +15,15 @@
 //     Copies each installer in <dir> to the name without the version that
 //     strandivo.com/download links to (DOWNLOADS).
 //   node .github/scripts/release.mjs release-notes <tag>
-//     Prints the version's notes from CHANGELOG.md, for the GitHub release.
+//     Prints the version's notes from CHANGELOG.md, for the GitHub release. A release
+//     candidate (v0.4.0-rc.1) has Unreleased's notes, as it has no section of its own.
 //
 // Run with --experimental-strip-types, as it reads the changelog with the app's own code.
 
 import { copyFileSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { notesFor, summaryProblem } from "../../src/lib/changelog.ts";
+import { releaseNotesFor, summaryProblem } from "../../src/lib/changelog.ts";
 
 /**
  * The updater's platform keys and how each one's update file is named. The updater looks
@@ -87,8 +88,8 @@ export function versionProblems(tag, found) {
 /** What is wrong with the changelog for releasing `tag`, or null. */
 export function changelogProblem(tag, changelog) {
   const version = tag.replace(/^v/, "");
-  const notes = notesFor(changelog, version);
-  if (!notes) return `CHANGELOG.md has no "## ${version}" section.`;
+  const notes = releaseNotesFor(changelog, version);
+  if (!notes) return `CHANGELOG.md has no "## ${version}" section${version.includes("-") ? " or Unreleased notes" : ""}.`;
   // Notes the app wouldn't show leave What's new empty.
   const problem = summaryProblem(notes.summary);
   return problem ? `CHANGELOG.md's ${version} section ${problem}.` : null;
@@ -140,7 +141,7 @@ function main([command, ...args]) {
   } else if (command === "latest-json") {
     const [dir, tag, repo] = args;
     const files = Object.fromEntries(readdirSync(dir).map(n => [n, n.endsWith(".sig") ? readFileSync(join(dir, n), "utf8") : ""]));
-    const notes = notesFor(changelog(), tag.replace(/^v/, ""))?.summary;
+    const notes = releaseNotesFor(changelog(), tag.replace(/^v/, ""))?.summary;
     console.log(JSON.stringify(latestJson({ files, tag, repo, notes }), null, 2));
   } else if (command === "download-copies") {
     const [dir, tag] = args;
@@ -149,7 +150,7 @@ function main([command, ...args]) {
       console.log(`${built} → ${copy}`);
     }
   } else if (command === "release-notes") {
-    const n = notesFor(changelog(), (args[0] ?? "").replace(/^v/, ""));
+    const n = releaseNotesFor(changelog(), (args[0] ?? "").replace(/^v/, ""));
     if (!n) {
       console.error(`CHANGELOG.md has no section for ${args[0]}.`);
       process.exit(1);

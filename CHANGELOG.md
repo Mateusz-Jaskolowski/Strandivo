@@ -11,7 +11,8 @@ Between releases, a pull request that changes something users notice adds a bull
 Unreleased, written for them like the bullets below. The app, the website and the release
 script read only sections headed by a version, so they skip it. To release, write the
 short notes above its bullets and run `npm run release <version>`, which renames it to
-the version and starts a new, empty Unreleased.
+the version and starts a new, empty Unreleased. A release candidate (`0.4.0-rc.1`) goes out
+with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 

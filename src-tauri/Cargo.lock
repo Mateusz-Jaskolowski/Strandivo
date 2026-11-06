@@ -3517,6 +3517,7 @@ version = "0.3.0"
 dependencies = [
  "os_info",
  "reqwest",
+ "rustls",
  "seqcore-json",
  "serde",
  "serde_json",

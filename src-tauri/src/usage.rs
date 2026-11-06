@@ -124,6 +124,12 @@ fn os_name() -> &'static str {
     }
 }
 
+/// The client events are posted with.
+fn http_client(version: &str) -> reqwest::Result<reqwest::Client> {
+    crate::install_tls_provider();
+    reqwest::Client::builder().timeout(Duration::from_secs(5)).user_agent(format!("Strandivo/{version}")).build()
+}
+
 /// Sends the page's events. Says whether they went: false without a key, for events that
 /// aren't made of listed words, or when Aptabase can't be reached (they are then dropped,
 /// as statistics aren't worth retrying for). Never an error, so a failure here never
@@ -140,8 +146,7 @@ pub async fn send_usage<R: Runtime>(app: AppHandle<R>, state: State<'_, SharedUs
     let Some(body) = events.iter().map(|e| event_body(e, session, &version, os_name(), &os_version)).collect::<Option<Vec<_>>>() else {
         return Ok(false);
     };
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).user_agent(format!("Strandivo/{version}")).build();
-    let Ok(client) = client else { return Ok(false) };
+    let Ok(client) = http_client(&version) else { return Ok(false) };
     let sent = client.post(ENDPOINT).header("App-Key", key).json(&body).send().await;
     Ok(sent.is_ok_and(|r| r.status().is_success()))
 }
@@ -152,6 +157,13 @@ mod tests {
 
     fn ev(name: &str, props: Value) -> UsageEvent {
         UsageEvent { name: name.into(), props: props.as_object().cloned().unwrap_or_default(), at: "2026-11-06T09:30:00.000Z".into() }
+    }
+
+    // Release builds are the only ones with a key, so nothing else ever builds the client:
+    // 0.3.0 crashed here, as reqwest had no TLS provider until an update check installed one.
+    #[test]
+    fn the_client_builds_before_any_update_check() {
+        assert!(http_client("0.0.0").is_ok());
     }
 
     #[test]

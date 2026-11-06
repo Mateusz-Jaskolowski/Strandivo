@@ -6,13 +6,18 @@ name: Checks
 # go to the `e2e-results` branch, or for a pull request from a fork (whose token can't
 # push) to the run's artifacts. Installers are built by build.yml, for a version tag.
 #
+# A change to nothing but docs or the website skips it: none of those reach the app, and
+# a run takes minutes. The guide and header checks, which such a change can break, run on
+# every change in quick-checks.yml. Keep the two lists below the same.
+#
 # Steps run through .github/scripts/run.sh, which repeats a failing step's output as an
 # annotation so it can be read through the GitHub API.
 on:
   push:
     branches: [main]
-    paths-ignore: ["**.md"]
+    paths-ignore: ["**.md", "docs/**", "site/**", "CITATION.cff"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "site/**", "CITATION.cff"]
   workflow_dispatch:
 
 concurrency:
@@ -29,12 +34,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
-
-      - name: Agent guide mentions only files that exist
-        run: .github/scripts/check-agents-paths.sh
-
-      - name: Every source file has the licence header
-        run: .github/scripts/check-headers.sh
 
       - uses: actions/setup-node@v5
         with:

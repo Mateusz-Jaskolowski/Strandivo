@@ -1,0 +1,33 @@
+name: Quick checks
+
+# The checks that take seconds and need nothing installed: that the agent guide names only
+# files that exist, and that every source file has the licence header. They run on every
+# push and pull request, including the docs and website changes that checks.yml skips,
+# since a docs change is just what breaks the guide's paths. `npm run check:quick` runs
+# the same locally.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: quick-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    name: Guide and headers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Agent guide mentions only files that exist
+        run: .github/scripts/check-agents-paths.sh
+
+      - name: Every source file has the licence header
+        run: .github/scripts/check-headers.sh

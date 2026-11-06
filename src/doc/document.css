@@ -979,6 +979,15 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+  /* Labels' backgrounds are measured on a canvas (`textWidth`). WebKit otherwise sets SVG
+     text at its zoomed size and scales it down, so the system font takes its tighter
+     large-size spacing and names come out up to 10% narrower than their backgrounds. */
+  text-rendering: geometricPrecision;
+}
+/* `dominant-baseline` is set on groups of labels, and WebKit doesn't pass it on to their
+   text (SVG 1.1 didn't inherit it), so on a Mac every label sat a third of a line high. */
+.sv-map-svgel text {
+  dominant-baseline: inherit;
 }
 .sv-map-svg-linear {
   height: auto;

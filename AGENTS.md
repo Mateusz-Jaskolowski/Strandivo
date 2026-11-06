@@ -393,6 +393,14 @@ it can (lists of files or features). CI checks that every path in backticks here
   counting (part 5 of `docs/updates-feedback-usage-plan.md`); the Worker keeps nothing else
   and logs nothing. Deploy it with
   `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
+- **The website**, `strandivo.com`, is the plain files in `site/` on Cloudflare Pages (a
+  project named `strandivo`), with no build step and no scripts, so its Content Security
+  Policy (`site/_headers`) allows only its own images and stylesheet. Its colours copy the
+  app's tokens, as the site can't load `src/styles.css`. For now it is one page saying the
+  app is in development; part 6 of `docs/updates-feedback-usage-plan.md` adds Download and
+  Privacy. Cloudflare builds it from this repository: every push to `main` goes live, and
+  other branches get a preview address. The project is connected to GitHub, so never
+  deploy it with wrangler, which would be overwritten by the next push.
 - From a cloud session the npm and crates registries may be blocked: Rust in `src-tauri/`
   then only compiles in CI, and CI is the final word.
 

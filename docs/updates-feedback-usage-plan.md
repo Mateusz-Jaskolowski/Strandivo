@@ -291,7 +291,10 @@ framework. Three pages to start with:
 - **Privacy**: generated from `docs/privacy.md` when the site is built, so there is one
   list of what the app sends. The welcome window and Settings link here.
 
-It comes after the first public release, when there is something to download. The About
+It comes after the first public release, when there is something to download. Until then
+a single placeholder page (built November 2026) says the app is in development and links
+to GitHub, since the repository, `CITATION.cff` and `SECURITY.md` already send people to
+the domain; the three pages replace it. The About
 box, `package.json`, `src-tauri/Cargo.toml` and the README name it as the homepage from
 the start.
 

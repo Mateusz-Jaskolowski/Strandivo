@@ -582,10 +582,22 @@ fn files_from_args(args: impl IntoIterator<Item = String>) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Installs the TLS provider every HTTPS client uses, before anything can make one: reqwest
+/// is built without one and panics building a client otherwise, and release builds abort on
+/// a panic. The updater installs the same one, but only once it checks, so 0.3.0 crashed
+/// when statistics were sent first. Installing it again does nothing.
+pub(crate) fn install_tls_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        // Fails only if another thread installed one first, which is just as good.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // First, so a panic anywhere after this is kept for the next launch (crash.rs).
     crash::install();
+    install_tls_provider();
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]

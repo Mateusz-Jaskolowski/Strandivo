@@ -21,6 +21,15 @@ the version and starts a new, empty Unreleased.
   sent until you click Send. Recent errors are now kept for a week, so a report after a
   crash can still include them if you tick them.
 
+## 0.3.1
+
+Fixes a crash in 0.3.0: with usage statistics turned on, Strandivo could quit on its own
+about half a minute after starting. If you turned statistics on, please update.
+
+- Sending usage statistics no longer makes Strandivo quit. It happened on every system
+  whenever statistics were sent before that day's check for updates, which is most
+  launches.
+
 ## 0.3.0
 
 Keep a list of your lab's enzymes and where they are, and show only those on the map. Map

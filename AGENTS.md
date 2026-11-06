@@ -627,6 +627,14 @@ it can (lists of files or features). CI checks that every path in backticks here
 - **Undo can arrive twice**: the page sees ⌘Z/Ctrl+Z and so does the native menu item,
   in either order depending on the platform. `fromMenu` in `src/doc/document.ts` skips a
   menu command the page just handled. Keep that in mind when adding shortcuts.
+- **Menu keys on Windows**: WebView2 keeps the keys pressed in the page, so the native
+  menu's accelerators never fire there. Outside macOS every window passes a menu item's
+  key on to the shell (`MENU_KEYS` in `src/lib/shortcuts.ts`, `menu_shortcut` in
+  `src-tauri/src/lib.rs`), which runs it once even where the menu hears it too. A new
+  accelerator goes in that list as well; a unit test reads the menu to check.
+- **Windows are light on Windows** (`app_window` in `src-tauri/src/lib.rs`), since the
+  interface is: a menu bar following the system's dark mode is drawn by hand and turned
+  light again when another window opened. Take that out when dark tokens get a setting.
 - **macOS title bar**: the main window uses an overlay title bar, so the app bar is the drag
   area (`data-tauri-drag-region="deep"`; buttons and fields are excluded automatically).
   Mark other controls in it with `data-tauri-drag-region="false"`, as the file tabs are. On

@@ -13,7 +13,7 @@ mod updates;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::menu::{AboutMetadata, Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -46,6 +46,15 @@ struct AppState {
     /// The main window's page asked for its files, so it now hears "open-files" events.
     main_ready: bool,
     quitting: bool,
+    /// The last menu command a key ran, and whether the page or the menu ran it
+    /// (`shortcut_ran_twice`).
+    last_shortcut: Option<(String, ShortcutFrom, Instant)>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum ShortcutFrom {
+    Page,
+    Menu,
 }
 
 type Shared = Mutex<AppState>;
@@ -93,6 +102,21 @@ fn open_paths<R: Runtime>(app: &AppHandle<R>, paths: Vec<PathBuf>) {
     }
 }
 
+/// A window showing the app's page. Strandivo's interface is light only for now, so on
+/// Windows its windows are too: there the menu bar would otherwise follow the system's dark
+/// mode, which the menu library draws by hand and which turned light again, under a light
+/// page, once another window had opened.
+fn app_window<'a, R: Runtime>(
+    app: &'a AppHandle<R>,
+    label: &str,
+    title: &str,
+) -> WebviewWindowBuilder<'a, R, AppHandle<R>> {
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into())).title(title);
+    #[cfg(windows)]
+    let builder = builder.theme(Some(tauri::Theme::Light));
+    builder
+}
+
 fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(w) = app.get_webview_window(MAIN_LABEL) {
         let _ = w.unminimize();
@@ -100,8 +124,7 @@ fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
         return;
     }
     #[allow(unused_mut)]
-    let mut builder = WebviewWindowBuilder::new(app, MAIN_LABEL, WebviewUrl::App("index.html".into()))
-        .title(APP_NAME)
+    let mut builder = app_window(app, MAIN_LABEL, APP_NAME)
         .inner_size(1360.0, 880.0)
         .min_inner_size(820.0, 560.0)
         .center();
@@ -124,8 +147,7 @@ fn show_settings_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = w.set_focus();
         return;
     }
-    let _ = WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App("index.html".into()))
-        .title("Settings")
+    let _ = app_window(app, SETTINGS_LABEL, "Settings")
         .inner_size(700.0, 780.0)
         .min_inner_size(560.0, 480.0)
         .center()
@@ -139,8 +161,7 @@ fn show_library_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = w.set_focus();
         return;
     }
-    let _ = WebviewWindowBuilder::new(app, LIBRARY_LABEL, WebviewUrl::App("index.html".into()))
-        .title("Primer Library")
+    let _ = app_window(app, LIBRARY_LABEL, "Primer Library")
         .inner_size(900.0, 640.0)
         .min_inner_size(600.0, 400.0)
         .center()
@@ -153,8 +174,7 @@ fn show_enzyme_library_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = w.set_focus();
         return;
     }
-    let _ = WebviewWindowBuilder::new(app, ENZYMES_LABEL, WebviewUrl::App("index.html".into()))
-        .title("Enzyme Library")
+    let _ = app_window(app, ENZYMES_LABEL, "Enzyme Library")
         .inner_size(940.0, 640.0)
         .min_inner_size(640.0, 440.0)
         .center()
@@ -187,6 +207,65 @@ fn close_focused<R: Runtime>(app: &AppHandle<R>) {
             return;
         }
     }
+}
+
+/// What a menu item does, whether it was chosen or its key was pressed.
+fn menu_action<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    match id {
+        "new" => open_targets(app, vec![None]),
+        "open" => prompt_open(app),
+        "settings" => show_settings_window(app),
+        "library" => show_library_window(app),
+        "enzyme-library" => show_enzyme_library_window(app),
+        "quit" => request_quit(app),
+        "close" => close_focused(app),
+        "website" | "github" => feedback::open_page(app, id),
+        "home" | "check-updates" | "welcome" | "feedback" | "report-bug" => {
+            show_main_window(app);
+            let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
+        }
+        // Everything else is for the main window's current tab.
+        other => {
+            let _ = app.emit_to(MAIN_LABEL, "menu", other.to_string());
+        }
+    }
+}
+
+/// Menu items whose keys the page passes on outside macOS (`MENU_KEYS` in
+/// `src/lib/shortcuts.ts`): on Windows the menu never hears a key pressed in the page, as
+/// WebView2 keeps it, so the page sends it here.
+const PAGE_SHORTCUTS: &[&str] = &["new", "open", "close", "home", "save", "save-as", "add-reads", "library", "settings"];
+
+/// Where both the page and the menu hear a key, one press runs its command once: the
+/// second of the two within half a second is skipped. Two presses from the same place
+/// both run.
+fn shortcut_ran_twice<R: Runtime>(app: &AppHandle<R>, id: &str, from: ShortcutFrom) -> bool {
+    if !PAGE_SHORTCUTS.contains(&id) {
+        return false;
+    }
+    let state = app.state::<Shared>();
+    let mut st = state.lock().unwrap();
+    let now = Instant::now();
+    if let Some((last, last_from, at)) = &st.last_shortcut {
+        if last == id && *last_from != from && now.duration_since(*at) < Duration::from_millis(500) {
+            st.last_shortcut = None;
+            return true;
+        }
+    }
+    st.last_shortcut = Some((id.to_string(), from, now));
+    false
+}
+
+/// A menu item's key, pressed in the page (see `PAGE_SHORTCUTS`).
+#[tauri::command]
+async fn menu_shortcut(app: AppHandle, id: String) -> Result<(), String> {
+    if !PAGE_SHORTCUTS.contains(&id.as_str()) {
+        return Err(format!("No menu shortcut \"{id}\""));
+    }
+    if !shortcut_ran_twice(&app, &id, ShortcutFrom::Page) {
+        menu_action(&app, &id);
+    }
+    Ok(())
 }
 
 fn request_quit<R: Runtime>(app: &AppHandle<R>) {
@@ -628,6 +707,7 @@ pub fn run() {
             new_document,
             show_open_dialog,
             open_settings,
+            menu_shortcut,
             open_library,
             open_enzyme_library,
             app_data::load_app_data,
@@ -658,23 +738,8 @@ pub fn run() {
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| {
                 let id: &str = event.id().as_ref();
-                match id {
-                    "new" => open_targets(app, vec![None]),
-                    "open" => prompt_open(app),
-                    "settings" => show_settings_window(app),
-                    "library" => show_library_window(app),
-                    "enzyme-library" => show_enzyme_library_window(app),
-                    "quit" => request_quit(app),
-                    "close" => close_focused(app),
-                    "website" | "github" => feedback::open_page(app, id),
-                    "home" | "check-updates" | "welcome" | "feedback" | "report-bug" => {
-                        show_main_window(app);
-                        let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
-                    }
-                    // Everything else is for the main window's current tab.
-                    other => {
-                        let _ = app.emit_to(MAIN_LABEL, "menu", other.to_string());
-                    }
+                if !shortcut_ran_twice(app, id, ShortcutFrom::Menu) {
+                    menu_action(app, id);
                 }
             });
 

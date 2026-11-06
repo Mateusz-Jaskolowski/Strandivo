@@ -565,6 +565,13 @@ export async function onCloseRequested(check: () => Promise<boolean>): Promise<v
   });
 }
 
+/** A menu item's key pressed in the page outside macOS: the shell runs the item as if it
+ *  had been chosen (`src/lib/shortcuts.ts`). */
+export async function sendMenuShortcut(id: string): Promise<void> {
+  if (!isDesktop) return;
+  await invoke<void>("menu_shortcut", { id }).catch(() => undefined);
+}
+
 /** Native menu commands routed to this window. */
 export async function onMenu(handler: (id: string) => void): Promise<void> {
   if (!isDesktop) return;

@@ -139,6 +139,8 @@ export interface DocTab {
   confirmClose(): Promise<boolean>;
   /** The sequence and selection (absent for a file that couldn't be read). */
   sequence?(): OpenSequence;
+  /** What a feedback report may say about this tab: its view, and the file as GenBank. */
+  feedbackContext?(): { view: string; file: { name: string; contents: () => string } | null };
   /** Replaces the reads with a check file's. */
   openCheck?(check: ReadCheck): Promise<void>;
   dispose(): void;
@@ -951,6 +953,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     drop,
     confirmClose,
     sequence: () => ({ title, data: store.data, selection: store.selection.range }),
+    feedbackContext: () => ({
+      view: TABS.find(t => t.id === tab)?.label ?? "Map",
+      file: { name: `${stripExtension(title) || "Untitled"}.gb`, contents: () => serialize(fileJson(), "genbank") }
+    }),
     openCheck: async (c: ReadCheck) => {
       reads.clear();
       await restoreReads(c, true);

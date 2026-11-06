@@ -3,7 +3,7 @@
 Status: every decision below is made (November 2026). Parts 1–3 are built and released
 as 0.2.0 (the release workflow, the updates Worker, updating from inside the app and the
 welcome window); 0.2.1, with no other change, proved the update on a Mac. Part 6, the
-website, is built. Parts 4 and 5 are planned.
+website, is live, and part 4, feedback, is built. Part 5 is planned.
 Each part below is one branch and one PR. What is said here about services and the law was read
 on 4 November 2026; check it again before each part is built. The legal notes are a
 reading of published guidance, not legal advice.
@@ -271,6 +271,20 @@ over the main window, as `showWindowsInPage` does for the others).
   size limit and the label are enough at this scale; revisit if it is abused.
 - `window.__strandivoFeedback` receives the report in tests; the e2e opens the dialog,
   fills it, sends it and checks the report holds no path.
+
+**As built**: the shape of a report and the check on it are one file,
+`src/lib/feedback.ts`, which the Worker bundles, so the app and the service can't
+disagree. **An attached file goes to the maintainer by email, never in the issue**, like
+the reporter's address: an issue is public, and a sequence may be confidential. Email
+uses Email Routing's sending from a Worker, which only reaches verified addresses, so
+the Worker can write to the maintainer and no one else; the address is a Worker secret.
+What the reporter wrote is fenced as plain text in the issue, so it can't mention anyone
+or add links. Labels are GitHub's own (`bug`, `enhancement`, `question`) plus
+`from-app`. Paths go from errors up to the end of their line when they start in a home
+or volume folder, as folder names there often have spaces. On a Mac, Check for Updates…
+and Welcome… stay in the app menu, where 0.2.0's notes put them; the Help menu has
+feedback and the two links. The shell's `system_info` gives the OS version (`os_info`),
+which the page can't tell.
 
 ### 5. Usage statistics
 `feat/usage`: `src/lib/usage.ts` (and its test), `src/usage.ts`, `src/platform.ts`,

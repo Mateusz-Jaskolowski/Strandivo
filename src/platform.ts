@@ -7,6 +7,8 @@
 import type { AlignResponse } from "./lib/types.ts";
 import type { DetectRequest, DetectResponse } from "./lib/detect.ts";
 import { changesUrl } from "./lib/changelog.ts";
+import type { FeedbackReport, SystemInfo } from "./lib/feedback.ts";
+import { recordError } from "./feedback.ts";
 
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -16,7 +18,13 @@ let invokeFn: Invoke | null = null;
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!isDesktop) throw new Error(`"${cmd}" is only available in the desktop app.`);
   if (!invokeFn) invokeFn = (await import("@tauri-apps/api/core")).invoke as Invoke;
-  return invokeFn<T>(cmd, args);
+  try {
+    return await invokeFn<T>(cmd, args);
+  } catch (e) {
+    // Kept for a bug report's "Recent errors", which the user sees before sending.
+    recordError(`${cmd} failed: ${e instanceof Error ? e.message : String(e)}`);
+    throw e;
+  }
 }
 
 export interface WindowInfo {
@@ -250,6 +258,79 @@ export async function appVersion(): Promise<string | null> {
 export async function takeUpdateFailure(): Promise<string | null> {
   if (!isDesktop || updateHook()) return null;
   return invoke<string | null>("take_update_failure").catch(() => null);
+}
+
+// ---------- feedback (services/feedback/) ----------
+
+/** The service that files a report as a GitHub issue; `connect-src` names it. */
+export const FEEDBACK_URL = "https://feedback.strandivo.com/report";
+
+export interface FeedbackSent {
+  /** The issue's number in the repository. */
+  number: number;
+  /** Whether the email address and file reached the maintainer (when there were any). */
+  emailed: boolean;
+}
+
+/** What a test supplies in place of the service and the browser, so e2e reaches neither. */
+export interface FeedbackHook {
+  send(report: FeedbackReport): Promise<FeedbackSent>;
+  openIssue?(number: number): void;
+  email?(subject: string, body: string): void;
+}
+
+const feedbackHook = () => (window as unknown as { __strandivoFeedback?: FeedbackHook }).__strandivoFeedback;
+
+/** Sends a report. Errors are sentences for the dialog; the text stays in it. */
+export async function sendFeedback(report: FeedbackReport): Promise<FeedbackSent> {
+  const hook = feedbackHook();
+  if (hook) return hook.send(report);
+  let res: Response;
+  try {
+    res = await fetch(FEEDBACK_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(report) });
+  } catch {
+    throw new Error("Couldn't reach Strandivo's feedback service. Check your internet connection, or copy the report or email it instead.");
+  }
+  const answer = (await res.json().catch(() => null)) as { number?: unknown; emailed?: unknown; error?: unknown } | null;
+  if (res.ok && typeof answer?.number === "number") return { number: answer.number, emailed: answer.emailed !== false };
+  if (res.status === 429) throw new Error("Too many reports from this network just now. Wait a minute and send again, or email it instead.");
+  // The service's own reason is shown as text, cut short.
+  const why = typeof answer?.error === "string" ? answer.error.slice(0, 200) : `error ${res.status}`;
+  throw new Error(`The feedback service didn't take the report (${why}). Copy it or email it instead.`);
+}
+
+/** This copy's version, system and processor; in a browser only what it can tell. */
+export async function systemInfo(): Promise<SystemInfo> {
+  if (isDesktop) {
+    try {
+      return await invoke<SystemInfo>("system_info");
+    } catch {
+      // Falls through to the browser's guess.
+    }
+  }
+  const ua = navigator.userAgent;
+  const os = /Mac/.test(ua) ? "macos" : /Windows/.test(ua) ? "windows" : /Linux/.test(ua) ? "linux" : "unknown";
+  return { version: "development", os, osVersion: "unknown", arch: "unknown" };
+}
+
+/** Opens a report's issue on GitHub; the shell builds the address from the number. */
+export async function openIssue(number: number): Promise<void> {
+  const hook = feedbackHook();
+  if (hook) return hook.openIssue?.(number);
+  if (isDesktop) return invoke<void>("open_issue", { number });
+  window.open(`https://github.com/Mateusz-Jaskolowski/Strandivo/issues/${number}`, "_blank", "noopener");
+}
+
+/** Starts an email to feedback@strandivo.com in the user's mail app, with the report in it. */
+export async function emailFeedback(subject: string, body: string): Promise<void> {
+  const hook = feedbackHook();
+  if (hook) return hook.email?.(subject, body);
+  if (isDesktop) return invoke<void>("email_feedback", { subject, body });
+  window.location.href = `mailto:feedback@strandivo.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body.slice(0, 1800))}`;
+}
+
+export async function copyText(text: string): Promise<void> {
+  await navigator.clipboard.writeText(text);
 }
 
 export type PageWindow = "settings" | "library";

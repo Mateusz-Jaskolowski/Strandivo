@@ -1093,6 +1093,45 @@ async function main() {
     check("It says so only once", await s.exec("return document.querySelector('.sv-update').hidden === true"));
     await s.exec("delete window.__strandivoUpdate;");
 
+    // --- feedback: through the hook, so CI never files an issue or opens a mail app ---
+    await s.exec("window.__strandivo.showHome()");
+    // An error naming a file, as a failed read would: the report must not carry the path.
+    await s.exec("setTimeout(() => { throw new Error(\"Couldn't read /Users/anna/Lab plasmids/pSecret.gb\"); });");
+    await sleep(200);
+    await s.exec(`window.__e2eFeedback = { reports: [], issues: [], emails: [], fail: true };
+      window.__strandivoFeedback = {
+        send: async r => { if (window.__e2eFeedback.fail) throw new Error("Couldn't reach Strandivo's feedback service."); window.__e2eFeedback.reports.push(r); return { number: 7, emailed: true }; },
+        openIssue: n => window.__e2eFeedback.issues.push(n),
+        email: (subject, body) => window.__e2eFeedback.emails.push({ subject, body })
+      };`);
+    await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.openFeedback('bug').then(() => done(true), e => done(String(e)));");
+    const feedbackOpen = await s.waitFor("document.querySelector('.sv-dialog-title')?.textContent === 'Send feedback'", 3000);
+    check("Report a Bug… opens the feedback dialog with Bug chosen", feedbackOpen && (await s.exec("return document.querySelector('.sv-feedback [aria-pressed=\"true\"]')?.textContent")) === "Bug");
+    check("Send waits for a summary", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent === 'Send')?.disabled === true"));
+    await s.keys("input[aria-label='Summary']", "Map stays blank");
+    await s.keys("textarea[aria-label='Details']", "Opened a plasmid from Home.");
+    await s.keys("input[aria-label='Your email']", "anna@lab.example.org");
+    await s.click("//label[contains(., 'Recent errors')]/input", "xpath");
+    const shown = await s.exec("return document.querySelector('.sv-feedback-errors')?.textContent ?? ''");
+    check("Recent errors are shown before sending, without the file's path", /Couldn't read <path>/.test(shown) && !/anna|pSecret/.test(shown), shown.slice(0, 160));
+    check("What is sent with it is listed in full", /Open view: Home/.test(await s.exec("return document.querySelector('.sv-feedback-sent')?.textContent ?? ''")));
+    await s.shot("12c-feedback");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Send']", "xpath");
+    check("If it can't be sent, the text stays, with Copy and Email instead", await s.waitFor("/Couldn't reach/.test(document.querySelector('.sv-feedback-status')?.textContent) && document.querySelector('input[aria-label=\"Summary\"]')?.value === 'Map stays blank' && Array.from(document.querySelectorAll('.sv-dialog-foot button')).some(b => b.textContent === 'Email instead' && !b.hidden)", 3000));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Email instead']", "xpath");
+    const emailed = await s.waitFor("window.__e2eFeedback.emails.length === 1", 3000) ? await s.exec("return window.__e2eFeedback.emails[0]") : null;
+    check("Email instead starts a message with the report in it", emailed?.subject === "Bug: Map stays blank" && /Opened a plasmid from Home\./.test(emailed.body) && !/anna/.test(emailed.body), JSON.stringify(emailed)?.slice(0, 160));
+    await s.exec("window.__e2eFeedback.fail = false;");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Try again']", "xpath");
+    const sent = await s.waitFor("window.__e2eFeedback.reports.length === 1", 3000) ? await s.exec("return window.__e2eFeedback.reports[0]") : null;
+    check("The report holds what the dialog showed, and no path", sent?.kind === "bug" && sent.summary === "Map stays blank" && sent.email === "anna@lab.example.org" && sent.view === "Home" && sent.errors?.some(e => /<path>/.test(e)) && !/\/Users\/|pSecret/.test(JSON.stringify(sent)) && sent.file === null, JSON.stringify(sent)?.slice(0, 200));
+    check("It says which issue it became", await s.waitFor("/sent as #7/.test(document.querySelector('.sv-feedback-thanks')?.textContent)", 3000));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Open on GitHub']", "xpath");
+    check("Open on GitHub asks for that issue by its number", await s.waitFor("window.__e2eFeedback.issues[0] === 7", 3000));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.exec("delete window.__strandivoFeedback;");
+
     // --- Home: the construct library ---
     await s.exec("window.__strandivo.showHome()");
     const homeList = await s.execAsync(

@@ -12,7 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/lib/*.test.ts .github/scripts/*.test.mjs services/updates/*.test.mjs tools/*.test.mjs",
+    "test": "node --test --experimental-strip-types src/lib/*.test.ts .github/scripts/*.test.mjs services/updates/*.test.mjs services/feedback/*.test.mjs tools/*.test.mjs",
     "site": "node --experimental-strip-types tools/build-site.mjs",
     "check:quick": "bash .github/scripts/check-agents-paths.sh && bash .github/scripts/check-headers.sh && node .github/scripts/check-security-txt.mjs && node --experimental-strip-types tools/build-site.mjs --check",
     "check": "npm run check:quick && node --check e2e/run.mjs && npm run typecheck && npm test && npm run build && cargo test --release --manifest-path crates/seqcore/Cargo.toml && cargo test --release --manifest-path crates/seqcore-json/Cargo.toml && cargo clippy --all-targets --manifest-path crates/seqcore-json/Cargo.toml && cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml",

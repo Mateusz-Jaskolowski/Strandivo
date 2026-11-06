@@ -5,6 +5,7 @@
 //! associations, the construct library's folder listing, the Sanger alignment commands,
 //! feature detection and updates (`updates.rs`).
 
+mod feedback;
 mod updates;
 
 use std::path::{Path, PathBuf};
@@ -254,6 +255,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build(app)?;
     let check_updates = MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(app)?;
     let welcome = MenuItemBuilder::with_id("welcome", "Welcome to Strandivo…").build(app)?;
+    let send_feedback = MenuItemBuilder::with_id("feedback", "Send Feedback…").build(app)?;
+    let report_bug = MenuItemBuilder::with_id("report-bug", "Report a Bug…").build(app)?;
+    let website = MenuItemBuilder::with_id("website", "Strandivo Website").build(app)?;
+    let github = MenuItemBuilder::with_id("github", "Strandivo on GitHub").build(app)?;
 
     let about = AboutMetadata {
         name: Some(APP_NAME.to_string()),
@@ -347,17 +352,30 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             .item(&quit)
             .build()?;
         menu = menu.item(&app_menu);
-    } else {
+        // On a Mac, Welcome and Check for Updates stay in the app's own menu, where 0.2.0
+        // put them and its notes say they are.
         let help = SubmenuBuilder::new(app, "Help")
-            .item(&welcome)
-            .item(&check_updates)
+            .item(&send_feedback)
+            .item(&report_bug)
             .separator()
-            .about(Some(about))
+            .item(&website)
+            .item(&github)
             .build()?;
-        menu = menu.item(&file).item(&edit).item(&view).item(&tools).item(&window).item(&help);
-        return menu.build();
+        return menu.item(&file).item(&edit).item(&view).item(&tools).item(&window).item(&help).build();
     }
-    menu.item(&file).item(&edit).item(&view).item(&tools).item(&window).build()
+    let help = SubmenuBuilder::new(app, "Help")
+        .item(&send_feedback)
+        .item(&report_bug)
+        .separator()
+        .item(&welcome)
+        .item(&check_updates)
+        .separator()
+        .item(&website)
+        .item(&github)
+        .separator()
+        .about(Some(about))
+        .build()?;
+    menu.item(&file).item(&edit).item(&view).item(&tools).item(&window).item(&help).build()
 }
 
 #[derive(Serialize)]
@@ -579,7 +597,10 @@ pub fn run() {
             updates::download_update,
             updates::restart_to_update,
             updates::open_whats_new,
-            updates::take_update_failure
+            updates::take_update_failure,
+            feedback::system_info,
+            feedback::open_issue,
+            feedback::email_feedback
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -594,7 +615,8 @@ pub fn run() {
                     "library" => show_library_window(app),
                     "quit" => request_quit(app),
                     "close" => close_focused(app),
-                    "home" | "check-updates" | "welcome" => {
+                    "website" | "github" => feedback::open_page(app, id),
+                    "home" | "check-updates" | "welcome" | "feedback" | "report-bug" => {
                         show_main_window(app);
                         let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
                     }

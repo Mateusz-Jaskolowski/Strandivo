@@ -39,6 +39,34 @@ accession, such as P42212. Nothing else goes with it: not the sequence, not the 
 happens only when you ask. UniProt's own
 [privacy notice](https://www.uniprot.org/help/privacy) covers what it keeps.
 
+## Sending feedback
+
+Help → Send Feedback… and Report a Bug… send what you write to `feedback.strandivo.com`,
+only when you click Send. The dialog shows everything that goes with it before you send:
+
+- what kind it is (a bug, an idea or a question), your summary and your details;
+- the app's version, the operating system and its version, and the processor;
+- which part of the app was open, such as Home or the Map.
+
+Two more things go only if you tick them, and both are off each time the dialog opens:
+
+- **Recent errors**: what went wrong in the app's window lately, with file paths
+  removed. The dialog shows them as they will be sent.
+- **The open file**, as GenBank.
+
+The service files your report as an issue in Strandivo's repository on GitHub, where
+anyone can read it, and tells you its number. Your email address, if you give one, and
+the open file, if you attach it, never go in the issue: they are emailed to the
+maintainer alone, with the issue's link, so the maintainer can answer you. The service
+keeps nothing itself and has no logs. To stop floods it lets each network send a few
+reports a minute, which Cloudflare counts for that minute and forgets. GitHub keeps the
+issue under [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement);
+the email stays in the maintainer's mailbox. To have an issue or an email removed, write
+to hello@strandivo.com.
+
+If a report can't be sent, nothing leaves the app: you can copy it, or email it to
+feedback@strandivo.com from your own mail app instead.
+
 ## Opening the website
 
 What's new… and some help items open strandivo.com or GitHub in your web browser. The app
@@ -56,4 +84,5 @@ handles each visit to deliver the page.
 - No usage statistics are sent. If they are added, they will be off until you turn them
   on, and this page will list every one before any copy sends them.
 - No account, no sign-in, no identifier for your copy of the app.
-- No crash reports and no error reports are sent on their own.
+- No crash reports and no error reports are sent on their own: errors go only in a
+  feedback report, and only if you tick them.

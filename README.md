@@ -30,7 +30,8 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
 - **Protein regions**: give a CDS its UniProt accession and its transmembrane helices,
   topological domains and signal peptides are marked inside it, still as one feature. The
   CDS's protein is aligned to the entry first, so tags, fusions and truncations land right.
-  This is the only time the app goes online, and only when you ask.
+  The entry is fetched only when you ask; apart from the daily update check, it is the
+  only time the app goes online.
 - **Primers**: Tm (SantaLucia with primer3's conditions by default; Breslauer, Wallace or a
   basic formula, and your reaction conditions, in Settings), GC, 3′ clamp, runs and self-dimer checks,
   where each primer binds (tails allowed, with a warning when a tail binds elsewhere too), add one by pasting its sequence, or design a pair
@@ -81,9 +82,11 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
 ## Download
 
 Installers for Mac (Apple Silicon and Intel), Windows and Linux are on the
-[Releases page](https://github.com/Mateusz-Jaskolowski/Strandivo/releases). A maintainer
-makes one by pushing a version tag such as `v0.2.0`, which builds every platform and drafts
-a release; *Actions* → *Build installers* → *Run workflow* builds one platform for testing.
+[Releases page](https://github.com/Mateusz-Jaskolowski/Strandivo/releases), and each
+release's notes are in [`CHANGELOG.md`](CHANGELOG.md). A maintainer makes one by writing its
+notes there and pushing a version tag such as `v0.2.0`, which builds every platform and
+drafts a release; *Actions* → *Build installers* → *Run workflow* builds one platform for
+testing.
 
 Every push runs the *Checks* workflow on Linux: all tests, plus a build of the Linux app that
 is clicked through automatically on a virtual display (screenshots go to the `e2e-results`
@@ -178,7 +181,10 @@ says how to take part.
 | `src-tauri/` | Desktop shell (Rust/Tauri): windows, menus, file associations, folder listing, commands |
 | `crates/seqcore/` | Trimming, alignment, difference calling, and the parts catalog and its search for feature detection (Rust, no dependencies) |
 | `crates/seqcore-json/` | The core's requests and responses as the interface sees them (JSON) |
-| `tools/` | The curated list of catalog sources and the script that builds the catalog from it |
+| `tools/` | Scripts run by hand: the parts catalog and its curated sources, the app icon, `npm run version` |
+| `services/updates/` | The Cloudflare Worker behind `updates.strandivo.com` |
+| `site/` | The website, `strandivo.com` (plain files on Cloudflare Pages) |
+| `CHANGELOG.md` | Each release's notes; their first paragraph is what the app shows in What's new |
 | `docs/` | Plans and notes: the parts catalog's sources and terms, clone checking, feature detection, updates and feedback |
 | `testdata/` | Real `.ab1`/`.dna` files used by the tests, with their sources |
 

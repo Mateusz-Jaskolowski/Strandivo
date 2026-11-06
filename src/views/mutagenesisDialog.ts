@@ -9,6 +9,7 @@ import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
 import { openDialog } from "../ui/modal.ts";
+import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
 import { featureLength, isCoding, threeLetter } from "../lib/genetics.ts";
 import { applyChange, changeName, codonAt, codonChoices, DEFAULT_SDM, designMutagenesis, residueAt, trimChange, type SdmChange, type SdmDesign, type SdmLayout, type SdmPrimer } from "../lib/mutagenesis.ts";
@@ -272,6 +273,7 @@ export function openMutagenesisDialog(ctx: DocContext, initial: MutagenesisTarge
     const mutant = memory.openMutant ? { ...applyChange(d, design.change), name: `${d.name || "Plasmid"} ${label}` } : null;
     ctx.store.apply({ ...d, primers: [...d.primers, f, r] }, "Add mutagenesis primers", { range: { start: f.start, end: f.end }, focus: { kind: "primer", id: f.id } });
     dlg.close();
+    track("dialog_completed", { dialog: "mutagenesis", method: memory.layout === "overlapping" ? "overlapping" : "back_to_back" });
     toast(`Added ${f.name} and ${r.name} for ${label}.`, "success", 4000);
     if (mutant) ctx.openNew(mutant);
   };

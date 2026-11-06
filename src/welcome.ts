@@ -9,7 +9,7 @@
 
 import { h, toast } from "./ui/dom.ts";
 import { openDialog } from "./ui/modal.ts";
-import { pickFiles } from "./platform.ts";
+import { openUsagePage, pickFiles } from "./platform.ts";
 import { basename } from "./lib/files.ts";
 import { WELCOME_VERSION, welcomeParts, type WelcomePart } from "./lib/welcome.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
@@ -28,6 +28,10 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
   if (!parts.length) return Promise.resolve();
   return new Promise(resolve => {
     const updates = h("input", { type: "checkbox", checked: loadSettings().checkForUpdates !== false }) as HTMLInputElement;
+    // Off unless chosen: nothing is sent without a yes.
+    const usage = h("input", { type: "checkbox", checked: loadSettings().shareUsage === true }) as HTMLInputElement;
+    // Someone who saw an older window is only asked what is new.
+    const upgrade = !reopened && loadSettings().welcomeSeen > 0;
     // Only offered while the library is empty: a lab's own list shouldn't get extra entries.
     const commonPrimers = h("input", { type: "checkbox", checked: true }) as HTMLInputElement;
     const folders = h("ul", { class: "sv-welcome-list" });
@@ -39,7 +43,8 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
       await saveSettings({
         ...s,
         welcomeSeen: Math.max(s.welcomeSeen, WELCOME_VERSION),
-        ...(parts.includes("updates") ? { checkForUpdates: updates.checked } : {})
+        ...(parts.includes("updates") ? { checkForUpdates: updates.checked } : {}),
+        ...(parts.includes("usage") ? { shareUsage: usage.checked } : {})
       });
       if (parts.includes("primers") && libraryEmpty && commonPrimers.checked) {
         const { addCommonPrimers } = await import("./libraryWindow.ts");
@@ -47,7 +52,14 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
       }
       resolve();
     };
-    const dlg = openDialog({ title: "Welcome to Strandivo", note: "Plan, build and check your plasmids. Everything runs on your computer: your files and sequences never leave it.", width: 560, onClose: () => void finish() });
+    const dlg = openDialog({
+      title: upgrade ? "Something new to choose" : "Welcome to Strandivo",
+      note: upgrade
+        ? "This version of Strandivo asks about something it didn't before. Nothing changes until you choose."
+        : "Plan, build and check your plasmids. Everything runs on your computer: your files and sequences never leave it.",
+      width: 560,
+      onClose: () => void finish()
+    });
 
     const section = (title: string, ...children: (Node | string)[]) => h("section", { class: "sv-welcome-part" }, h("h3", { class: "sv-section-title" }, title), ...children);
     const option = (box: HTMLInputElement, label: string, note: string) =>
@@ -71,6 +83,16 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
         section(
           "Updates",
           option(updates, "Check for updates automatically", "Once a day, Strandivo asks its server for the latest version. An update installs only when you choose.")
+        ),
+      usage: () =>
+        section(
+          "Usage statistics",
+          option(
+            usage,
+            "Share anonymous usage statistics",
+            "Which features are used, and on which systems, so work goes where it helps most. Never your files, sequences or names, and nothing that tells you apart."
+          ),
+          h("div", { class: "sv-welcome-actions" }, h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void openUsagePage() }, "What is sent"))
         ),
       constructs: () =>
         section(
@@ -97,6 +119,6 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
 
     dlg.body.classList.add("sv-welcome");
     dlg.body.replaceChildren(...parts.map(p => build[p]()), h("p", { class: "sv-small sv-dim" }, "You can change all of this in Settings."));
-    dlg.footer.replaceChildren(h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => dlg.close() }, "Start using Strandivo"));
+    dlg.footer.replaceChildren(h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => dlg.close() }, upgrade ? "Done" : "Start using Strandivo"));
   });
 }

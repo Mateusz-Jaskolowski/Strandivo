@@ -3,7 +3,8 @@
 Status: every decision below is made (November 2026). Parts 1–3 are built and released
 as 0.2.0 (the release workflow, the updates Worker, updating from inside the app and the
 welcome window); 0.2.1, with no other change, proved the update on a Mac. Part 6, the
-website, is live, and part 4, feedback, is built. Part 5 is planned.
+website, is live, part 4, feedback, is built, and so is part 5, usage statistics; both
+reach users with the next release.
 Each part below is one branch and one PR. What is said here about services and the law was read
 on 4 November 2026; check it again before each part is built. The legal notes are a
 reading of published guidance, not legal advice.
@@ -327,6 +328,22 @@ which the page can't tell.
   the setting off stops them.
 - **Crashes**: a Rust panic aborts with nothing recorded. Later, a panic hook can write a
   line that the next launch sends as a `crashed` event; not in this part.
+
+**As built**: Aptabase's Tauri plugin (1.3.0) builds with this Tauri but isn't used. It
+keeps its own queue in the shell and sends it at quit, which the page can't empty, so
+turning statistics off wouldn't stop what was queued; it adds the system's language and
+the web view's version to every event; and its commands take any name and any text,
+error messages and stack traces included. Instead `src-tauri/src/usage.rs` posts to
+Aptabase's events API itself (one POST, through reqwest, which the updater already
+brought in, so no new crates), with the key from `APTABASE_APP_KEY` at release build time
+and only an `A-EU-` key. The queue is the page's (`src/usage.ts`), sent every 30 seconds
+and, within a second, at quit. Counts go in five buckets (0, 1, 2–5, 6–20, 21+). Events
+cap at 200 each per launch, 10 for errors, so a loop that throws can't flood. The update
+checks are counted in a D1 database (`services/updates/schema.sql`), a row per day,
+version, OS and processor, rather than Analytics Engine, which would keep each check with
+its time. A dialog counts as completed when it adds or makes something: a digest or a PCR
+product counts once per dialog, when it first shows one. People who saw the first welcome
+window get a short one with only this question.
 
 ### 6. The website
 `feat/website`: `site/`, `docs/privacy.md`, `README.md`

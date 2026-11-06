@@ -24,6 +24,7 @@ import {
   type PickedFile
 } from "../platform.ts";
 import { addRecentFile } from "../recent.ts";
+import { track } from "../usage.ts";
 import { basename, dirname, extension, formatForPath, isTraceFile, joinPath, stripExtension, suggestedSaveName, TEXT_READ_EXTENSIONS, type SaveFormat } from "../lib/files.ts";
 import { CHECK_EXTENSION, checkFileText, type ReadCheck } from "../lib/readCheck.ts";
 import { rememberedReads, rememberReads } from "../readChecks.ts";
@@ -432,6 +433,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   }
 
   function setTab(t: Tab) {
+    if (t !== tab) track("view_shown", { view: t });
     tab = t;
     layout();
     if (t === "sequence") seqView.focus();
@@ -683,6 +685,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     if (!where) return;
     try {
       await saveText(where, checkFileText(where, { reference: path, reads: saved, minQuality: reads.minQuality, trimCutoff: reads.trimCutoff }));
+      track("check_saved");
       toast(`Saved ${basename(where)}. Open it to see these reads again, here or on another computer.`, "info", 5000);
     } catch (e) {
       toast(`Couldn't save the check: ${e instanceof Error ? e.message : e}`, "error", 8000);

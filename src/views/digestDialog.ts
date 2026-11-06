@@ -9,6 +9,7 @@ import { h } from "../ui/dom.ts";
 import { s } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
 import { openDialog } from "../ui/modal.ts";
+import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
 import { scanSites } from "../lib/enzymes.ts";
 import { endLabel } from "../lib/cloning.ts";
@@ -304,9 +305,15 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
     );
   }
 
+  let counted = false;
   function render() {
     const lane = lanes[current];
     const r = resultOf(lane);
+    // Usage statistics: once per dialog, when it first shows a digest.
+    if (!counted && lane.enzymes.length) {
+      counted = true;
+      track("dialog_completed", { dialog: "digest" });
+    }
     const summary = r.uncut ? "Uncut" : plural(r.fragments.length, "fragment");
     const ladderSelect = h(
       "select",

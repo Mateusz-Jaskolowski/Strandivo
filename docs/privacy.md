@@ -18,9 +18,10 @@ question carries:
 - the processor, such as Apple silicon or Intel.
 
 Like any connection on the internet, it also comes from your network's address. The
-service answers with the newest version's details and keeps nothing: it doesn't record
-the question, the address or anything else, and it has no logs. It runs on Cloudflare,
-which carries the connection.
+service answers with the newest version's details. All it keeps is a count: one more
+check that day for that version, operating system and processor, which tells roughly how
+many copies are in use. It doesn't record the address or anything that tells one copy
+from another, and it has no logs. It runs on Cloudflare, which carries the connection.
 
 You can turn automatic checks off in the welcome window or in Settings → Updates and
 privacy. Check for Updates… still works when you ask.
@@ -67,6 +68,51 @@ to hello@strandivo.com.
 If a report can't be sent, nothing leaves the app: you can copy it, or email it to
 feedback@strandivo.com from your own mail app instead.
 
+## Usage statistics
+
+From Strandivo 0.3.0 the app can count which of its features are used, and on which
+systems, so that work goes where it helps most. It is **off unless you turn it on**: the
+welcome window asks, and "Share anonymous usage statistics" in Settings → Updates and
+privacy turns it on or off at any time. Until you turn it on, nothing is sent, and
+turning it off sends nothing either, not even that you turned it off; anything waiting to
+be sent is dropped at once.
+
+When it is on, the app sends these events, and nothing else. Every detail an event carries
+is one of a few fixed words or a number put in a range (0, 1, 2–5, 6–20 or more than 20),
+so none can hold a name, a sequence or anything you typed:
+
+- `app_started`: the app was opened, with `arch`, the processor (Apple silicon or ARM,
+  Intel or AMD).
+- `file_opened`: a file was opened, with `format`, its kind (GenBank, SnapGene, FASTA,
+  EMBL or other), worked out from its name; never the name itself.
+- `view_shown`: one of a file's five views was shown, with `view` (Map, Sequence,
+  Primers, Reads or Info).
+- `dialog_completed`: a tool made or added something, with `dialog` (a digest, cloning, primer
+  design, a PCR product, mutagenesis primers or finding known parts), the `method` for
+  cloning and mutagenesis (such as Gibson or overlapping), and for found parts `parts`,
+  how many were added, as a range.
+- `primer_pairs`: the Primers tab's Pairs view was shown, or its Export list was used, as
+  `action`.
+- `reads_aligned`: reads were checked against a sequence, with `reads`, how many, as a
+  range, and `kind`, whether Sanger reads, long reads or both.
+- `check_saved`: a read check was saved as a file.
+- `update_installed`: the app was updated to a new version.
+- `error`: something went wrong in the app's window, with `kind` (a script error, a
+  promise nobody caught or a command that failed); never the message, which could name a
+  file.
+
+Every event also carries the app's version, the operating system and its version, the
+time, and a session number: a random number the app makes when it starts and drops after
+four hours without events. It is never stored, so it can't link one day's use to the next.
+Events are sent every 30 seconds while the app is open. A copy built for testing or
+development sends none.
+
+They go to [Aptabase](https://aptabase.com), an open-source service for app statistics,
+in its EU region. Like any server, it sees the address the events come from: it uses it
+to tell the country and region, and to count visitors a day with a code that changes
+every day, and it doesn't keep the address. Aptabase's own
+[privacy policy](https://aptabase.com/legal/privacy) covers what it keeps.
+
 ## Opening the website
 
 What's new… and some help items open strandivo.com or GitHub in your web browser. The app
@@ -81,8 +127,8 @@ handles each visit to deliver the page.
 
 ## What the app doesn't do
 
-- No usage statistics are sent. If they are added, they will be off until you turn them
-  on, and this page will list every one before any copy sends them.
+- No usage statistics unless you turn them on, and then only the events listed above.
 - No account, no sign-in, no identifier for your copy of the app.
-- No crash reports and no error reports are sent on their own: errors go only in a
-  feedback report, and only if you tick them.
+- No crash reports and no error messages are sent on their own: messages go only in a
+  feedback report, and only if you tick them. With usage statistics on, an error is
+  counted by its kind alone.

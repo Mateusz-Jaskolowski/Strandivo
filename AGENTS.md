@@ -156,6 +156,19 @@ it can (lists of files or features). CI checks that every path in backticks here
   to feedback@strandivo.com with the page's text as subject and body. e2e fakes the
   service with `window.__strandivoFeedback`. On a Mac, Welcome and Check for Updates stay
   in the app menu, where 0.2.0's notes put them; the Help menu has the rest.
+- **Usage statistics** are off until the user turns them on (the welcome window or
+  Settings), for everyone, as the EU's rules want. Every event and what it may carry is
+  listed in `src/lib/usage.ts`, each property a list of words or a count put in a bucket,
+  so nothing typed or named can go; a unit test holds `docs/privacy.md` to naming every
+  event and property, so add one to both, with why it is worth counting. `track` in
+  `src/usage.ts` is the only way to send; it queues in the page, so turning statistics off
+  empties the queue at once and sends nothing, not even that. The shell
+  (`src-tauri/src/usage.rs`) checks the words again, adds a session number (random, never
+  stored) and the system, and posts to Aptabase's EU region with the key built in from
+  `APTABASE_APP_KEY`, a variable of the `release` environment: development, CI and e2e
+  builds have none and send nothing. Aptabase's Tauri plugin isn't used: it keeps a queue
+  of its own that turning statistics off couldn't empty, sends the system's language, and
+  lets the page send any text. e2e receives events with `window.__strandivoTrack`.
 - **The welcome window** (`src/welcome.ts`) opens on first launch as a dialog over the
   main window, not a window of its own, since what it asks acts on the main window (Home's
   folders, holding back the update check, which waits for it). A choice users must make,
@@ -448,9 +461,11 @@ it can (lists of files or features). CI checks that every path in backticks here
 - **`updates.strandivo.com`** is built into every copy (`plugins.updater` in
   `src-tauri/tauri.conf.json`), so it must never change; the Worker behind it
   (`services/updates/`) hands over the published release's latest.json, or 204 for no
-  update when there is none. The app's version, OS and processor come in the query for
-  counting (part 5 of `docs/updates-feedback-usage-plan.md`); the Worker keeps nothing else
-  and logs nothing. Deploy it with
+  update when there is none. The app's version, OS and processor come in the query, and
+  each check adds one to a row for its day, version, OS and processor in a D1 database
+  (`services/updates/schema.sql`), as known words or "other": that count of copies in use
+  is what tells how far the opt-in statistics speak for everyone. The Worker keeps nothing
+  else and logs nothing. Deploy it with
   `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
 - **`feedback.strandivo.com`** is built into every copy from the release that adds it (`FEEDBACK_URL` in
   `src/platform.ts`), so it must keep answering. Its Worker (`services/feedback/`) needs

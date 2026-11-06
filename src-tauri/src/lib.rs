@@ -6,6 +6,7 @@
 //! feature detection and updates (`updates.rs`).
 
 mod feedback;
+mod usage;
 mod updates;
 
 use std::path::{Path, PathBuf};
@@ -579,6 +580,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(AppState::default()))
         .manage(updates::SharedUpdates::default())
+        .manage(usage::SharedUsage::default())
         .invoke_handler(tauri::generate_handler![
             window_info,
             list_sequence_files,
@@ -600,7 +602,9 @@ pub fn run() {
             updates::take_update_failure,
             feedback::system_info,
             feedback::open_issue,
-            feedback::email_feedback
+            feedback::email_feedback,
+            feedback::open_project_page,
+            usage::send_usage
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -14,6 +14,7 @@ import { appVersion, canUpdate, checkForUpdate, downloadUpdate, openWhatsNew, re
 import { dueForCheck, parseMemory, progressText, shouldOffer, wasUpdated, type UpdateMemory } from "./lib/updates.ts";
 import { notesFor, shortNotes } from "./lib/changelog.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
+import { track } from "./usage.ts";
 // The notes of the version this copy is, built in: shown after an update, with no network.
 import changelog from "../CHANGELOG.md?raw";
 
@@ -172,7 +173,9 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     if (!version) return;
     const memory = remembered();
     remember({ shownVersion: version });
-    if (!wasUpdated(memory, version) || !el.hidden) return;
+    if (!wasUpdated(memory, version)) return;
+    track("update_installed");
+    if (!el.hidden) return;
     const notes = notesFor(changelog, version);
     show(
       "download",

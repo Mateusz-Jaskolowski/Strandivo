@@ -9,6 +9,7 @@ import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
 import { openDialog, type Dialog } from "../ui/modal.ts";
+import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
 import { primerLibrary } from "../primerLibrary.ts";
 import { serialize } from "../doc/fileio.ts";
@@ -377,6 +378,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
   const sel = focus?.kind === "primer" ? d0.primers.find(p => p.id === focus.id) : undefined;
   if (sel && !preset.forward && !preset.reverse) pick[sel.strand === 1 ? "forward" : "reverse"] = `p:${sel.id}`;
 
+  let counted = false;
   const render = () => {
     const d = ctx.store.data;
     const n = d.sequence.length;
@@ -405,6 +407,11 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     const f = opts.find(o => o.key === pick.forward)?.primer;
     const r = opts.find(o => o.key === pick.reverse)?.primer;
     const product = f && r ? pcrProduct(d.sequence, d.circular, f, r) : null;
+    // Usage statistics: once per dialog, when it first shows a product.
+    if (product && !counted) {
+      counted = true;
+      track("dialog_completed", { dialog: "pcr_product" });
+    }
     const actions: Node[] = [];
     let result: Node[] = [];
     if (!f || !r) {
@@ -656,6 +663,7 @@ export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null =
     const second = make(r);
     ctx.store.apply({ ...d, primers: [...d.primers, first, second] }, "Add designed primers", { range: { start: first.start, end: first.end }, focus: { kind: "primer", id: first.id } });
     dlg.close();
+    track("dialog_completed", { dialog: "primer_design" });
     toast(`Added ${first.name} (${f.primer.tm.toFixed(1)} °C) and ${second.name} (${r.primer.tm.toFixed(1)} °C)${product ? ` for a ${fmt(product.length)} bp product` : ""}.`, "success", 5000);
   };
 

@@ -16,6 +16,8 @@ import { regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
+import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
+import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import type { CutSite } from "../lib/enzymes.ts";
 import type { Orf } from "../lib/orfs.ts";
 import {
@@ -721,6 +723,15 @@ export class SequenceView {
       parts.push(el);
     }
     r.sel.replaceChildren(...parts);
+    // The selected cut site, and the other sites of its enzyme or of the picked ones.
+    const { focus } = this.ctx.store.selection;
+    const picked = pickedEnzymes(this.ctx.store.selection);
+    for (const el of Array.from(r.el.querySelectorAll<HTMLElement>('[data-kind="cutsite"]'))) {
+      const id = el.dataset.id ?? "";
+      const on = focus?.kind === "cutsite" && focus.id === id;
+      el.classList.toggle("sv-cut-focused", on);
+      el.classList.toggle("sv-cut-related", !on && picked.includes(enzymeOf(id)));
+    }
   }
 
   /** Scrolls so the selection (or caret) is on screen. */
@@ -830,6 +841,11 @@ export class SequenceView {
       this.focus();
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       target = el?.dataset.kind ? hitOf(el) : null;
+      if (target?.kind === "cutsite" && isPickClick(e)) {
+        pickSite(this.ctx, target.id, "sequence");
+        anchor = null;
+        return;
+      }
       const b = this.boundaryAt(e.clientX, e.clientY);
       const sel = store.selection;
       if (e.shiftKey) {

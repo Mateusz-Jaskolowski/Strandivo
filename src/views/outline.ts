@@ -11,6 +11,8 @@ import { iconSvg, primerIcon, strandIcon } from "../ui/icons.ts";
 import { cutSites, featureStyles, primerColors, primerTm } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
+import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
+import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import { ENZYME_SETS, type EnzymeSet } from "../lib/enzymes.ts";
 import { fmt } from "../ui/format.ts";
 import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
@@ -270,7 +272,7 @@ export class Outline {
           "data-kind": "cutsite",
           "data-id": c.id,
           title: `${c.enzyme} · ${c.site.toUpperCase()} · ${c.cuts === 1 ? "cuts once" : `cuts ${c.cuts} times`}`,
-          onclick: () => this.select({ kind: "cutsite", id: c.id }, c.start, c.end)
+          onclick: (e: MouseEvent) => (isPickClick(e) ? pickSite(this.ctx, c.id, "outline") : this.select({ kind: "cutsite", id: c.id }, c.start, c.end))
         },
         c.enzyme,
         h("span", { class: "sv-mono sv-dim" }, fmt(c.start + 1))
@@ -316,9 +318,12 @@ export class Outline {
 
   private updateSelected() {
     const f = this.ctx.store.selection.focus;
+    // The other sites of the selected or picked enzymes.
+    const picked = pickedEnzymes(this.ctx.store.selection);
     for (const el of Array.from(this.body.querySelectorAll<HTMLElement>("[data-kind]"))) {
       const on = !!f && el.dataset.kind === f.kind && el.dataset.id === f.id;
       el.classList.toggle("sv-selected", on);
+      el.classList.toggle("sv-related", !on && el.dataset.kind === "cutsite" && picked.includes(enzymeOf(el.dataset.id ?? "")));
       if (on) el.setAttribute("aria-current", "true");
       else el.removeAttribute("aria-current");
     }

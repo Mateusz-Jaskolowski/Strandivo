@@ -572,6 +572,35 @@ async function main() {
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
     check("Done closes the Digest dialog", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
 
+    // --- an enzyme's other sites, and picking enzymes for a digest ---
+    await s.exec(`window.__strandivo.command('show-map');
+      const set = document.querySelector('select[aria-label="Which enzymes to show"]'); set.value = 'unique2'; set.dispatchEvent(new Event('change', { bubbles: true }));`);
+    await s.waitFor("document.querySelector('.sv-map-svgel text[data-id^=\"BglI@\"]')", 3000);
+    await s.exec("document.querySelector('.sv-enzyme-chip[data-id^=\"BglI@\"]').click();");
+    await sleep(300);
+    const related = await s.exec("return Array.from(document.querySelectorAll('.sv-map-svgel text.sv-related')).map(t => t.dataset.id)");
+    check("Selecting a site of an enzyme that cuts twice marks its other site on the map", related.length === 1 && related[0].startsWith("BglI@"), JSON.stringify(related));
+    // ⌘-click on a Mac, Ctrl-click elsewhere.
+    const pick = name => `{ const mac = /Mac/.test(navigator.platform); document.querySelector('.sv-enzyme-chip[data-id^="${name}@"]').dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: mac, ctrlKey: !mac })); }`;
+    await s.exec(`${pick("EcoRI")} ${pick("BamHI")}`);
+    await sleep(300);
+    const picked = await s.exec(`${doc} return { enzymes: s.selection.enzymes, inspector: document.querySelector('.sv-inspector')?.textContent || '' };`);
+    check("⌘/Ctrl-click picks more enzymes, and the inspector offers to digest with them", JSON.stringify(picked.enzymes) === '["BglI","EcoRI","BamHI"]' && picked.inspector.includes("Digest with BglI, EcoRI and BamHI…"), JSON.stringify(picked.enzymes));
+    await s.shot("10b-picked-enzymes");
+    const digestMenu = await s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
+      document.querySelector('.sv-map-svgel text[data-id^="EcoRI@"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
+    check("Right-clicking a picked enzyme keeps the pick and digests with them all", digestMenu.includes("Digest with BglI, EcoRI and BamHI…"), digestMenu.join(" | "));
+    await s.exec("window.__e2eMenu.find(e => e.label.startsWith('Digest with')).run(); delete window.__strandivoMenu;");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
+    const ticked = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog input[data-enzyme]:checked')).map(i => i.dataset.enzyme).sort()");
+    check("The Digest dialog opens with the picked enzymes ticked", JSON.stringify(ticked) === '["BamHI","BglI","EcoRI"]', JSON.stringify(ticked));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.press(ESCAPE);
+    check("Esc drops the picked enzymes", await s.waitFor("!window.__strandivo.store.selection.enzymes && !window.__strandivo.store.selection.focus", 3000));
+    await s.exec(`const set = document.querySelector('select[aria-label="Which enzymes to show"]'); set.value = 'unique6'; set.dispatchEvent(new Event('change', { bubbles: true }));`);
+
     // --- the offer: shown for a thin file, not for an annotated one ---
     check("An annotated file is not asked about", !(await s.exec("return document.querySelector('.sv-offer') && !document.querySelector('.sv-offer').hidden")));
     await s.exec(`window.__strandivo.open([${JSON.stringify(data("sanger", "sage-sample-reference.fa"))}])`);

@@ -37,6 +37,11 @@ import {
 } from "../lib/seqdata.ts";
 import { fmt } from "../ui/format.ts";
 import { openUniprotDialog } from "./uniprotDialog.ts";
+import { openDigestDialog } from "./digestDialog.ts";
+import { enzymesText } from "../lib/enzymePick.ts";
+
+/** The key held to pick enzymes, as the interface names it. */
+const pickKeyName = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "Hold ⌘" : "Hold Ctrl";
 import { openMutagenesisDialog } from "./mutagenesisDialog.ts";
 
 const loc = (r: Range) => `${fmt(r.start + 1)}..${fmt(r.end + 1)}`;
@@ -107,8 +112,8 @@ export class Inspector {
   }
 
   render() {
-    const { range, focus, caret } = this.ctx.store.selection;
-    const key = `${focus?.kind}:${focus?.id}:${focus?.region}:${range?.start}:${range?.end}:${range ? "" : caret}:${this.ctx.tab}`;
+    const { range, focus, caret, enzymes } = this.ctx.store.selection;
+    const key = `${focus?.kind}:${focus?.id}:${focus?.region}:${range?.start}:${range?.end}:${range ? "" : caret}:${this.ctx.tab}:${enzymes?.join(",") ?? ""}`;
     // Don't rebuild (and lose focus in a field) when nothing relevant changed.
     if (key === this.lastKey && this.el.childElementCount) return;
     this.lastKey = key;
@@ -120,6 +125,8 @@ export class Inspector {
     } else if (focus?.kind === "primer") {
       const p = d.primers.find(x => x.id === focus.id);
       content = p ? this.primer(p) : this.overview();
+    } else if (focus?.kind === "cutsite" && enzymes) {
+      content = this.pickedEnzymes(enzymes);
     } else if (focus?.kind === "cutsite") {
       const c = cutSites(d, this.ctx.options.enzymeSet).find(x => x.id === focus.id);
       content = c && range ? this.cutsite(c.id) : this.overview();
@@ -670,6 +677,41 @@ export class Inspector {
 
   // ---------- cut site ----------
 
+  /** Links to an enzyme's sites, each selecting that site; the one selected is plain text. */
+  private siteLinks(enzyme: string): HTMLElement {
+    const focus = this.ctx.store.selection.focus;
+    const sites = cutSites(this.ctx.store.data, this.ctx.options.enzymeSet).filter(x => x.enzyme === enzyme);
+    return h(
+      "span",
+      { class: "sv-site-links" },
+      sites.map(x =>
+        focus?.id === x.id && !this.ctx.store.selection.enzymes
+          ? h("span", { class: "sv-mono" }, fmt(x.start + 1))
+          : h(
+              "button",
+              { type: "button", class: "sv-link sv-mono", title: `Select this ${enzyme} site`, onclick: () => this.ctx.store.selectRange({ start: x.start, end: x.end }, { kind: "cutsite", id: x.id }, "inspector") },
+              fmt(x.start + 1)
+            )
+      )
+    );
+  }
+
+  /** Enzymes picked with ⌘/Ctrl-click, ready to digest with. */
+  private pickedEnzymes(enzymes: string[]): Node[] {
+    const sites = cutSites(this.ctx.store.data, this.ctx.options.enzymeSet);
+    const count = (e: string) => sites.filter(x => x.enzyme === e).length;
+    return [
+      h(
+        "div",
+        { class: "sv-insp-head" },
+        h("div", { class: "sv-insp-title" }, h("span", { class: "sv-insp-icon" }, iconSvg("scissors", 16)), h("h2", { class: "sv-insp-heading" }, `${enzymes.length} enzymes picked`)),
+        h("div", { class: "sv-dim sv-small" }, `${pickKeyName} and click a cut site to add or remove its enzyme. Esc clears them.`),
+        this.facts(enzymes.map(e => [e, count(e) > 1 ? h("span", null, this.siteLinks(e), h("span", { class: "sv-dim" }, ` · ${count(e)} sites`)) : this.siteLinks(e)]))
+      ),
+      h("div", { class: "sv-insp-actions" }, this.button(`Digest with ${enzymesText(enzymes)}…`, () => openDigestDialog(this.ctx, enzymes), { icon: "gel", primary: true, wide: true }))
+    ];
+  }
+
   private cutsite(id: string): Node[] {
     const d = this.ctx.store.data;
     const c = cutSites(d, this.ctx.options.enzymeSet).find(x => x.id === id)!;
@@ -683,9 +725,16 @@ export class Inspector {
           ["Site", h("span", { class: "sv-mono" }, c.site.toUpperCase())],
           ["Location", loc(c)],
           ["Cuts after", `${fmt(c.cut)} (top) · ${fmt(c.bottomCut)} (bottom)`],
-          ["Ends", overhangText(c)]
+          ["Ends", overhangText(c)],
+          ...(c.cuts > 1 ? [["All sites", this.siteLinks(c.enzyme)] as [string, Node]] : [])
         ]),
         this.viewOther({ start: c.start, end: c.end })
+      ),
+      h(
+        "div",
+        { class: "sv-insp-actions" },
+        this.button(`Digest with ${c.enzyme}…`, () => openDigestDialog(this.ctx, [c.enzyme]), { icon: "gel", wide: true }),
+        h("p", { class: "sv-dim sv-small" }, `${pickKeyName} and click other cut sites to digest with several enzymes.`)
       )
     ];
   }

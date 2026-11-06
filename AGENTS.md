@@ -306,6 +306,17 @@ it can (lists of files or features). CI checks that every path in backticks here
   as a stop even with amber suppression on, as a plasmid made that way works in one strain.
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that
   made it, so that view can skip scrolling to itself.
+- **Picked enzymes** (`src/lib/enzymePick.ts`, `src/doc/pickEnzyme.ts`): ⌘-click (Ctrl-click
+  outside macOS, where Ctrl-click is a right-click) on a cut site in the map, the Sequence
+  tab or the outline picks its enzyme for a digest; the selection keeps them in `enzymes`
+  (two or more), and any other selection drops them. Enzymes are picked, not sites, as a
+  digest uses every site. Every site of a picked enzyme, or of the selected site's enzyme,
+  is marked, so a dual cutter shows where else it cuts. A right-click on one of their sites
+  keeps the pick and digests with them all.
+- **Map labels** say what they name by their colour, font and leader: a feature's name on a
+  tint of its colour (solid leader), a primer's after an arrow pointing its way (dashed), an
+  enzyme's in small grey monospace with no mark (dotted), darker when it cuts once. Marks on
+  enzymes were tried and made the map busy; their positions are in the tooltip and outline.
 - **Right-click menus**: `src/lib/contextMenu.ts` decides what each menu offers (as data,
   unit-tested) and `src/doc/contextMenu.ts` runs it with the inspector's and toolbar's own
   functions. A view selects what was clicked first (`menuTargetAt`), then calls

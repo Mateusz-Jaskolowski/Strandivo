@@ -30,16 +30,15 @@ Before the first release this answers `204 No Content`; afterwards, the release'
 
 Each check adds one to a row for its day, version, OS and processor in a D1 database
 (`schema.sql`), so checks a day roughly count copies in use, whether they share usage
-statistics or not. Nothing else is kept: no address, no identifier, no logs. Set it up
-once, from the repository's root:
+statistics or not. Nothing else is kept: no address, no identifier, no logs. It was set
+up once, in western Europe, from the repository's root, and its id is in `wrangler.toml`:
 
 ```sh
-npx wrangler@4 d1 create strandivo-update-checks
+npx wrangler@4 d1 create strandivo-update-checks --location weur
 npx wrangler@4 d1 execute strandivo-update-checks --remote --file services/updates/schema.sql
 ```
 
-Put the id the first command prints in the `[[d1_databases]]` block of `wrangler.toml`,
-uncomment it and deploy. Read the counts with:
+Read the counts with:
 
 ```sh
 npx wrangler@4 d1 execute strandivo-update-checks --remote --command "SELECT day, SUM(n) AS checks FROM checks GROUP BY day ORDER BY day DESC LIMIT 14"

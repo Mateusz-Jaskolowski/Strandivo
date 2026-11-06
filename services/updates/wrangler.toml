@@ -11,9 +11,8 @@ routes = [{ pattern = "updates.strandivo.com", custom_domain = true }]
 enabled = false
 
 # The count of update checks per day, version, OS and processor (schema.sql); nothing else.
-# Created once with `npx wrangler@4 d1 create strandivo-update-checks`, which prints the id.
-# Until it is bound, checks are answered and not counted.
-# [[d1_databases]]
-# binding = "CHECKS"
-# database_name = "strandivo-update-checks"
-# database_id = "…"
+# Created in western Europe; the README says how it was set up and how to read it.
+[[d1_databases]]
+binding = "CHECKS"
+database_name = "strandivo-update-checks"
+database_id = "a7b75689-4f57-49b2-949e-77b96591266c"

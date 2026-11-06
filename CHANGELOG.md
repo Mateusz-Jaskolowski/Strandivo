@@ -15,6 +15,8 @@ the version and starts a new, empty Unreleased.
 
 ## Unreleased
 
+## 0.3.1
+
 Fixes a crash in 0.3.0: with usage statistics turned on, Strandivo could quit on its own
 about half a minute after starting. If you turned statistics on, please update.
 

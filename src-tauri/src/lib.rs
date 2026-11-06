@@ -93,6 +93,21 @@ fn open_paths<R: Runtime>(app: &AppHandle<R>, paths: Vec<PathBuf>) {
     }
 }
 
+/// A window showing the app's page. Strandivo's interface is light only for now, so on
+/// Windows its windows are too: there the menu bar would otherwise follow the system's dark
+/// mode, which the menu library draws by hand and which turned light again, under a light
+/// page, once another window had opened.
+fn app_window<'a, R: Runtime>(
+    app: &'a AppHandle<R>,
+    label: &str,
+    title: &str,
+) -> WebviewWindowBuilder<'a, R, AppHandle<R>> {
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into())).title(title);
+    #[cfg(windows)]
+    let builder = builder.theme(Some(tauri::Theme::Light));
+    builder
+}
+
 fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(w) = app.get_webview_window(MAIN_LABEL) {
         let _ = w.unminimize();
@@ -100,8 +115,7 @@ fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
         return;
     }
     #[allow(unused_mut)]
-    let mut builder = WebviewWindowBuilder::new(app, MAIN_LABEL, WebviewUrl::App("index.html".into()))
-        .title(APP_NAME)
+    let mut builder = app_window(app, MAIN_LABEL, APP_NAME)
         .inner_size(1360.0, 880.0)
         .min_inner_size(820.0, 560.0)
         .center();
@@ -124,8 +138,7 @@ fn show_settings_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = w.set_focus();
         return;
     }
-    let _ = WebviewWindowBuilder::new(app, SETTINGS_LABEL, WebviewUrl::App("index.html".into()))
-        .title("Settings")
+    let _ = app_window(app, SETTINGS_LABEL, "Settings")
         .inner_size(700.0, 780.0)
         .min_inner_size(560.0, 480.0)
         .center()
@@ -139,8 +152,7 @@ fn show_library_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = w.set_focus();
         return;
     }
-    let _ = WebviewWindowBuilder::new(app, LIBRARY_LABEL, WebviewUrl::App("index.html".into()))
-        .title("Primer Library")
+    let _ = app_window(app, LIBRARY_LABEL, "Primer Library")
         .inner_size(900.0, 640.0)
         .min_inner_size(600.0, 400.0)
         .center()
@@ -153,8 +165,7 @@ fn show_enzyme_library_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = w.set_focus();
         return;
     }
-    let _ = WebviewWindowBuilder::new(app, ENZYMES_LABEL, WebviewUrl::App("index.html".into()))
-        .title("Enzyme Library")
+    let _ = app_window(app, ENZYMES_LABEL, "Enzyme Library")
         .inner_size(940.0, 640.0)
         .min_inner_size(640.0, 440.0)
         .center()

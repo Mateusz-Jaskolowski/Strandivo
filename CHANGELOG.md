@@ -26,6 +26,8 @@ with Unreleased's notes and leaves them where they are.
   sequence is and how long alignment takes, and three choices in Settings. Each view is
   counted once each time the app opens, not at every switch. The Privacy page lists every
   event and what it carries.
+- **Menu bar on Windows** stays light, like the rest of the window, instead of switching
+  from dark to light when another window such as Settings opened.
 
 ## 0.3.1
 

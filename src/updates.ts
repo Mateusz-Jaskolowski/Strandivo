@@ -12,7 +12,7 @@ import { iconSvg } from "./ui/icons.ts";
 import { openDialog } from "./ui/modal.ts";
 import { appVersion, canUpdate, checkForUpdate, downloadUpdate, openWhatsNew, restartToUpdate, takeUpdateFailure, type UpdateInfo } from "./platform.ts";
 import { dueForCheck, parseMemory, progressText, shouldOffer, wasUpdated, type UpdateMemory } from "./lib/updates.ts";
-import { notesFor, shortNotes } from "./lib/changelog.ts";
+import { releaseNotesFor, shortNotes } from "./lib/changelog.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
 import { track } from "./usage.ts";
 // The notes of the version this copy is, built in: shown after an update, with no network.
@@ -176,7 +176,7 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     if (!wasUpdated(memory, version)) return;
     track("update_installed");
     if (!el.hidden) return;
-    const notes = notesFor(changelog, version);
+    const notes = releaseNotesFor(changelog, version);
     show(
       "download",
       `Strandivo was updated to ${version}.`,

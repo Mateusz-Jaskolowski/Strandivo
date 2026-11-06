@@ -8,11 +8,13 @@
 //
 // package.json, src-tauri/Cargo.toml (and its entry in src-tauri/Cargo.lock) and
 // src-tauri/tauri.conf.json. `npm run release` (tools/release.mjs) calls it, so it is
-// rarely run by hand.
+// rarely run by hand. Run with --experimental-strip-types, as it reads the changelog with
+// the app's own code.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { releaseNotesFor } from "../src/lib/changelog.ts";
 
 export const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
@@ -28,10 +30,10 @@ const PLACES = [
 export function setVersion(root, version) {
   if (!VERSION.test(version)) throw new Error(`"${version}" isn't a version such as 0.2.0.`);
   // The notes come first: a release without them would offer an update with nothing to say.
+  // A release candidate (0.4.0-rc.1) goes out with Unreleased's notes instead.
   const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
-  const sections = [...changelog.matchAll(/^## +(\S+)\s*$/gm)].map(m => m[1]);
-  if (!sections.includes(version)) {
-    throw new Error(`Write ${version}'s notes in CHANGELOG.md first: a "## ${version}" section whose first paragraph is the short version the app shows.`);
+  if (!releaseNotesFor(changelog, version)?.summary) {
+    throw new Error(`Write ${version}'s notes in CHANGELOG.md first: a "## ${version}" section whose first paragraph is the short version the app shows${version.includes("-") ? ", or for a release candidate, Unreleased's" : ""}.`);
   }
   for (const [path, place] of PLACES) {
     const file = join(root, path);

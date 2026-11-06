@@ -17,6 +17,18 @@ export interface ReleaseNotes {
 /** A version as release tags and `npm run version` write it, so it is safe in an address. */
 export const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
+/** A section's text as short notes (its first paragraph, as one line) and the rest. */
+function splitNotes(version: string, text: string): ReleaseNotes {
+  const body = text.trim();
+  const gap = body.search(/\n\s*\n/);
+  const first = gap < 0 ? body : body.slice(0, gap);
+  return {
+    version,
+    summary: first.split("\n").map(l => l.trim()).join(" ").trim(),
+    details: gap < 0 ? "" : body.slice(gap).trim()
+  };
+}
+
 /** Every `## <version>` section, in the file's order. */
 export function parseChangelog(text: string): ReleaseNotes[] {
   const notes: ReleaseNotes[] = [];
@@ -24,15 +36,7 @@ export function parseChangelog(text: string): ReleaseNotes[] {
   for (const section of sections) {
     const [head, ...rest] = section.split("\n");
     const version = head.trim();
-    if (!VERSION_PATTERN.test(version)) continue;
-    const body = rest.join("\n").trim();
-    const gap = body.search(/\n\s*\n/);
-    const first = gap < 0 ? body : body.slice(0, gap);
-    notes.push({
-      version,
-      summary: first.split("\n").map(l => l.trim()).join(" ").trim(),
-      details: gap < 0 ? "" : body.slice(gap).trim()
-    });
+    if (VERSION_PATTERN.test(version)) notes.push(splitNotes(version, rest.join("\n")));
   }
   return notes;
 }
@@ -81,6 +85,43 @@ export function summaryProblem(summary: string): string | null {
 /** The heading of what is merged but not released yet; not a version, so nothing reads it. */
 const UNRELEASED = /^## +Unreleased[ \t]*$/m;
 
+/** Where Unreleased's text starts and ends in `lf` (text with \n line ends), if it has one. */
+function unreleasedSpan(lf: string) {
+  const head = UNRELEASED.exec(lf);
+  if (!head) return null;
+  const start = head.index + head[0].length;
+  const next = lf.slice(start).search(/^## /m);
+  return { head: head.index, start, end: next < 0 ? lf.length : start + next };
+}
+
+/** A release candidate's version, such as 0.4.0-rc.1: tried before it is released. */
+export const isPrerelease = (version: string) => VERSION_PATTERN.test(version) && version.includes("-");
+
+/**
+ * The notes a release goes out with. A release has its own section; a release candidate
+ * has Unreleased's, as Unreleased becomes a section only with the release itself, so a
+ * candidate's notes are never shown on the website or kept apart.
+ */
+export function releaseNotesFor(text: string, version: string): ReleaseNotes | null {
+  const own = notesFor(text, version);
+  if (own || !isPrerelease(version)) return own;
+  const lf = text.replace(/\r\n?/g, "\n");
+  const span = unreleasedSpan(lf);
+  return span ? splitNotes(version, lf.slice(span.start, span.end)) : null;
+}
+
+/** What stops Unreleased from being released as it is, or null. */
+export function unreleasedProblem(text: string): string | null {
+  const lf = text.replace(/\r\n?/g, "\n");
+  const span = unreleasedSpan(lf);
+  if (!span) return 'CHANGELOG.md has no "## Unreleased" section.';
+  const notes = splitNotes("", lf.slice(span.start, span.end));
+  if (!notes.summary) return "Unreleased is empty: there is nothing to release.";
+  // Bullets alone are what Unreleased holds until a release: the short notes go above them.
+  const problem = /^[-*] /.test(notes.summary) ? "has no short notes: its first paragraph is a list, so write two or three sentences above it" : summaryProblem(notes.summary);
+  return problem ? `Unreleased ${problem}.` : null;
+}
+
 /**
  * CHANGELOG.md with Unreleased turned into `version`'s section and a new, empty Unreleased
  * above it, or the problem that stops that. The short notes must already be written as
@@ -89,17 +130,11 @@ const UNRELEASED = /^## +Unreleased[ \t]*$/m;
 export function releaseUnreleased(text: string, version: string): { text: string } | { problem: string } {
   if (!VERSION_PATTERN.test(version)) return { problem: `"${version}" isn't a version such as 0.3.0.` };
   if (notesFor(text, version)) return { problem: `CHANGELOG.md already has a "## ${version}" section.` };
+  const problem = unreleasedProblem(text);
+  if (problem) return { problem };
   const lf = text.replace(/\r\n?/g, "\n");
-  const head = UNRELEASED.exec(lf);
-  if (!head) return { problem: 'CHANGELOG.md has no "## Unreleased" section.' };
-  const bodyStart = head.index + head[0].length;
-  const next = lf.slice(bodyStart).search(/^## /m);
-  const bodyEnd = next < 0 ? lf.length : bodyStart + next;
-  const body = lf.slice(bodyStart, bodyEnd).trim();
-  if (!body) return { problem: "Unreleased is empty: there is nothing to release." };
-  const out = `${lf.slice(0, head.index)}## Unreleased\n\n## ${version}\n\n${body}\n${next < 0 ? "" : `\n${lf.slice(bodyEnd)}`}`;
-  // Bullets alone are what Unreleased holds until a release: the short notes go above them.
-  const summary = notesFor(out, version)?.summary ?? "";
-  const problem = /^[-*] /.test(summary) ? "has no short notes: its first paragraph is a list, so write two or three sentences above it" : summaryProblem(summary);
-  return problem ? { problem: `Unreleased ${problem}.` } : { text: out };
+  const span = unreleasedSpan(lf)!;
+  const body = lf.slice(span.start, span.end).trim();
+  const rest = span.end < lf.length ? `\n${lf.slice(span.end)}` : "";
+  return { text: `${lf.slice(0, span.head)}## Unreleased\n\n## ${version}\n\n${body}\n${rest}` };
 }

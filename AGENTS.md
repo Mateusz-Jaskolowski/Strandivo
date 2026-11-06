@@ -493,6 +493,13 @@ it can (lists of files or features). CI checks that every path in backticks here
   rebuilds the site, commits on `chore/release-<x.y.z>` and opens the pull request. Once
   that is merged, `npm run release:tag` checks main as the release build will and pushes
   the `v<x.y.z>` tag on it; then a maintainer approves the run and publishes the draft.
+  A minor release is first tried as a **release candidate** (`npm run release 0.4.0-rc.1`):
+  the same steps, but Unreleased stays as it is and gives the candidate its notes
+  (`releaseNotesFor` in `src/lib/changelog.ts`), and its build drafts a pre-release. GitHub
+  never makes a pre-release "latest", which is what the updates Worker and the Download page
+  follow, so only people who download it get it; the website shows sections only, so it
+  never lists one. 0.3.0 is why: its crash happened only in a signed build, the one thing
+  nothing ran before users had it. Use the candidate for a day with statistics on.
   Tagging stays a person's step: an Actions token that could push `v*` tags would get
   round the ruleset that keeps them to admins. `check-version` in
   `.github/scripts/release.mjs` fails a tag that doesn't match the three

@@ -47,6 +47,9 @@ test("a release needs short notes in the changelog", () => {
   assert.match(changelogProblem("v0.4.0", log), /no "## 0\.4\.0" section/);
   assert.equal(changelogProblem("v0.2.0", log), null);
   assert.match(changelogProblem("v0.5.0", "## 0.5.0\n\nSee example.com.\n"), /name an address/);
+  // A release candidate has Unreleased's notes, and needs them.
+  assert.equal(changelogProblem("v0.4.0-rc.1", `## Unreleased\n\nSoon.\n\n${log}`), null);
+  assert.match(changelogProblem("v0.4.0-rc.1", log), /or Unreleased notes/);
 });
 
 test("latest.json refuses a release missing a platform or a signature", () => {

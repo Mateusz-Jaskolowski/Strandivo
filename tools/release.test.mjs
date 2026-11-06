@@ -17,6 +17,12 @@ test("versions are compared by number, a pre-release before its release", () => 
   assert.equal(compareVersions("1.0.0-beta.1", "1.0.0"), -1);
   assert.equal(compareVersions("1.0.0", "1.0.0-beta.1"), 1);
   assert.equal(compareVersions("0.2.1", "1.0.0-beta.1"), -1);
+  // Release candidates: in order among themselves, and before their release.
+  assert.equal(compareVersions("0.4.0-rc.1", "0.3.1"), 1);
+  assert.equal(compareVersions("0.4.0-rc.2", "0.4.0-rc.10"), -1);
+  assert.equal(compareVersions("0.4.0-rc.1", "0.4.0"), -1);
+  assert.equal(compareVersions("0.4.0-rc", "0.4.0-rc.1"), -1);
+  assert.equal(compareVersions("0.4.0-1", "0.4.0-rc"), -1);
 });
 
 test("the pull request quotes the short notes and says what comes next", () => {
@@ -24,6 +30,22 @@ test("the pull request quotes the short notes and says what comes next", () => {
   assert.match(body, /^> Faster maps\.$/m);
   assert.match(body, /^- Labels\.$/m);
   assert.match(body, /npm run release:tag/);
+  assert.match(pullRequestBody("0.4.0-rc.1", { summary: "Faster maps.", details: "" }), /pre-release/);
+});
+
+test("a release candidate's version is set from Unreleased's notes", () => {
+  const repo = fileURLToPath(new URL("..", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "strandivo-rc-"));
+  for (const f of ["package.json", "src-tauri/tauri.conf.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock"]) {
+    cpSync(join(repo, f), join(dir, f));
+  }
+  writeFileSync(join(dir, "CHANGELOG.md"), "## Unreleased\n\n## 9.8.7\n\nOld.\n");
+  assert.throws(() => setVersion(dir, "9.9.0-rc.1"), /Unreleased's/);
+  writeFileSync(join(dir, "CHANGELOG.md"), "## Unreleased\n\nNew things.\n\n## 9.8.7\n\nOld.\n");
+  setVersion(dir, "9.9.0-rc.1");
+  assert.equal(JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).version, "9.9.0-rc.1");
+  // The release itself still needs its own section.
+  assert.throws(() => setVersion(dir, "9.9.0"), /"## 9\.9\.0" section/);
 });
 
 test("the version is set in all four files, and not without notes", () => {

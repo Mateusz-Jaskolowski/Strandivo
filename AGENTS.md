@@ -344,7 +344,9 @@ it can (lists of files or features). CI checks that every path in backticks here
 - `npm run check` runs all of the above, the agent guide's path check, a syntax check of
   the e2e script and clippy: what CI
   checks except the e2e, in a minute or two. Run it before every push where Rust is
-  installed; CI stays the final word and the only place the e2e runs.
+  installed; CI stays the final word and the only place the e2e runs. A change to nothing
+  but docs, Markdown, the website or `CITATION.cff` needs only `npm run check:quick` (the
+  guide's paths and the licence headers, in seconds), as CI then runs only that too.
 - In a browser, `npm run dev` (or any static server on the built `dist` folder) shows Home,
   and opens a file in a tab with `?open=<path or URL>`. Reads only align there if the page
   defines `window.__strandivoAlign` (returning `{ reads, clones }` as the core does), and Home lists folders only if it defines
@@ -353,7 +355,12 @@ it can (lists of files or features). CI checks that every path in backticks here
   tests do, in the app too. A
   right-click menu is drawn in the page there, or handed to `window.__strandivoMenu` if
   defined, which is how e2e tests pick items (WebDriver can't click native menus).
-- **Checks** (`.github/workflows/checks.yml`) runs on every push, on Linux only: tests,
+- **Checks** (`.github/workflows/checks.yml`) runs on every pull request and push to
+  `main`, on Linux only, except one that changes only docs, Markdown, the website or
+  `CITATION.cff` (its `paths-ignore`; keep the two lists, and the rule above, the same).
+  The guide and header checks run apart, on every change
+  (`.github/workflows/quick-checks.yml`), as a docs change is what breaks the guide's
+  paths. Checks itself runs tests,
   type check, clippy, a debug build, then `e2e/run.mjs` clicks through the real app with
   WebDriver and pushes screenshots and a report to the `e2e-results` branch (for a pull
   request from a fork, whose token can't push, they are the run's artifact). Add an e2e

@@ -428,8 +428,10 @@ it can (lists of files or features). CI checks that every path in backticks here
   Policy (`site/_headers`) allows only its own images and stylesheet. Its colours copy the
   app's tokens, as the site can't load `src/styles.css`. For now it is one page saying the
   app is in development; part 6 of `docs/updates-feedback-usage-plan.md` adds Download and
-  Privacy. Cloudflare builds it from this repository: every push to `main` goes live, and
-  other branches get a preview address. The project is connected to GitHub, so never
+  Privacy. Cloudflare builds it from this repository, but only for a push that changes
+  something in `site/` (the project's build watch paths, a dashboard setting): on `main`
+  it goes live, and other branches get a preview address. Other pushes, the e2e-results
+  branch's included, show as skipped. The project is connected to GitHub, so never
   deploy it with wrangler, which would be overwritten by the next push. Cloudflare's
   email obfuscation rewrites addresses on the proxied domain (not on `pages.dev`) into
   a script the policy blocks, so a page's body sits inside `<!--email_off-->` comments;

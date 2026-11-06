@@ -131,11 +131,14 @@ jobs:
           path: dist
           merge-multiple: true
       # The short notes in CHANGELOG.md go in latest.json, for "What's new" in the app; the
-      # whole section is the release's text.
-      - name: Write latest.json and the release notes
+      # whole section is the release's text. The installers' copies without the version
+      # are what strandivo.com/download links to; they come after latest.json, which lists
+      # the versioned files.
+      - name: Write latest.json, the release notes and the website's copies
         run: |
           node --experimental-strip-types .github/scripts/release.mjs latest-json dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > dist/latest.json
           node --experimental-strip-types .github/scripts/release.mjs release-notes "$GITHUB_REF_NAME" > notes.md
+          node --experimental-strip-types .github/scripts/release.mjs download-copies dist "$GITHUB_REF_NAME"
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           draft: true

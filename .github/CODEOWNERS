@@ -17,9 +17,13 @@
 /src-tauri/capabilities/              @Mateusz-Jaskolowski
 
 # Live without a release: the Worker behind updates.strandivo.com, which every installed
-# copy asks, and the website, which goes live on every push to main.
+# copy asks, and the website, which goes live on every push to main, with what it is
+# written from (its generator, its pages' sources and the privacy page).
 /services/updates/                    @Mateusz-Jaskolowski
 /site/                                @Mateusz-Jaskolowski
+/tools/build-site.mjs                 @Mateusz-Jaskolowski
+/tools/site/                          @Mateusz-Jaskolowski
+/docs/privacy.md                      @Mateusz-Jaskolowski
 
 # Where security problems are reported.
 /SECURITY.md                          @Mateusz-Jaskolowski

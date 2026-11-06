@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+     SPDX-License-Identifier: GPL-3.0-or-later
+     Written by tools/build-site.mjs from docs/privacy.md: edit that, then run npm run site. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy · Strandivo</title>
+  <meta name="description" content="What the Strandivo app sends, and when: everything, listed in one place. Your files never leave your computer.">
+  <!-- strandivo.pages.dev serves the same page; this names the real address. -->
+  <link rel="canonical" href="https://strandivo.com/privacy/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Strandivo">
+  <meta property="og:title" content="Privacy · Strandivo">
+  <meta property="og:description" content="What the Strandivo app sends, and when: everything, listed in one place. Your files never leave your computer.">
+  <meta property="og:image" content="https://strandivo.com/map.png">
+  <meta property="og:image:width" content="1360">
+  <meta property="og:image:height" content="855">
+  <meta property="og:image:alt" content="Strandivo showing a circular map of pUC19.">
+  <meta property="og:url" content="https://strandivo.com/privacy/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#eef0f3">
+  <!-- Every link starts from the root: the 404 page is served at any address, and the
+       others sit in folders. -->
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
+       the Content Security Policy blocks, leaving "[email protected]": email_off keeps
+       them as written. -->
+  <!--email_off-->
+  <header class="bar">
+    <a class="brand" href="/">
+      <img src="/icon.png" alt="" width="32" height="32">
+      <span>Strandivo</span>
+    </a>
+    <nav class="bar-links" aria-label="Site">
+      <a class="bar-link" href="/download/">Download</a>
+      <a class="bar-link" href="/changes/">What's new</a>
+      <a class="bar-link" aria-current="page" href="/privacy/">Privacy</a>
+      <a class="bar-link" href="https://github.com/Mateusz-Jaskolowski/Strandivo">GitHub</a>
+    </nav>
+  </header>
+
+<main class="prose">
+    <h1 id="privacy">Privacy</h1>
+    <p>Strandivo is a desktop app, and your work stays on your computer. Your sequences, files, file names, folders, features, primers and notes are never sent anywhere by the app.</p>
+    <p>This page lists everything the app does send, and when. It is the one list: strandivo.com/privacy is made from it, so the two can't disagree. Strandivo is maintained by Mateusz Jaskolowski; questions about this page go to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
+    <h2 id="checking-for-updates">Checking for updates</h2>
+    <p>Once a day, while &quot;Check for updates automatically&quot; is on, and whenever you choose Check for Updates…, the app asks <code>updates.strandivo.com</code> whether there is a newer version. The question carries:</p>
+    <ul>
+      <li>the app's version, such as 0.2.1;</li>
+      <li>the operating system, such as macOS or Windows;</li>
+      <li>the processor, such as Apple silicon or Intel.</li>
+    </ul>
+    <p>Like any connection on the internet, it also comes from your network's address. The service answers with the newest version's details and keeps nothing: it doesn't record the question, the address or anything else, and it has no logs. It runs on Cloudflare, which carries the connection.</p>
+    <p>You can turn automatic checks off in the welcome window or in Settings → Updates and privacy. Check for Updates… still works when you ask.</p>
+    <h2 id="installing-an-update">Installing an update</h2>
+    <p>When you choose to install an update, the app downloads it from GitHub, where Strandivo's releases are published. GitHub sees that download as it sees any other, under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
+    <h2 id="looking-up-a-protein-in-uniprot">Looking up a protein in UniProt</h2>
+    <p>When you look up a UniProt entry for a protein's regions, the app asks UniProt (<code>rest.uniprot.org</code>, run by EMBL-EBI and its partners) for that one entry, by its accession, such as P42212. Nothing else goes with it: not the sequence, not the file. It happens only when you ask. UniProt's own <a href="https://www.uniprot.org/help/privacy">privacy notice</a> covers what it keeps.</p>
+    <h2 id="opening-the-website">Opening the website</h2>
+    <p>What's new… and some help items open strandivo.com or GitHub in your web browser. The app sends nothing itself; your browser visits the page as it would any other.</p>
+    <h2 id="this-website">This website</h2>
+    <p>strandivo.com has no cookies and no tracking. Its one script, on the home and Download pages, asks your browser which system it runs on, so that the right download comes first; it sends nothing and stores nothing. The site is served by Cloudflare, which handles each visit to deliver the page.</p>
+    <h2 id="what-the-app-doesn-t-do">What the app doesn't do</h2>
+    <ul>
+      <li>No usage statistics are sent. If they are added, they will be off until you turn them on, and this page will list every one before any copy sends them.</li>
+      <li>No account, no sign-in, no identifier for your copy of the app.</li>
+      <li>No crash reports and no error reports are sent on their own.</li>
+    </ul>
+  </main>
+
+  <footer class="foot">
+    <p>Strandivo is free software under the GPL-3.0. This site has no cookies and no
+    tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
+    <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
+    <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
+  </footer>
+  <!--/email_off-->
+</body>
+</html>

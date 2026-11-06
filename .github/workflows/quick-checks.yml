@@ -1,8 +1,9 @@
 name: Quick checks
 
-# The checks that take seconds and need nothing installed: that the agent guide names only
-# files that exist, that every source file has the licence header, and that the website's
-# security.txt isn't about to expire (its date is renewed by hand). They run on every
+# The checks that take seconds and need nothing installed but Node: that the agent guide
+# names only files that exist, that every source file has the licence header, that the
+# website's security.txt isn't about to expire (its date is renewed by hand), and that its
+# pages are what tools/build-site.mjs writes from CHANGELOG.md and docs/privacy.md. They run on every
 # push and pull request, including the docs and website changes that checks.yml skips,
 # since a docs change is just what breaks the guide's paths. `npm run check:quick` runs
 # the same locally.
@@ -33,5 +34,14 @@ jobs:
       - name: Every source file has the licence header
         run: .github/scripts/check-headers.sh
 
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+
       - name: The website's security.txt is not about to expire
         run: node .github/scripts/check-security-txt.mjs
+
+      # A changelog or privacy change that wasn't followed by npm run site would leave
+      # the website saying something else.
+      - name: The website's pages are up to date
+        run: node --experimental-strip-types tools/build-site.mjs --check

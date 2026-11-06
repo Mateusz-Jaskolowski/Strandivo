@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+     SPDX-License-Identifier: GPL-3.0-or-later
+     Written by tools/build-site.mjs from tools/site/download.html: edit that, then run npm run site. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download Strandivo</title>
+  <meta name="description" content="Download Strandivo, the free plasmid editor, for Mac (Apple silicon and Intel), Windows and Linux.">
+  <!-- strandivo.pages.dev serves the same page; this names the real address. -->
+  <link rel="canonical" href="https://strandivo.com/download/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Strandivo">
+  <meta property="og:title" content="Download Strandivo">
+  <meta property="og:description" content="Download Strandivo, the free plasmid editor, for Mac (Apple silicon and Intel), Windows and Linux.">
+  <meta property="og:image" content="https://strandivo.com/map.png">
+  <meta property="og:image:width" content="1360">
+  <meta property="og:image:height" content="855">
+  <meta property="og:image:alt" content="Strandivo showing a circular map of pUC19.">
+  <meta property="og:url" content="https://strandivo.com/download/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#eef0f3">
+  <!-- Every link starts from the root: the 404 page is served at any address, and the
+       others sit in folders. -->
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <!-- Puts the visitor's own system's download first; see the file. -->
+  <script type="module" src="/download.js"></script>
+</head>
+<body>
+  <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
+       the Content Security Policy blocks, leaving "[email protected]": email_off keeps
+       them as written. -->
+  <!--email_off-->
+  <header class="bar">
+    <a class="brand" href="/">
+      <img src="/icon.png" alt="" width="32" height="32">
+      <span>Strandivo</span>
+    </a>
+    <nav class="bar-links" aria-label="Site">
+      <a class="bar-link" aria-current="page" href="/download/">Download</a>
+      <a class="bar-link" href="/changes/">What's new</a>
+      <a class="bar-link" href="/privacy/">Privacy</a>
+      <a class="bar-link" href="https://github.com/Mateusz-Jaskolowski/Strandivo">GitHub</a>
+    </nav>
+  </header>
+
+<main class="prose">
+    <h1>Download Strandivo</h1>
+    <p class="lede">Free, for Mac, Windows and Linux. These are the newest version; once it is
+    installed, Strandivo offers each new one and installs it when you say so. See
+    <a href="/changes/">what's new</a>.</p>
+
+      <div class="suggested" id="suggested" hidden>
+        <div data-os="mac" hidden>
+          <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_aarch64.dmg">Download for Mac</a>
+          <p class="note">For Macs with Apple silicon (M1 or later), which is nearly every Mac
+          since 2020. Choose Apple menu → About This Mac: a “Processor” line instead of
+          “Chip” means Intel. <a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_x64.dmg">Download for a Mac with Intel</a></p>
+        </div>
+        <div data-os="windows" hidden>
+          <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_x64-setup.exe">Download for Windows</a>
+          <p class="note">For 64-bit Windows 10 and 11. It installs for you alone, without an
+          administrator.</p>
+        </div>
+        <div data-os="linux" hidden>
+          <div class="actions">
+            <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_amd64.deb">Download the .deb</a>
+            <a class="button primary big" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_amd64.AppImage">Download the AppImage</a>
+          </div>
+          <p class="note">The .deb is for Debian, Ubuntu and their relatives; the AppImage runs
+          on other systems.</p>
+        </div>
+      </div>
+
+    <h2 id="all-downloads-title" hidden>Other systems</h2>
+    <div class="downloads" id="all-downloads">
+      <div class="download" id="mac">
+        <h2>Mac</h2>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_aarch64.dmg">Mac with Apple silicon</a>
+          <a class="button" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_x64.dmg">Mac with Intel</a>
+        </div>
+      </div>
+      <div class="download" id="windows">
+        <h2>Windows</h2>
+        <div class="actions">
+          <a class="button" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_x64-setup.exe">Windows</a>
+        </div>
+      </div>
+      <div class="download" id="linux">
+        <h2>Linux</h2>
+        <div class="actions">
+          <a class="button" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_amd64.deb">Debian, Ubuntu and relatives</a>
+          <a class="button" href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/latest/download/Strandivo_amd64.AppImage">Other Linux (AppImage)</a>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">Not sure which Mac you have? Choose Apple menu → About This Mac: a
+    “Chip” line means Apple silicon (M1 or later), a “Processor” line means Intel.</p>
+
+    <h2 id="first-launch">The first time you open it</h2>
+    <p>Strandivo isn't signed by Apple or Microsoft yet, so each warns you the first time
+    you open it.</p>
+
+    <h3 id="first-launch-mac">Mac</h3>
+    <p>Open the downloaded file and drag Strandivo into Applications. Open it once; when
+    macOS says it can't check the app, click <strong>Done</strong>. Then go to
+    <strong>System Settings → Privacy &amp; Security</strong>, scroll down and click
+    <strong>Open Anyway</strong>. If macOS says instead that the app “is damaged”, run this
+    in Terminal once:</p>
+    <pre><code>xattr -dr com.apple.quarantine "/Applications/Strandivo.app"</code></pre>
+
+    <h3 id="first-launch-windows">Windows</h3>
+    <p>If SmartScreen shows “Windows protected your PC”, click <strong>More info</strong>,
+    then <strong>Run anyway</strong>. Strandivo installs for you alone, without asking for an
+    administrator.</p>
+
+    <h3 id="first-launch-linux">Linux</h3>
+    <p>Install the <code>.deb</code> on Debian, Ubuntu and their relatives. Elsewhere, make
+    the AppImage executable (<code>chmod +x Strandivo_amd64.AppImage</code>) and run it.
+    Strandivo needs WebKitGTK 4.1, which current Ubuntu, Debian and Fedora releases
+    include.</p>
+
+    <h2 id="requirements">What it needs</h2>
+    <ul>
+      <li>macOS 11 (Big Sur) or later, on Apple silicon or Intel.</li>
+      <li>64-bit Windows 10 or 11.</li>
+      <li>64-bit Linux with WebKitGTK 4.1.</li>
+    </ul>
+
+    <p>Older versions and the source code are on
+    <a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases">GitHub's releases
+    page</a>.</p>
+  </main>
+
+  <footer class="foot">
+    <p>Strandivo is free software under the GPL-3.0. This site has no cookies and no
+    tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
+    <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
+    <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
+  </footer>
+  <!--/email_off-->
+</body>
+</html>

@@ -9,7 +9,7 @@ import { h } from "../ui/dom.ts";
 import { fontStack, s, textWidth } from "../ui/svg.ts";
 import { cutSites, featureStyles, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
-import type { CutSite } from "../lib/enzymes.ts";
+import { ENZYME_SETS, type CutSite, type EnzymeSet } from "../lib/enzymes.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
@@ -270,6 +270,7 @@ export class MapView {
   private modeButtons: { circular: HTMLButtonElement; linear: HTMLButtonElement };
   private sliders: { rotate: HTMLInputElement; zoom: HTMLInputElement; label: HTMLInputElement };
   private rotateWrap: HTMLElement;
+  private enzymeSelect: HTMLSelectElement;
   private visible = false;
   private stale = true;
   private ctx: DocContext;
@@ -308,7 +309,11 @@ export class MapView {
     const lab = slider("Label size", "text", 3, 16, ctx.options.labelSize, v => ctx.setOptions({ labelSize: v }));
     this.sliders = { rotate: rot.input, zoom: zoom.input, label: lab.input };
     this.rotateWrap = rot.wrap;
-    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, zoom.wrap, lab.wrap);
+    this.enzymeSelect = h("select", { class: "sv-select-quiet", "aria-label": "Which map enzymes to show", onchange: () => {
+      const enzymeSet = this.enzymeSelect.value as EnzymeSet;
+      ctx.setOptions({ enzymeSet, cutsites: enzymeSet !== "none" });
+    } }, ENZYME_SETS.map(set => h("option", { value: set.id }, set.label))) as HTMLSelectElement;
+    const controls = h("div", { class: "sv-map-controls" }, h("label", { class: "sv-map-slider", title: "Enzymes to show" }, iconSvg("scissors"), this.enzymeSelect), rot.wrap, zoom.wrap, lab.wrap);
     this.el = h("div", { class: "sv-map" }, header, this.area, controls);
 
     this.installPointer();
@@ -362,6 +367,7 @@ export class MapView {
     this.sliders.rotate.value = String(o.mapRotation);
     this.sliders.zoom.value = String(zoomToSlider(o.mapZoom));
     this.sliders.label.value = String(o.labelSize);
+    this.enzymeSelect.value = o.enzymeSet;
 
     const d = this.ctx.store.data;
     this.shapes.clear();

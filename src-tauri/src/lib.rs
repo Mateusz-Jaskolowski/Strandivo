@@ -5,6 +5,7 @@
 //! associations, the construct library's folder listing, the Sanger alignment commands,
 //! feature detection and updates (`updates.rs`).
 
+mod enzyme_library;
 mod feedback;
 mod updates;
 
@@ -21,6 +22,7 @@ const APP_NAME: &str = "Strandivo";
 const MAIN_LABEL: &str = "main";
 const SETTINGS_LABEL: &str = "settings";
 const LIBRARY_LABEL: &str = "library";
+const ENZYMES_LABEL: &str = "enzymes";
 
 /// Extensions offered in the Open dialog.
 const OPEN_EXTENSIONS: &[&str] = &[
@@ -143,6 +145,20 @@ fn show_library_window<R: Runtime>(app: &AppHandle<R>) {
         .build();
 }
 
+fn show_enzyme_library_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(w) = app.get_webview_window(ENZYMES_LABEL) {
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        return;
+    }
+    let _ = WebviewWindowBuilder::new(app, ENZYMES_LABEL, WebviewUrl::App("index.html".into()))
+        .title("Enzyme Library")
+        .inner_size(940.0, 640.0)
+        .min_inner_size(640.0, 440.0)
+        .center()
+        .build();
+}
+
 fn prompt_open<R: Runtime>(app: &AppHandle<R>) {
     let handle = app.clone();
     app.dialog()
@@ -156,7 +172,7 @@ fn prompt_open<R: Runtime>(app: &AppHandle<R>) {
         });
 }
 
-/// ⌘W: closes the current tab in the main window, and Settings or the primer library
+/// ⌘W: closes the current tab in the main window, and Settings or a library window
 /// themselves.
 fn close_focused<R: Runtime>(app: &AppHandle<R>) {
     for (label, w) in app.webview_windows() {
@@ -250,6 +266,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let library = MenuItemBuilder::with_id("library", "Primer Library")
         .accelerator("CmdOrCtrl+Shift+L")
         .build(app)?;
+    let enzyme_library = MenuItemBuilder::with_id("enzyme-library", "Enzyme Library").build(app)?;
     let settings = MenuItemBuilder::with_id("settings", "Settings…")
         .accelerator("CmdOrCtrl+,")
         .build(app)?;
@@ -324,6 +341,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let window = SubmenuBuilder::new(app, "Window")
         .item(&home)
         .item(&library)
+        .item(&enzyme_library)
         .separator()
         .minimize()
         .maximize()
@@ -391,6 +409,7 @@ fn window_info(window: tauri::Window, state: tauri::State<'_, Shared>) -> Window
     match window.label() {
         SETTINGS_LABEL => WindowInfo { kind: "settings", paths: vec![] },
         LIBRARY_LABEL => WindowInfo { kind: "library", paths: vec![] },
+        ENZYMES_LABEL => WindowInfo { kind: "enzymes", paths: vec![] },
         _ => {
             // The page listens for "open-files" before asking, so later files go to it directly.
             let mut st = state.lock().unwrap();
@@ -498,6 +517,12 @@ async fn open_library(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn open_enzyme_library(app: AppHandle) -> Result<(), String> {
+    show_enzyme_library_window(&app);
+    Ok(())
+}
+
+#[tauri::command]
 fn cancel_quit(app: AppHandle, state: tauri::State<'_, Shared>) {
     state.lock().unwrap().quitting = false;
     updates::quit_cancelled(&app);
@@ -587,6 +612,9 @@ pub fn run() {
             show_open_dialog,
             open_settings,
             open_library,
+            open_enzyme_library,
+            enzyme_library::load_enzyme_library,
+            enzyme_library::save_enzyme_library,
             cancel_quit,
             read_file,
             write_file,
@@ -613,6 +641,7 @@ pub fn run() {
                     "open" => prompt_open(app),
                     "settings" => show_settings_window(app),
                     "library" => show_library_window(app),
+                    "enzyme-library" => show_enzyme_library_window(app),
                     "quit" => request_quit(app),
                     "close" => close_focused(app),
                     "website" | "github" => feedback::open_page(app, id),

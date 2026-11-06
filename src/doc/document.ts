@@ -57,6 +57,7 @@ import { regionsOf } from "../lib/regions.ts";
 import { dismissOffer, offerDismissed } from "../detectOffer.ts";
 import { looksUnannotated } from "../lib/detect.ts";
 import { enzymeOf } from "../lib/enzymePick.ts";
+import { enzymeLibrary } from "../enzymeLibrary.ts";
 import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
@@ -713,6 +714,15 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     readsView.refresh();
     if (tab === "info") infoPanel.render();
   });
+  const offEnzymeLibrary = enzymeLibrary.onChange(() => {
+    if (ctx.options.enzymeSet === "lab") {
+      // A removed enzyme may be selected. Notes and locations leave a valid pick alone.
+      const { focus, enzymes } = store.selection;
+      if (focus?.kind === "cutsite" && (!enzymeLibrary.names.includes(enzymeOf(focus.id)) || enzymes?.some(e => !enzymeLibrary.names.includes(e))))
+        store.select({ range: store.selection.range }, "enzyme-library");
+      opts.set({});
+    }
+  });
 
   // ---------- keyboard ----------
   const inField = () => {
@@ -968,6 +978,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     },
     dispose: () => {
       offSettings();
+      offEnzymeLibrary();
       inspector.dispose();
       outline.dispose();
     },

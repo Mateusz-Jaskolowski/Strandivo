@@ -11,6 +11,7 @@ import { bindingTm, changesText } from "../lib/primers.ts";
 import { alignPrimer, type PrimerAlignment } from "../lib/primerAlign.ts";
 import { fmt } from "../ui/format.ts";
 import { type SeqData, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
+import { enzymeLibrary } from "../enzymeLibrary.ts";
 
 // Primers are replaced, never changed, so each keeps its alignment until the sequence changes.
 const alignCache = new WeakMap<SeqPrimer, { sequence: string; a: PrimerAlignment }>();
@@ -116,14 +117,16 @@ export function featureStyles(d: SeqData): Map<string, FeatureStyle> {
 
 // Every site of every listed enzyme, updated around each edit rather than searched again.
 let hitCache: { sequence: string; circular: boolean; hits: SiteHit[] } | null = null;
-let cutCache: { hits: SiteHit[]; set: EnzymeSet; sites: CutSite[] } | null = null;
+let cutCache: { hits: SiteHit[]; set: EnzymeSet; lab: readonly string[]; sites: CutSite[] } | null = null;
 
 export function cutSites(d: SeqData, set: EnzymeSet): CutSite[] {
   if (!hitCache || hitCache.sequence !== d.sequence || hitCache.circular !== d.circular) {
     const hits = hitCache ? rescanSites(hitCache, d.sequence, d.circular) : scanSites(d.sequence, d.circular);
     hitCache = { sequence: d.sequence, circular: d.circular, hits };
   }
-  if (!cutCache || cutCache.hits !== hitCache.hits || cutCache.set !== set) cutCache = { hits: hitCache.hits, set, sites: selectSites(hitCache.hits, set) };
+  const lab = enzymeLibrary.names;
+  if (!cutCache || cutCache.hits !== hitCache.hits || cutCache.set !== set || (set === "lab" && cutCache.lab !== lab))
+    cutCache = { hits: hitCache.hits, set, lab, sites: selectSites(hitCache.hits, set, lab) };
   return cutCache.sites;
 }
 

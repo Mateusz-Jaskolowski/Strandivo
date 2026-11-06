@@ -5,12 +5,13 @@
 
 import { aliasedEnzymesByName, getCutsitesFromSequence, type RestrictionEnzyme } from "@teselagen/sequence-utils";
 
-export type EnzymeSet = "unique6" | "unique" | "unique2" | "none";
+export type EnzymeSet = "unique6" | "unique" | "unique2" | "lab" | "none";
 
 export const ENZYME_SETS: { id: EnzymeSet; label: string }[] = [
   { id: "unique6", label: "Unique 6+ cutters" },
   { id: "unique", label: "Unique cutters" },
   { id: "unique2", label: "Unique and dual cutters" },
+  { id: "lab", label: "Lab enzymes" },
   { id: "none", label: "None" }
 ];
 
@@ -176,16 +177,17 @@ function updateAround(a: string, b: string, p: number, s: number, hits: SiteHit[
 }
 
 /** The sites shown for an enzyme set, with how often each enzyme cuts, sorted by position. */
-export function selectSites(hits: SiteHit[], set: EnzymeSet): CutSite[] {
+export function selectSites(hits: SiteHit[], set: EnzymeSet, labEnzymes: readonly string[] = []): CutSite[] {
   if (set === "none") return [];
-  const maxCuts = set === "unique2" ? 2 : 1;
+  const lab = set === "lab" ? new Set(labEnzymes) : null;
+  const maxCuts = lab ? Infinity : set === "unique2" ? 2 : 1;
   const minSpecificity = set === "unique6" ? 6 : 0;
   const counts = new Map<string, number>();
   for (const h of hits) counts.set(h.enzyme, (counts.get(h.enzyme) ?? 0) + 1);
   const out: CutSite[] = [];
   for (const h of hits) {
     const cuts = counts.get(h.enzyme)!;
-    if (cuts > maxCuts || (SPECIFICITY.get(h.enzyme) ?? 0) < minSpecificity) continue;
+    if ((lab && !lab.has(h.enzyme)) || cuts > maxCuts || (SPECIFICITY.get(h.enzyme) ?? 0) < minSpecificity) continue;
     // Stable ids, so a selected site stays selected when the sites are recomputed.
     out.push({ id: `${h.enzyme}@${h.start}`, ...h, cuts });
   }
@@ -214,8 +216,8 @@ export function cutCounts(sequence: string, circular: boolean, names: string[]):
 }
 
 /** Cut sites of the enzymes in a set, sorted by position. */
-export function findCutSites(sequence: string, circular: boolean, set: EnzymeSet): CutSite[] {
-  return set === "none" ? [] : selectSites(scanSites(sequence, circular), set);
+export function findCutSites(sequence: string, circular: boolean, set: EnzymeSet, labEnzymes: readonly string[] = []): CutSite[] {
+  return set === "none" ? [] : selectSites(scanSites(sequence, circular), set, labEnzymes);
 }
 
 /** "5′ overhang AATT", "blunt", … */

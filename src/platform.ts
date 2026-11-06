@@ -28,7 +28,7 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
 }
 
 export interface WindowInfo {
-  kind: "main" | "settings" | "library";
+  kind: "main" | "settings" | "library" | "enzymes";
   /** For the main window: files to open as tabs (null = a new sequence). */
   paths: (string | null)[];
 }
@@ -37,13 +37,14 @@ type OpenHandler = (paths: (string | null)[]) => void;
 let openHandler: OpenHandler | null = null;
 let openQueue: (string | null)[] = [];
 
-// In a plain browser (development and UI tests): `?settings` and `?library` show those
+// In a plain browser (development and UI tests): `?settings`, `?library` and `?enzymes` show those
 // windows on their own (the main window shows them over its tabs), `?open=<url>` opens that URL in a tab of the main window, `?new` a new sequence.
 export async function windowInfo(): Promise<WindowInfo> {
   if (!isDesktop) {
     const params = new URLSearchParams(location.search);
     if (params.get("settings") !== null) return { kind: "settings", paths: [] };
     if (params.get("library") !== null) return { kind: "library", paths: [] };
+    if (params.get("enzymes") !== null) return { kind: "enzymes", paths: [] };
     return { kind: "main", paths: [...params.getAll("open"), ...(params.get("new") !== null ? [null] : [])] };
   }
   const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
@@ -333,12 +334,12 @@ export async function copyText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
-export type PageWindow = "settings" | "library";
+export type PageWindow = "settings" | "library" | "enzymes";
 let showInPage: ((w: PageWindow) => void) | null = null;
 
 /**
  * In a browser, pages can't reliably open windows (blocked, or loaded over the app), so the
- * main window shows Settings and the primer library itself.
+ * main window shows Settings and the library windows itself.
  */
 export function showWindowsInPage(show: (w: PageWindow) => void) {
   showInPage = show;
@@ -361,6 +362,40 @@ export async function openLibrary(): Promise<void> {
     return;
   }
   return invoke<void>("open_library");
+}
+
+/** The lab's enzyme stock, shared by all documents. */
+export async function openEnzymeLibrary(): Promise<void> {
+  if (!isDesktop) {
+    if (showInPage) showInPage("enzymes");
+    else window.open(`${location.pathname}?enzymes`, "_blank");
+    return;
+  }
+  return invoke<void>("open_enzyme_library");
+}
+
+const ENZYME_LIBRARY_KEY = "strandivo.enzymeLibrary";
+const ENZYME_LIBRARY_EVENT = "enzyme-library-changed";
+
+export async function loadEnzymeLibrary(): Promise<string | null> {
+  return isDesktop ? invoke<string | null>("load_enzyme_library") : localStorage.getItem(ENZYME_LIBRARY_KEY);
+}
+
+export async function saveEnzymeLibrary(contents: string): Promise<void> {
+  if (isDesktop) return invoke<void>("save_enzyme_library", { contents });
+  localStorage.setItem(ENZYME_LIBRARY_KEY, contents);
+}
+
+export async function onEnzymeLibraryChanged(fn: () => void): Promise<() => void> {
+  const storage = (e: StorageEvent) => { if (e.key === ENZYME_LIBRARY_KEY || e.key === null) fn(); };
+  window.addEventListener("storage", storage);
+  window.addEventListener("focus", fn);
+  const off = isDesktop ? await import("@tauri-apps/api/event").then(({ listen }) => listen(ENZYME_LIBRARY_EVENT, fn)) : () => undefined;
+  return () => {
+    window.removeEventListener("storage", storage);
+    window.removeEventListener("focus", fn);
+    off();
+  };
 }
 
 export interface PickedFile {

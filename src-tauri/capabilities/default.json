@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main window, Settings and the primer library",
+  "description": "Permissions for the main window, Settings and the primer and enzyme libraries",
   "windows": ["*"],
   "permissions": [
     "core:default",

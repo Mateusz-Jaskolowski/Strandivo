@@ -17,6 +17,8 @@ import { ENZYME_SETS, type EnzymeSet } from "../lib/enzymes.ts";
 import { fmt } from "../ui/format.ts";
 import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
 import { dropGap, moveSection, SIDEBAR_SECTIONS, type SidebarSection } from "../lib/sidebar.ts";
+import { enzymeLibrary } from "../enzymeLibrary.ts";
+import { openEnzymeLibrary } from "../platform.ts";
 
 /** How far the pointer moves on a heading before it is a drag rather than a click. */
 const DRAG_START = 4;
@@ -303,9 +305,12 @@ export class Outline {
           "Enzymes",
           null,
           setSelect,
-          chips.length
-            ? h("div", { class: "sv-enzyme-chips" }, chips)
-            : empty(this.ctx.options.enzymeSet === "none" ? "Enzymes are hidden." : this.filter ? "No matching enzymes." : "None of these enzymes cut.")
+          h("div", null,
+            chips.length
+              ? h("div", { class: "sv-enzyme-chips" }, chips)
+              : empty(this.ctx.options.enzymeSet === "none" ? "Enzymes are hidden." : this.filter ? "No matching enzymes." : this.ctx.options.enzymeSet === "lab" && enzymeLibrary.error ? "The enzyme library couldn't be loaded." : this.ctx.options.enzymeSet === "lab" && !enzymeLibrary.all.length ? "Your lab enzyme library is empty." : "None of these enzymes cut."),
+            this.ctx.options.enzymeSet === "lab" ? h("button", { class: "sv-btn sv-btn-small sv-btn-quiet sv-lab-enzymes-edit", type: "button", onclick: () => void openEnzymeLibrary() }, "Edit lab enzymes…") : ""
+          )
         )
     };
     // Keep the keyboard on a heading that was just folded or moved.

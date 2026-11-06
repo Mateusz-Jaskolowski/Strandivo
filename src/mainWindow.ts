@@ -11,7 +11,7 @@ import "./mainWindow.css";
 
 import { h, icon, toast } from "./ui/dom.ts";
 import { iconSvg, type IconName } from "./ui/icons.ts";
-import { closeWindow, isDesktop, onCloseRequested, onFileDrop, onMenu, onOpenRequests, openLibrary, openSettings, readFile, setWindowTitle, showWindowsInPage, type PageWindow } from "./platform.ts";
+import { closeWindow, isDesktop, onCloseRequested, onFileDrop, onMenu, onOpenRequests, openEnzymeLibrary, openLibrary, openSettings, readFile, setWindowTitle, showWindowsInPage, type PageWindow } from "./platform.ts";
 import { basename, extension } from "./lib/files.ts";
 import { CHECK_EXTENSION, parseCheckFile, type ReadCheck } from "./lib/readCheck.ts";
 import type { SeqData } from "./lib/seqdata.ts";
@@ -60,6 +60,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     h("button", { type: "button", class: "sv-icon-btn", "aria-label": label, title: label, onclick }, iconSvg(name, 17));
   const appButtons: Record<PageWindow, HTMLElement> = {
     library: appButton("library", "Primer library", () => void openLibrary()),
+    enzymes: appButton("scissors", "Enzyme library", () => void openEnzymeLibrary()),
     settings: appButton("settings", "Settings", () => void openSettings())
   };
   const appBar = h(
@@ -67,7 +68,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     // "deep": empty space in the bar moves the window (buttons don't).
     { class: "sv-appbar", "data-tauri-drag-region": "deep" },
     tabList,
-    h("div", { class: "sv-appbar-tools" }, appButtons.library, appButtons.settings)
+    h("div", { class: "sv-appbar-tools" }, appButtons.library, appButtons.enzymes, appButtons.settings)
   );
   const content = h("div", { class: "sv-shell-body" });
   // The welcome window opens over everything on first launch; the update check waits for it.
@@ -77,11 +78,12 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   const dropOverlay = h("div", { class: "ps-drop-overlay" }, h("div", null, icon("reads"), dropText));
   root.replaceChildren(h("div", { class: "sv-shell" }, appBar, updates.el, content, dropOverlay));
 
-  // ---------- Settings and the primer library over the tabs (browser only) ----------
+  // ---------- Settings and libraries over the tabs (browser only) ----------
   // The desktop app opens them as windows. Home, a tab, the same button, × or Esc close them.
-  let panel: { kind: PageWindow; el: HTMLElement } | null = null;
+  let panel: { kind: PageWindow; el: HTMLElement; dispose?: () => void } | null = null;
   function closePanel() {
     if (!panel) return;
+    panel.dispose?.();
     panel.el.remove();
     appButtons[panel.kind].classList.remove("sv-on");
     panel = null;
@@ -93,15 +95,23 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     const body = h("div", { class: `sv-panel-body sv-panel-${kind}` });
     const el = h(
       "div",
-      { class: "sv-panel", role: "dialog", "aria-label": kind === "settings" ? "Settings" : "Primer library" },
+      { class: "sv-panel", role: "dialog", "aria-label": { settings: "Settings", library: "Primer library", enzymes: "Enzyme library" }[kind] },
       h("button", { type: "button", class: "sv-icon-btn sv-panel-close", "aria-label": "Close", title: "Close (Esc)", onclick: closePanel }, iconSvg("x", 16)),
       body
     );
     panel = { kind, el };
     appButtons[kind].classList.add("sv-on");
     content.appendChild(el);
-    if (kind === "settings") (await import("./settingsWindow.ts")).mountSettings(body, true);
-    else (await import("./libraryWindow.ts")).mountLibrary(body, true);
+    if (kind === "settings") {
+      const { mountSettings } = await import("./settingsWindow.ts");
+      if (panel?.el === el) mountSettings(body, true);
+    } else if (kind === "enzymes") {
+      const { mountEnzymeLibrary } = await import("./enzymeLibraryWindow.ts");
+      if (panel?.el === el) panel.dispose = mountEnzymeLibrary(body, true);
+    } else {
+      const { mountLibrary } = await import("./libraryWindow.ts");
+      if (panel?.el === el) mountLibrary(body, true);
+    }
   }
   showWindowsInPage(kind => void showPanel(kind));
 

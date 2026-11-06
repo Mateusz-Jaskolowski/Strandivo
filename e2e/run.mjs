@@ -598,6 +598,43 @@ async function main() {
     check("Esc drops the picked enzymes", await s.waitFor("!window.__strandivo.store.selection.enzymes && !window.__strandivo.store.selection.focus", 3000));
     await s.exec(`const set = document.querySelector('select[aria-label="Which enzymes to show"]'); set.value = 'unique6'; set.dispatchEvent(new Event('change', { bubbles: true }));`);
 
+    // --- lab enzyme stock: the shell's saved list and live updates across windows ---
+    const stockBefore = await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('load_enzyme_library').then(done, e => done(String(e)));");
+    const beforeEnzymes = await s.handles();
+    await s.click("button[aria-label='Enzyme library']");
+    await sleep(1500);
+    const enzymeHandle = (await s.handles()).find(h => !beforeEnzymes.includes(h));
+    if (enzymeHandle) {
+      await s.switchTo(enzymeHandle);
+      check("The enzyme library opens in its own window", await s.waitFor("document.querySelector('.sv-libwin h1')?.textContent.includes('Enzyme library')", 10000));
+      await s.click("//button[normalize-space(.)='Add enzyme…']", "xpath");
+      for (const enzyme of ["EcoRI", "PvuII"]) {
+        await s.exec(`document.querySelector('[aria-label="New stock enzyme"]').value = arguments[0];
+          document.querySelector('[aria-label="New stock product"]').value = 'E2E ' + arguments[0];
+          document.querySelector('[aria-label="New stock freezer location"]').value = 'Freezer 2, box A';
+          document.querySelector('[aria-label="New stock notes"]').value = 'Spare tube';`, enzyme);
+        await s.click("//button[normalize-space(.)='Add enzyme']", "xpath");
+        check(`The stock record for ${enzyme} is saved`, await s.waitFor(`document.querySelector('input[aria-label="Product of E2E ${enzyme}"]')`, 5000));
+      }
+      await s.click("//button[normalize-space(.)='Done']", "xpath");
+      await s.exec(`const notes = document.querySelector('input[aria-label="Notes of E2E EcoRI"]'); notes.focus(); notes.value = 'Updated spare tube'; notes.blur();`);
+      await s.waitFor("document.querySelector('[role=status]')?.textContent === 'Saved locally'", 5000);
+      const stockSaved = await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('load_enzyme_library').then(raw => done(JSON.parse(raw)), e => done(String(e)));");
+      check("Product, freezer location and edited notes are kept in the JSON file", stockSaved?.version === 1 && ["EcoRI", "PvuII"].every(enzyme => stockSaved.entries.some(e => e.enzyme === enzyme && e.product === `E2E ${enzyme}` && e.location === "Freezer 2, box A" && e.notes === (enzyme === "EcoRI" ? "Updated spare tube" : "Spare tube"))), JSON.stringify(stockSaved));
+      await s.shot("10c-enzyme-library");
+      await s.closeWindow();
+      await s.switchTo(mainHandle);
+      await s.exec(`const set = document.querySelector('select[aria-label="Which map enzymes to show"]'); set.value = 'lab'; set.dispatchEvent(new Event('change', { bubbles: true }));`);
+      check("Lab enzymes updates the open map, including every PvuII site", await s.waitFor("document.querySelectorAll('.sv-map-svgel text[data-id^=\"PvuII@\"]').length === 2 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"EcoRI@\"]').length === 1", 5000));
+      check("The outline follows the map's lab enzyme choice", await s.exec("return document.querySelector('select[aria-label=\"Which enzymes to show\"]').value === 'lab'"));
+      await s.shot("10d-lab-enzymes");
+    } else {
+      check("Enzyme library window opens (not visible to WebDriver; skipped)", true);
+    }
+    // Restore the starting stock and view so later checks stay independent.
+    await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('save_enzyme_library', { contents: arguments[0] }).then(() => done(true), e => done(String(e)));", stockBefore || JSON.stringify({ version: 1, entries: [] }));
+    await s.exec(`const set = document.querySelector('select[aria-label="Which map enzymes to show"]'); set.value = 'unique6'; set.dispatchEvent(new Event('change', { bubbles: true }));`);
+
     // --- the offer: shown for a thin file, not for an annotated one ---
     check("An annotated file is not asked about", !(await s.exec("return document.querySelector('.sv-offer') && !document.querySelector('.sv-offer').hidden")));
     await s.exec(`window.__strandivo.open([${JSON.stringify(data("sanger", "sage-sample-reference.fa"))}])`);

@@ -7,6 +7,48 @@ won't show notes that name anything like example.com or pUC19.gb). Everything af
 first blank line is the full notes, for the GitHub release and strandivo.com/changes.
 `npm run version` fails a release without a section here.
 
+Between releases, a pull request that changes something users notice adds a bullet under
+Unreleased, written for them like the bullets below. The app, the website and the release
+script read only sections headed by a version, so they skip it. To release, write the
+short notes above its bullets and run `npm run release <version>`, which renames it to
+the version and starts a new, empty Unreleased.
+
+## Unreleased
+
+Keep a list of your lab's enzymes and where they are, and show only those on the map. Map
+labels now tell features, primers and enzymes apart, and you can pick enzymes on the map to
+digest with. Send feedback or report a bug from the Help menu, and share anonymous usage
+statistics if you choose to.
+
+- **Enzyme library**: open Enzyme Library from the app bar or the Window menu to keep the
+  enzymes your lab has, with each product's name, freezer location and notes. Choose Lab
+  enzymes on the map or in the outline to show every site of the enzymes you stock and no
+  others. Export and Import back the list up or share it, and Import also reads a
+  spreadsheet saved as tab-separated or CSV text.
+- **Map labels** say what they name: a feature's name sits on a tint of its colour, a
+  primer's follows an arrow pointing its way, and an enzyme's is small grey type, darker
+  when it cuts once. Enzymes that cut once keep their labels when space runs short, and
+  every site's position is in its tooltip.
+- **An enzyme's other sites**: selecting a cut site marks the enzyme's other sites on the
+  map, in the Sequence tab and in the outline, and the inspector links to each one.
+- **Pick enzymes to digest**: ⌘-click (Ctrl-click on Windows and Linux) cut sites to pick
+  their enzymes. Digest with… in the inspector, or on a right-click on any of their sites,
+  opens the Digest dialog with them ticked. Esc or an ordinary click drops them.
+- **Send Feedback… and Report a Bug…** in the Help menu: everything sent is shown first,
+  and recent errors (without file paths) and the open file go only if you tick them. Your
+  email address, if you give one, and an attached file go to the maintainer alone, never
+  into the public report. If a report can't be sent, you can copy it or email it instead.
+- The **Help menu** also has Strandivo Website and Strandivo on GitHub, and on Windows and
+  Linux Welcome, Check for Updates and About.
+- **Usage statistics** stay off unless you turn them on. The welcome window asks once (if
+  you have seen it before, it shows only this question), and Settings → Updates and privacy
+  has the same switch, with what is sent. They are fixed words and rounded counts, never
+  file names, sequences or anything you typed.
+- Update checks are now counted by day, version and system, to know how many copies are in
+  use; nothing else about a check is kept.
+- [strandivo.com](https://strandivo.com) has Download, What's new and Privacy pages; the
+  Privacy page lists everything the app sends.
+
 ## 0.2.1
 
 A small update with no new features. It is the first to arrive through Strandivo's own

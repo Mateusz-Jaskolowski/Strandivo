@@ -40,8 +40,11 @@ it to `e2e/run.mjs`. If you only change docs, Markdown files or the website (`si
   with a short body saying what changed and why. Make one logical change per commit.
 - Commit under your own name. Signed commits are welcome but not required.
 - Don't rewrite commits that are already pushed to a shared branch.
-- You don't need to edit `CHANGELOG.md`: a maintainer writes each release's notes when
-  making the release. Say in the pull request what a user would notice, and it helps.
+- If your change is something users would notice, add a bullet for it under
+  `## Unreleased` in `CHANGELOG.md`: one or two plain sentences saying what they can do
+  now, like the bullets of past releases. Refactors, tests, CI and docs need none. Each
+  release's notes are made from that section. If you're unsure what to write, say in the
+  pull request what a user would notice, and the maintainer will add it.
 - If a coding agent helped, that's fine. You are still the author and responsible for the
   change.
 

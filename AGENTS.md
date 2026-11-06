@@ -396,6 +396,11 @@ it can (lists of files or features). CI checks that every path in backticks here
   design tokens in `src/styles.css`.
 - **Commits**: Conventional Commits (`feat(scope): summary` and a short body saying what
   and why), one logical change each, under your own name. Never rewrite pushed commits.
+- **What's new**: a pull request that changes something users notice adds a bullet under
+  `## Unreleased` in `CHANGELOG.md`, in the same plain words as the bullets of past
+  releases: what they can do now, not how the code does it. Fixes users would notice count;
+  refactors, tests, CI and docs don't. The section is what a release's notes are made
+  from, so a change left out of it is a change nobody hears about.
 - **Licence headers**: every `.ts`, `.mjs`, `.css`, `.rs` and `.sh` file starts with the
   copyright and `SPDX-License-Identifier: GPL-3.0-or-later` lines (`CONTRIBUTING.md`),
   checked by `.github/scripts/check-headers.sh`. A new file copies them from any other.

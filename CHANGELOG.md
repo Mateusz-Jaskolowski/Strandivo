@@ -15,6 +15,8 @@ the version and starts a new, empty Unreleased.
 
 ## Unreleased
 
+## 0.3.0
+
 Keep a list of your lab's enzymes and where they are, and show only those on the map. Map
 labels now tell features, primers and enzymes apart, and you can pick enzymes on the map to
 digest with. Send feedback or report a bug from the Help menu, and share anonymous usage

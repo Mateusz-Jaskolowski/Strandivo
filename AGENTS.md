@@ -335,6 +335,11 @@ it can (lists of files or features). CI checks that every path in backticks here
   digest uses every site. Every site of a picked enzyme, or of the selected site's enzyme,
   is marked, so a dual cutter shows where else it cuts. A right-click on one of their sites
   keeps the pick and digests with them all.
+- **The map's sliders**: the rotation is the file's own, kept by path in local storage
+  (`src/mapRotations.ts`), since a plasmid's best angle depends on its contents; an
+  unsaved file's is kept once it is saved. Label size is a setting, the same for every
+  file. Zoom is kept by nothing: every map opens fitted to the window, as a zoom without
+  the place zoomed into would open a file on an arbitrary part of its map.
 - **Map labels** say what they name by their colour, font and leader: a feature's name on a
   tint of its colour (solid leader), a primer's after an arrow pointing its way (dashed), an
   enzyme's in small grey monospace with no mark (dotted), darker when it cuts once. Marks on

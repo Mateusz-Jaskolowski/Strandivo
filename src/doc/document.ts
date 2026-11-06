@@ -28,6 +28,7 @@ import { track, trackOnce } from "../usage.ts";
 import { basename, dirname, extension, formatForPath, isTraceFile, joinPath, stripExtension, suggestedSaveName, TEXT_READ_EXTENSIONS, type SaveFormat } from "../lib/files.ts";
 import { CHECK_EXTENSION, checkFileText, type ReadCheck } from "../lib/readCheck.ts";
 import { rememberedReads, rememberReads } from "../readChecks.ts";
+import { rememberedRotation, rememberRotation } from "../mapRotations.ts";
 import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
 import { basesIn, newId, rangeLength, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData, type SeqPrimer } from "../lib/seqdata.ts";
 import { PRIMER_BASES } from "../lib/contextMenu.ts";
@@ -186,7 +187,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   const store = new DocStore(loaded.data);
 
   // ---------- shared context ----------
-  const opts = optionsStore(loadViewOptions(settings), o => {
+  // The map's rotation is the file's own (label size is a setting, and every map opens unzoomed).
+  const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0 }, o => {
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSet: o.enzymeSet, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap }));
     } catch {
@@ -214,6 +216,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     setOptions: patch => {
       opts.set(patch);
       if (patch.labelSize !== undefined) void saveSettings({ ...loadSettings(), labelSize: patch.labelSize });
+      if (patch.mapRotation !== undefined && path) rememberRotation(path, patch.mapRotation);
     },
     onOptions: fn => opts.on(fn),
     showTab: t => setTab(t),
@@ -623,6 +626,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     infoDirty = false;
     if (target !== path) {
       path = target;
+      rememberRotation(target, opts.get().mapRotation);
       format = formatName(target);
       addRecentFile(target);
     }

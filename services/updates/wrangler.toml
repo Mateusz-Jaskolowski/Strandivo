@@ -9,3 +9,11 @@ routes = [{ pattern = "updates.strandivo.com", custom_domain = true }]
 # No request logs: the privacy page promises that update checks keep nothing but counts.
 [observability]
 enabled = false
+
+# The count of update checks per day, version, OS and processor (schema.sql); nothing else.
+# Created once with `npx wrangler@4 d1 create strandivo-update-checks`, which prints the id.
+# Until it is bound, checks are answered and not counted.
+# [[d1_databases]]
+# binding = "CHECKS"
+# database_name = "strandivo-update-checks"
+# database_id = "…"

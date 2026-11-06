@@ -15,6 +15,12 @@ the version and starts a new, empty Unreleased.
 
 ## Unreleased
 
+- **Crash reports**: if Strandivo quits unexpectedly, it notes why on your computer, and
+  the next time it opens a strip under the app bar offers to report it. Report it… opens
+  Report a Bug with what it noted, shown in full and with file paths removed; nothing is
+  sent until you click Send. Recent errors are now kept for a week, so a report after a
+  crash can still include them if you tick them.
+
 ## 0.3.1
 
 Fixes a crash in 0.3.0: with usage statistics turned on, Strandivo could quit on its own

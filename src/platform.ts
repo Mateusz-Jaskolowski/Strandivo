@@ -262,6 +262,22 @@ export async function takeUpdateFailure(): Promise<string | null> {
   return invoke<string | null>("take_update_failure").catch(() => null);
 }
 
+/**
+ * The file the shell's panic hook wrote if the app crashed last time
+ * (src-tauri/src/crash.rs), taken once: the shell deletes it as it hands it over. e2e
+ * puts one in `window.__strandivoCrash`, also taken once.
+ */
+export async function takeCrashReport(): Promise<string | null> {
+  const w = window as unknown as { __strandivoCrash?: string | null };
+  if (w.__strandivoCrash !== undefined) {
+    const text = w.__strandivoCrash;
+    delete w.__strandivoCrash;
+    return text;
+  }
+  if (!isDesktop) return null;
+  return invoke<string | null>("take_crash_report").catch(() => null);
+}
+
 // ---------- feedback (services/feedback/) ----------
 
 /** The service that files a report as a GitHub issue; `connect-src` names it. */

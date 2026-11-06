@@ -149,14 +149,27 @@ it can (lists of files or features). CI checks that every path in backticks here
   secret), and what the reporter wrote is fenced as plain text, so it can't mention
   anyone or link anywhere. What a report may hold is `src/lib/feedback.ts`, which the
   Worker bundles too, so the two can't disagree; change it and deploy the Worker in the
-  same PR. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`,
-  in memory only: uncaught errors, rejected promises and failed shell commands) and the
+  same PR. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`:
+  uncaught errors, rejected promises and failed shell commands of the past week) and the
   open file are off until ticked, and errors lose their file paths (`scrubPaths`, which
   takes a path under a home or volume folder to the end of its line, as folder names have
   spaces). The shell opens only addresses it builds: an issue from its number, an email
   to feedback@strandivo.com with the page's text as subject and body. e2e fakes the
   service with `window.__strandivoFeedback`. On a Mac, Welcome and Check for Updates stay
   in the app menu, where 0.2.0's notes put them; the Help menu has the rest.
+- **Crash reports** (`src-tauri/src/crash.rs`, `src/crash.ts`): release builds abort on a
+  panic and have no symbols, so the panic hook, set first in `run()`, writes the message,
+  `file:line:column`, thread, version, system and time to crash.json in the app's data
+  folder, from one buffer on the stack, then lets the abort happen. It keeps the location
+  short (a dependency from its crate's folder) but leaves the message as it is: the page
+  removes paths (`crashForReport` in `src/lib/feedback.ts`), and shows the crash exactly as
+  it is sent. The main window takes the file once (`take_crash_report` deletes it) and
+  offers it in a strip, never a dialog; Report it… opens Report a Bug with the crash ticked,
+  and nothing goes without Send. A report's `crash` is optional, as copies before 0.4.0
+  send none. With statistics on, a crash counts as `error` of kind `crash` on that next
+  launch. Recent errors (`src/feedback.ts`) are kept in local storage for a week, shared by
+  all windows, so a report after a crash still has them; still off until ticked. e2e hands
+  a crash file over with `window.__strandivoCrash`.
 - **Usage statistics** are off until the user turns them on (the welcome window or
   Settings), for everyone, as the EU's rules want. Every event and what it may carry is
   listed in `src/lib/usage.ts`, each property a list of words or a count put in a bucket,
@@ -409,7 +422,8 @@ it can (lists of files or features). CI checks that every path in backticks here
 
 - `npm test` (unit tests in `src/lib/`), `npm run typecheck`, `npm run build`.
 - `cd crates/seqcore && cargo test --release` for the alignment core, and the same in
-  `crates/seqcore-json/` for the JSON it answers with.
+  `crates/seqcore-json/` for the JSON it answers with; `cargo test --lib` in `src-tauri/`
+  for the shell's own (the crash hook, usage events, app data).
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
   list and the regenerated catalog together.

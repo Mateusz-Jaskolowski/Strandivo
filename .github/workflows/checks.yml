@@ -124,6 +124,11 @@ jobs:
         working-directory: src-tauri
         run: ../.github/scripts/run.sh "Desktop shell lint" cargo clippy --all-targets
 
+      - name: Test desktop shell
+        if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
+        working-directory: src-tauri
+        run: ../.github/scripts/run.sh "Desktop shell tests" cargo test --lib
+
       - name: Install tauri-driver
         if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
         run: command -v tauri-driver || .github/scripts/run.sh "install tauri-driver" cargo install tauri-driver --locked

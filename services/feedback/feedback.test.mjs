@@ -94,6 +94,21 @@ test("only a sound report is filed", async () => {
   assert.equal(preflight.headers.get("access-control-allow-headers"), "content-type");
 });
 
+test("a crash goes in the issue fenced, and older copies' reports still pass", async () => {
+  const crash = { version: "0.4.0", at: "2026-11-06T09:30:00.000Z", thread: "tokio-runtime-worker", location: "reqwest-0.13.0/src/async_impl/client.rs:2311:5", message: "no TLS provider\n```\n@maintainer" };
+  const body = issueBody({ ...report, crash });
+  assert.match(body, /The app quit unexpectedly/);
+  assert.match(body, /\n````text\nStrandivo 0\.4\.0, 2026-11-06 09:30:00 UTC\nThread: tokio-runtime-worker\nAt: reqwest-0\.13\.0\/src\/async_impl\/client\.rs:2311:5\nno TLS provider\n```\n@maintainer\n````\n/);
+  const { calls, send } = service();
+  assert.equal((await send({ ...report, crash })).status, 200);
+  assert.equal((await send({ ...report, crash: null })).status, 200);
+  // A copy before 0.4.0 sends no crash field at all.
+  assert.equal((await send(report)).status, 200);
+  assert.equal((await send({ ...report, crash: { ...crash, extra: "x" } })).status, 400);
+  assert.equal((await send({ ...report, crash: { ...crash, location: "a\nb" } })).status, 400);
+  assert.equal(calls.github.length, 3);
+});
+
 test("the email's subject may be in any language", () => {
   const mail = maintainerEmail({ ...report, summary: "Mapa jest pusta – żółw" }, { number: 7, url: "u" }, "m@example.org", "B");
   const subject = /Subject: =\?UTF-8\?B\?([^?]+)\?=/.exec(mail)[1];

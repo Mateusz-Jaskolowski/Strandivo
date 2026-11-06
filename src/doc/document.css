@@ -3627,10 +3627,12 @@
 }
 
 /* A quiet strip offering to look for features: never a dialog, and asked once. */
-/* Detection's offer in a file, and the update strip under the app bar (src/updates.ts),
-   which keeps a class of its own so `.sv-offer` always means the file's. */
+/* Detection's offer in a file, and the update and crash strips under the app bar
+   (src/updates.ts, src/crash.ts), which keep classes of their own so `.sv-offer` always
+   means the file's. */
 .sv-offer,
-.sv-update {
+.sv-update,
+.sv-crash {
   display: flex;
   align-items: center;
   gap: 10px;

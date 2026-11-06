@@ -21,6 +21,9 @@ export const LIMITS = {
   errors: 20,
   error: 600,
   fileName: 120,
+  /** A crash's message; the shell keeps 2,000 bytes of it (src-tauri/src/crash.rs). */
+  crashMessage: 2000,
+  crashLocation: 200,
   /** A plasmid's GenBank file is tens of kilobytes; a whole genome isn't feedback. */
   fileBytes: 2_000_000
 };
@@ -33,6 +36,21 @@ export interface SystemInfo {
   osVersion: string;
   /** "aarch64" or "x86_64". */
   arch: string;
+}
+
+/**
+ * Why the app quit last time, as the shell's panic hook wrote it down: Strandivo's
+ * version then, when, which thread, where in the source and the panic's message, file
+ * paths removed. Only in a report the user opened from "Strandivo quit unexpectedly".
+ */
+export interface CrashReport {
+  version: string;
+  /** ISO 8601, UTC. */
+  at: string;
+  thread: string;
+  /** file:line:column in Strandivo's or a library's source, never the user's files. */
+  location: string;
+  message: string;
 }
 
 export interface FeedbackReport {
@@ -48,6 +66,11 @@ export interface FeedbackReport {
   errors: string[] | null;
   /** The open file as GenBank, for the maintainer alone; null unless the box was ticked. */
   file: { name: string; contents: string } | null;
+  /**
+   * The crash the report is about; null unless the user reported one. Copies before
+   * 0.4.0 send no such field, which the service takes as null.
+   */
+  crash?: CrashReport | null;
 }
 
 const OS_NAMES: Record<string, string> = { macos: "macOS", windows: "Windows", linux: "Linux" };
@@ -84,6 +107,19 @@ export const isEmail = (s: string) => s.length <= LIMITS.email && /^[^\s@<>()",;
 /** Plain one-line text: no control characters, which a title or header mustn't carry. */
 const oneLine = (s: string) => s.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+/** Lines kept, other control characters gone: for a crash's message. */
+const lines = (s: string) => s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]+/g, " ").trim();
+
+/** A crash as a report carries it: one-line fields, file paths removed, within limits. */
+export function crashForReport(c: CrashReport): CrashReport {
+  return {
+    version: cut(oneLine(c.version), 40),
+    at: c.at,
+    thread: cut(oneLine(c.thread), 60),
+    location: cut(oneLine(scrubPaths(c.location)), LIMITS.crashLocation),
+    message: cut(lines(scrubPaths(c.message)), LIMITS.crashMessage)
+  };
+}
 
 /** The report the dialog sends, from what it shows: trimmed and within the limits. */
 export function buildReport(o: {
@@ -95,6 +131,7 @@ export function buildReport(o: {
   view: string;
   errors: string[] | null;
   file: { name: string; contents: string } | null;
+  crash?: CrashReport | null;
 }): FeedbackReport {
   const email = o.email.trim();
   return {
@@ -105,11 +142,27 @@ export function buildReport(o: {
     app: o.app,
     view: oneLine(o.view),
     errors: o.errors ? o.errors.slice(-LIMITS.errors).map(e => cut(oneLine(scrubPaths(e)), LIMITS.error)) : null,
-    file: o.file ? { name: cut(oneLine(o.file.name), LIMITS.fileName), contents: o.file.contents } : null
+    file: o.file ? { name: cut(oneLine(o.file.name), LIMITS.fileName), contents: o.file.contents } : null,
+    crash: o.crash ? crashForReport(o.crash) : null
   };
 }
 
 const SHORT = /^[\w .()+,-]{1,40}$/;
+const ISO_TIME = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{3})?Z$/;
+
+function crashProblem(c: unknown): string | null {
+  const bad = "The crash's details aren't right.";
+  if (!c || typeof c !== "object") return bad;
+  const o = c as Record<string, unknown>;
+  const keys = ["version", "at", "thread", "location", "message"];
+  if (Object.keys(o).length !== keys.length || !keys.every(k => typeof o[k] === "string")) return bad;
+  const s = o as unknown as CrashReport;
+  if (!SHORT.test(s.version) || !ISO_TIME.test(s.at)) return bad;
+  const plain = (v: string, max: number) => v.length > 0 && v.length <= max && !/[\u0000-\u001f\u007f]/.test(v);
+  if (!plain(s.thread, 60) || !plain(s.location, LIMITS.crashLocation)) return bad;
+  if (!s.message.trim() || s.message.length > LIMITS.crashMessage || /[\u0000-\u0008\u000b-\u001f\u007f]/.test(s.message)) return "The crash's message is too long.";
+  return null;
+}
 
 /** Why a report can't be sent as it is, or null; the service makes the same check. */
 export function reportProblem(r: unknown): string | null {
@@ -132,9 +185,18 @@ export function reportProblem(r: unknown): string | null {
     if (!f || typeof f !== "object" || !str(f.name) || !str(f.contents) || !(f.name as string).trim() || (f.name as string).length > LIMITS.fileName || /[\u0000-\u001f/\\]/.test(f.name as string)) return "The attached file has no name.";
     if (new TextEncoder().encode(f.contents as string).length > LIMITS.fileBytes) return `The open file is over ${LIMITS.fileBytes / 1_000_000} MB, too big to attach.`;
   }
-  const known = new Set(["kind", "summary", "details", "email", "app", "view", "errors", "file"]);
+  if (o.crash !== undefined && o.crash !== null) {
+    const problem = crashProblem(o.crash);
+    if (problem) return problem;
+  }
+  const known = new Set(["kind", "summary", "details", "email", "app", "view", "errors", "file", "crash"]);
   if (Object.keys(o).some(k => !known.has(k))) return "The report has something it shouldn't.";
   return null;
+}
+
+/** A crash as text: the dialog shows it so, and the issue and an email carry it so. */
+export function crashLines(c: CrashReport): string[] {
+  return [`Strandivo ${c.version}, ${c.at.slice(0, 10)} ${c.at.slice(11, 19)} UTC`, `Thread: ${c.thread}`, `At: ${c.location}`, c.message];
 }
 
 /**
@@ -149,6 +211,7 @@ export function reportText(r: FeedbackReport): string {
     "",
     describeSystem(r.app),
     `Open view: ${r.view}`,
+    ...(r.crash ? ["", "It quit unexpectedly:", ...crashLines(r.crash)] : []),
     ...(r.errors?.length ? ["", "Recent errors:", ...r.errors] : [])
   ]
     .filter((l, i) => i !== 1 || l)

@@ -128,9 +128,10 @@ it can (lists of files or features). CI checks that every path in backticks here
   window has closed. A cancelled quit keeps the download, and an ordinary quit doesn't
   install it. So the updater and opener plugins' own commands stay out of the capability,
   and the release page is opened from the version the shell found, not an address from
-  the page. Development builds and Linux packages (.deb, .rpm) don't update themselves:
-  latest.json's Linux file is the AppImage, which the plugin would otherwise install over a
-  package. A check says nothing unless it finds something or the user asked; an offer is a
+  the page. Development builds don't update themselves. On Linux the AppImage replaces
+  itself and a .deb copy installs the release's .deb (`linux-x86_64-deb` in latest.json,
+  which the plugin looks for before `linux-x86_64`) with `pkexec`, so the system asks for a
+  password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
   strip under the app bar, never a dialog. e2e fakes the shell with
   `window.__strandivoUpdate`, so it never reaches the server.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):

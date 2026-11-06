@@ -51,17 +51,18 @@ pub struct Progress {
     total: Option<u64>,
 }
 
-/// Why this copy can't update itself, if it can't. A development build isn't a bundle,
-/// and a .deb or .rpm belongs to the system's package manager: latest.json's Linux file is
-/// the AppImage, which the updater would otherwise try to install over the package.
+/// Why this copy can't update itself, if it can't. A development build isn't a bundle.
+/// A .deb is updated with the release's .deb (`linux-x86_64-deb` in latest.json), which the
+/// plugin installs with `pkexec dpkg -i`, so the system asks for the user's password. No
+/// .rpm is built, so an .rpm someone made themselves would otherwise get the AppImage.
 fn unsupported() -> Option<&'static str> {
     if cfg!(debug_assertions) {
         return Some("Development builds don't update themselves.");
     }
     match tauri::utils::platform::bundle_type() {
-        Some(BundleType::App | BundleType::Nsis | BundleType::AppImage) => None,
-        Some(BundleType::Deb | BundleType::Rpm) => {
-            Some("Strandivo was installed as a package, so it can't update itself. Download the new version from strandivo.com.")
+        Some(BundleType::App | BundleType::Nsis | BundleType::AppImage | BundleType::Deb) => None,
+        Some(BundleType::Rpm) => {
+            Some("Strandivo was installed as an .rpm package, so it can't update itself. Download the new version from strandivo.com.")
         }
         _ => Some("This copy of Strandivo can't update itself. Download the new version from strandivo.com."),
     }

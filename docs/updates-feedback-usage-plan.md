@@ -114,7 +114,8 @@ Cloudflare Workers; `strandivo.com` itself is the website (part 6). The domain a
   Microsoft's code signing.
 - `bundle.createUpdaterArtifacts: true`, so each build also makes the update files and
   their signatures: `.app.tar.gz` on a Mac, the NSIS `-setup.exe` on Windows, the
-  AppImage on Linux. A `.deb` can't update itself; it stays for people who want one.
+  AppImage and the `.deb` on Linux (the `.deb` installs with the system's password prompt;
+  part 2).
 - **`latest.json`** lists each platform's file, signature and version, and the release
   notes. Either switch the build step to `tauri-apps/tauri-action`, which writes it, or
   have the release job build it from the `.sig` files, whichever is less code.
@@ -146,8 +147,10 @@ Built differently from the plan below in four ways:
 - **Only Restart installs.** A cancelled quit keeps the download for the next Restart, but
   an ordinary quit doesn't install it: on Windows that would bring up an installer the
   user didn't ask for.
-- **Linux packages (.deb, .rpm) don't update themselves**, as the manifest's Linux file is
-  the AppImage. Checking for them says to download the new version.
+- **The .deb updates too**, not only the AppImage: the release's latest.json has a
+  `linux-x86_64-deb` entry, which a copy installed from the .deb finds first, and the
+  plugin installs it with `pkexec dpkg -i`, so the system asks for the user's password.
+  No .rpm is built, so an .rpm copy is told to download the new version.
 
 Part 3 must hold the first check back while the welcome window is open (`startUpdates` in
 `src/updates.ts` waits `FIRST_CHECK_MS`, not for the window).

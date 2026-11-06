@@ -253,6 +253,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .accelerator("CmdOrCtrl+,")
         .build(app)?;
     let check_updates = MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(app)?;
+    let welcome = MenuItemBuilder::with_id("welcome", "Welcome to Strandivo…").build(app)?;
 
     let about = AboutMetadata {
         name: Some(APP_NAME.to_string()),
@@ -333,6 +334,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         let app_menu = SubmenuBuilder::new(app, APP_NAME)
             .about(Some(about))
             .item(&check_updates)
+            .item(&welcome)
             .separator()
             .item(&settings)
             .separator()
@@ -347,6 +349,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         menu = menu.item(&app_menu);
     } else {
         let help = SubmenuBuilder::new(app, "Help")
+            .item(&welcome)
             .item(&check_updates)
             .separator()
             .about(Some(about))
@@ -591,7 +594,7 @@ pub fn run() {
                     "library" => show_library_window(app),
                     "quit" => request_quit(app),
                     "close" => close_focused(app),
-                    "home" | "check-updates" => {
+                    "home" | "check-updates" | "welcome" => {
                         show_main_window(app);
                         let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
                     }

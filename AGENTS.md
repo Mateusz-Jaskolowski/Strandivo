@@ -134,6 +134,14 @@ it can (lists of files or features). CI checks that every path in backticks here
   password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
   strip under the app bar, never a dialog. e2e fakes the shell with
   `window.__strandivoUpdate`, so it never reaches the server.
+- **The welcome window** (`src/welcome.ts`) opens on first launch as a dialog over the
+  main window, not a window of its own, since what it asks acts on the main window (Home's
+  folders, holding back the update check, which waits for it). A choice users must make,
+  such as usage statistics, is added to `WELCOME_PARTS` in `src/lib/welcome.ts` with the
+  next version: that raises `WELCOME_VERSION`, and people who saw the older window are
+  asked only the new part. Closing it any way keeps the choices as shown; "Reset all
+  settings" leaves it seen. The e2e run starts as a fresh install, so it closes the window
+  first.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
   the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
   start and strand don't matter; it starts at the first in-frame codon of 10 good matching

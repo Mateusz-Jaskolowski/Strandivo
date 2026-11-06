@@ -362,7 +362,8 @@ export function mountSettings(root: HTMLElement, embedded = false) {
           {
             class: "ps-btn ps-btn-quiet",
             onclick: () => {
-              commit({ ...DEFAULT_SETTINGS });
+              // Resetting isn't a first launch: the welcome window stays seen.
+              commit({ ...DEFAULT_SETTINGS, welcomeSeen: s.welcomeSeen });
               root.replaceChildren();
               mountSettings(root, embedded);
             }

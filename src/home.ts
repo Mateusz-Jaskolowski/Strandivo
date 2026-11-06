@@ -157,13 +157,15 @@ export class Home {
     void this.scan();
   }
 
-  private async chooseFolder() {
+  /** Asks for a folder and adds it; the folder, or null if none was chosen. */
+  async chooseFolder(): Promise<string | null> {
     if (!isDesktop) {
       toast("Folders can only be read in the desktop app.", "info");
-      return;
+      return null;
     }
     const folder = await pickFolder("Add a folder of constructs");
     if (folder) await this.addFolder(folder);
+    return folder;
   }
 
   private async openDialog() {

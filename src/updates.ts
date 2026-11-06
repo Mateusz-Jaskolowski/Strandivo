@@ -44,7 +44,8 @@ export interface Updates {
   check(asked: boolean): Promise<void>;
 }
 
-export function startUpdates(): Updates {
+/** `until`: nothing is checked on its own before it settles (the welcome window closing). */
+export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updates {
   const el = h("div", { class: "sv-update", role: "status", hidden: true });
   let checking = false;
   /** The update on offer, and how far it has got. */
@@ -142,12 +143,16 @@ export function startUpdates(): Updates {
     }
   }
 
+  let held = true;
   const checkIfDue = () => {
-    if (dueForCheck(remembered(), Date.now(), loadSettings().checkForUpdates)) void check(false);
+    if (!held && dueForCheck(remembered(), Date.now(), loadSettings().checkForUpdates)) void check(false);
   };
 
   void takeUpdateFailure().then(why => why && show("warn", why, button("Later", hide)));
-  setTimeout(checkIfDue, FIRST_CHECK_MS);
+  void until.finally(() => {
+    held = false;
+    setTimeout(checkIfDue, FIRST_CHECK_MS);
+  });
   setInterval(checkIfDue, RECHECK_MS);
   // Turning checks back on in Settings checks then, if a day has passed.
   onSettingsChanged(s => s.checkForUpdates && checkIfDue());

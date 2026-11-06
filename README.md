@@ -73,7 +73,8 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
 - **Settings** in their own window (⌘,): map display, Tm method, read quality thresholds,
   lab fields
 - **Updates** from inside the app: it checks once a day (a setting) and installs a new
-  version only when you choose
+  version only when you choose. A welcome window on first launch asks about it and helps
+  you add your construct folders and a primer library
 - **Private**: everything runs on your computer and your files never leave it. The app
   goes online only to check for updates and to look up a UniProt entry you ask for
 

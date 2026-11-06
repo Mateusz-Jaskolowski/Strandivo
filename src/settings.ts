@@ -49,6 +49,8 @@ export interface Settings {
   sidebar: { order: SidebarSection[]; folded: SidebarSection[] };
   /** Ask updates.strandivo.com for a new version once a day (src/updates.ts). */
   checkForUpdates: boolean;
+  /** The version of the welcome window last seen; 0 = never (src/lib/welcome.ts). */
+  welcomeSeen: number;
 }
 
 export const DEFAULT_LAB_FIELDS = [
@@ -99,7 +101,8 @@ export const DEFAULT_SETTINGS: Settings = {
   amberAsQ: false,
   offerDetection: true,
   sidebar: { order: DEFAULT_SIDEBAR_ORDER, folded: [] },
-  checkForUpdates: true
+  checkForUpdates: true,
+  welcomeSeen: 0
 };
 
 const KEY = "strandivo.settings";

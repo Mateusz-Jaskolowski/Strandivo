@@ -73,9 +73,11 @@ test("every page has the bar and the footer, and no script but the site's own fi
     assert.match(html, /<nav class="bar-links"/, path);
     assert.match(html, /<!--email_off-->[\s\S]*<!--\/email_off-->/, path);
     // The Content Security Policy (site/_headers) would block anything else anyway.
-    const scripts = html.match(/<script[^>]*>[\s\S]*?<\/script>/g) ?? [];
-    assert.ok(scripts.every(s => s === '<script type="module" src="/download.js"></script>'), path);
-    assert.equal(scripts.length, path === "index.html" || path.startsWith("download/") ? 1 : 0, path);
+    // Every opening tag, in any case, must be the one allowed, closed at once (no inline code).
+    const opening = html.match(/<script\b[^>]*>/gi) ?? [];
+    const allowed = html.match(/<script type="module" src="\/download\.js"><\/script>/g) ?? [];
+    assert.equal(opening.length, allowed.length, path);
+    assert.equal(allowed.length, path === "index.html" || path.startsWith("download/") ? 1 : 0, path);
     assert.doesNotMatch(html, /\son[a-z]+=|javascript:/i, path);
     assert.doesNotMatch(html, /\{\{/, path);
   }

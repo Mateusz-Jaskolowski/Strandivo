@@ -56,6 +56,7 @@ import { openDetectDialog } from "../views/detectDialog.ts";
 import { regionsOf } from "../lib/regions.ts";
 import { dismissOffer, offerDismissed } from "../detectOffer.ts";
 import { looksUnannotated } from "../lib/detect.ts";
+import { enzymeOf } from "../lib/enzymePick.ts";
 import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
@@ -488,7 +489,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         label = `${region?.name ?? f?.name ?? "Feature"} selected`;
       }
       else if (focus?.kind === "primer") label = `${d.primers.find(p => p.id === focus.id)?.name ?? "Primer"} selected`;
-      else if (focus?.kind === "cutsite") label = "Cut site selected";
+      else if (focus?.kind === "cutsite") label = store.selection.enzymes ? `${store.selection.enzymes.length} enzymes picked` : `${enzymeOf(focus.id)} site selected`;
       else if (focus?.kind === "orf") label = "ORF selected";
       const len = rangeLength(range, n);
       const bases = basesIn(d.sequence, range);
@@ -843,6 +844,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     } else if (!id && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s" && !isDesktop) {
       e.preventDefault();
       void save(e.shiftKey);
+    } else if (e.key === "Escape" && !e.defaultPrevented && store.selection.enzymes && !inField() && !seqField() && !document.querySelector(".sv-dialog-overlay, .ps-modal-overlay")) {
+      // Esc drops enzymes picked for a digest (the sequence handles its own Esc).
+      e.preventDefault();
+      store.select({ range: null, caret: store.selection.caret }, "keys");
     }
     if (id) lastShortcut = { id, at: performance.now(), handled: e.defaultPrevented };
   };

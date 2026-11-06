@@ -668,6 +668,10 @@
   background: var(--accent-soft);
   color: var(--accent-text);
 }
+.sv-enzyme-chip.sv-related {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent-text);
+}
 
 /* ---------- inspector ---------- */
 .sv-inspector {
@@ -901,6 +905,16 @@
 .sv-insp-actions .sv-btn {
   padding: 0 8px;
 }
+.sv-insp-actions > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+/* An enzyme's sites, each a link selecting it. */
+.sv-site-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
 
 /* ---------- status bar ---------- */
 .sv-status {
@@ -1133,6 +1147,25 @@
 .sv-map-cut line.sv-map-unique {
   stroke: var(--text-2);
   stroke-width: 1.2;
+}
+/* A selected cut site, and in a lighter shade the other sites of its enzyme (or of every
+   enzyme picked with ⌘/Ctrl-click), so an enzyme that cuts twice shows where else it does. */
+.sv-map-cut line.sv-focused,
+.sv-map-leader .sv-map-leader-cutsite.sv-focused,
+.sv-map-leader-cutsite.sv-focused {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-dasharray: none;
+}
+.sv-map-cut line.sv-related,
+.sv-map-leader .sv-map-leader-cutsite.sv-related,
+.sv-map-leader-cutsite.sv-related {
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--leader));
+  stroke-width: 1.4;
+  stroke-dasharray: none;
+}
+.sv-map-label.sv-related {
+  fill: color-mix(in srgb, var(--accent-text) 75%, var(--panel));
 }
 .sv-map-label:hover {
   fill: var(--accent-text);
@@ -1388,6 +1421,13 @@
 }
 .sv-hit:hover .sv-cut-label {
   color: var(--accent-text);
+}
+.sv-cut-focused .sv-cut-label {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.sv-cut-related .sv-cut-label {
+  color: color-mix(in srgb, var(--accent-text) 75%, var(--panel));
 }
 .sv-cut-line {
   background: var(--cut);

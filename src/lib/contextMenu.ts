@@ -7,6 +7,16 @@
 
 import { alignPrimer } from "./primerAlign.ts";
 import { rangeLength, type Range, type SeqData } from "./seqdata.ts";
+import { enzymeOf, enzymesText } from "./enzymePick.ts";
+
+/**
+ * What "Digest" on a cut site digests with: the picked enzymes when the site is one of
+ * theirs, else the site's own enzyme.
+ */
+export function digestEnzymes(siteId: string, picked: string[] = []): string[] {
+  const enzyme = enzymeOf(siteId);
+  return picked.includes(enzyme) ? picked : [enzyme];
+}
 
 /** What a menu is for: an annotation, the selected bases, or the cursor between bases. */
 export type MenuTarget =
@@ -92,6 +102,8 @@ export interface MenuContext {
   tab?: "map" | "sequence" | "primers" | "reads" | "info";
   /** Whether a primer with these bases is in the lab library. */
   inLibrary(bases: string): boolean;
+  /** Enzymes picked with ⌘/Ctrl-click; a site of one of them digests with them all. */
+  enzymes?: string[];
 }
 
 const item = (action: MenuAction, label: string, enabled = true): MenuItem => (enabled ? { action, label } : { action, label, enabled });
@@ -173,9 +185,7 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
       ]);
     }
     case "cutsite": {
-      // Cut site ids are "<enzyme>@<position>".
-      const enzyme = target.id.split("@")[0];
-      return [item("copy-site", "Copy recognition site"), item("digest", `Digest with ${enzyme}…`), show];
+      return [item("copy-site", "Copy recognition site"), item("digest", `Digest with ${enzymesText(digestEnzymes(target.id, c.enzymes))}…`), show];
     }
     case "orf":
       return tidy([item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), "separator", item("add-orf-feature", "Add as feature"), show]);

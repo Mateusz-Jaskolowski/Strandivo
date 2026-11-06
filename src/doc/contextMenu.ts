@@ -8,7 +8,8 @@ import { toast } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
 import { showContextMenu, type ContextMenuEntry } from "../platform.ts";
 import { primerLibrary } from "../primerLibrary.ts";
-import { menuFor, type MenuEntry, type MenuItem, type MenuTarget } from "../lib/contextMenu.ts";
+import { enzymeOf } from "../lib/enzymePick.ts";
+import { digestEnzymes, menuFor, type MenuEntry, type MenuItem, type MenuTarget } from "../lib/contextMenu.ts";
 import { basesIn, deleteRange, featureBases, inRange, rangeLength, reverseComplement, type Range } from "../lib/seqdata.ts";
 import { cutSites, orfFeature, orfs, protein } from "./analysis.ts";
 import type { DocContext, Tab } from "./context.ts";
@@ -37,7 +38,8 @@ export function openContextMenu(host: ContextMenuHost, target: MenuTarget, at: {
     data: host.ctx.store.data,
     onMap,
     tab: host.ctx.tab,
-    inLibrary: bases => primerLibrary.all.some(x => x.bases === bases)
+    inLibrary: bases => primerLibrary.all.some(x => x.bases === bases),
+    enzymes: host.ctx.store.selection.enzymes
   }).map(convert);
   void showContextMenu(entries, at);
 }
@@ -50,7 +52,9 @@ export function menuTargetAt(ctx: DocContext, annotation: Focus | null, b: numbe
   const store = ctx.store;
   if (annotation) {
     const f = store.selection.focus;
-    if (f?.kind !== annotation.kind || f.id !== annotation.id) selectAnnotation(annotation);
+    // A site of a picked enzyme keeps the pick, so its menu can digest with them all.
+    const picked = annotation.kind === "cutsite" && !!store.selection.enzymes?.includes(enzymeOf(annotation.id));
+    if (!picked && (f?.kind !== annotation.kind || f.id !== annotation.id)) selectAnnotation(annotation);
     return annotation;
   }
   if (b === null) return null;
@@ -118,7 +122,7 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       if (primer) host.copy(`${primer.name}\t${primer.bases}`, `${primer.name} (name and sequence, tab-separated)`);
       return;
     case "digest":
-      if (target.kind === "cutsite") host.digest([target.id.split("@")[0]]);
+      if (target.kind === "cutsite") host.digest(digestEnzymes(target.id, store.selection.enzymes));
       return;
     case "add-orf-feature":
       if (orf) {

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { menuFor, readsMenu, type MenuContext, type MenuEntry, type MenuTarget, type ReadsTarget } from "./contextMenu.ts";
+import { digestEnzymes, menuFor, readsMenu, type MenuContext, type MenuEntry, type MenuTarget, type ReadsTarget } from "./contextMenu.ts";
 import type { SeqData } from "./seqdata.ts";
 
 const data: SeqData = {
@@ -54,6 +54,11 @@ test("selected bases: primers for primer-sized stretches, design for longer ones
 
 test("cut sites and ORFs", () => {
   assert.deepEqual(labels({ kind: "cutsite", id: "EcoRI@395" }), ["Copy recognition site", "Digest with EcoRI…", "Show on map"]);
+  // With enzymes picked, a site of one of them digests with them all; any other only with its own.
+  assert.equal(labels({ kind: "cutsite", id: "EcoRI@395" }, { enzymes: ["EcoRI", "BamHI"] })[1], "Digest with EcoRI and BamHI…");
+  assert.equal(labels({ kind: "cutsite", id: "XbaI@423" }, { enzymes: ["EcoRI", "BamHI"] })[1], "Digest with XbaI…");
+  assert.deepEqual(digestEnzymes("BamHI@417", ["EcoRI", "BamHI"]), ["EcoRI", "BamHI"]);
+  assert.deepEqual(digestEnzymes("XbaI@423", ["EcoRI", "BamHI"]), ["XbaI"]);
   assert.deepEqual(labels({ kind: "orf", id: "1:10" }, { onMap: true }), ["Copy DNA", "Copy protein", "—", "Add as feature", "Show in sequence"]);
 });
 

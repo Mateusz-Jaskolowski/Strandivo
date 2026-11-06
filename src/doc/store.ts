@@ -24,6 +24,11 @@ export interface Selection {
   /** Fixed end of a mouse or shift selection (a boundary 0…n). */
   anchor: number | null;
   focus: Focus | null;
+  /**
+   * Enzymes picked for a digest with ⌘/Ctrl-click (`src/lib/enzymePick.ts`), two or more;
+   * the range and focus are then the site clicked last. Any other selection drops them.
+   */
+  enzymes?: string[];
 }
 
 export interface Change {
@@ -97,7 +102,8 @@ export class DocStore {
       range,
       caret,
       anchor: sel.anchor ?? null,
-      focus: range ? sel.focus ?? null : null
+      focus: range ? sel.focus ?? null : null,
+      ...(range && sel.enzymes && sel.enzymes.length > 1 ? { enzymes: sel.enzymes } : {})
     };
     this.emit({ data: false, selection: true, source });
   }

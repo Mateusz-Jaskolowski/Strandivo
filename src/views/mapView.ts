@@ -12,6 +12,8 @@ import type { DocContext } from "../doc/context.ts";
 import type { CutSite } from "../lib/enzymes.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
+import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
+import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import { regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions.ts";
 import { featureGaps, pieces as rangePieces, rangeLength, type Range, type SeqData, type SeqFeature } from "../lib/seqdata.ts";
 import { checkIcon, iconSvg } from "../ui/icons.ts";
@@ -562,7 +564,9 @@ export class MapView {
         const [x1, y1] = pt(a, BAND_OUT);
         const [x2, y2] = pt(a, tickOut);
         const unique = c.cuts === 1;
-        cuts.appendChild(s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2), class: unique ? "sv-map-unique" : undefined }));
+        const tick = s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2), class: unique ? "sv-map-unique" : undefined });
+        cuts.appendChild(tick);
+        this.addShape(`cutsite:${c.id}`, tick);
         labels.push({
           angle: ((a % 360) + 360) % 360,
           r: tickOut,
@@ -617,7 +621,9 @@ export class MapView {
         let x = sgn * Math.sqrt(Math.max(rLab * rLab - dy * dy, 34 * 34));
         x = sgn > 0 ? Math.max(x, k[0] + 6) : Math.min(x, k[0] - 6);
         const colour = l.color ? `--lc:${l.color}` : undefined;
-        leaders.appendChild(s("polyline", { points: `${P(p0)} ${P(k)} ${f1(x)},${f1(dy)}`, class: `sv-map-leader-${l.kind}`, style: colour }));
+        const leader = s("polyline", { points: `${P(p0)} ${P(k)} ${f1(x)},${f1(dy)}`, class: `sv-map-leader-${l.kind}`, style: colour });
+        leaders.appendChild(leader);
+        if (l.kind === "cutsite") this.addShape(`cutsite:${l.id}`, leader);
         const gx = x + sgn * 4;
         const chip = l.kind === "feature" ? labelChip(l, gx, dy, l.width, labelPx, sgn) : null;
         const mark = chip ?? labelGlyph(l, gx, dy, gs, sgn);
@@ -863,7 +869,9 @@ export class MapView {
     for (const { c, x, w, row } of placed) {
       const y = labelTop + (rows.length - 1 - row) * rowH + rowH / 2;
       const mark = { kind: "cutsite" as const, id: c.id, unique: c.cuts === 1 };
-      cutLayer.appendChild(s("line", { x1: f1(X(c.cut)), y1: f1(y + rowH / 2), x2: f1(X(c.cut)), y2: baseY, class: "sv-map-leader sv-map-leader-cutsite" }));
+      const leader = s("line", { x1: f1(X(c.cut)), y1: f1(y + rowH / 2), x2: f1(X(c.cut)), y2: baseY, class: "sv-map-leader sv-map-leader-cutsite" });
+      cutLayer.appendChild(leader);
+      this.addShape(`cutsite:${c.id}`, leader);
       const t = s("text", { x: f1(x + w / 2), y: f1(y), "text-anchor": "middle", class: labelClass(mark), "data-kind": "cutsite", "data-id": c.id }, c.enzyme, s("title", null, cutTitle(c)));
       cutLayer.appendChild(t);
       this.addShape(`cutsite:${c.id}`, t);
@@ -887,7 +895,7 @@ export class MapView {
     const layer = this.selLayer;
     const g = this.geom;
     if (!layer || !g || !this.svg) return;
-    for (const el of this.focused) el.classList.remove("sv-focused");
+    for (const el of this.focused) el.classList.remove("sv-focused", "sv-related");
     this.focused = [];
     const sel = this.ctx.store.selection;
     const focus = sel.focus;
@@ -895,6 +903,17 @@ export class MapView {
       for (const el of this.shapes.get(`${focus.kind}:${focus.id}`) || []) {
         el.classList.add("sv-focused");
         this.focused.push(el);
+      }
+    }
+    // The other sites of the selected or picked enzymes.
+    const picked = pickedEnzymes(sel);
+    if (picked.length) {
+      for (const [key, els] of this.shapes) {
+        if (!key.startsWith("cutsite:") || key === `${focus?.kind}:${focus?.id}` || !picked.includes(enzymeOf(key.slice(8)))) continue;
+        for (const el of els) {
+          el.classList.add("sv-related");
+          this.focused.push(el);
+        }
       }
     }
     const parts: SVGElement[] = [];
@@ -969,6 +988,11 @@ export class MapView {
       if (e.button !== 0 || (e.ctrlKey && isMac)) return;
       const el = (e.target as Element).closest("[data-kind]");
       target = el ? hitOf(el) : null;
+      if (target?.kind === "cutsite" && isPickClick(e)) {
+        pickSite(this.ctx, target.id, "map");
+        e.preventDefault();
+        return;
+      }
       anchor = this.boundaryAt(e.clientX, e.clientY);
       moved = false;
       this.svgHost.setPointerCapture(e.pointerId);

@@ -655,17 +655,18 @@ export class SequenceView {
             track.appendChild(box);
           }
         } else {
-          // Codon shading and amino acids, centred on each codon.
+          // Codon shading and amino acids, centred on each codon. Every other codon gets a box
+          // of its own, in a layer cut to the bar's shape: a repeating background lost its
+          // phase at the bar's left edge, which shaded a part of the first codon.
           const line = new Array(bar.b + 1).fill(" ");
-          let shadeFrom: number | null = null;
+          const shade = abs(`left:${ch(bar.a)};width:${ch(bar.b - bar.a + 1)};top:${ly}px;height:${lh}px;pointer-events:none;${clipPath && !notchLeft && !notchRight ? clipPath : ""}`);
           for (const c of cs) {
             line[c.mid - row.start] = c.aa;
-            if (shadeFrom === null && c.index % 2 === 0) shadeFrom = Math.min(c.lo, c.hi) - row.start;
+            if (c.index % 2 === 1) continue;
+            const a = Math.max(bar.a, c.mid - 1 - row.start);
+            const b = Math.min(bar.b, c.mid + 1 - row.start);
+            shade.appendChild(abs(`left:${ch(a - bar.a)};width:${ch(b - a + 1)};top:0;height:100%;background:rgba(0,0,0,.09)`));
           }
-          const offset = shadeFrom === null ? 0 : (((shadeFrom - bar.a) % 6) + 6) % 6;
-          const shade = abs(
-            `left:${ch(bar.a)};width:${ch(bar.b - bar.a + 1)};top:${ly}px;height:${lh}px;background:repeating-linear-gradient(90deg,rgba(0,0,0,.09) 0 3ch,transparent 3ch 6ch);background-position:${ch(offset)} 0;pointer-events:none;${clipPath && !notchLeft && !notchRight ? clipPath : ""}`
-          );
           track.appendChild(shade);
           const letters = abs(`left:0;top:${ly}px;line-height:${lh}px;color:${st.text}`, line.join("").replace(/\s+$/, ""));
           letters.className = "sv-aa";

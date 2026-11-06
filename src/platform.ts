@@ -29,7 +29,7 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
 }
 
 export interface WindowInfo {
-  kind: "main" | "settings" | "library";
+  kind: "main" | "settings" | "library" | "enzymes";
   /** For the main window: files to open as tabs (null = a new sequence). */
   paths: (string | null)[];
 }
@@ -38,13 +38,14 @@ type OpenHandler = (paths: (string | null)[]) => void;
 let openHandler: OpenHandler | null = null;
 let openQueue: (string | null)[] = [];
 
-// In a plain browser (development and UI tests): `?settings` and `?library` show those
+// In a plain browser (development and UI tests): `?settings`, `?library` and `?enzymes` show those
 // windows on their own (the main window shows them over its tabs), `?open=<url>` opens that URL in a tab of the main window, `?new` a new sequence.
 export async function windowInfo(): Promise<WindowInfo> {
   if (!isDesktop) {
     const params = new URLSearchParams(location.search);
     if (params.get("settings") !== null) return { kind: "settings", paths: [] };
     if (params.get("library") !== null) return { kind: "library", paths: [] };
+    if (params.get("enzymes") !== null) return { kind: "enzymes", paths: [] };
     return { kind: "main", paths: [...params.getAll("open"), ...(params.get("new") !== null ? [null] : [])] };
   }
   const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
@@ -363,12 +364,12 @@ export async function copyText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
-export type PageWindow = "settings" | "library";
+export type PageWindow = "settings" | "library" | "enzymes";
 let showInPage: ((w: PageWindow) => void) | null = null;
 
 /**
  * In a browser, pages can't reliably open windows (blocked, or loaded over the app), so the
- * main window shows Settings and the primer library itself.
+ * main window shows Settings and the library windows itself.
  */
 export function showWindowsInPage(show: (w: PageWindow) => void) {
   showInPage = show;
@@ -391,6 +392,54 @@ export async function openLibrary(): Promise<void> {
     return;
   }
   return invoke<void>("open_library");
+}
+
+/** The lab's enzyme stock, shared by all documents. */
+export async function openEnzymeLibrary(): Promise<void> {
+  if (!isDesktop) {
+    if (showInPage) showInPage("enzymes");
+    else window.open(`${location.pathname}?enzymes`, "_blank");
+    return;
+  }
+  return invoke<void>("open_enzyme_library");
+}
+
+/**
+ * Lists the app keeps for the user (`src-tauri/src/app_data.rs` names them): JSON files in
+ * app data on the desktop, local storage in a browser.
+ */
+export type AppData = "enzyme-library";
+const appDataKey = (name: AppData) => `strandivo.data.${name}`;
+
+export async function loadAppData(name: AppData): Promise<string | null> {
+  return isDesktop ? invoke<string | null>("load_app_data", { name }) : localStorage.getItem(appDataKey(name));
+}
+
+export async function saveAppData(name: AppData, contents: string): Promise<void> {
+  if (isDesktop) return invoke<void>("save_app_data", { name, contents });
+  localStorage.setItem(appDataKey(name), contents);
+}
+
+/** Moves a list that can't be read out of the way, keeping it; returns where it went, if anywhere. */
+export async function setAsideAppData(name: AppData): Promise<string | null> {
+  if (isDesktop) return invoke<string | null>("set_aside_app_data", { name });
+  const old = localStorage.getItem(appDataKey(name));
+  if (old === null) return null;
+  const aside = `${appDataKey(name)}.unreadable-${Date.now()}`;
+  localStorage.setItem(aside, old);
+  localStorage.removeItem(appDataKey(name));
+  return `local storage, as ${aside}`;
+}
+
+/** Calls `fn` when another window (or browser tab) saves the list. */
+export async function onAppDataChanged(name: AppData, fn: () => void): Promise<() => void> {
+  if (isDesktop) {
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<string>("app-data-changed", e => { if (e.payload === name) fn(); });
+  }
+  const storage = (e: StorageEvent) => { if (e.key === appDataKey(name) || e.key === null) fn(); };
+  window.addEventListener("storage", storage);
+  return () => window.removeEventListener("storage", storage);
 }
 
 export interface PickedFile {

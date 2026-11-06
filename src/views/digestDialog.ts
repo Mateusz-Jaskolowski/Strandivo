@@ -26,15 +26,14 @@ interface Lane {
 /** Kept between openings in this window. */
 const memory = { ladder: LADDERS[0].id, allEnzymes: false };
 
-const counts = new WeakMap<SeqData, Map<string, number>>();
-/** How many times each enzyme in the list cuts a sequence. */
-function cutCountsOf(d: SeqData): Map<string, number> {
-  let m = counts.get(d);
-  if (!m) {
-    m = new Map();
-    for (const hit of scanSites(d.sequence, d.circular)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
-    counts.set(d, m);
-  }
+const counts = new WeakMap<SeqData, { extra: readonly string[]; m: Map<string, number> }>();
+/** How many times each enzyme in the list, or in the lab's stock (`extra`), cuts a sequence. */
+function cutCountsOf(d: SeqData, extra: readonly string[]): Map<string, number> {
+  const known = counts.get(d);
+  if (known?.extra === extra) return known.m;
+  const m = new Map<string, number>();
+  for (const hit of scanSites(d.sequence, d.circular, extra)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
+  counts.set(d, { extra, m });
   return m;
 }
 
@@ -67,7 +66,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
 
   function enzymeList(): HTMLElement {
     const lane = lanes[current];
-    const cuts = cutCountsOf(lane.data);
+    const cuts = cutCountsOf(lane.data, ctx.options.labEnzymes);
     const q = filter.trim().toLowerCase();
     const names = [...cuts.keys()]
       .filter(x => lane.enzymes.includes(x) || ((memory.allEnzymes || (cuts.get(x) ?? 0) <= 3) && (!q || x.toLowerCase().includes(q))))

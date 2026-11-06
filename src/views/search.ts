@@ -100,7 +100,7 @@ export class Search {
     const named = (name: string) => name.toLowerCase().includes(lower);
     for (const f of d.features) if (named(f.name) || f.type.toLowerCase() === lower) hits.push({ label: f.name, meta: `${f.type} · ${fmt(f.start + 1)}..${fmt(f.end + 1)}`, range: { start: f.start, end: f.end }, focus: { kind: "feature", id: f.id }, kind: "feature" });
     for (const p of d.primers) if (named(p.name)) hits.push({ label: p.name, meta: `primer · ${fmt(p.start + 1)}..${fmt(p.end + 1)}`, range: { start: p.start, end: p.end }, focus: { kind: "primer", id: p.id }, kind: "primer" });
-    for (const c of cutSites(d, this.ctx.options.enzymeSet)) if (named(c.enzyme)) hits.push({ label: c.enzyme, meta: `cut site · ${fmt(c.start + 1)}`, range: { start: c.start, end: c.end }, focus: { kind: "cutsite", id: c.id }, kind: "cutsite" });
+    for (const c of cutSites(d, this.ctx.options)) if (named(c.enzyme)) hits.push({ label: c.enzyme, meta: `cut site · ${fmt(c.start + 1)}`, range: { start: c.start, end: c.end }, focus: { kind: "cutsite", id: c.id }, kind: "cutsite" });
     const dna = q.replace(/\s+/g, "");
     if (dna.length >= 3 && /^[ACGTURYSWKMBDHVN]+$/i.test(dna)) {
       const text = d.circular ? d.sequence + d.sequence.slice(0, dna.length - 1) : d.sequence;

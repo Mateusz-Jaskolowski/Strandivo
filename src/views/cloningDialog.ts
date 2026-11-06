@@ -69,15 +69,14 @@ interface InsertRow {
 /** Kept between openings in this window. */
 const memory = { method: "restriction" as Method, goldenGate: "BsaI" };
 
-const counts = new WeakMap<SeqData, Map<string, number>>();
-/** How many times each enzyme in the list cuts a sequence. */
-function cutCountsOf(d: SeqData): Map<string, number> {
-  let m = counts.get(d);
-  if (!m) {
-    m = new Map();
-    for (const hit of scanSites(d.sequence, d.circular)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
-    counts.set(d, m);
-  }
+const counts = new WeakMap<SeqData, { extra: readonly string[]; m: Map<string, number> }>();
+/** How many times each enzyme in the list, or in the lab's stock (`extra`), cuts a sequence. */
+function cutCountsOf(d: SeqData, extra: readonly string[]): Map<string, number> {
+  const known = counts.get(d);
+  if (known?.extra === extra) return known.m;
+  const m = new Map<string, number>();
+  for (const hit of scanSites(d.sequence, d.circular, extra)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
+  counts.set(d, { extra, m });
   return m;
 }
 
@@ -149,7 +148,7 @@ export function openCloningDialog(ctx: DocContext) {
   const update = () => rerender(dlg, render);
 
   const enzymeSelect = (d: SeqData, value: string, label: string, onChange: (v: string) => void, names?: string[]) => {
-    const cuts = cutCountsOf(d);
+    const cuts = cutCountsOf(d, ctx.options.labEnzymes);
     const list = (names ?? [...cuts.keys()].sort((a, b) => a.localeCompare(b))).filter(x => names || (cuts.get(x) ?? 0) > 0);
     if (value && !list.includes(value)) list.unshift(value);
     const el = h(

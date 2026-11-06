@@ -2749,7 +2749,7 @@
   background: var(--diff);
 }
 
-/* ---------- primer library window ---------- */
+/* ---------- library windows ---------- */
 .sv-libwin {
   overflow: hidden;
 }
@@ -2869,6 +2869,40 @@
 }
 .sv-libwin-more {
   margin: 10px 2px 0;
+}
+.sv-enzyme-add {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.sv-enzyme-add label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.sv-enzyme-add-actions {
+  grid-column: 1 / -1;
+}
+.sv-enzyme-search {
+  width: 300px;
+}
+.sv-enzyme-grid {
+  min-width: 720px;
+}
+.sv-enzyme-grid td:nth-child(3),
+.sv-enzyme-grid td:nth-child(5) {
+  width: 25%;
+}
+.sv-enzyme-grid td:nth-child(4) {
+  width: 20%;
+}
+.sv-enzyme-grid td:first-child .sv-cell-input {
+  min-width: 110px;
+}
+.sv-lab-enzymes-edit {
+  margin: 2px 8px 8px;
 }
 
 /* ---------- task dialogs ---------- */

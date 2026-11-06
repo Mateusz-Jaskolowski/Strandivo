@@ -15,7 +15,8 @@ it can (lists of files or features). CI checks that every path in backticks here
 ## How the code is organised
 
 - `src/main.ts` decides what a window shows: the main window (`src/mainWindow.ts`),
-  Settings (`src/settingsWindow.ts`) or the primer library (`src/libraryWindow.ts`).
+  Settings (`src/settingsWindow.ts`), the primer library (`src/libraryWindow.ts`) or the
+  enzyme library (`src/enzymeLibraryWindow.ts`).
 - `src/mainWindow.ts` is the one main window: an app bar with Home (`src/home.ts`, the
   construct library) and a tab per open file, the window title, keys, native menu, dropped
   files and closing. It passes what is meant for a file to that file's tab.
@@ -62,12 +63,12 @@ it can (lists of files or features). CI checks that every path in backticks here
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.
 - **Where things go**: the app bar holds what is about the app (Home, a tab per open file,
-  the primer library and Settings); the bar under it is the file's own (its five views,
+  the primer and enzyme libraries and Settings); the bar under it is the file's own (its five views,
   search, editing tools). Views show the document (Map, Sequence, Primers, Reads, Info), and
   there are five; a task with a start and an end (design primers, a PCR product, adding
   from the library) is a dialog (`openDialog` in `src/ui/modal.ts`, see
   `src/views/primerDialogs.ts`); something not tied to one file gets its own window, like
-  Settings and the primer library (in a browser, which can't open windows reliably, the main
+  Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
   selected. This keeps windows from getting crowded.
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
@@ -558,7 +559,19 @@ it can (lists of files or features). CI checks that every path in backticks here
   in local storage like the settings, with an app event so every window sees changes).
   Export/Import of a tab-separated list is the backup and the way to share it.
 - **Enzymes**: a curated list of common commercial enzymes (`src/lib/enzymes.ts`), not every
-  isoschizomer.
+  isoschizomer, is what the map shows by default. The lab's stock (`src/enzymeLibrary.ts`)
+  may name any enzyme TeselaGen knows (`enzymeName`), since a lab's Acc65I is not KpnI:
+  same site, other ends. Lab sets (`isLabSet`) show only stocked enzymes and the others
+  only the curated list, so a stocked Esp3I doesn't double every BsmBI label; stocked names
+  reach `cutSites`, the Digest and Cloning dialogs through `ViewOptions.labEnzymes`, never
+  a global, and `enzymeLibrary.names` keeps one array until the names change, so editing a
+  note redraws no map. Product names are user text, never read for recognition or reaction
+  conditions. The stock is kept by the shell (`src-tauri/src/app_data.rs`, which writes
+  only the files it names), not in local storage like the primer library, which a cleared
+  web view loses. A saved list is read even if it names an enzyme this version doesn't know
+  (kept as written, left off the map), as one unknown name must not lock a lab's list; one
+  that can't be read at all blocks writes until the user starts a new list, which keeps
+  the old file beside it. An import, unlike the saved list, is all or nothing.
 - **Bases in upper case** by default; Settings can show them as in the file.
 
 ## Traps

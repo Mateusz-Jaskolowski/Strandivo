@@ -39,6 +39,9 @@ async function boot() {
     } else if (info.kind === "library") {
       const { mountLibrary } = await import("./libraryWindow.ts");
       mountLibrary(root);
+    } else if (info.kind === "enzymes") {
+      const { mountEnzymeLibrary } = await import("./enzymeLibraryWindow.ts");
+      mountEnzymeLibrary(root);
     } else {
       const { mountMain } = await import("./mainWindow.ts");
       mountMain(root, info.paths);

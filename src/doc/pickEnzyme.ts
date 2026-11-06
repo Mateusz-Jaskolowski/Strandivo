@@ -20,7 +20,7 @@ export const isPickClick = (e: MouseEvent) => (isMac ? e.metaKey : e.ctrlKey) &&
  */
 export function pickSite(ctx: DocContext, siteId: string, source: string) {
   const store = ctx.store;
-  const sites = cutSites(store.data, ctx.options.enzymeSet);
+  const sites = cutSites(store.data, ctx.options);
   const site = sites.find(c => c.id === siteId);
   if (!site) return;
   const sel = store.selection;

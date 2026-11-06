@@ -52,17 +52,20 @@
   min-height: 0;
   overflow: auto;
 }
-.sv-panel-library {
+.sv-panel-library,
+.sv-panel-enzymes {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.sv-panel-library > .sv-app {
+.sv-panel-library > .sv-app,
+.sv-panel-enzymes > .sv-app {
   height: auto;
   flex: 1 1 auto;
   min-height: 0;
 }
-.sv-panel-library .sv-libwin-head {
+.sv-panel-library .sv-libwin-head,
+.sv-panel-enzymes .sv-libwin-head {
   padding-right: 56px; /* room for the close button */
 }
 .sv-panel-close {

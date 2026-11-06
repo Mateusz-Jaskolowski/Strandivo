@@ -5,14 +5,21 @@
 
 import { aliasedEnzymesByName, getCutsitesFromSequence, type RestrictionEnzyme } from "@teselagen/sequence-utils";
 
-export type EnzymeSet = "unique6" | "unique" | "unique2" | "none";
+export type EnzymeSet = "unique6" | "unique" | "unique2" | "lab1" | "lab2" | "lab" | "none";
 
-export const ENZYME_SETS: { id: EnzymeSet; label: string }[] = [
+/** The sets offered in the map and outline; `lab` ones are grouped under "Lab enzymes". */
+export const ENZYME_SETS: { id: EnzymeSet; label: string; lab?: boolean }[] = [
   { id: "unique6", label: "Unique 6+ cutters" },
   { id: "unique", label: "Unique cutters" },
   { id: "unique2", label: "Unique and dual cutters" },
+  { id: "lab1", label: "Lab enzymes: unique cutters", lab: true },
+  { id: "lab2", label: "Lab enzymes: unique and dual", lab: true },
+  { id: "lab", label: "Lab enzymes: every site", lab: true },
   { id: "none", label: "None" }
 ];
+
+/** Whether a set shows the lab's stocked enzymes rather than the curated list. */
+export const isLabSet = (set: EnzymeSet) => set === "lab" || set === "lab1" || set === "lab2";
 
 export interface CutSite {
   id: string;
@@ -52,6 +59,50 @@ const ALL_ENZYMES: RestrictionEnzyme[] = COMMON_ENZYMES.flatMap(name => {
   const e = aliasedEnzymesByName[name.toLowerCase()];
   return e ? [{ ...e, name }] : [];
 });
+const CURATED = new Map(ALL_ENZYMES.map(e => [e.name.toLowerCase(), e]));
+
+/**
+ * The name Strandivo uses for any enzyme TeselaGen knows, or null: the curated list's own
+ * name where it has one (BsmBI, not Esp3I), else the alias as the user wrote it (Esp3I).
+ * Lab stock may hold any of these, so a lab's Acc65I isn't mistaken for KpnI, whose cut differs.
+ */
+export function enzymeName(name: string): string | null {
+  const lower = name.trim().toLowerCase();
+  if (!lower) return null;
+  const curated = CURATED.get(lower);
+  if (curated) return curated.name;
+  const e = aliasedEnzymesByName[lower];
+  return e ? (e.aliases?.find(a => a.toLowerCase() === lower) ?? e.name) : null;
+}
+
+/** Every enzyme name TeselaGen knows, the curated ones first, for choosing a lab's stock. */
+export const KNOWN_ENZYMES: readonly string[] = [
+  ...COMMON_ENZYMES,
+  ...[...new Set(Object.values(aliasedEnzymesByName).flatMap(e => e.aliases?.length ? e.aliases : [e.name]))]
+    .filter(n => !CURATED.has(n.toLowerCase()))
+    .sort((a, b) => a.localeCompare(b))
+];
+
+const extraCache = new Map<string, RestrictionEnzyme[]>();
+/** The curated enzymes plus any other known enzyme named in `extra` (a lab's stock). */
+function enzymeList(extra: readonly string[]): RestrictionEnzyme[] {
+  const names = [...new Set(extra.map(enzymeName).filter((n): n is string => !!n && !CURATED.has(n.toLowerCase())))].sort();
+  if (!names.length) return ALL_ENZYMES;
+  const key = names.join(" ");
+  let list = extraCache.get(key);
+  if (!list) {
+    list = [...ALL_ENZYMES, ...names.map(name => ({ ...aliasedEnzymesByName[name.toLowerCase()], name }))];
+    extraCache.clear();
+    extraCache.set(key, list);
+  }
+  return list;
+}
+
+/** The part of `extra` that changes what is scanned, as a cache key. */
+export function extraKey(extra: readonly string[]): string {
+  const list = enzymeList(extra);
+  return list === ALL_ENZYMES ? "" : list.slice(ALL_ENZYMES.length).map(e => e.name).join(" ");
+}
 
 /** Where one enzyme recognises and cuts the sequence (before counting and filtering). */
 export interface SiteHit {
@@ -65,14 +116,15 @@ export interface SiteHit {
   overhang: string;
 }
 
-const MAX_SITE = Math.max(...ALL_ENZYMES.map(e => e.site.length));
+// Over every known enzyme, so a lab's stock can't outgrow it.
+const MAX_SITE = Math.max(...Object.values(aliasedEnzymesByName).map(e => e.site.length));
 /** How far from an edit sites are looked for again: longer than any site plus any cut outside it. */
 const MARGIN = MAX_SITE + 40;
 
-function search(sequence: string, circular: boolean, offset = 0): SiteHit[] {
+function search(sequence: string, circular: boolean, enzymes: RestrictionEnzyme[], offset = 0): SiteHit[] {
   let found: ReturnType<typeof getCutsitesFromSequence>;
   try {
-    found = getCutsitesFromSequence(sequence, circular, ALL_ENZYMES);
+    found = getCutsitesFromSequence(sequence, circular, enzymes);
   } catch (e) {
     console.error(e);
     return [];
@@ -95,9 +147,9 @@ function search(sequence: string, circular: boolean, offset = 0): SiteHit[] {
   return out;
 }
 
-/** Every site of every enzyme in the list. */
-export function scanSites(sequence: string, circular: boolean): SiteHit[] {
-  return sequence.length ? search(sequence, circular) : [];
+/** Every site of every enzyme in the curated list, and of any other known enzyme in `extra`. */
+export function scanSites(sequence: string, circular: boolean, extra: readonly string[] = []): SiteHit[] {
+  return sequence.length ? search(sequence, circular, enzymeList(extra)) : [];
 }
 
 /** A site that crosses the origin, or cuts on the other side of it. */
@@ -132,27 +184,28 @@ const turn = (h: SiteHit, by: number, n: number): SiteHit => {
  * searched again, which keeps typing fast in long sequences. On a circular sequence an
  * edit near the origin is handled by turning both sequences so the edit sits in the middle.
  */
-export function rescanSites(before: { sequence: string; circular: boolean; hits: SiteHit[] }, sequence: string, circular: boolean): SiteHit[] {
+export function rescanSites(before: { sequence: string; circular: boolean; hits: SiteHit[] }, sequence: string, circular: boolean, extra: readonly string[] = []): SiteHit[] {
   const a = before.sequence;
   const b = sequence;
+  const enzymes = enzymeList(extra);
   if (a === b && circular === before.circular) return before.hits;
-  if (circular !== before.circular || !a.length || !b.length) return scanSites(b, circular);
+  if (circular !== before.circular || !a.length || !b.length) return scanSites(b, circular, extra);
   let [p, s] = commonEnds(a, b);
-  if (!circular || (p >= MARGIN && s >= MARGIN)) return updateAround(a, b, p, s, before.hits, circular);
+  if (!circular || (p >= MARGIN && s >= MARGIN)) return updateAround(a, b, p, s, before.hits, circular, enzymes);
   // The unchanged bases run from the end of the change round the origin to its start.
   const unchanged = p + s;
-  if (unchanged < 2 * MARGIN) return scanSites(b, true);
+  if (unchanged < 2 * MARGIN) return scanSites(b, true, extra);
   const half = Math.floor(unchanged / 2);
   const byA = (a.length - s + half) % a.length;
   const byB = (b.length - s + half) % b.length;
   const ta = a.slice(byA) + a.slice(0, byA);
   const tb = b.slice(byB) + b.slice(0, byB);
   [p, s] = commonEnds(ta, tb);
-  const hits = updateAround(ta, tb, p, s, before.hits.map(h => turn(h, byA, a.length)), true);
+  const hits = updateAround(ta, tb, p, s, before.hits.map(h => turn(h, byA, a.length)), true, enzymes);
   return hits.map(h => turn(h, -byB, b.length));
 }
 
-function updateAround(a: string, b: string, p: number, s: number, hits: SiteHit[], circular: boolean): SiteHit[] {
+function updateAround(a: string, b: string, p: number, s: number, hits: SiteHit[], circular: boolean, enzymes: RestrictionEnzyme[]): SiteHit[] {
   const delta = b.length - a.length;
   const oldEnd = a.length - s; // the change was [p, oldEnd) and is now [p, newEnd)
   const newEnd = b.length - s;
@@ -171,21 +224,27 @@ function updateAround(a: string, b: string, p: number, s: number, hits: SiteHit[
   const from = Math.max(0, p - MARGIN);
   const to = Math.min(b.length, newEnd + MARGIN);
   // On a linear sequence a window that reaches either end is searched just like the whole.
-  const fresh = search(b.slice(from, to), false, from).filter(h => !(hi(h) < p || lo(h) >= newEnd));
+  const fresh = search(b.slice(from, to), false, enzymes, from).filter(h => !(hi(h) < p || lo(h) >= newEnd));
   return [...kept, ...fresh];
 }
 
-/** The sites shown for an enzyme set, with how often each enzyme cuts, sorted by position. */
-export function selectSites(hits: SiteHit[], set: EnzymeSet): CutSite[] {
+/**
+ * The sites shown for an enzyme set, with how often each enzyme cuts, sorted by position.
+ * Lab sets show only stocked enzymes; the others only the curated list, so a lab's
+ * Esp3I doesn't sit on every BsmBI site.
+ */
+export function selectSites(hits: SiteHit[], set: EnzymeSet, labEnzymes: readonly string[] = []): CutSite[] {
   if (set === "none") return [];
-  const maxCuts = set === "unique2" ? 2 : 1;
+  const lab = isLabSet(set) ? new Set(labEnzymes.map(enzymeName)) : null;
+  const maxCuts = set === "lab" ? Infinity : set === "unique2" || set === "lab2" ? 2 : 1;
   const minSpecificity = set === "unique6" ? 6 : 0;
   const counts = new Map<string, number>();
   for (const h of hits) counts.set(h.enzyme, (counts.get(h.enzyme) ?? 0) + 1);
   const out: CutSite[] = [];
   for (const h of hits) {
     const cuts = counts.get(h.enzyme)!;
-    if (cuts > maxCuts || (SPECIFICITY.get(h.enzyme) ?? 0) < minSpecificity) continue;
+    const shown = lab ? lab.has(h.enzyme) : CURATED.has(h.enzyme.toLowerCase());
+    if (!shown || cuts > maxCuts || (SPECIFICITY.get(h.enzyme) ?? 0) < minSpecificity) continue;
     // Stable ids, so a selected site stays selected when the sites are recomputed.
     out.push({ id: `${h.enzyme}@${h.start}`, ...h, cuts });
   }
@@ -195,9 +254,9 @@ export function selectSites(hits: SiteHit[], set: EnzymeSet): CutSite[] {
 
 const SPECIFICITY = new Map(ALL_ENZYMES.map(e => [e.name, specificity(e)]));
 
-/** An enzyme's recognition site in upper case ("GGTCTC" for BsaI), or "" if it isn't in the list. */
+/** An enzyme's recognition site in upper case ("GGTCTC" for BsaI), or "" if TeselaGen doesn't know it. */
 export function enzymeSite(name: string): string {
-  return ALL_ENZYMES.find(e => e.name === name)?.site.toUpperCase() ?? "";
+  return aliasedEnzymesByName[name.trim().toLowerCase()]?.site.toUpperCase() ?? "";
 }
 
 /** Enzymes whose site can be added to a primer as written (no N or other ambiguity codes). */
@@ -209,13 +268,13 @@ export const TAIL_ENZYMES: { name: string; site: string }[] = ALL_ENZYMES.filter
 export function cutCounts(sequence: string, circular: boolean, names: string[]): Map<string, number> {
   const out = new Map(names.map(n => [n, 0]));
   if (!names.length || !sequence.length) return out;
-  for (const h of scanSites(sequence, circular)) if (out.has(h.enzyme)) out.set(h.enzyme, out.get(h.enzyme)! + 1);
+  for (const h of scanSites(sequence, circular, names)) if (out.has(h.enzyme)) out.set(h.enzyme, out.get(h.enzyme)! + 1);
   return out;
 }
 
 /** Cut sites of the enzymes in a set, sorted by position. */
-export function findCutSites(sequence: string, circular: boolean, set: EnzymeSet): CutSite[] {
-  return set === "none" ? [] : selectSites(scanSites(sequence, circular), set);
+export function findCutSites(sequence: string, circular: boolean, set: EnzymeSet, labEnzymes: readonly string[] = []): CutSite[] {
+  return set === "none" ? [] : selectSites(scanSites(sequence, circular, labEnzymes), set, labEnzymes);
 }
 
 /** "5′ overhang AATT", "blunt", … */

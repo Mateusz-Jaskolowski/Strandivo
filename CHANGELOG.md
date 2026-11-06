@@ -7,6 +7,13 @@ won't show notes that name anything like example.com or pUC19.gb). Everything af
 first blank line is the full notes, for the GitHub release and strandivo.com/changes.
 `npm run version` fails a release without a section here.
 
+## 0.2.1
+
+A small update with no new features. It is the first to arrive through Strandivo's own
+updates, to check that updating works on every system.
+
+- Nothing in the app changes; only the version number is new.
+
 ## 0.2.0
 
 Strandivo now updates itself: it checks once a day and installs a new version when you

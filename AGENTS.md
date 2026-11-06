@@ -341,6 +341,11 @@ it can (lists of files or features). CI checks that every path in backticks here
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
   list and the regenerated catalog together.
+- `node tools/build-icon.mjs` draws the app icon and writes every file made from it: the
+  PNGs, `src-tauri/icons/icon.ico` and `src-tauri/icons/icon.icns`, and the website's icon
+  and favicon. Change the drawing there, never the images (the SVGs beside them are its
+  output too). Sizes of 32 px and under get a plainer drawing, as the full one blurs. It
+  needs macOS for the .icns.
 - `npm run check` runs all of the above, the agent guide's path check, a syntax check of
   the e2e script and clippy: what CI
   checks except the e2e, in a minute or two. Run it before every push where Rust is
@@ -388,6 +393,14 @@ it can (lists of files or features). CI checks that every path in backticks here
   counting (part 5 of `docs/updates-feedback-usage-plan.md`); the Worker keeps nothing else
   and logs nothing. Deploy it with
   `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
+- **The website**, `strandivo.com`, is the plain files in `site/` on Cloudflare Pages (a
+  project named `strandivo`), with no build step and no scripts, so its Content Security
+  Policy (`site/_headers`) allows only its own images and stylesheet. Its colours copy the
+  app's tokens, as the site can't load `src/styles.css`. For now it is one page saying the
+  app is in development; part 6 of `docs/updates-feedback-usage-plan.md` adds Download and
+  Privacy. Cloudflare builds it from this repository: every push to `main` goes live, and
+  other branches get a preview address. The project is connected to GitHub, so never
+  deploy it with wrangler, which would be overwritten by the next push.
 - From a cloud session the npm and crates registries may be blocked: Rust in `src-tauri/`
   then only compiles in CI, and CI is the final word.
 

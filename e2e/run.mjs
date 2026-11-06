@@ -578,7 +578,7 @@ async function main() {
     const related = await s.exec("return Array.from(document.querySelectorAll('.sv-map-svgel text.sv-related')).map(t => t.dataset.id)");
     check("Selecting a site of an enzyme that cuts twice marks its other site on the map", related.length === 1 && related[0].startsWith("BglI@"), JSON.stringify(related));
     // ⌘-click on a Mac, Ctrl-click elsewhere.
-    const pick = name => `const mac = /Mac/.test(navigator.platform); document.querySelector('.sv-enzyme-chip[data-id^="${name}@"]').dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: mac, ctrlKey: !mac }));`;
+    const pick = name => `{ const mac = /Mac/.test(navigator.platform); document.querySelector('.sv-enzyme-chip[data-id^="${name}@"]').dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: mac, ctrlKey: !mac })); }`;
     await s.exec(`${pick("EcoRI")} ${pick("BamHI")}`);
     await sleep(300);
     const picked = await s.exec(`${doc} return { enzymes: s.selection.enzymes, inspector: document.querySelector('.sv-inspector')?.textContent || '' };`);

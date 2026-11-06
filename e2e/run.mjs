@@ -174,7 +174,23 @@ async function main() {
   const state = () => s.exec(`${doc} return { len: s.data.sequence.length, features: s.data.features.map(f => f.name), primers: s.data.primers.map(p => p.name), sel: s.selection, dirty: s.dirty };`);
   try {
     // --- map ---
+    // A fresh install: the welcome window opens over the file that started the app. Update
+    // checks are counted through the hook, which answers that there is none.
+    await s.exec("window.__e2eChecks = 0; window.__strandivoUpdate = { check: async () => { window.__e2eChecks++; return null; }, download: async () => {}, restart: async () => {} };");
     check("The file opens in a tab with its map", await s.waitFor("document.querySelector('.sv-map-svgel .sv-map-feature')", 30000));
+    const welcomeShown = await s.waitFor("/Welcome to Strandivo/.test(document.querySelector('.sv-dialog-title')?.textContent)", 5000);
+    check("On first launch the welcome window opens over the file", welcomeShown && JSON.stringify(await s.exec("return window.__strandivo.tabs()")) === '["pUC19-annotated.gb"]');
+    if (welcomeShown) {
+      await s.shot("00-welcome");
+      await s.click("//label[contains(@class,'sv-welcome-option')][contains(., 'common sequencing primers')]//input", "xpath");
+      check("Nothing is checked online while the welcome window is open", (await s.exec("return window.__e2eChecks")) === 0);
+      await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Start using Strandivo']", "xpath");
+      check("Start using Strandivo closes it", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
+      const chosen = await s.exec("const st = JSON.parse(localStorage.getItem('strandivo.settings') || '{}'); return { seen: st.welcomeSeen, updates: st.checkForUpdates, primers: JSON.parse(localStorage.getItem('strandivo.primerLibrary') || '[]').length };");
+      check("Its choices land in the settings, and an unticked box adds nothing", chosen.seen >= 1 && chosen.updates === true && chosen.primers === 0, JSON.stringify(chosen));
+      check("Once it closes, the update check runs", await s.waitFor("window.__e2eChecks === 1", 9000), `${await s.exec("return window.__e2eChecks")} checks`);
+    }
+    await s.exec("delete window.__strandivoUpdate;");
     const firstTabs = await s.exec("return { tabs: window.__strandivo.tabs(), active: window.__strandivo.activeTab(), home: !!document.querySelector('.sv-apptab-home') }");
     check("Home and the file's tab are in the app bar", firstTabs.home && JSON.stringify(firstTabs.tabs) === '["pUC19-annotated.gb"]' && firstTabs.active === 0, JSON.stringify(firstTabs));
     await sleep(1500);

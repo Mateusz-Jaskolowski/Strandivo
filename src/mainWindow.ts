@@ -19,6 +19,8 @@ import { openDocument, type DocTab, type OpenSequence } from "./doc/document.ts"
 import { Home } from "./home.ts";
 import { loadSettings, saveSettings, type Settings } from "./settings.ts";
 import { startUpdates } from "./updates.ts";
+import { openWelcome } from "./welcome.ts";
+import { needsWelcome } from "./lib/welcome.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
@@ -67,7 +69,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     h("div", { class: "sv-appbar-tools" }, appButtons.library, appButtons.settings)
   );
   const content = h("div", { class: "sv-shell-body" });
-  const updates = startUpdates();
+  // The welcome window opens over everything on first launch; the update check waits for it.
+  const welcome = needsWelcome(loadSettings().welcomeSeen) ? openWelcome(home) : Promise.resolve();
+  const updates = startUpdates(welcome);
   const dropText = h("span");
   const dropOverlay = h("div", { class: "ps-drop-overlay" }, h("div", null, icon("reads"), dropText));
   root.replaceChildren(h("div", { class: "sv-shell" }, appBar, updates.el, content, dropOverlay));
@@ -305,6 +309,10 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       void updates.check(true);
       return;
     }
+    if (id === "welcome") {
+      void openWelcome(home, true);
+      return;
+    }
     if (active?.doc) {
       active.doc.menu(id);
       return;
@@ -350,7 +358,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     saveSettings: (patch: Partial<Settings>) => saveSettings({ ...loadSettings(), ...patch }),
     libraryNames: () => home.listedNames(),
     /** Check for Updates…, as the menu does. */
-    checkForUpdates: () => updates.check(true)
+    checkForUpdates: () => updates.check(true),
+    /** Help → Welcome…, as the menu does. */
+    openWelcome: () => openWelcome(home, true)
   };
   Object.defineProperty(window, "__strandivo", { configurable: true, get: () => ({ ...shellHook, ...(active?.doc?.testHook ?? {}) }) });
 

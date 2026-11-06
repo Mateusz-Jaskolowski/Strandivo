@@ -485,3 +485,45 @@
   color: var(--text-3);
   white-space: nowrap;
 }
+
+/* ---------- the welcome window (src/welcome.ts) ---------- */
+.sv-welcome {
+  gap: 18px;
+}
+.sv-welcome-part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sv-welcome-part p {
+  margin: 0;
+}
+.sv-welcome-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.sv-welcome-option input {
+  margin-top: 2px;
+}
+.sv-welcome-option > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sv-welcome-label {
+  font-weight: 500;
+}
+.sv-welcome-actions {
+  display: flex;
+  gap: 8px;
+}
+.sv-welcome-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.sv-welcome-list:empty,
+.sv-welcome-done:empty {
+  display: none;
+}

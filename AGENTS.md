@@ -131,7 +131,8 @@ it can (lists of files or features). CI checks that every path in backticks here
   so it must keep working: `site/_redirects` until the page exists) are opened from a
   version the shell checks, never an address from the page. What's new shows the short
   notes as text: before updating they come from latest.json (`shortNotes` in
-  `src/lib/changelog.ts` cuts them short, as latest.json isn't signed), after updating
+  `src/lib/changelog.ts` cuts them short and drops them if they name an address, as
+  latest.json isn't signed and tampered notes could point to a look-alike site), after updating
   from the copy's own `CHANGELOG.md`, on the first start of the new version. Development builds don't update themselves. On Linux the AppImage replaces
   itself and a .deb copy installs the release's .deb (`linux-x86_64-deb` in latest.json,
   which the plugin looks for before `linux-x86_64`) with `pkexec`, so the system asks for a

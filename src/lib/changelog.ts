@@ -40,16 +40,25 @@ export function parseChangelog(text: string): ReleaseNotes[] {
 export const notesFor = (text: string, version: string) => parseChangelog(text).find(n => n.version === version) ?? null;
 
 /**
- * Short notes from the update server, made safe to show: plain text, a few lines at most.
- * They arrive over the network (latest.json isn't signed, only the files it lists), so they
- * are only ever shown as text and cut short.
+ * Whether text names a web or mail address: a scheme, "www.", or a name.tld such as
+ * example.com. Short notes never do (a test holds CHANGELOG.md to it), so notes from the
+ * server that do aren't shown. It errs on the side of caution: a file name such as
+ * pUC19.gb counts too, which only means the notes are on the website instead.
+ */
+export const looksLikeAddress = (text: string) => /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|[a-z0-9-]\.[a-z]{2,24}\b/i.test(text);
+
+/**
+ * Short notes from the update server, made safe to show: plain text, a few lines at most,
+ * and none at all if they name an address. They arrive over the network (latest.json isn't
+ * signed, only the files it lists), so tampered notes could at worst send people to a
+ * look-alike site; the dialog then only offers strandivo.com, which the app builds itself.
  */
 export function shortNotes(notes: string | null | undefined): string[] {
-  if (!notes) return [];
+  if (!notes || looksLikeAddress(notes)) return [];
   return notes
     .split(/\n+/)
     .map(l => l.trim())
-    .filter(l => l && !/^what's new:\s*https?:/i.test(l))
+    .filter(Boolean)
     .slice(0, 6)
     .map(l => (l.length > 400 ? `${l.slice(0, 399)}…` : l));
 }

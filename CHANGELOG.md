@@ -2,8 +2,9 @@
 
 Each release has a section, newest first, headed by its version. Its first paragraph is
 the short version: the app shows it in "What's new" before and after updating, so keep it
-to two or three plain sentences, without links or formatting. Everything after the first
-blank line is the full notes, for the GitHub release and strandivo.com/changes.
+to two or three plain sentences, without formatting, addresses or file names (the app
+won't show notes that name anything like example.com or pUC19.gb). Everything after the
+first blank line is the full notes, for the GitHub release and strandivo.com/changes.
 `npm run version` fails a release without a section here.
 
 ## 0.2.0

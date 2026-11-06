@@ -24,7 +24,7 @@ import {
   type PickedFile
 } from "../platform.ts";
 import { addRecentFile } from "../recent.ts";
-import { track } from "../usage.ts";
+import { track, trackOnce } from "../usage.ts";
 import { basename, dirname, extension, formatForPath, isTraceFile, joinPath, stripExtension, suggestedSaveName, TEXT_READ_EXTENSIONS, type SaveFormat } from "../lib/files.ts";
 import { CHECK_EXTENSION, checkFileText, type ReadCheck } from "../lib/readCheck.ts";
 import { rememberedReads, rememberReads } from "../readChecks.ts";
@@ -221,7 +221,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       return tab;
     },
     coverage: (r: Range) => reads.coverage(r.start, r.end),
-    addFeatureFromSelection: as => addFeature(as),
+    // Given a feature to make, it is an ORF's CDS (the inspector and the ORF menu).
+    addFeatureFromSelection: as => (as ? addFeature(as, "orf") : addFeature()),
     addPrimerFromSelection: () => addPrimer(),
     command: id => void command(id),
     contextMenu: (target, at, onMap = false) =>
@@ -437,7 +438,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   }
 
   function setTab(t: Tab) {
-    if (t !== tab) track("view_shown", { view: t });
+    if (t !== tab) trackOnce("view_used", { view: t });
     tab = t;
     layout();
     if (t === "sequence") seqView.focus();
@@ -524,7 +525,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   refreshStatus();
 
   // ---------- adding things ----------
-  function addFeature(as: { name: string; type: string; strand: 1 | -1 } = { name: "New feature", type: "misc_feature", strand: 1 }) {
+  function addFeature(as: { name: string; type: string; strand: 1 | -1 } = { name: "New feature", type: "misc_feature", strand: 1 }, how: "selection" | "orf" = "selection") {
     const { range } = store.selection;
     if (!range) {
       toast("Select the bases for the new feature first (drag across the map or the sequence).", "info", 4000);
@@ -537,6 +538,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       "Add feature",
       { range, focus: { kind: "feature", id } }
     );
+    track("feature_added", { how });
     focusInspectorName();
   }
 
@@ -554,6 +556,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const top = basesIn(d.sequence, range).toUpperCase();
     const primer: SeqPrimer = { id, name, start: range.start, end: range.end, strand, bases: strand === 1 ? top : reverseComplement(top), notes: {}, raw: {} };
     store.apply({ ...d, primers: [...d.primers, primer] }, "Add primer", { range, focus: { kind: "primer", id } });
+    track("primer_added", { how: "selection" });
     focusInspectorName();
   }
 
@@ -615,6 +618,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   /** Writes the document to a file, which becomes the window's file. */
   async function saveTo(target: string, fmtOut: SaveFormat) {
     await saveText(target, serialize(fileJson(), fmtOut));
+    track("file_saved", { format: fmtOut, how: "save" });
     store.markSaved();
     infoDirty = false;
     if (target !== path) {
@@ -632,6 +636,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     if (!chosen) return;
     try {
       await saveText(chosen, serialize(fileJson(), fmtOut));
+      track("file_saved", { format: fmtOut, how: "export" });
       toast(`Exported ${basename(chosen)}`, "success");
     } catch (e) {
       await alertDialog(`Couldn't export: ${e instanceof Error ? e.message : e}`);

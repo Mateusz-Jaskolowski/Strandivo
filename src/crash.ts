@@ -45,7 +45,7 @@ export function startCrashOffer(report: (crash: CrashReport, sent: () => void) =
     );
     el.hidden = false;
     await until.catch(() => {});
-    track("error", { kind: "crash" });
+    track("error_caught", { kind: "crash" });
   }
 
   return { el, check };

@@ -1238,7 +1238,13 @@ async function main() {
     await flush();
     const usage = await s.exec("return window.__e2eUsage");
     const names = usage.map(e => e.name);
-    check("Turned on, the app counts its start and what is used", names.includes("app_started") && usage.some(e => e.name === "view_shown" && e.props.view === "primers"), JSON.stringify(usage).slice(0, 240));
+    check("Turned on, the app counts its start and what is used", names.includes("app_started") && usage.some(e => e.name === "view_used" && e.props.view === "primers"), JSON.stringify(usage).slice(0, 240));
+    const started = usage.find(e => e.name === "app_started");
+    check("The start says how long the copy has been in use, as a range, and Settings' choices come with it", started?.props.installed === "first_day" && usage.some(e => e.name === "settings_chosen" && e.props.tm === "santalucia" && e.props.amber === "off"), JSON.stringify(usage.filter(e => /app_started|settings_chosen/.test(e.name))));
+    await s.exec("window.__strandivo.setView('sequence'); window.__strandivo.setView('primers');");
+    await flush();
+    usage.push(...(await s.exec("return window.__e2eUsage")).slice(usage.length));
+    check("A view is counted once, not at every switch", usage.filter(e => e.name === "view_used" && e.props.view === "primers").length === 1, JSON.stringify(usage.filter(e => e.name === "view_used")));
     // A crash last time is counted, by its kind alone; Dismiss forgets it.
     await s.exec(crashFile);
     await takeCrash();
@@ -1247,7 +1253,7 @@ async function main() {
     check("Dismiss hides the crash strip", await s.waitFor("document.querySelector('.sv-crash')?.hidden === true", 3000));
     await flush();
     usage.push(...(await s.exec("return window.__e2eUsage")).slice(usage.length));
-    check("A crash is counted as an error of kind crash, without its message", usage.some(e => e.name === "error" && e.props.kind === "crash" && Object.keys(e.props).length === 1), JSON.stringify(usage.filter(e => e.name === "error")));
+    check("A crash is counted as an error of kind crash, without its message", usage.some(e => e.name === "error_caught" && e.props.kind === "crash" && Object.keys(e.props).length === 1), JSON.stringify(usage.filter(e => e.name === "error_caught")));
     check("Events carry listed words alone, never a file's name or path", usage.length > 0 && !/pUC19|annotated|\/|\\/.test(JSON.stringify(usage.map(e => e.props))), JSON.stringify(usage.map(e => e.props)).slice(0, 200));
     await s.exec("window.__strandivo.setView('map');");
     await s.exec("window.__strandivo.saveSettings({ shareUsage: false });");

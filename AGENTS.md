@@ -172,15 +172,23 @@ it can (lists of files or features). CI checks that every path in backticks here
   a crash file over with `window.__strandivoCrash`.
 - **Usage statistics** are off until the user turns them on (the welcome window or
   Settings), for everyone, as the EU's rules want. Every event and what it may carry is
-  listed in `src/lib/usage.ts`, each property a list of words or a count put in a bucket,
-  so nothing typed or named can go; a unit test holds `docs/privacy.md` to naming every
-  event and property, so add one to both, with why it is worth counting. `track` in
-  `src/usage.ts` is the only way to send; it queues in the page, so turning statistics off
-  empties the queue at once and sends nothing, not even that. The shell
-  (`src-tauri/src/usage.rs`) checks the words again, adds a session number (random, never
-  stored) and the system, and posts to Aptabase's EU region with the key built in from
-  `APTABASE_APP_KEY`, a variable of the `release` environment: development, CI and e2e
-  builds have none and send nothing. Aptabase's Tauri plugin isn't used: it keeps a queue
+  listed in `src/lib/usage.ts`, each property a list of words or a number put in one of a
+  few buckets (`BUCKETS`), so nothing typed or named can go; a unit test holds
+  `docs/privacy.md` to naming every event and property, so add one to both, with why it is
+  worth counting. An event is named for what happened to what, as the user would say it
+  (`file_opened`, `primers_designed`, never `dialog_completed` with the tool as a
+  property), as Aptabase's dashboard lists names alone; a test holds names to the verbs
+  in use. Renaming one splits its count from older copies', so do it early or not at all.
+  `track` in `src/usage.ts` is the only way to send (`trackOnce` for once a launch, as for
+  views); it queues in the page, so turning statistics off empties the queue at once and
+  sends nothing, not even that. Only the main window's page sends, so a library or
+  Settings window can't count anything yet. The shell (`src-tauri/src/usage.rs`) checks
+  the words again, adds a session number (random, never stored) and the system, and posts
+  to Aptabase's EU region with the key built in from `APTABASE_APP_KEY`, a variable of the
+  `release` environment: CI and e2e builds have none and send nothing. A development build
+  sends only if its developer builds it with the key, to try the whole path before a
+  release; its events and a release candidate's are marked `isDebug`, which Aptabase's
+  dashboard keeps apart (its bug icon). Aptabase's Tauri plugin isn't used: it keeps a queue
   of its own that turning statistics off couldn't empty, sends the system's language, and
   lets the page send any text. e2e receives events with `window.__strandivoTrack`.
 - **The welcome window** (`src/welcome.ts`) opens on first launch as a dialog over the
@@ -650,6 +658,7 @@ it can (lists of files or features). CI checks that every path in backticks here
   `rustls-no-provider`) and panics building a client until one is installed, and release
   builds abort on a panic. `install_tls_provider` in `src-tauri/src/lib.rs` runs first in
   `run()`; call it too before building a client anywhere else. 0.3.0 crashed this way, as
-  only release builds have the statistics key, so no test or e2e run ever built that
-  client: code that only a release reaches needs a unit test of its own.
+  only release builds had the statistics key, so no test or e2e run ever built that
+  client: code that only a release reaches needs a unit test of its own, and a try in a
+  development build given the key or in a release candidate.
 - Files in `testdata/` have their own licences, listed in `testdata/README.md`.

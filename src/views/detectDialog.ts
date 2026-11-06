@@ -99,7 +99,7 @@ export function openDetectDialog(ctx: DocContext) {
       { range: { start: first.start, end: first.end }, focus: { kind: "feature", id: first.id } }
     );
     dlg.close();
-    track("dialog_completed", { dialog: "detection", parts: features.length });
+    track("features_detected", { found: features.length });
     toast(`Added ${plural(features.length, "feature")}. Undo takes them all back.`, "success", 4000);
   });
 

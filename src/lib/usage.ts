@@ -11,8 +11,20 @@
 // Add an event here with the reason it is worth counting, and to docs/privacy.md, which
 // the test checks names every event and property. No DOM.
 
-/** One of these words, or a count put in a bucket (`bucket`). */
-export type PropSpec = readonly string[] | "count";
+/**
+ * Numbers that go out as words: each kind's buckets, as [upper bound, word], the bound
+ * excluded. An exact number of reads, kilobases or days could tell people apart.
+ */
+export const BUCKETS = {
+  kb: [[5, "under_5kb"], [15, "5-15kb"], [50, "15-50kb"], [Infinity, "50kb+"]],
+  seconds: [[1, "under_1s"], [5, "1-5s"], [30, "5-30s"], [Infinity, "30s+"]],
+  days: [[1, "first_day"], [7, "first_week"], [30, "first_month"], [Infinity, "longer"]]
+} as const satisfies Record<string, readonly (readonly [number, string])[]>;
+
+export type BucketKind = keyof typeof BUCKETS;
+
+/** One of these words, a count in a bucket (`bucket`), or a number in one of `BUCKETS`. */
+export type PropSpec = readonly string[] | "count" | BucketKind;
 
 export interface EventSpec {
   /** Why it is counted: what it tells us that we would otherwise guess. */
@@ -20,30 +32,45 @@ export interface EventSpec {
   props: Record<string, PropSpec>;
 }
 
-export const DIALOGS = ["digest", "cloning", "primer_design", "pcr_product", "mutagenesis", "detection"] as const;
 export const VIEWS = ["map", "sequence", "primers", "reads", "info"] as const;
 export const FORMATS = ["genbank", "snapgene", "fasta", "embl", "other"] as const;
+export const READ_FORMATS = ["ab1", "fasta", "fastq", "genbank", "mixed"] as const;
 
+// Names are what happened to what, as the user would say it (file_opened, primers_designed),
+// so the dashboard's list of events reads without opening each one.
 export const USAGE_EVENTS = {
   app_started: {
-    why: "How many copies are in use, of which version, on which systems; the OS and its version come with every event.",
-    props: { arch: ["aarch64", "x86_64", "other"] }
+    why: "How many copies are in use, of which version, on which systems (the OS and its version come with every event); how long people keep using it, without anything that follows a person; and whether Home's folders are used.",
+    props: { arch: ["aarch64", "x86_64", "other"], installed: "days", folders: "count" }
   },
-  file_opened: { why: "Which file formats people bring, so the readers that matter get the work.", props: { format: FORMATS } },
-  view_shown: { why: "Which of the five views are used, and so where work on them goes.", props: { view: VIEWS } },
-  dialog_completed: {
-    why: "Which tools are used to the end, not just opened: a dialog counted when it adds or makes something.",
-    props: {
-      dialog: DIALOGS,
-      method: ["restriction", "gibson", "infusion", "goldengate", "back_to_back", "overlapping"],
-      parts: "count"
-    }
+  settings_chosen: {
+    why: "Whether the choices in Settings are used, so ones nobody changes can go; once a launch.",
+    props: { tm: ["santalucia", "breslauer", "wallace", "basic"], amber: ["on", "off"], bases: ["upper", "lower", "as_file"] }
   },
-  primer_pairs: { why: "Whether the Primers tab's Pairs view is used, and its Export list.", props: { action: ["shown", "exported"] } },
-  reads_aligned: { why: "How many reads people check at once, and whether long reads matter yet.", props: { reads: "count", kind: ["sanger", "long", "both"] } },
+  file_opened: {
+    why: "Which formats people bring, whether they open files from Home, and how long their sequences are, so the readers that matter, Home and speed on long sequences get the work.",
+    props: { format: FORMATS, from: ["home", "drop", "other"], length: "kb", topology: ["circular", "linear"] }
+  },
+  file_saved: { why: "Whether people edit and keep their work in Strandivo, not only look at it.", props: { format: ["genbank", "fasta"], how: ["save", "export"] } },
+  view_used: { why: "Which of the five views are used, and so where work on them goes; once a view a launch.", props: { view: VIEWS } },
+  feature_added: { why: "Whether people annotate by hand, from ORFs or from a protein's regions.", props: { how: ["selection", "orf", "region"] } },
+  features_detected: { why: "Whether feature detection is used, and how much it finds.", props: { found: "count" } },
+  primer_added: { why: "How primers reach a file other than by design: typed, from the selection or from the library.", props: { how: ["selection", "sequence", "library"] } },
+  primers_designed: { why: "Whether primer design is used to the end.", props: {} },
+  primer_pairs_shown: { why: "Whether the Primers tab's Pairs view is used.", props: {} },
+  primer_pairs_exported: { why: "Whether the pairs' Export list is used.", props: {} },
+  pcr_product_made: { why: "Whether the PCR product dialog is used to the end.", props: {} },
+  mutagenesis_designed: { why: "Whether mutagenesis primers are made, and which layout labs use.", props: { layout: ["back_to_back", "overlapping"] } },
+  digest_simulated: { why: "Whether digests are simulated to the end.", props: {} },
+  cloning_simulated: { why: "Which cloning methods are simulated, so the work goes to the ones labs use.", props: { method: ["restriction", "gibson", "infusion", "goldengate"] } },
+  reads_added: { why: "Which read formats people bring, and how many at once.", props: { format: READ_FORMATS, reads: "count" } },
+  reads_aligned: {
+    why: "How many reads people check at once, whether long reads matter yet, whether alignment is fast enough, and how many check libraries with variable regions.",
+    props: { reads: "count", kind: ["sanger", "long", "both"], took: "seconds", variable: ["yes", "no"] }
+  },
   check_saved: { why: "Whether people keep their checks as files.", props: {} },
   update_installed: { why: "How quickly a new version reaches people.", props: {} },
-  error: {
+  error_caught: {
     why: "How often something goes wrong, by kind, crashes included (counted on the next launch); never the message, which can name a file.",
     props: { kind: ["uncaught", "rejection", "command", "crash"] }
   }
@@ -51,7 +78,7 @@ export const USAGE_EVENTS = {
 
 export type UsageEventName = keyof typeof USAGE_EVENTS;
 
-type Value<S> = S extends "count" ? number : S extends readonly (infer W)[] ? W : never;
+type Value<S> = S extends readonly (infer W)[] ? W : number;
 /** The properties an event may carry, each optional. */
 export type UsageProps<E extends UsageEventName> = { [K in keyof (typeof USAGE_EVENTS)[E]["props"]]?: Value<(typeof USAGE_EVENTS)[E]["props"][K]> };
 
@@ -72,6 +99,18 @@ export function bucket(n: number): string {
   return "21+";
 }
 
+/** A number as its bucket's word (`BUCKETS`). */
+export function inBucket(kind: BucketKind, n: number): string {
+  return BUCKETS[kind].find(([below]) => n < below)![1];
+}
+
+/** Every word a property may go out as. */
+export function propWords(spec: PropSpec): readonly string[] {
+  if (spec === "count") return ["0", "1", "2-5", "6-20", "21+"];
+  if (typeof spec === "string") return BUCKETS[spec].map(([, w]) => w);
+  return spec;
+}
+
 /**
  * The event as it is sent, or null if it isn't on the list. Properties that aren't on the
  * list, or whose value isn't one of its words, are dropped rather than sent.
@@ -83,8 +122,8 @@ export function usageEvent(name: string, props: Record<string, unknown> = {}, no
   for (const [key, value] of Object.entries(props)) {
     if (!Object.hasOwn(spec, key)) continue;
     const allowed = spec[key];
-    if (allowed === "count") {
-      if (typeof value === "number" && Number.isFinite(value)) out[key] = bucket(value);
+    if (typeof allowed === "string") {
+      if (typeof value === "number" && Number.isFinite(value)) out[key] = allowed === "count" ? bucket(value) : inBucket(allowed, value);
     } else if (typeof value === "string" && allowed.includes(value)) {
       out[key] = value;
     }
@@ -100,4 +139,18 @@ export function fileFormat(path: string): (typeof FORMATS)[number] {
   if (["fa", "fasta", "fna", "ffn", "seq", "txt"].includes(ext)) return "fasta";
   if (["embl", "emb"].includes(ext)) return "embl";
   return "other";
+}
+
+/** The format of a batch of read files, from their names: one word, or "mixed". */
+export function readFormat(paths: string[]): (typeof READ_FORMATS)[number] {
+  const kinds = new Set(
+    paths.map(p => {
+      const ext = /\.([^./\\]+)$/.exec(p)?.[1]?.toLowerCase() ?? "";
+      if (["ab1", "abi"].includes(ext)) return "ab1";
+      if (["fastq", "fq"].includes(ext)) return "fastq";
+      if (["gb", "gbk", "genbank"].includes(ext)) return "genbank";
+      return "fasta";
+    })
+  );
+  return kinds.size === 1 ? [...kinds][0] : "mixed";
 }

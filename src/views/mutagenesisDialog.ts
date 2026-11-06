@@ -273,7 +273,7 @@ export function openMutagenesisDialog(ctx: DocContext, initial: MutagenesisTarge
     const mutant = memory.openMutant ? { ...applyChange(d, design.change), name: `${d.name || "Plasmid"} ${label}` } : null;
     ctx.store.apply({ ...d, primers: [...d.primers, f, r] }, "Add mutagenesis primers", { range: { start: f.start, end: f.end }, focus: { kind: "primer", id: f.id } });
     dlg.close();
-    track("dialog_completed", { dialog: "mutagenesis", method: memory.layout === "overlapping" ? "overlapping" : "back_to_back" });
+    track("mutagenesis_designed", { layout: memory.layout === "overlapping" ? "overlapping" : "back_to_back" });
     toast(`Added ${f.name} and ${r.name} for ${label}.`, "success", 4000);
     if (mutant) ctx.openNew(mutant);
   };

@@ -106,7 +106,7 @@ export class PrimersView {
       h("span", { class: "sv-push" }),
       button("Copy for ordering…", "copy", () => openOrderDialog(ctx, this.shownOrder)),
       button("Export list…", null, () => {
-        track("primer_pairs", { action: "exported" });
+        track("primer_pairs_exported");
         void exportPrimerList(ctx, this.exportRows());
       })
     );
@@ -277,7 +277,7 @@ export class PrimersView {
           onclick: () => {
             if (this.listView === v) return;
             this.listView = v;
-            if (v === "pairs") track("primer_pairs", { action: "shown" });
+            if (v === "pairs") track("primer_pairs_shown");
             this.renderBody();
             this.markSelected();
           }

@@ -4,6 +4,7 @@
 // Right sidebar: everything about the current selection (a feature, primer, cut site or a
 // range of bases), with editing and the actions that apply to it.
 
+import { track } from "../usage.ts";
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg, primerIcon } from "../ui/icons.ts";
 import { primerLibrary } from "../primerLibrary.ts";
@@ -453,6 +454,7 @@ export class Inspector {
       raw: {}
     };
     this.ctx.store.apply({ ...d, features: [...d.features, feature] }, "Add feature", { range: { start: feature.start, end: feature.end }, focus: { kind: "feature", id } });
+    track("feature_added", { how: "region" });
   }
 
   private removeRegion(f: SeqFeature, r: ProteinRegion) {

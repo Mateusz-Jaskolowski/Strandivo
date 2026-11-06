@@ -67,6 +67,17 @@ fn unsupported() -> Option<&'static str> {
     }
 }
 
+/// What went wrong, in words for the user: a network error says only that, as its own text
+/// is a URL and a library's message.
+fn failure(doing: &str, e: tauri_plugin_updater::Error) -> String {
+    match e {
+        tauri_plugin_updater::Error::Reqwest(_) | tauri_plugin_updater::Error::Network(_) => {
+            format!("Couldn't {doing}: Strandivo couldn't reach the internet, or the server didn't answer.")
+        }
+        e => format!("Couldn't {doing}: {e}"),
+    }
+}
+
 /// Asks updates.strandivo.com for a newer version. `None` when this is the latest.
 #[tauri::command]
 pub async fn check_update<R: Runtime>(app: AppHandle<R>) -> Result<Option<UpdateInfo>, String> {
@@ -74,7 +85,7 @@ pub async fn check_update<R: Runtime>(app: AppHandle<R>) -> Result<Option<Update
         return Err(why.to_string());
     }
     let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| format!("Couldn't check for updates: {e}"))?;
+    let update = updater.check().await.map_err(|e| failure("check for updates", e))?;
     let state = app.state::<SharedUpdates>();
     let mut st = state.lock().unwrap();
     let Some(update) = update else {
@@ -120,7 +131,7 @@ pub async fn download_update<R: Runtime>(app: AppHandle<R>, on_progress: Channel
             || {},
         )
         .await
-        .map_err(|e| format!("Couldn't download the update: {e}"))?;
+        .map_err(|e| failure("download the update", e))?;
     let state = app.state::<SharedUpdates>();
     let mut st = state.lock().unwrap();
     if let Some((u, slot)) = st.found.as_mut() {

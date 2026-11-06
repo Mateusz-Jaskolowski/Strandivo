@@ -26,6 +26,10 @@ seqcore-json = { path = "../crates/seqcore-json" }
 os_info = { version = "3", default-features = false }
 # Usage statistics (src/usage.rs); the updater already brings it in, with its TLS.
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
+# reqwest is built without a TLS provider (the updater's `rustls-no-provider`) and panics
+# building a client before one is installed; `install_tls_provider` in src/lib.rs installs
+# the same one the updater does. Already in the tree, so no new crates.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"

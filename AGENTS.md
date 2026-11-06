@@ -632,4 +632,10 @@ it can (lists of files or features). CI checks that every path in backticks here
   (`src/lib/chromatogram.ts`) keeps the four traces as `Int16Array` and drops the parser's
   `baseTraces`, which took about 90% of a read's 1.6 MB. Typed arrays become objects in
   JSON, so turn traces into plain lists before sending them to Rust.
+- **HTTPS in the shell**: reqwest is built without a TLS provider (the updater's
+  `rustls-no-provider`) and panics building a client until one is installed, and release
+  builds abort on a panic. `install_tls_provider` in `src-tauri/src/lib.rs` runs first in
+  `run()`; call it too before building a client anywhere else. 0.3.0 crashed this way, as
+  only release builds have the statistics key, so no test or e2e run ever built that
+  client: code that only a release reaches needs a unit test of its own.
 - Files in `testdata/` have their own licences, listed in `testdata/README.md`.

@@ -9,6 +9,7 @@ import { h } from "../ui/dom.ts";
 import { fontStack, s, textWidth } from "../ui/svg.ts";
 import { cutSites, featureStyles, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
+import type { CutSite } from "../lib/enzymes.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import { regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions.ts";
@@ -22,13 +23,76 @@ interface LabelItem {
   /** Radius where the leader line starts. */
   r: number;
   text: string;
-  sub?: string;
   kind: "feature" | "primer" | "cutsite";
   id: string;
+  /** The feature's or primer's own colour, for its mark, text and leader. */
+  color?: string;
+  /** Which way a primer points, for its mark. */
+  strand?: 1 | -1;
+  /** An enzyme that cuts once, which is the one people look for. */
+  unique?: boolean;
+  /** Tooltip, for labels whose shape on the map has none. */
+  title?: string;
   width: number;
   y: number;
   ly: number;
 }
+
+/** Width of the mark before a primer's label, and the space after it, for labels of `px`. */
+const glyphSize = (px: number) => px * 0.85;
+const glyphGap = (px: number) => Math.max(3, px * 0.35);
+/** Room either side of a feature's name inside its background. */
+const chipPad = (px: number) => Math.max(3, px * 0.45);
+/** Enzymes are set smaller, in monospace (`.sv-map-label-cut`), so they read as the quiet kind. */
+const CUT_SCALE = 0.92;
+
+/**
+ * The background behind a feature's name, a tint of the feature's colour: features are what
+ * a map is read for, so they get the strongest mark. It starts at `x` and grows towards
+ * `dir` over `textW` and its padding, centred on `y`.
+ */
+function labelChip(l: Pick<LabelItem, "id" | "color">, x: number, y: number, textW: number, px: number, dir: 1 | -1): SVGElement {
+  const w = textW + 2 * chipPad(px);
+  const hgt = px * 1.12;
+  return s("rect", {
+    x: f1(dir > 0 ? x : x - w),
+    y: f1(y - hgt / 2),
+    width: f1(w),
+    height: f1(hgt),
+    rx: f1(px * 0.3),
+    class: "sv-map-chip",
+    style: l.color ? `--lc:${l.color}` : undefined,
+    "data-kind": "feature",
+    "data-id": l.id
+  });
+}
+
+/**
+ * The small mark beside a primer's label: an arrow pointing the primer's way. It is `size`
+ * wide from `x`, growing towards `dir`, centred on `y`. Features have a background instead
+ * (`labelChip`), and enzymes nothing: with dozens of them marks made the map busy, and
+ * their font and dotted leader set them apart already.
+ */
+function labelGlyph(l: Pick<LabelItem, "kind" | "id" | "color" | "strand">, x: number, y: number, size: number, dir: 1 | -1): SVGElement | null {
+  const x0 = dir > 0 ? x : x - size;
+  const at = { "data-kind": l.kind, "data-id": l.id };
+  if (l.kind === "primer") {
+    const reverse = l.strand === -1;
+    const tip = reverse ? x0 : x0 + size;
+    const back = reverse ? size * 0.4 : -size * 0.4;
+    const hh = size * 0.34;
+    const d = `M${f1(reverse ? x0 + size : x0)},${f1(y)} H${f1(tip)} M${f1(tip + back)},${f1(y - hh)} L${f1(tip)},${f1(y)} L${f1(tip + back)},${f1(y + hh)}`;
+    return s("path", { ...at, d, class: "sv-map-glyph sv-map-glyph-primer", style: l.color ? `--pc:${l.color}` : undefined });
+  }
+  return null;
+}
+
+/** An enzyme's tooltip: how often it cuts, which is what decides whether it is any use. */
+const cutTitle = (c: CutSite) => (c.cuts === 1 ? `${c.enzyme} · cuts once, at ${fmt(c.cut)}` : `${c.enzyme} · cuts ${fmt(c.cuts)} times · this cut at ${fmt(c.cut)}`);
+
+/** Class names of a label's text, by kind (and, for an enzyme, whether it cuts once). */
+const labelClass = (l: Pick<LabelItem, "kind" | "unique">) =>
+  l.kind === "cutsite" ? `sv-map-label sv-map-label-cut${l.unique ? " sv-map-unique" : ""}` : l.kind === "primer" ? "sv-map-label sv-map-label-primer" : "sv-map-label sv-map-label-feature";
 
 interface Geometry {
   n: number;
@@ -328,6 +392,7 @@ export class MapView {
     const labelPx = 10.5 * (o.labelSize / 8);
     const gap = labelPx * 1.32;
     const labelFont = (w: number) => `${w} ${labelPx}px ${sans}`;
+    const cutFont = `400 ${labelPx * CUT_SCALE}px ${mono}`;
     const pad = Math.max(1, n * 0.002);
 
     // Feature lanes, outermost first. Features that only touch share a lane.
@@ -446,7 +511,7 @@ export class MapView {
         );
       } else {
         const text = shortLabel(f.name);
-        labels.push({ angle: (a0 + span / 2) % 360, r: r2, text, kind: "feature", id: f.id, width: textWidth(text, labelFont(600)), y: 0, ly: 0 });
+        labels.push({ angle: (a0 + span / 2) % 360, r: r2, text, kind: "feature", id: f.id, color: st.fill, width: textWidth(text, labelFont(600)), y: 0, ly: 0 });
       }
     });
     root.appendChild(featureLayer);
@@ -485,7 +550,7 @@ export class MapView {
       let span = a1 - a0;
       if (span <= 0) span += 360;
       const text = shortLabel(p.name);
-      labels.push({ angle: (a0 + span / 2) % 360, r: r + 3, text, kind: "primer", id: p.id, width: textWidth(text, labelFont(600)), y: 0, ly: 0 });
+      labels.push({ angle: (a0 + span / 2) % 360, r: r + 3, text, kind: "primer", id: p.id, color: own, strand: p.strand === -1 ? -1 : 1, width: textWidth(text, labelFont(500)), y: 0, ly: 0 });
     }
     root.appendChild(primerLayer);
 
@@ -496,16 +561,17 @@ export class MapView {
         const a = ang(c.cut);
         const [x1, y1] = pt(a, BAND_OUT);
         const [x2, y2] = pt(a, tickOut);
-        cuts.appendChild(s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2) }));
-        const sub = fmt(c.start + 1);
+        const unique = c.cuts === 1;
+        cuts.appendChild(s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2), class: unique ? "sv-map-unique" : undefined }));
         labels.push({
           angle: ((a % 360) + 360) % 360,
           r: tickOut,
           text: c.enzyme,
-          sub,
           kind: "cutsite",
           id: c.id,
-          width: textWidth(c.enzyme, labelFont(500)) + 4 + textWidth(sub, labelFont(400)),
+          unique,
+          title: cutTitle(c),
+          width: textWidth(c.enzyme, cutFont),
           y: 0,
           ly: 0
         });
@@ -520,10 +586,11 @@ export class MapView {
     let maxY = knee;
     for (const l of labels) l.angle = ((l.angle % 360) + 360) % 360;
     // Only as many labels as fit beside the map: features first (largest first), then
-    // primers, then enzymes. The rest stay reachable from the outline and by hovering.
+    // primers, then enzymes that cut once, then the rest. The others stay reachable from
+    // the outline and by hovering.
     const capacity = Math.max(8, Math.floor((2.4 * rLab) / gap));
     const featureSize = new Map(feats.map(f => [f.id, rangeLength(f, n)]));
-    const rank = (l: LabelItem) => (l.kind === "feature" ? 0 : l.kind === "primer" ? 1 : 2);
+    const rank = (l: LabelItem) => (l.kind === "feature" ? 0 : l.kind === "primer" ? 1 : l.unique ? 2 : 3);
     const fit = (side: LabelItem[]) => {
       if (side.length <= capacity) return side;
       const keep = new Set([...side].sort((a, b) => rank(a) - rank(b) || (featureSize.get(b.id) ?? 0) - (featureSize.get(a.id) ?? 0)).slice(0, capacity));
@@ -532,6 +599,10 @@ export class MapView {
     const right = fit(labels.filter(l => l.angle < 180));
     const left = fit(labels.filter(l => l.angle >= 180));
     const leaders = s("g", { fill: "none", class: "sv-map-leader" });
+    // A feature's name sits on a tint of its colour, a primer's starts with an arrow.
+    const gs = glyphSize(labelPx);
+    const gg = glyphGap(labelPx);
+    const cp = chipPad(labelPx);
     const texts = s("g", { "font-size": labelPx, "dominant-baseline": "central" });
     for (const [side, sgn] of [
       [right, 1],
@@ -545,19 +616,25 @@ export class MapView {
         const k = pt(l.angle, knee);
         let x = sgn * Math.sqrt(Math.max(rLab * rLab - dy * dy, 34 * 34));
         x = sgn > 0 ? Math.max(x, k[0] + 6) : Math.min(x, k[0] - 6);
-        leaders.appendChild(s("polyline", { points: `${P(p0)} ${P(k)} ${f1(x)},${f1(dy)}` }));
-        const tx = x + sgn * 4;
-        const cls = l.kind === "cutsite" ? "sv-map-label sv-map-label-cut" : l.kind === "primer" ? "sv-map-label sv-map-label-primer" : "sv-map-label";
+        const colour = l.color ? `--lc:${l.color}` : undefined;
+        leaders.appendChild(s("polyline", { points: `${P(p0)} ${P(k)} ${f1(x)},${f1(dy)}`, class: `sv-map-leader-${l.kind}`, style: colour }));
+        const gx = x + sgn * 4;
+        const chip = l.kind === "feature" ? labelChip(l, gx, dy, l.width, labelPx, sgn) : null;
+        const mark = chip ?? labelGlyph(l, gx, dy, gs, sgn);
+        if (mark) texts.appendChild(mark);
+        if (chip) this.addShape(`${l.kind}:${l.id}`, chip);
+        const tx = chip ? gx + sgn * cp : mark ? gx + sgn * (gs + gg) : gx;
         const t = s(
           "text",
-          { x: f1(tx), y: f1(dy), "text-anchor": sgn > 0 ? "start" : "end", class: cls, "data-kind": l.kind, "data-id": l.id },
+          { x: f1(tx), y: f1(dy), "text-anchor": sgn > 0 ? "start" : "end", class: labelClass(l), style: colour, "data-kind": l.kind, "data-id": l.id },
           l.text,
-          l.sub ? s("tspan", { dx: 4, class: "sv-map-label-sub" }, l.sub) : null
+          l.title ? s("title", null, l.title) : null
         );
         texts.appendChild(t);
         this.addShape(`${l.kind}:${l.id}`, t);
-        minX = Math.min(minX, sgn > 0 ? tx : tx - l.width);
-        maxX = Math.max(maxX, sgn > 0 ? tx + l.width : tx);
+        const end = tx + sgn * (l.width + (chip ? cp : 0));
+        minX = Math.min(minX, gx, end);
+        maxX = Math.max(maxX, gx, end);
         minY = Math.min(minY, dy - gap / 2);
         maxY = Math.max(maxY, dy + gap / 2);
       }
@@ -590,14 +667,18 @@ export class MapView {
     const scale = (width - 2 * m) / n;
     const X = (p: number) => m + p * scale;
     const labelFont = (w: number) => `${w} ${labelPx}px ${sans}`;
+    // Feature names under their bars sit on a tint of their colour, as on the circular map.
+    const cp = chipPad(labelPx);
+    const cutFont = `400 ${labelPx * CUT_SCALE}px ${mono}`;
 
     // Enzyme label rows, from the backbone upwards.
     const cuts = o.cutsites ? cutSites(d, o.enzymeSet) : [];
     const rows: number[] = [];
     const placed = cuts.map(c => {
       const text = c.enzyme;
-      const w = textWidth(text, labelFont(500)) + 6;
-      const x = X(c.cut) - w / 2;
+      const w = textWidth(text, cutFont) + 6;
+      // Centred on the cut, but kept inside the drawing near the ends.
+      const x = Math.max(2, Math.min(width - w - 2, X(c.cut) - w / 2));
       let row = 0;
       while (rows[row] !== undefined && rows[row] > x) row++;
       rows[row] = x + w;
@@ -609,7 +690,7 @@ export class MapView {
     const primerPlaced = primers.map(p => {
       const a = X(p.start);
       const b = X(p.end + 1);
-      const w = Math.max(b - a, textWidth(p.name, labelFont(600)) + 4);
+      const w = Math.max(b - a, textWidth(p.name, labelFont(500)) + 4);
       let row = 0;
       while (primerRows[row] !== undefined && primerRows[row] > a) row++;
       primerRows[row] = a + w + 4;
@@ -633,13 +714,16 @@ export class MapView {
     const nameBelow = (f: SeqFeature) => X((f.end >= f.start ? f.end : n - 1) + 1) - X(f.start) <= textWidth(f.name, labelFont(600)) + 16;
     const nameRow = new Map<string, number>();
     const nameRowEnds: number[][] = Array.from({ length: laneCount }, () => []);
+    // A name starts under its feature's start, moved left if it would run off the end.
+    const nameWidth = (f: SeqFeature) => 2 * cp + textWidth(shortLabel(f.name), labelFont(600));
+    const nameX = (f: SeqFeature) => Math.max(2, Math.min(X(f.start), width - 2 - nameWidth(f)));
     for (const f of [...feats].sort((a, b) => a.start - b.start)) {
       if (!nameBelow(f)) continue;
-      const x = X(f.start);
+      const x = nameX(f);
       const ends = nameRowEnds[lanes.get(f.id) ?? 0];
       let row = 0;
       while (ends[row] !== undefined && ends[row] > x) row++;
-      ends[row] = x + textWidth(shortLabel(f.name), labelFont(600)) + 6;
+      ends[row] = x + nameWidth(f) + 6;
       nameRow.set(f.id, row);
     }
     const nameStep = Math.max(14, labelPx + 4);
@@ -732,7 +816,13 @@ export class MapView {
         featureLayer.appendChild(s("text", { x: f1((x1 + x2) / 2), y: y + 8, "text-anchor": "middle", "font-weight": 600, fill: st.text, class: "sv-map-arctext", "data-kind": "feature", "data-id": f.id }, f.name));
       } else {
         const ty = y + 16 + nameStep / 2 + (nameRow.get(f.id) ?? 0) * nameStep;
-        featureLayer.appendChild(s("text", { x: f1(x1), y: f1(ty), "font-weight": 600, class: "sv-map-label", "data-kind": "feature", "data-id": f.id }, shortLabel(f.name)));
+        const mark = { kind: "feature" as const, id: f.id, color: st.fill };
+        const name = shortLabel(f.name);
+        const nx = nameX(f);
+        const chip = labelChip(mark, nx, ty, textWidth(name, labelFont(600)), labelPx, 1);
+        featureLayer.appendChild(chip);
+        this.addShape(`feature:${f.id}`, chip);
+        featureLayer.appendChild(s("text", { x: f1(nx + cp), y: f1(ty), class: labelClass(mark), style: `--lc:${st.fill}`, "data-kind": "feature", "data-id": f.id }, name));
       }
     }
     root.appendChild(featureLayer);
@@ -760,18 +850,21 @@ export class MapView {
         p.strand === 1
           ? `M${f1(a)},${y - 2} H${f1(b - head)} L${f1(b)},${y} L${f1(b - head)},${y + 2} H${f1(a)} Z`
           : `M${f1(a + head)},${y - 2} H${f1(b)} V${y + 2} H${f1(a + head)} L${f1(a)},${y} Z`;
-      const path = s("path", { d: d2, class: "sv-map-primer", "data-kind": "primer", "data-id": p.id }, s("title", null, `${p.name} · primer`));
+      // The name sits on the primer's own arrow, so it needs no mark of its own.
+      const own = primerColors(p).color;
+      const path = s("path", { d: d2, class: "sv-map-primer", style: own ? `--pc:${own}` : undefined, "data-kind": "primer", "data-id": p.id }, s("title", null, `${p.name} · primer`));
       primerLayer.appendChild(path);
       this.addShape(`primer:${p.id}`, path);
-      primerLayer.appendChild(s("text", { x: f1(a), y: y - labelPx * 0.75, "font-weight": 600, class: "sv-map-label sv-map-label-primer", "data-kind": "primer", "data-id": p.id }, p.name));
+      primerLayer.appendChild(s("text", { x: f1(a), y: y - labelPx * 0.75, class: labelClass({ kind: "primer" }), style: own ? `--lc:${own}` : undefined, "data-kind": "primer", "data-id": p.id }, p.name));
     }
     root.appendChild(primerLayer);
 
     const cutLayer = s("g", { "font-size": labelPx, "dominant-baseline": "central" });
     for (const { c, x, w, row } of placed) {
       const y = labelTop + (rows.length - 1 - row) * rowH + rowH / 2;
-      cutLayer.appendChild(s("line", { x1: f1(X(c.cut)), y1: f1(y + rowH / 2), x2: f1(X(c.cut)), y2: baseY, class: "sv-map-leader" }));
-      const t = s("text", { x: f1(x + w / 2), y: f1(y), "text-anchor": "middle", class: "sv-map-label sv-map-label-cut", "data-kind": "cutsite", "data-id": c.id }, c.enzyme, s("title", null, `${c.enzyme} · cuts at ${fmt(c.cut)}`));
+      const mark = { kind: "cutsite" as const, id: c.id, unique: c.cuts === 1 };
+      cutLayer.appendChild(s("line", { x1: f1(X(c.cut)), y1: f1(y + rowH / 2), x2: f1(X(c.cut)), y2: baseY, class: "sv-map-leader sv-map-leader-cutsite" }));
+      const t = s("text", { x: f1(x + w / 2), y: f1(y), "text-anchor": "middle", class: labelClass(mark), "data-kind": "cutsite", "data-id": c.id }, c.enzyme, s("title", null, cutTitle(c)));
       cutLayer.appendChild(t);
       this.addShape(`cutsite:${c.id}`, t);
     }

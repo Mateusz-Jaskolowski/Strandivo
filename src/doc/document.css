@@ -1064,21 +1064,75 @@
   stroke-width: 1;
   fill: none;
 }
+/* Labels say what they name by their colour, font and leader: features in their colour on a
+   solid line, primers in theirs on a dashed one, enzymes in small grey monospace on a dotted
+   one. A feature's name also sits on a tint of its colour, the strongest mark, as features
+   are what a map is read for; a primer's starts with an arrow pointing its way. Enzymes get
+   neither, as dozens of marks made the map busy. An enzyme that cuts once is a darker grey
+   than one that cuts several times. */
+.sv-map-leader polyline.sv-map-leader-feature {
+  stroke: color-mix(in srgb, var(--lc, var(--leader)) 70%, var(--leader));
+}
+.sv-map-leader polyline.sv-map-leader-primer {
+  stroke: color-mix(in srgb, var(--lc, var(--primer)) 60%, var(--leader));
+  stroke-dasharray: 3 2;
+}
+.sv-map-leader polyline.sv-map-leader-cutsite,
+.sv-map-leader.sv-map-leader-cutsite {
+  stroke: var(--text-3);
+  stroke-dasharray: 0.1 2.4;
+  stroke-linecap: round;
+  stroke-width: 1.2;
+}
+.sv-map-glyph {
+  cursor: pointer;
+}
+.sv-map-glyph-primer {
+  fill: none;
+  stroke: var(--pc, var(--primer));
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .sv-map-label {
   fill: var(--text);
   font-weight: 600;
   cursor: pointer;
 }
+.sv-map-label-feature {
+  fill: color-mix(in srgb, var(--lc, var(--text)) 45%, var(--text));
+}
+/* Its background is measured for this weight, so a selected feature keeps it. */
+.sv-map-label-feature.sv-focused {
+  font-weight: 600;
+}
+.sv-map-chip {
+  fill: color-mix(in srgb, var(--lc, var(--text-3)) 22%, var(--panel));
+  stroke: color-mix(in srgb, var(--lc, var(--text-3)) 45%, var(--panel));
+  stroke-width: 0.75;
+  cursor: pointer;
+}
+.sv-map-chip.sv-focused {
+  stroke: var(--accent);
+  stroke-width: 1.25;
+}
+/* CUT_SCALE in src/views/mapView.ts measures these labels at this size. */
 .sv-map-label-cut {
+  fill: color-mix(in srgb, var(--text-3) 65%, var(--leader));
+  font-family: var(--mono);
+  font-size: 0.92em;
+  font-weight: 400;
+}
+.sv-map-label-cut.sv-map-unique {
   fill: var(--text-2);
-  font-weight: 500;
 }
 .sv-map-label-primer {
-  fill: var(--primer);
+  fill: color-mix(in srgb, var(--lc, var(--primer)) 70%, var(--text));
+  font-weight: 500;
 }
-.sv-map-label-sub {
-  fill: var(--text-3);
-  font-weight: 400;
+.sv-map-cut line.sv-map-unique {
+  stroke: var(--text-2);
+  stroke-width: 1.2;
 }
 .sv-map-label:hover {
   fill: var(--accent-text);

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { changelogProblem, latestJson, versionProblems, versions } from "./release.mjs";
+import { changelogProblem, downloadCopies, DOWNLOADS, latestJson, versionProblems, versions } from "./release.mjs";
 
 const files = {
   "Strandivo_0.2.0_aarch64.app.tar.gz": "",
@@ -71,4 +71,15 @@ test("the repository's three files agree on one version today", () => {
   const values = new Set(Object.values(found));
   assert.equal(values.size, 1, JSON.stringify(found));
   assert.match([...values][0], /^\d+\.\d+\.\d+/);
+});
+
+test("each installer gets a copy without the version, for the website's links", () => {
+  const built = ["Strandivo_0.2.0_x64.dmg", "Strandivo_0.2.0_x64-setup.exe", "Strandivo_0.2.0_amd64.AppImage", "Strandivo_0.2.0_amd64.deb", ...Object.keys(files)];
+  const copies = downloadCopies(built, "v0.2.0");
+  assert.deepEqual(copies.map(c => c[1]), DOWNLOADS.map(d => d.file));
+  assert.deepEqual(copies[0], ["Strandivo_0.2.0_aarch64.dmg", "Strandivo_aarch64.dmg"]);
+  // A copy's name never carries a version, so the link to it stays the same.
+  for (const d of DOWNLOADS) assert.doesNotMatch(d.file, /\d+\.\d+\.\d+/);
+  // The update files alone aren't enough: the Intel Mac's .dmg is missing.
+  assert.throws(() => downloadCopies(Object.keys(files), "v0.2.0"), /^Error: No Strandivo_0\.2\.0_x64\.dmg to copy/);
 });

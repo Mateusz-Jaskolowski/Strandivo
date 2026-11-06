@@ -11,12 +11,15 @@
 //   node .github/scripts/release.mjs latest-json <dir> <tag> <owner/repo>
 //     Prints the updater's latest.json for the signed files in <dir>: each platform's file
 //     and the signature the build wrote beside it, and the version's short notes.
+//   node .github/scripts/release.mjs download-copies <dir> <tag>
+//     Copies each installer in <dir> to the name without the version that
+//     strandivo.com/download links to (DOWNLOADS).
 //   node .github/scripts/release.mjs release-notes <tag>
 //     Prints the version's notes from CHANGELOG.md, for the GitHub release.
 //
 // Run with --experimental-strip-types, as it reads the changelog with the app's own code.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { copyFileSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { looksLikeAddress, notesFor } from "../../src/lib/changelog.ts";
@@ -33,6 +36,33 @@ export const PLATFORMS = [
   { key: "linux-x86_64", matches: f => f.endsWith(".AppImage") },
   { key: "linux-x86_64-deb", matches: f => f.endsWith(".deb") }
 ];
+
+/**
+ * The installers strandivo.com/download links to. Each release also carries a copy of
+ * each under a name without the version, so the page can link to
+ * `releases/latest/download/<file>`, which always means the newest published release,
+ * and needs no change when one comes out.
+ */
+export const DOWNLOADS = [
+  { file: "Strandivo_aarch64.dmg", os: "mac", label: "Mac with Apple silicon" },
+  { file: "Strandivo_x64.dmg", os: "mac", label: "Mac with Intel" },
+  { file: "Strandivo_x64-setup.exe", os: "windows", label: "Windows" },
+  { file: "Strandivo_amd64.deb", os: "linux", label: "Debian, Ubuntu and relatives" },
+  { file: "Strandivo_amd64.AppImage", os: "linux", label: "Other Linux (AppImage)" }
+];
+
+/** The copies a release makes for the website, as [built file, copy] pairs. */
+export function downloadCopies(names, tag) {
+  const version = tag.replace(/^v/, "");
+  const missing = [];
+  const copies = DOWNLOADS.map(d => {
+    const built = d.file.replace(/^Strandivo_/, `Strandivo_${version}_`);
+    if (!names.includes(built)) missing.push(built);
+    return [built, d.file];
+  });
+  if (missing.length) throw new Error(`No ${missing.join(", ")} to copy for the website.`);
+  return copies;
+}
 
 /** The versions a release must agree on, read from the three files that state one. */
 export function versions(root) {
@@ -113,6 +143,12 @@ function main([command, ...args]) {
     const files = Object.fromEntries(readdirSync(dir).map(n => [n, n.endsWith(".sig") ? readFileSync(join(dir, n), "utf8") : ""]));
     const notes = notesFor(changelog(), tag.replace(/^v/, ""))?.summary;
     console.log(JSON.stringify(latestJson({ files, tag, repo, notes }), null, 2));
+  } else if (command === "download-copies") {
+    const [dir, tag] = args;
+    for (const [built, copy] of downloadCopies(readdirSync(dir), tag)) {
+      copyFileSync(join(dir, built), join(dir, copy));
+      console.log(`${built} → ${copy}`);
+    }
   } else if (command === "release-notes") {
     const n = notesFor(changelog(), (args[0] ?? "").replace(/^v/, ""));
     if (!n) {
@@ -121,7 +157,7 @@ function main([command, ...args]) {
     }
     console.log([n.summary, n.details].filter(Boolean).join("\n\n"));
   } else {
-    console.error("Usage: release.mjs check-version <tag> | latest-json <dir> <tag> <owner/repo> | release-notes <tag>");
+    console.error("Usage: release.mjs check-version <tag> | latest-json <dir> <tag> <owner/repo> | download-copies <dir> <tag> | release-notes <tag>");
     process.exit(2);
   }
 }

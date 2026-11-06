@@ -335,6 +335,16 @@ export function mountSettings(root: HTMLElement, embedded = false) {
           "Restore default fields"
         )
       )
+    ),
+    h(
+      "section",
+      { class: "ps-set-section" },
+      h("h2", null, "Updates and privacy"),
+      row(
+        "Updates",
+        "Once a day, Strandivo asks updates.strandivo.com for the latest version, telling it your version and system; it keeps no record of who asked. An update installs only when you choose.",
+        check("Check for updates automatically", s.checkForUpdates !== false, v => commit({ ...s, checkForUpdates: v }))
+      )
     )
   ];
 

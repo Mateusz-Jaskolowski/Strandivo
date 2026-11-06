@@ -18,6 +18,7 @@ import type { SeqData } from "./lib/seqdata.ts";
 import { openDocument, type DocTab, type OpenSequence } from "./doc/document.ts";
 import { Home } from "./home.ts";
 import { loadSettings, saveSettings, type Settings } from "./settings.ts";
+import { startUpdates } from "./updates.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
@@ -66,9 +67,10 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     h("div", { class: "sv-appbar-tools" }, appButtons.library, appButtons.settings)
   );
   const content = h("div", { class: "sv-shell-body" });
+  const updates = startUpdates();
   const dropText = h("span");
   const dropOverlay = h("div", { class: "ps-drop-overlay" }, h("div", null, icon("reads"), dropText));
-  root.replaceChildren(h("div", { class: "sv-shell" }, appBar, content, dropOverlay));
+  root.replaceChildren(h("div", { class: "sv-shell" }, appBar, updates.el, content, dropOverlay));
 
   // ---------- Settings and the primer library over the tabs (browser only) ----------
   // The desktop app opens them as windows. Home, a tab, the same button, × or Esc close them.
@@ -299,6 +301,10 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       activate(null);
       return;
     }
+    if (id === "check-updates") {
+      void updates.check(true);
+      return;
+    }
     if (active?.doc) {
       active.doc.menu(id);
       return;
@@ -342,7 +348,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     addLibraryFolder: (folder: string) => home.addFolder(folder),
     /** Changes settings as the Settings window would. */
     saveSettings: (patch: Partial<Settings>) => saveSettings({ ...loadSettings(), ...patch }),
-    libraryNames: () => home.listedNames()
+    libraryNames: () => home.listedNames(),
+    /** Check for Updates…, as the menu does. */
+    checkForUpdates: () => updates.check(true)
   };
   Object.defineProperty(window, "__strandivo", { configurable: true, get: () => ({ ...shellHook, ...(active?.doc?.testHook ?? {}) }) });
 

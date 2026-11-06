@@ -47,6 +47,8 @@ export interface Settings {
   offerDetection: boolean;
   /** The sidebar left of a file: its sections in order, and those folded to their heading. */
   sidebar: { order: SidebarSection[]; folded: SidebarSection[] };
+  /** Ask updates.strandivo.com for a new version once a day (src/updates.ts). */
+  checkForUpdates: boolean;
 }
 
 export const DEFAULT_LAB_FIELDS = [
@@ -96,7 +98,8 @@ export const DEFAULT_SETTINGS: Settings = {
   tm: DEFAULT_TM,
   amberAsQ: false,
   offerDetection: true,
-  sidebar: { order: DEFAULT_SIDEBAR_ORDER, folded: [] }
+  sidebar: { order: DEFAULT_SIDEBAR_ORDER, folded: [] },
+  checkForUpdates: true
 };
 
 const KEY = "strandivo.settings";

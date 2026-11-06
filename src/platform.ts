@@ -173,6 +173,72 @@ export function detectFeatures(request: DetectRequest) {
   return invoke<DetectResponse>("detect_features", { request });
 }
 
+// ---------- updates (src-tauri/src/updates.rs) ----------
+
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  /** latest.json's notes: a link to the release page. */
+  notes: string | null;
+  /** Already downloaded, so Restart needs no wait. */
+  ready: boolean;
+}
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+/** What a test supplies in place of the update server, so e2e never reaches it. */
+export interface UpdateHook {
+  check(): Promise<UpdateInfo | null>;
+  download(onProgress: (p: UpdateProgress) => void): Promise<void>;
+  restart(): Promise<void>;
+  releaseNotes?(): Promise<void>;
+}
+
+const updateHook = () => (window as unknown as { __strandivoUpdate?: UpdateHook }).__strandivoUpdate;
+
+/** Whether this window can update the app: only the desktop app can, or a test's hook. */
+export const canUpdate = () => isDesktop || !!updateHook();
+
+/** Asks updates.strandivo.com for a newer version; null when this one is the latest. */
+export function checkForUpdate(): Promise<UpdateInfo | null> {
+  const hook = updateHook();
+  if (hook) return hook.check();
+  return invoke<UpdateInfo | null>("check_update");
+}
+
+/** Downloads the update the last check found; the shell checks its signature. */
+export async function downloadUpdate(onProgress: (p: UpdateProgress) => void): Promise<void> {
+  const hook = updateHook();
+  if (hook) return hook.download(onProgress);
+  const { Channel } = await import("@tauri-apps/api/core");
+  const channel = new Channel<UpdateProgress>();
+  channel.onmessage = onProgress;
+  return invoke<void>("download_update", { onProgress: channel });
+}
+
+/** Quits as ⌘Q does (unsaved tabs are asked about) and installs the downloaded update. */
+export function restartToUpdate(): Promise<void> {
+  const hook = updateHook();
+  if (hook) return hook.restart();
+  return invoke<void>("restart_to_update");
+}
+
+/** Opens the found update's release page in the browser. */
+export function openReleaseNotes(): Promise<void> {
+  const hook = updateHook();
+  if (hook) return hook.releaseNotes?.() ?? Promise.resolve();
+  return invoke<void>("open_release_notes");
+}
+
+/** Why the last install failed, if it did; asked once when the main window opens. */
+export async function takeUpdateFailure(): Promise<string | null> {
+  if (!isDesktop || updateHook()) return null;
+  return invoke<string | null>("take_update_failure").catch(() => null);
+}
+
 export type PageWindow = "settings" | "library";
 let showInPage: ((w: PageWindow) => void) | null = null;
 

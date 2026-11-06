@@ -1037,6 +1037,25 @@ async function main() {
       await s.waitFor("!window.__strandivo.tabs().includes('pUC19-annotated.gb')", 5000);
     } else check("The parent opens for the whole-plasmid read", false);
 
+    // --- updates: a made-up version through the hook, so CI never asks the update server ---
+    await s.exec(`window.__e2eUpdate = { restarts: 0 };
+      window.__strandivoUpdate = {
+        check: async () => ({ version: "9.9.9", currentVersion: "0.1.0", notes: null, ready: false }),
+        download: async onProgress => { onProgress({ downloaded: 4e6, total: 8e6 }); onProgress({ downloaded: 8e6, total: 8e6 }); },
+        restart: async () => { window.__e2eUpdate.restarts++; }
+      };`);
+    await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.checkForUpdates().then(() => done(true), e => done(String(e)));");
+    const updateStrip = "document.querySelector('.sv-update:not([hidden])')";
+    check("A new version is offered in a strip, not a dialog", await s.waitFor(`/Strandivo 9\\.9\\.9 is available/.test(${updateStrip}?.textContent) && !document.querySelector('.sv-dialog')`, 5000), await s.exec(`return ${updateStrip}?.textContent ?? 'no strip'`));
+    await s.shot("12a-update-offered");
+    await s.click("//*[contains(@class,'sv-update')]//button[normalize-space()='Install and restart']", "xpath");
+    check("Install and restart downloads it, then quits the way ⌘Q does", await s.waitFor("window.__e2eUpdate.restarts === 1", 5000));
+    // The hook doesn't quit, as a kept unsaved tab wouldn't: the strip offers to restart again.
+    check("If the app stays open, the strip offers to restart", await s.waitFor(`/9\\.9\\.9 is ready to install/.test(${updateStrip}?.textContent)`, 3000), await s.exec(`return ${updateStrip}?.textContent ?? 'no strip'`));
+    await s.click("//*[contains(@class,'sv-update')]//button[normalize-space()='Later']", "xpath");
+    check("Later hides the strip", await s.waitFor("document.querySelector('.sv-update')?.hidden === true", 3000));
+    await s.exec("delete window.__strandivoUpdate;");
+
     // --- Home: the construct library ---
     await s.exec("window.__strandivo.showHome()");
     const homeList = await s.execAsync(

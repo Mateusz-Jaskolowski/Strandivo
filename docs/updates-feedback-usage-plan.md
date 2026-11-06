@@ -1,7 +1,8 @@
 # Updates, feedback and usage statistics: plan
 
-Status: every decision below is made (November 2026). Part 1 is built: the release
-workflow and the updates Worker, which go live with 0.2.0. The other parts are planned.
+Status: every decision below is made (November 2026). Parts 1 and 2 are built: the
+release workflow, the updates Worker (deployed) and updating from inside the app, which
+go out with 0.2.0. The other parts are planned.
 Each part below is one branch and one PR. What is said here about services and the law was read
 on 4 November 2026; check it again before each part is built. The legal notes are a
 reading of published guidance, not legal advice.
@@ -113,7 +114,8 @@ Cloudflare Workers; `strandivo.com` itself is the website (part 6). The domain a
   Microsoft's code signing.
 - `bundle.createUpdaterArtifacts: true`, so each build also makes the update files and
   their signatures: `.app.tar.gz` on a Mac, the NSIS `-setup.exe` on Windows, the
-  AppImage on Linux. A `.deb` can't update itself; it stays for people who want one.
+  AppImage and the `.deb` on Linux (the `.deb` installs with the system's password prompt;
+  part 2).
 - **`latest.json`** lists each platform's file, signature and version, and the release
   notes. Either switch the build step to `tauri-apps/tauri-action`, which writes it, or
   have the release job build it from the `.sig` files, whichever is less code.
@@ -130,9 +132,28 @@ Cloudflare Workers; `strandivo.com` itself is the website (part 6). The domain a
 - Mac minutes are unchanged: installers are still built only for a tag or on request.
 
 ### 2. Updating from inside the app
-`feat/updates`: `src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`,
-`src-tauri/capabilities/default.json`, `src/platform.ts`, `src/updates.ts`,
+`feat/in-app-updates`: `src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`,
+`src-tauri/src/updates.rs`, `src/platform.ts`, `src/updates.ts`, `src/lib/updates.ts`,
 `src/mainWindow.ts`, `src/settings.ts`, `src/settingsWindow.ts`, `e2e/run.mjs`
+
+Built differently from the plan below in four ways:
+
+- **The shell holds the update, not the page.** Its own commands check, download and
+  restart; the updater plugin's commands aren't in the capability, and there is no
+  `tauri-plugin-process`, as the shell restarts itself. The page can't install anything.
+- **What's new opens the release page** (through `tauri-plugin-opener`, from Rust only),
+  rather than a dialog: latest.json is written when the draft is made, before its notes
+  are edited, so its notes are only a link.
+- **Only Restart installs.** A cancelled quit keeps the download for the next Restart, but
+  an ordinary quit doesn't install it: on Windows that would bring up an installer the
+  user didn't ask for.
+- **The .deb updates too**, not only the AppImage: the release's latest.json has a
+  `linux-x86_64-deb` entry, which a copy installed from the .deb finds first, and the
+  plugin installs it with `pkexec dpkg -i`, so the system asks for the user's password.
+  No .rpm is built, so an .rpm copy is told to download the new version.
+
+Part 3 must hold the first check back while the welcome window is open (`startUpdates` in
+`src/updates.ts` waits `FIRST_CHECK_MS`, not for the window).
 
 - `tauri-plugin-updater` and `tauri-plugin-process` (to relaunch), with their permissions
   in the capability. `checkForUpdate()` and `installUpdate()` in `src/platform.ts`; in a

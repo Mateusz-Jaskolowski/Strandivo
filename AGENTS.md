@@ -113,15 +113,27 @@ it can (lists of files or features). CI checks that every path in backticks here
   edge can still move that edge, as it clips a feature's own end. Each also keeps the
   entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
   makes a real one for files going to other software.
-- **UniProt** (`src/lib/uniprot.ts`) is the one thing the app fetches from the internet, and
+- **UniProt** (`src/lib/uniprot.ts`) is the one thing the page fetches from the internet, and
   only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's own `fetch`; the
   API allows any origin; `connect-src` in the Content Security Policy names it, so the
-  page can reach nothing else). A construct's protein is rarely the entry's (both mRNAs Q9UKG4
+  page can reach nothing else). The update check is the shell's, not the page's (below). A construct's protein is rarely the entry's (both mRNAs Q9UKG4
   cites differ from it, one in length), so residues are never taken at face value: the
   CDS's translation is aligned locally with gaps, and regions are carried across. Under
   `MIN_IDENTITY` nothing is placed, since a wrong accession would otherwise mark the wrong
   bases. The entry goes in `/db_xref` as `UniProtKB/Swiss-Prot:…`, as ENA's records have it,
   so those files fill the field in themselves.
+- **Updates** (`src/updates.ts`, `src-tauri/src/updates.rs`): the page asks the shell to
+  check, download and restart, but can't install: Restart quits the way ⌘Q does, so the
+  main window asks about unsaved tabs, and the update is installed only once the last
+  window has closed. A cancelled quit keeps the download, and an ordinary quit doesn't
+  install it. So the updater and opener plugins' own commands stay out of the capability,
+  and the release page is opened from the version the shell found, not an address from
+  the page. Development builds don't update themselves. On Linux the AppImage replaces
+  itself and a .deb copy installs the release's .deb (`linux-x86_64-deb` in latest.json,
+  which the plugin looks for before `linux-x86_64`) with `pkexec`, so the system asks for a
+  password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
+  strip under the app bar, never a dialog. e2e fakes the shell with
+  `window.__strandivoUpdate`, so it never reaches the server.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
   the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
   start and strand don't matter; it starts at the first in-frame codon of 10 good matching

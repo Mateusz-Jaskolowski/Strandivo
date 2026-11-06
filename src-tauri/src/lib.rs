@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Desktop shell: one main window with a tab per document, native menus, file
-//! associations, the construct library's folder listing, the Sanger alignment commands
-//! and feature detection.
+//! associations, the construct library's folder listing, the Sanger alignment commands,
+//! feature detection and updates (`updates.rs`).
+
+mod updates;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -171,7 +173,7 @@ fn close_focused<R: Runtime>(app: &AppHandle<R>) {
 fn request_quit<R: Runtime>(app: &AppHandle<R>) {
     let windows = app.webview_windows();
     if windows.is_empty() {
-        app.exit(0);
+        finish_quit(app);
         return;
     }
     {
@@ -182,6 +184,17 @@ fn request_quit<R: Runtime>(app: &AppHandle<R>) {
     for (_, w) in windows {
         let _ = w.close();
     }
+}
+
+/// Every window has closed on the way out: exit, or install the update the user chose to
+/// restart for. If that fails, the app stays open and the main window says why.
+fn finish_quit<R: Runtime>(app: &AppHandle<R>) {
+    if updates::finish_quit(app) {
+        app.exit(0);
+        return;
+    }
+    app.state::<Shared>().lock().unwrap().quitting = false;
+    show_main_window(app);
 }
 
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -239,6 +252,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let settings = MenuItemBuilder::with_id("settings", "Settings…")
         .accelerator("CmdOrCtrl+,")
         .build(app)?;
+    let check_updates = MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(app)?;
 
     let about = AboutMetadata {
         name: Some(APP_NAME.to_string()),
@@ -318,6 +332,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             .build(app)?;
         let app_menu = SubmenuBuilder::new(app, APP_NAME)
             .about(Some(about))
+            .item(&check_updates)
             .separator()
             .item(&settings)
             .separator()
@@ -331,7 +346,11 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             .build()?;
         menu = menu.item(&app_menu);
     } else {
-        let help = SubmenuBuilder::new(app, "Help").about(Some(about)).build()?;
+        let help = SubmenuBuilder::new(app, "Help")
+            .item(&check_updates)
+            .separator()
+            .about(Some(about))
+            .build()?;
         menu = menu.item(&file).item(&edit).item(&view).item(&tools).item(&window).item(&help);
         return menu.build();
     }
@@ -458,8 +477,9 @@ async fn open_library(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn cancel_quit(state: tauri::State<'_, Shared>) {
+fn cancel_quit(app: AppHandle, state: tauri::State<'_, Shared>) {
     state.lock().unwrap().quitting = false;
+    updates::quit_cancelled(&app);
 }
 
 #[tauri::command]
@@ -534,7 +554,10 @@ pub fn run() {
 
     let app = builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(AppState::default()))
+        .manage(updates::SharedUpdates::default())
         .invoke_handler(tauri::generate_handler![
             window_info,
             list_sequence_files,
@@ -548,7 +571,12 @@ pub fn run() {
             write_file,
             align_reads,
             detect_features,
-            catalog_version
+            catalog_version,
+            updates::check_update,
+            updates::download_update,
+            updates::restart_to_update,
+            updates::open_release_notes,
+            updates::take_update_failure
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -563,9 +591,9 @@ pub fn run() {
                     "library" => show_library_window(app),
                     "quit" => request_quit(app),
                     "close" => close_focused(app),
-                    "home" => {
+                    "home" | "check-updates" => {
                         show_main_window(app);
-                        let _ = app.emit_to(MAIN_LABEL, "menu", "home".to_string());
+                        let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
                     }
                     // Everything else is for the main window's current tab.
                     other => {
@@ -595,7 +623,7 @@ pub fn run() {
                 };
                 let others = app.webview_windows().keys().filter(|l| **l != label).count();
                 if quitting && others == 0 {
-                    app.exit(0);
+                    finish_quit(app);
                 }
             }
         })

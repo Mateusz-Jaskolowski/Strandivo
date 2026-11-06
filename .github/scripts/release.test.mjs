@@ -17,20 +17,26 @@ const files = {
   "Strandivo_0.2.0_amd64.AppImage": "",
   "Strandivo_0.2.0_amd64.AppImage.sig": "sig-linux",
   "Strandivo_0.2.0_aarch64.dmg": "",
-  "Strandivo_0.2.0_amd64.deb": ""
+  "Strandivo_0.2.0_amd64.deb": "",
+  "Strandivo_0.2.0_amd64.deb.sig": "sig-deb"
 };
 
 test("latest.json names each platform's signed file and its signature", () => {
   const j = latestJson({ files, tag: "v0.2.0", repo: "owner/Strandivo", date: new Date("2026-11-06T10:00:00.123Z") });
   assert.equal(j.version, "0.2.0");
   assert.equal(j.pub_date, "2026-11-06T10:00:00Z");
-  assert.deepEqual(Object.keys(j.platforms), ["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64"]);
+  assert.deepEqual(Object.keys(j.platforms), ["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64", "linux-x86_64-deb"]);
   assert.deepEqual(j.platforms["darwin-aarch64"], {
     signature: "sig-mac-arm",
     url: "https://github.com/owner/Strandivo/releases/download/v0.2.0/Strandivo_0.2.0_aarch64.app.tar.gz"
   });
   assert.equal(j.platforms["windows-x86_64"].url.endsWith("/Strandivo_0.2.0_x64-setup.exe"), true);
   assert.equal(j.platforms["linux-x86_64"].signature, "sig-linux");
+  // A copy installed from the .deb is updated with the .deb, never the AppImage.
+  assert.deepEqual(j.platforms["linux-x86_64-deb"], {
+    signature: "sig-deb",
+    url: "https://github.com/owner/Strandivo/releases/download/v0.2.0/Strandivo_0.2.0_amd64.deb"
+  });
   assert.match(j.notes, /releases\/tag\/v0\.2\.0$/);
 });
 

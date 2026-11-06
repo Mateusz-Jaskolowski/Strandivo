@@ -55,7 +55,8 @@ runs:
         mkdir -p out
         shopt -s nullglob
         for f in "$bundle"/dmg/*.dmg "$bundle"/nsis/*.exe "$bundle"/nsis/*.exe.sig \
-                 "$bundle"/deb/*.deb "$bundle"/appimage/*.AppImage "$bundle"/appimage/*.AppImage.sig; do
+                 "$bundle"/deb/*.deb "$bundle"/deb/*.deb.sig \
+                 "$bundle"/appimage/*.AppImage "$bundle"/appimage/*.AppImage.sig; do
           cp "$f" out/
         done
         # Both Mac builds name their update file Strandivo.app.tar.gz; give each its version and

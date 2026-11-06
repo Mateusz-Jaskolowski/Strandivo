@@ -15,12 +15,17 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The updater's platform keys and how each one's update file is named. */
+/**
+ * The updater's platform keys and how each one's update file is named. The updater looks
+ * for `<os>-<arch>-<installer>` before `<os>-<arch>`, so a copy installed from the .deb
+ * finds the .deb and every other Linux copy (the AppImage) the plain key.
+ */
 export const PLATFORMS = [
   { key: "darwin-aarch64", matches: f => f.endsWith("_aarch64.app.tar.gz") },
   { key: "darwin-x86_64", matches: f => f.endsWith("_x64.app.tar.gz") },
   { key: "windows-x86_64", matches: f => f.endsWith("-setup.exe") },
-  { key: "linux-x86_64", matches: f => f.endsWith(".AppImage") }
+  { key: "linux-x86_64", matches: f => f.endsWith(".AppImage") },
+  { key: "linux-x86_64-deb", matches: f => f.endsWith(".deb") }
 ];
 
 /** The versions a release must agree on, read from the three files that state one. */

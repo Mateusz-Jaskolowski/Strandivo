@@ -72,7 +72,10 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
   source, notes, and your own) saved inside the GenBank file so they travel with it
 - **Settings** in their own window (⌘,): map display, Tm method, read quality thresholds,
   lab fields
-- **Private**: everything runs on your computer; nothing is uploaded
+- **Updates** from inside the app: it checks once a day (a setting) and installs a new
+  version only when you choose
+- **Private**: everything runs on your computer and your files never leave it. The app
+  goes online only to check for updates and to look up a UniProt entry you ask for
 
 ## Download
 
@@ -180,7 +183,6 @@ says how to take part.
 
 ## Roadmap
 
-- Updates from inside the app
 - Send feedback and bug reports from the app
 - Anonymous usage statistics, with a choice at first launch and a setting
 - Golden Gate primer design (adding sites and overhangs to PCR inserts)

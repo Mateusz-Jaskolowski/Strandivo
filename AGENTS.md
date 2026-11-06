@@ -407,7 +407,10 @@ it can (lists of files or features). CI checks that every path in backticks here
   app is in development; part 6 of `docs/updates-feedback-usage-plan.md` adds Download and
   Privacy. Cloudflare builds it from this repository: every push to `main` goes live, and
   other branches get a preview address. The project is connected to GitHub, so never
-  deploy it with wrangler, which would be overwritten by the next push.
+  deploy it with wrangler, which would be overwritten by the next push. Cloudflare's
+  email obfuscation rewrites addresses on the proxied domain (not on `pages.dev`) into
+  a script the policy blocks, so a page's body sits inside `<!--email_off-->` comments;
+  a new page needs them too, or its addresses read "[email protected]".
 - From a cloud session the npm and crates registries may be blocked: Rust in `src-tauri/`
   then only compiles in CI, and CI is the final word.
 

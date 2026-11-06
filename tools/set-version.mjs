@@ -22,7 +22,8 @@ const root = process.env.STRANDIVO_ROOT ?? fileURLToPath(new URL("..", import.me
 
 // The notes come first: a release without them would offer an update with nothing to say.
 const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
-if (!new RegExp(`^## +${version.replace(/[.]/g, "\\.")}\\s*$`, "m").test(changelog)) {
+const sections = [...changelog.matchAll(/^## +(\S+)\s*$/gm)].map(m => m[1]);
+if (!sections.includes(version)) {
   console.error(`Write ${version}'s notes in CHANGELOG.md first: a "## ${version}" section whose first paragraph is the short version the app shows.`);
   process.exit(1);
 }

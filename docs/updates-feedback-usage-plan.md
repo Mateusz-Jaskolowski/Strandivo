@@ -1,8 +1,8 @@
 # Updates, feedback and usage statistics: plan
 
-Status: every decision below is made (November 2026). Parts 1 and 2 are built: the
-release workflow, the updates Worker (deployed) and updating from inside the app, which
-go out with 0.2.0. The other parts are planned.
+Status: every decision below is made (November 2026). Parts 1–3 are built: the release
+workflow, the updates Worker (deployed), updating from inside the app and the welcome
+window, which go out together as 0.2.0. The other parts are planned.
 Each part below is one branch and one PR. What is said here about services and the law was read
 on 4 November 2026; check it again before each part is built. The legal notes are a
 reading of published guidance, not legal advice.
@@ -152,8 +152,8 @@ Built differently from the plan below in four ways:
   plugin installs it with `pkexec dpkg -i`, so the system asks for the user's password.
   No .rpm is built, so an .rpm copy is told to download the new version.
 
-Part 3 must hold the first check back while the welcome window is open (`startUpdates` in
-`src/updates.ts` waits `FIRST_CHECK_MS`, not for the window).
+The first check waits for the welcome window to close (`startUpdates` takes a promise,
+part 3).
 
 - `tauri-plugin-updater` and `tauri-plugin-process` (to relaunch), with their permissions
   in the capability. `checkForUpdate()` and `installUpdate()` in `src/platform.ts`; in a
@@ -184,9 +184,21 @@ Part 3 must hold the first check back while the welcome window is open (`startUp
   check is for). An e2e check fakes an update through the hook and checks the strip.
 
 ### 3. The welcome window
-`feat/welcome`: `src/welcomeWindow.ts`, `src/main.ts`, `src/mainWindow.ts`,
-`src/settings.ts`, `src-tauri/src/lib.rs`, `src/home.ts`, `src/libraryWindow.ts`,
-`e2e/run.mjs`
+`feat/welcome`: `src/welcome.ts`, `src/lib/welcome.ts`, `src/mainWindow.ts`,
+`src/updates.ts`, `src/settings.ts`, `src-tauri/src/lib.rs`, `src/home.ts`, `e2e/run.mjs`
+
+Built differently from the plan below:
+
+- **A dialog over the main window, not a window of its own.** Its choices act on the main
+  window (Home's folders, the update check it holds back), and a separate window on first
+  launch could end up behind the main one.
+- **The version is `welcomeSeen` in the settings, and the parts are versioned**
+  (`WELCOME_PARTS` in `src/lib/welcome.ts`), so a raised version shows only the new parts.
+- **The common primers are offered only while the library is empty**, so a lab's own list
+  never gets extra entries; reopening the window doesn't add them again.
+- In e2e the run starts as a fresh install, so it closes the window first rather than
+  starting with the version set: that is the check the plan describes.
+- Welcome… is in the Help menu, and in the app menu on a Mac (which has no Help menu yet).
 
 Not tied to one file, so it is a window of its own, like Settings (in a browser it is shown
 over the main window, as `showWindowsInPage` does for the others).

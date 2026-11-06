@@ -3,7 +3,8 @@
 
 import "./polyfills.ts";
 import "./styles.css";
-import { replaceContextMenus, windowInfo } from "./platform.ts";
+import { isDesktop, replaceContextMenus, sendMenuShortcut, windowInfo } from "./platform.ts";
+import { menuShortcut } from "./lib/shortcuts.ts";
 import { startErrorLog } from "./feedback.ts";
 import { toast } from "./ui/dom.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
@@ -17,6 +18,18 @@ window.addEventListener("error", e => {
 window.addEventListener("unhandledrejection", e => {
   console.error(e.reason);
 });
+
+// Outside macOS the native menu may never hear its keys (on Windows WebView2 keeps them),
+// so every window passes them on; the shell runs each press once.
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+if (isDesktop && !isMac) {
+  window.addEventListener("keydown", e => {
+    const id = menuShortcut(e);
+    if (!id || e.defaultPrevented) return;
+    e.preventDefault();
+    if (!e.repeat) void sendMenuShortcut(id);
+  });
+}
 
 async function boot() {
   const root = document.getElementById("app")!;

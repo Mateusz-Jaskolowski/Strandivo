@@ -492,6 +492,12 @@ async function main() {
     );
     check("Saving writes the file", saveResult === "ok", saveResult);
     check("Saving clears the edited mark", (await s.exec("return window.__strandivo.isDirty()")) === false);
+    // Outside macOS the page passes a menu item's key on to the shell, as Windows' menu never
+    // hears it (#32); here GTK's may hear it too, and the shell still saves once.
+    await s.exec(`${doc} s.apply({ ...s.data, features: s.data.features.map((f, i) => i === 0 ? { ...f, name: "Saved with Ctrl+S" } : f) }, "Rename");`);
+    await s.press("s", [CTRL]);
+    const keySaved = await s.waitFor("window.__strandivo.isDirty() === false", 5000);
+    check("Ctrl+S saves the file", keySaved && readFileSync(savedPath, "utf8").includes("Saved with Ctrl+S"));
     const docSummary = `${doc} return { len: s.data.sequence.length, features: s.data.features.map(f => f.name + ' ' + f.start + '-' + f.end), primers: s.data.primers.map(p => p.name + ' ' + p.start + '-' + p.end) };`;
     const savedDoc = await s.exec(docSummary);
     // The saved file is now this tab's file, so opening it again would just show this tab:

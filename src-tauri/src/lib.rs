@@ -13,7 +13,7 @@ mod updates;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::menu::{AboutMetadata, Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -46,6 +46,15 @@ struct AppState {
     /// The main window's page asked for its files, so it now hears "open-files" events.
     main_ready: bool,
     quitting: bool,
+    /// The last menu command a key ran, and whether the page or the menu ran it
+    /// (`shortcut_ran_twice`).
+    last_shortcut: Option<(String, ShortcutFrom, Instant)>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum ShortcutFrom {
+    Page,
+    Menu,
 }
 
 type Shared = Mutex<AppState>;
@@ -198,6 +207,65 @@ fn close_focused<R: Runtime>(app: &AppHandle<R>) {
             return;
         }
     }
+}
+
+/// What a menu item does, whether it was chosen or its key was pressed.
+fn menu_action<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    match id {
+        "new" => open_targets(app, vec![None]),
+        "open" => prompt_open(app),
+        "settings" => show_settings_window(app),
+        "library" => show_library_window(app),
+        "enzyme-library" => show_enzyme_library_window(app),
+        "quit" => request_quit(app),
+        "close" => close_focused(app),
+        "website" | "github" => feedback::open_page(app, id),
+        "home" | "check-updates" | "welcome" | "feedback" | "report-bug" => {
+            show_main_window(app);
+            let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
+        }
+        // Everything else is for the main window's current tab.
+        other => {
+            let _ = app.emit_to(MAIN_LABEL, "menu", other.to_string());
+        }
+    }
+}
+
+/// Menu items whose keys the page passes on outside macOS (`MENU_KEYS` in
+/// `src/lib/shortcuts.ts`): on Windows the menu never hears a key pressed in the page, as
+/// WebView2 keeps it, so the page sends it here.
+const PAGE_SHORTCUTS: &[&str] = &["new", "open", "close", "home", "save", "save-as", "add-reads", "library", "settings"];
+
+/// Where both the page and the menu hear a key, one press runs its command once: the
+/// second of the two within half a second is skipped. Two presses from the same place
+/// both run.
+fn shortcut_ran_twice<R: Runtime>(app: &AppHandle<R>, id: &str, from: ShortcutFrom) -> bool {
+    if !PAGE_SHORTCUTS.contains(&id) {
+        return false;
+    }
+    let state = app.state::<Shared>();
+    let mut st = state.lock().unwrap();
+    let now = Instant::now();
+    if let Some((last, last_from, at)) = &st.last_shortcut {
+        if last == id && *last_from != from && now.duration_since(*at) < Duration::from_millis(500) {
+            st.last_shortcut = None;
+            return true;
+        }
+    }
+    st.last_shortcut = Some((id.to_string(), from, now));
+    false
+}
+
+/// A menu item's key, pressed in the page (see `PAGE_SHORTCUTS`).
+#[tauri::command]
+async fn menu_shortcut(app: AppHandle, id: String) -> Result<(), String> {
+    if !PAGE_SHORTCUTS.contains(&id.as_str()) {
+        return Err(format!("No menu shortcut \"{id}\""));
+    }
+    if !shortcut_ran_twice(&app, &id, ShortcutFrom::Page) {
+        menu_action(&app, &id);
+    }
+    Ok(())
 }
 
 fn request_quit<R: Runtime>(app: &AppHandle<R>) {
@@ -639,6 +707,7 @@ pub fn run() {
             new_document,
             show_open_dialog,
             open_settings,
+            menu_shortcut,
             open_library,
             open_enzyme_library,
             app_data::load_app_data,
@@ -669,23 +738,8 @@ pub fn run() {
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| {
                 let id: &str = event.id().as_ref();
-                match id {
-                    "new" => open_targets(app, vec![None]),
-                    "open" => prompt_open(app),
-                    "settings" => show_settings_window(app),
-                    "library" => show_library_window(app),
-                    "enzyme-library" => show_enzyme_library_window(app),
-                    "quit" => request_quit(app),
-                    "close" => close_focused(app),
-                    "website" | "github" => feedback::open_page(app, id),
-                    "home" | "check-updates" | "welcome" | "feedback" | "report-bug" => {
-                        show_main_window(app);
-                        let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
-                    }
-                    // Everything else is for the main window's current tab.
-                    other => {
-                        let _ = app.emit_to(MAIN_LABEL, "menu", other.to_string());
-                    }
+                if !shortcut_ran_twice(app, id, ShortcutFrom::Menu) {
+                    menu_action(app, id);
                 }
             });
 

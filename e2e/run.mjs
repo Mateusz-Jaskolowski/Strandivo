@@ -1240,7 +1240,9 @@ async function main() {
     const names = usage.map(e => e.name);
     check("Turned on, the app counts its start and what is used", names.includes("app_started") && usage.some(e => e.name === "view_used" && e.props.view === "primers"), JSON.stringify(usage).slice(0, 240));
     const started = usage.find(e => e.name === "app_started");
-    check("The start says how long the copy has been in use, as a range, and Settings' choices come with it", started?.props.installed === "first_day" && usage.some(e => e.name === "settings_chosen" && e.props.tm === "santalucia" && e.props.amber === "off"), JSON.stringify(usage.filter(e => /app_started|settings_chosen/.test(e.name))));
+    // Earlier checks change the Tm method, so compare with what Settings say now.
+    const tmNow = await s.exec("return JSON.parse(localStorage.getItem('strandivo.settings') || '{}').tm?.method ?? 'santalucia'");
+    check("The start says how long the copy has been in use, as a range, and Settings' choices come with it", started?.props.installed === "first_day" && usage.some(e => e.name === "settings_chosen" && e.props.tm === tmNow && e.props.amber === "off"), JSON.stringify(usage.filter(e => /app_started|settings_chosen/.test(e.name))));
     await s.exec("window.__strandivo.setView('sequence'); window.__strandivo.setView('primers');");
     await flush();
     usage.push(...(await s.exec("return window.__e2eUsage")).slice(usage.length));

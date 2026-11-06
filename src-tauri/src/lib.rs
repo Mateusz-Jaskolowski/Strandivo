@@ -5,7 +5,7 @@
 //! associations, the construct library's folder listing, the Sanger alignment commands,
 //! feature detection and updates (`updates.rs`).
 
-mod enzyme_library;
+mod app_data;
 mod feedback;
 mod updates;
 
@@ -613,8 +613,9 @@ pub fn run() {
             open_settings,
             open_library,
             open_enzyme_library,
-            enzyme_library::load_enzyme_library,
-            enzyme_library::save_enzyme_library,
+            app_data::load_app_data,
+            app_data::save_app_data,
+            app_data::set_aside_app_data,
             cancel_quit,
             read_file,
             write_file,

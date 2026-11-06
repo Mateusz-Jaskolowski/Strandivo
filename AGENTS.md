@@ -544,16 +544,19 @@ it can (lists of files or features). CI checks that every path in backticks here
   in local storage like the settings, with an app event so every window sees changes).
   Export/Import of a tab-separated list is the backup and the way to share it.
 - **Enzymes**: a curated list of common commercial enzymes (`src/lib/enzymes.ts`), not every
-  isoschizomer. The lab stock (`src/enzymeLibrary.ts`) records products, freezer locations
-  and notes against those names: products sharing one enzyme show its sites only once.
-  The desktop shell (`src-tauri/src/enzyme_library.rs`) saves a versioned JSON file in
-  app data by writing a temporary file then replacing the old one; browsers use local
-  storage. Export/import merges stock records for backup and sharing, without syncing
-  computers. A failed load is shown and blocks writes, so a damaged file isn't replaced
-  with an empty list. Lab enzymes shows every cut of stocked enzymes, independent of the
-  unique-cutter filters. Its analysis cache includes stock membership, and open documents
-  redraw on library events; document disposal removes that subscription. Product names
-  are user text, never used to guess recognition or supplier-specific reaction conditions.
+  isoschizomer, is what the map shows by default. The lab's stock (`src/enzymeLibrary.ts`)
+  may name any enzyme TeselaGen knows (`enzymeName`), since a lab's Acc65I is not KpnI:
+  same site, other ends. Lab sets (`isLabSet`) show only stocked enzymes and the others
+  only the curated list, so a stocked Esp3I doesn't double every BsmBI label; stocked names
+  reach `cutSites`, the Digest and Cloning dialogs through `ViewOptions.labEnzymes`, never
+  a global, and `enzymeLibrary.names` keeps one array until the names change, so editing a
+  note redraws no map. Product names are user text, never read for recognition or reaction
+  conditions. The stock is kept by the shell (`src-tauri/src/app_data.rs`, which writes
+  only the files it names), not in local storage like the primer library, which a cleared
+  web view loses. A saved list is read even if it names an enzyme this version doesn't know
+  (kept as written, left off the map), as one unknown name must not lock a lab's list; one
+  that can't be read at all blocks writes until the user starts a new list, which keeps
+  the old file beside it. An import, unlike the saved list, is all or nothing.
 - **Bases in upper case** by default; Settings can show them as in the file.
 
 ## Traps

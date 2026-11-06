@@ -28,11 +28,12 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
   simulated agarose gel next to a ladder, with other open files as more lanes; any fragment
   opens in a new tab
 - **Lab enzymes**: keep your enzyme products, freezer locations and notes in the Enzyme
-  library (the scissors button in the app bar, or Window → Enzyme Library). Choose *Lab
-  enzymes* in the map controls or outline to show every cut site for enzymes you have.
-  The stock list is saved locally for all plasmids; export/import makes a backup or shares
-  it with colleagues. Product names are your records; reaction conditions aren't fetched
-  from manufacturers
+  library (the scissors button in the app bar, or Window → Enzyme Library), including
+  isoschizomers such as Acc65I or Esp3I. Choose a *Lab enzymes* set in the map controls or
+  outline to show where enzymes you have cut: once, at most twice, or everywhere. The stock
+  list is saved locally for all plasmids; import a spreadsheet (tab-separated or CSV), and
+  export or import to back it up or share it with colleagues. Product names are your
+  records; reaction conditions aren't fetched from manufacturers
 - **Protein regions**: give a CDS its UniProt accession and its transmembrane helices,
   topological domains and signal peptides are marked inside it, still as one feature. The
   CDS's protein is aligned to the entry first, so tags, fusions and truncations land right.

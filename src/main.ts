@@ -9,7 +9,6 @@ import { toast } from "./ui/dom.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
 import { useTmSettings } from "./lib/primers.ts";
 import { useAmberSuppression } from "./lib/genetics.ts";
-import { enzymeLibrary } from "./enzymeLibrary.ts";
 
 window.addEventListener("error", e => {
   console.error(e.error || e.message);
@@ -33,7 +32,6 @@ async function boot() {
     useAmberSuppression(s.amberAsQ);
   });
   try {
-    await enzymeLibrary.ready;
     const info = await windowInfo();
     if (info.kind === "settings") {
       const { mountSettings } = await import("./settingsWindow.ts");

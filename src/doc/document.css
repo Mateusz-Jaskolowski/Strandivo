@@ -2898,6 +2898,9 @@
 .sv-enzyme-grid td:nth-child(4) {
   width: 20%;
 }
+.sv-enzyme-grid td:first-child .sv-cell-input {
+  min-width: 110px;
+}
 .sv-lab-enzymes-edit {
   margin: 2px 8px 8px;
 }

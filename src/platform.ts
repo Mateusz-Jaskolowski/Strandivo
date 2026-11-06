@@ -374,28 +374,42 @@ export async function openEnzymeLibrary(): Promise<void> {
   return invoke<void>("open_enzyme_library");
 }
 
-const ENZYME_LIBRARY_KEY = "strandivo.enzymeLibrary";
-const ENZYME_LIBRARY_EVENT = "enzyme-library-changed";
+/**
+ * Lists the app keeps for the user (`src-tauri/src/app_data.rs` names them): JSON files in
+ * app data on the desktop, local storage in a browser.
+ */
+export type AppData = "enzyme-library";
+const appDataKey = (name: AppData) => `strandivo.data.${name}`;
 
-export async function loadEnzymeLibrary(): Promise<string | null> {
-  return isDesktop ? invoke<string | null>("load_enzyme_library") : localStorage.getItem(ENZYME_LIBRARY_KEY);
+export async function loadAppData(name: AppData): Promise<string | null> {
+  return isDesktop ? invoke<string | null>("load_app_data", { name }) : localStorage.getItem(appDataKey(name));
 }
 
-export async function saveEnzymeLibrary(contents: string): Promise<void> {
-  if (isDesktop) return invoke<void>("save_enzyme_library", { contents });
-  localStorage.setItem(ENZYME_LIBRARY_KEY, contents);
+export async function saveAppData(name: AppData, contents: string): Promise<void> {
+  if (isDesktop) return invoke<void>("save_app_data", { name, contents });
+  localStorage.setItem(appDataKey(name), contents);
 }
 
-export async function onEnzymeLibraryChanged(fn: () => void): Promise<() => void> {
-  const storage = (e: StorageEvent) => { if (e.key === ENZYME_LIBRARY_KEY || e.key === null) fn(); };
+/** Moves a list that can't be read out of the way, keeping it; returns where it went, if anywhere. */
+export async function setAsideAppData(name: AppData): Promise<string | null> {
+  if (isDesktop) return invoke<string | null>("set_aside_app_data", { name });
+  const old = localStorage.getItem(appDataKey(name));
+  if (old === null) return null;
+  const aside = `${appDataKey(name)}.unreadable-${Date.now()}`;
+  localStorage.setItem(aside, old);
+  localStorage.removeItem(appDataKey(name));
+  return `local storage, as ${aside}`;
+}
+
+/** Calls `fn` when another window (or browser tab) saves the list. */
+export async function onAppDataChanged(name: AppData, fn: () => void): Promise<() => void> {
+  if (isDesktop) {
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<string>("app-data-changed", e => { if (e.payload === name) fn(); });
+  }
+  const storage = (e: StorageEvent) => { if (e.key === appDataKey(name) || e.key === null) fn(); };
   window.addEventListener("storage", storage);
-  window.addEventListener("focus", fn);
-  const off = isDesktop ? await import("@tauri-apps/api/event").then(({ listen }) => listen(ENZYME_LIBRARY_EVENT, fn)) : () => undefined;
-  return () => {
-    window.removeEventListener("storage", storage);
-    window.removeEventListener("focus", fn);
-    off();
-  };
+  return () => window.removeEventListener("storage", storage);
 }
 
 export interface PickedFile {

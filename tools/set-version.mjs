@@ -7,39 +7,52 @@
 //   npm run version 0.2.0
 //
 // package.json, src-tauri/Cargo.toml (and its entry in src-tauri/Cargo.lock) and
-// src-tauri/tauri.conf.json. Commit the result, then tag that commit v0.2.0.
+// src-tauri/tauri.conf.json. `npm run release` (tools/release.mjs) calls it, so it is
+// rarely run by hand.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const version = process.argv[2] ?? "";
-if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-  console.error("Usage: npm run version <x.y.z>, such as npm run version 0.2.0");
-  process.exit(2);
-}
-const root = process.env.STRANDIVO_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
+export const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
-// The notes come first: a release without them would offer an update with nothing to say.
-const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
-const sections = [...changelog.matchAll(/^## +(\S+)\s*$/gm)].map(m => m[1]);
-if (!sections.includes(version)) {
-  console.error(`Write ${version}'s notes in CHANGELOG.md first: a "## ${version}" section whose first paragraph is the short version the app shows.`);
-  process.exit(1);
+/** Where each file states the version: the part before it and the part after. */
+const PLACES = [
+  ["package.json", /^(\s{2}"version":\s*")[^"]*(")/m],
+  ["src-tauri/tauri.conf.json", /^(\s{2}"version":\s*")[^"]*(")/m],
+  ["src-tauri/Cargo.toml", /^(\[package\][^[]*?^version\s*=\s*")[^"]*(")/m],
+  ["src-tauri/Cargo.lock", /^(name = "strandivo"\nversion = ")[^"]*(")/m]
+];
+
+/** Writes `version` into every file that states it; returns the files it names. */
+export function setVersion(root, version) {
+  if (!VERSION.test(version)) throw new Error(`"${version}" isn't a version such as 0.2.0.`);
+  // The notes come first: a release without them would offer an update with nothing to say.
+  const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+  const sections = [...changelog.matchAll(/^## +(\S+)\s*$/gm)].map(m => m[1]);
+  if (!sections.includes(version)) {
+    throw new Error(`Write ${version}'s notes in CHANGELOG.md first: a "## ${version}" section whose first paragraph is the short version the app shows.`);
+  }
+  for (const [path, place] of PLACES) {
+    const file = join(root, path);
+    const before = readFileSync(file, "utf8");
+    if (!place.test(before)) throw new Error(`Found no version to set in ${path}.`);
+    writeFileSync(file, before.replace(place, `$1${version}$2`));
+  }
+  return PLACES.map(([path]) => path);
 }
 
-function edit(path, change) {
-  const file = join(root, path);
-  const before = readFileSync(file, "utf8");
-  const after = change(before);
-  if (after === before) throw new Error(`Found no version to set in ${path}.`);
-  writeFileSync(file, after);
-  console.log(`${path}: ${version}`);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const version = process.argv[2] ?? "";
+  if (!VERSION.test(version)) {
+    console.error("Usage: npm run version <x.y.z>, such as npm run version 0.2.0");
+    process.exit(2);
+  }
+  const root = process.env.STRANDIVO_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
+  try {
+    for (const path of setVersion(root, version)) console.log(`${path}: ${version}`);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
 }
-
-// Only the "version" field at the top of each JSON file, keeping their own formatting.
-const jsonVersion = s => s.replace(/^(\s{2}"version":\s*")[^"]*(")/m, `$1${version}$2`);
-edit("package.json", jsonVersion);
-edit("src-tauri/tauri.conf.json", jsonVersion);
-edit("src-tauri/Cargo.toml", s => s.replace(/^(\[package\][^[]*?^version\s*=\s*")[^"]*(")/m, `$1${version}$2`));
-edit("src-tauri/Cargo.lock", s => s.replace(/^(name = "strandivo"\nversion = ")[^"]*(")/m, `$1${version}$2`));

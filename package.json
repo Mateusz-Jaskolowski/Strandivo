@@ -19,7 +19,9 @@
     "tauri": "tauri",
     "app:dev": "tauri dev",
     "app:build": "tauri build --config src-tauri/tauri.unsigned.conf.json",
-    "version": "node tools/set-version.mjs"
+    "version": "node tools/set-version.mjs",
+    "release": "node --experimental-strip-types tools/release.mjs prepare",
+    "release:tag": "node --experimental-strip-types tools/release.mjs tag"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.0",

@@ -396,6 +396,11 @@ it can (lists of files or features). CI checks that every path in backticks here
   design tokens in `src/styles.css`.
 - **Commits**: Conventional Commits (`feat(scope): summary` and a short body saying what
   and why), one logical change each, under your own name. Never rewrite pushed commits.
+- **What's new**: a pull request that changes something users notice adds a bullet under
+  `## Unreleased` in `CHANGELOG.md`, in the same plain words as the bullets of past
+  releases: what they can do now, not how the code does it. Fixes users would notice count;
+  refactors, tests, CI and docs don't. The section is what a release's notes are made
+  from, so a change left out of it is a change nobody hears about.
 - **Licence headers**: every `.ts`, `.mjs`, `.css`, `.rs` and `.sh` file starts with the
   copyright and `SPDX-License-Identifier: GPL-3.0-or-later` lines (`CONTRIBUTING.md`),
   checked by `.github/scripts/check-headers.sh`. A new file copies them from any other.
@@ -458,18 +463,24 @@ it can (lists of files or features). CI checks that every path in backticks here
   keep the release jobs' third-party actions pinned to commits, as they run beside it.
   `.github/CODEOWNERS` names who reviews what runs beside it or reaches users without a
   release (the site, the updates Worker); a new file of that kind goes in it too.
-  Losing the key strands every install: it is backed up outside GitHub. A release is a
-  `CHANGELOG.md` section (its first paragraph the short notes the app shows, in two or
-  three plain sentences), `npm run version <x.y.z>` (which won't run without that section),
-  a commit, a `v<x.y.z>` tag on it, approving the run, then publishing the draft;
-  `check-version` in `.github/scripts/release.mjs` fails a tag that doesn't match the three
+  Losing the key strands every install: it is backed up outside GitHub. To release, write
+  the short notes the app shows (two or three plain sentences) as the first paragraph of
+  Unreleased in `CHANGELOG.md`, above its bullets, then run `npm run release <x.y.z>` on
+  an up-to-date main (`tools/release.mjs`): it renames Unreleased to the version with a new
+  empty one above, sets the version (`tools/set-version.mjs`, also `npm run version`),
+  rebuilds the site, commits on `chore/release-<x.y.z>` and opens the pull request. Once
+  that is merged, `npm run release:tag` checks main as the release build will and pushes
+  the `v<x.y.z>` tag on it; then a maintainer approves the run and publishes the draft.
+  Tagging stays a person's step: an Actions token that could push `v*` tags would get
+  round the ruleset that keeps them to admins. `check-version` in
+  `.github/scripts/release.mjs` fails a tag that doesn't match the three
   files or has no notes, `latest-json` writes the manifest from the `.sig` files the builds
   made, and the section becomes the release's text. `download-copies` gives each
   installer a second name without the version, which is what the website's Download page
   links to (`releases/latest/download/…`, the newest published release), so the page
   needs no change per release. The script reads the changelog with
-  `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`. After a release's
-  section is written, run `npm run site` too, or the quick checks fail.
+  `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`. A release's
+  section written by hand needs `npm run site` too, or the quick checks fail.
 - **`updates.strandivo.com`** is built into every copy (`plugins.updater` in
   `src-tauri/tauri.conf.json`), so it must never change; the Worker behind it
   (`services/updates/`) hands over the published release's latest.json, or 204 for no

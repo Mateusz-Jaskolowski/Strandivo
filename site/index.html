@@ -17,6 +17,10 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
+       the Content Security Policy blocks, leaving "[email protected]": email_off keeps
+       them as written. -->
+  <!--email_off-->
   <header class="bar">
     <a class="brand" href="/">
       <img src="icon.png" alt="" width="32" height="32">
@@ -76,5 +80,6 @@
     <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
     <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
   </footer>
+  <!--/email_off-->
 </body>
 </html>

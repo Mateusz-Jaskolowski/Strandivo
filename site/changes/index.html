@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
+     SPDX-License-Identifier: GPL-3.0-or-later
+     Written by tools/build-site.mjs from CHANGELOG.md: edit that, then run npm run site. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What's new in Strandivo</title>
+  <meta name="description" content="What changed in each version of Strandivo, the free plasmid editor.">
+  <!-- strandivo.pages.dev serves the same page; this names the real address. -->
+  <link rel="canonical" href="https://strandivo.com/changes/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Strandivo">
+  <meta property="og:title" content="What's new in Strandivo">
+  <meta property="og:description" content="What changed in each version of Strandivo, the free plasmid editor.">
+  <meta property="og:image" content="https://strandivo.com/map.png">
+  <meta property="og:image:width" content="1360">
+  <meta property="og:image:height" content="855">
+  <meta property="og:image:alt" content="Strandivo showing a circular map of pUC19.">
+  <meta property="og:url" content="https://strandivo.com/changes/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#eef0f3">
+  <!-- Every link starts from the root: the 404 page is served at any address, and the
+       others sit in folders. -->
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
+       the Content Security Policy blocks, leaving "[email protected]": email_off keeps
+       them as written. -->
+  <!--email_off-->
+  <header class="bar">
+    <a class="brand" href="/">
+      <img src="/icon.png" alt="" width="32" height="32">
+      <span>Strandivo</span>
+    </a>
+    <nav class="bar-links" aria-label="Site">
+      <a class="bar-link" href="/download/">Download</a>
+      <a class="bar-link" aria-current="page" href="/changes/">What's new</a>
+      <a class="bar-link" href="/privacy/">Privacy</a>
+      <a class="bar-link" href="https://github.com/Mateusz-Jaskolowski/Strandivo">GitHub</a>
+    </nav>
+  </header>
+
+<main class="prose">
+    <h1>What's new in Strandivo</h1>
+    <p class="lede">Every version, newest first. Strandivo shows the short notes of each when
+    it offers the update; this page has the rest.</p>
+    <section class="release" id="v0.2.1">
+      <h2><a href="#v0.2.1">0.2.1</a></h2>
+      <p class="summary">A small update with no new features. It is the first to arrive through Strandivo's own updates, to check that updating works on every system.</p>
+      <ul>
+        <li>Nothing in the app changes; only the version number is new.</li>
+      </ul>
+      <p class="release-link"><a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/tag/v0.2.1">Release 0.2.1 on GitHub</a></p>
+    </section>
+    <section class="release" id="v0.2.0">
+      <h2><a href="#v0.2.0">0.2.0</a></h2>
+      <p class="summary">Strandivo now updates itself: it checks once a day and installs a new version when you choose. A welcome window on first launch helps you add your construct folders and start a primer library.</p>
+      <ul>
+        <li>Check for Updates… in the Strandivo menu (Help menu on Windows and Linux), and &quot;Check for updates automatically&quot; in Settings → Updates and privacy.</li>
+        <li>An update downloads in the background and installs when you restart; unsaved files are asked about first.</li>
+        <li>On Linux, both the AppImage and the .deb update themselves.</li>
+        <li>The welcome window can be opened again from Welcome to Strandivo… in the same menu.</li>
+      </ul>
+      <p class="release-link"><a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases/tag/v0.2.0">Release 0.2.0 on GitHub</a></p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Strandivo is free software under the GPL-3.0. This site has no cookies, no scripts
+    and no tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
+    <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
+    <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
+  </footer>
+  <!--/email_off-->
+</body>
+</html>

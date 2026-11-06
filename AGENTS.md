@@ -128,7 +128,7 @@ it can (lists of files or features). CI checks that every path in backticks here
   window has closed. A cancelled quit keeps the download, and an ordinary quit doesn't
   install it. So the updater and opener plugins' own commands stay out of the capability,
   and a version's notes on strandivo.com (`/changes#v<version>`, which every copy opens,
-  so it must keep working: `site/_redirects` until the page exists) are opened from a
+  so it must keep working: each version's section has that id) are opened from a
   version the shell checks, never an address from the page. What's new shows the short
   notes as text: before updating they come from latest.json (`shortNotes` in
   `src/lib/changelog.ts` cuts them short and drops them if they name an address, as
@@ -422,8 +422,12 @@ it can (lists of files or features). CI checks that every path in backticks here
   a commit, a `v<x.y.z>` tag on it, approving the run, then publishing the draft;
   `check-version` in `.github/scripts/release.mjs` fails a tag that doesn't match the three
   files or has no notes, `latest-json` writes the manifest from the `.sig` files the builds
-  made, and the section becomes the release's text. The script reads the changelog with
-  `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`.
+  made, and the section becomes the release's text. `download-copies` gives each
+  installer a second name without the version, which is what the website's Download page
+  links to (`releases/latest/download/…`, the newest published release), so the page
+  needs no change per release. The script reads the changelog with
+  `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`. After a release's
+  section is written, run `npm run site` too, or the quick checks fail.
 - **`updates.strandivo.com`** is built into every copy (`plugins.updater` in
   `src-tauri/tauri.conf.json`), so it must never change; the Worker behind it
   (`services/updates/`) hands over the published release's latest.json, or 204 for no
@@ -434,13 +438,20 @@ it can (lists of files or features). CI checks that every path in backticks here
 - **The website**, `strandivo.com`, is the plain files in `site/` on Cloudflare Pages (a
   project named `strandivo`), with no build step and no scripts, so its Content Security
   Policy (`site/_headers`) allows only its own images and stylesheet. Its colours copy the
-  app's tokens, as the site can't load `src/styles.css`. For now it is one page saying the
-  app is in development; part 6 of `docs/updates-feedback-usage-plan.md` adds Download and
-  Privacy. Cloudflare builds it from this repository, but only for a push that changes
-  something in `site/` (the project's build watch paths, a dashboard setting): on `main`
-  it goes live, and other branches get a preview address. Other pushes, the e2e-results
-  branch's included, show as skipped. The project is connected to GitHub, so never
-  deploy it with wrangler, which would be overwritten by the next push. Cloudflare's
+  app's tokens, as the site can't load `src/styles.css`. Its pages are written by
+  `tools/build-site.mjs` (`npm run site`) and committed: What's new from `CHANGELOG.md`,
+  Privacy from `docs/privacy.md`, and Home, Download and the 404 page from
+  `tools/site/`, each with the same header and footer. Edit those, never the HTML in
+  `site/`; the quick checks fail when the two differ. `docs/privacy.md` is the one list of
+  what the app sends, so whatever makes the app send something new changes it in the same
+  PR. Its Markdown is a small subset (headings, paragraphs, `-` lists, links, `code`,
+  bold), and the generator fails on anything else rather than show it wrong; links may
+  only be https, mail or the site's own. Cloudflare builds it from this repository, but
+  only for a push that changes something in `site/` (the project's build watch paths, a
+  dashboard setting): on `main` it goes live, and other branches get a preview address.
+  Other pushes, the e2e-results branch's included, show as skipped. The project is
+  connected to GitHub, so never deploy it with wrangler, which would be overwritten by
+  the next push. Cloudflare's
   email obfuscation rewrites addresses on the proxied domain (not on `pages.dev`) into
   a script the policy blocks, so a page's body sits inside `<!--email_off-->` comments;
   a new page needs them too, or its addresses read "[email protected]".

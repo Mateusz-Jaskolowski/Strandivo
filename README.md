@@ -77,13 +77,16 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
   version only when you choose. A welcome window on first launch asks about it and helps
   you add your construct folders and a primer library
 - **Private**: everything runs on your computer and your files never leave it. The app
-  goes online only to check for updates and to look up a UniProt entry you ask for
+  goes online only to check for updates and to look up a UniProt entry you ask for;
+  [strandivo.com/privacy](https://strandivo.com/privacy/) lists exactly what each sends
 
 ## Download
 
-Installers for Mac (Apple Silicon and Intel), Windows and Linux are on the
-[Releases page](https://github.com/Mateusz-Jaskolowski/Strandivo/releases), and each
-release's notes are in [`CHANGELOG.md`](CHANGELOG.md). A maintainer makes one by writing its
+Download Strandivo for Mac (Apple Silicon and Intel), Windows and Linux from
+[strandivo.com/download](https://strandivo.com/download/); every version is also on the
+[Releases page](https://github.com/Mateusz-Jaskolowski/Strandivo/releases). Each release's
+notes are in [`CHANGELOG.md`](CHANGELOG.md), and
+[strandivo.com/privacy](https://strandivo.com/privacy/) lists everything the app sends. A maintainer makes one by writing its
 notes there and pushing a version tag such as `v0.2.0`, which builds every platform and
 drafts a release; *Actions* → *Build installers* → *Run workflow* builds one platform for
 testing.
@@ -181,9 +184,9 @@ says how to take part.
 | `src-tauri/` | Desktop shell (Rust/Tauri): windows, menus, file associations, folder listing, commands |
 | `crates/seqcore/` | Trimming, alignment, difference calling, and the parts catalog and its search for feature detection (Rust, no dependencies) |
 | `crates/seqcore-json/` | The core's requests and responses as the interface sees them (JSON) |
-| `tools/` | Scripts run by hand: the parts catalog and its curated sources, the app icon, `npm run version` |
+| `tools/` | Scripts run by hand: the parts catalog and its curated sources, the app icon, `npm run version`, and the website's pages (`npm run site`, from `tools/site/`) |
 | `services/updates/` | The Cloudflare Worker behind `updates.strandivo.com` |
-| `site/` | The website, `strandivo.com` (plain files on Cloudflare Pages) |
+| `site/` | The website, `strandivo.com`: plain files on Cloudflare Pages, most of them written by `npm run site` |
 | `CHANGELOG.md` | Each release's notes; their first paragraph is what the app shows in What's new |
 | `docs/` | Plans and notes: the parts catalog's sources and terms, clone checking, feature detection, updates and feedback |
 | `testdata/` | Real `.ab1`/`.dna` files used by the tests, with their sources |

@@ -93,6 +93,15 @@ main,
 
 .bar-link:hover { background: var(--hover); color: var(--text); }
 
+.bar-link[aria-current="page"] { color: var(--text); font-weight: 600; }
+
+.bar-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
 .hero {
   max-width: 720px;
   padding: 56px 0 40px;
@@ -211,9 +220,105 @@ h1 {
   margin-bottom: 24px;
 }
 
+/* Pages of text: Download, What's new and Privacy. */
+.prose {
+  max-width: 760px;
+  padding-top: 40px;
+  padding-bottom: 24px;
+}
+
+.prose h1 { font-size: clamp(30px, 5vw, 42px); }
+
+.prose h2 {
+  margin: 40px 0 10px;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.prose h3 {
+  margin: 24px 0 6px;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.prose p,
+.prose li { color: var(--text-2); }
+
+.prose p { margin: 0 0 12px; }
+
+.prose ul { margin: 0 0 12px; padding-left: 22px; }
+
+.prose li { margin: 0 0 4px; }
+
+.prose strong { color: var(--text); font-weight: 600; }
+
+code {
+  font: 0.9em ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--text);
+}
+
+pre {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow-x: auto;
+}
+
+pre code { padding: 0; background: none; }
+
+.note { font-size: 15px; }
+
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 28px 0 20px;
+}
+
+.download {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.download h2 { margin: 0 0 12px; font-size: 17px; }
+
+.download .actions {
+  flex-direction: column;
+  margin-top: 0;
+}
+
+.download .button { text-align: center; font-size: 14px; }
+
+.release {
+  padding: 4px 0 8px;
+  border-top: 1px solid var(--line);
+  margin-top: 28px;
+  scroll-margin-top: 16px;
+}
+
+.release h2 { margin-top: 20px; }
+
+.release h2 a { color: var(--text); text-decoration: none; }
+
+.release h3 { font-size: 15px; }
+
+.release .summary { color: var(--text); }
+
+.release-link { font-size: 14px; }
+
 @media (max-width: 760px) {
   .bar, main, .foot { padding-left: 16px; padding-right: 16px; }
   .hero { padding: 32px 0 28px; }
   .lede { font-size: 17px; }
   .features { grid-template-columns: 1fr; gap: 24px; padding-top: 40px; }
+  .downloads { grid-template-columns: 1fr; }
+  .prose { padding-top: 24px; }
 }

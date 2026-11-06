@@ -1,8 +1,9 @@
 # Updates, feedback and usage statistics: plan
 
-Status: every decision below is made (November 2026). Parts 1–3 are built: the release
-workflow, the updates Worker (deployed), updating from inside the app and the welcome
-window, which go out together as 0.2.0. The other parts are planned.
+Status: every decision below is made (November 2026). Parts 1–3 are built and released
+as 0.2.0 (the release workflow, the updates Worker, updating from inside the app and the
+welcome window); 0.2.1, with no other change, proved the update on a Mac. Part 6, the
+website, is built. Parts 4 and 5 are planned.
 Each part below is one branch and one PR. What is said here about services and the law was read
 on 4 November 2026; check it again before each part is built. The legal notes are a
 reading of published guidance, not legal advice.
@@ -329,6 +330,16 @@ framework. Three pages to start with:
 - **What's new** at `/changes`, a section per version with an `id` of `v<version>`, from
   `CHANGELOG.md`. Every copy from 0.2.0 on opens that address, so it must keep working;
   until the page exists, `site/_redirects` sends it to the GitHub releases.
+
+**As built**: the site keeps no scripts and no build step on Cloudflare, so its strict
+Content Security Policy stays. Instead `tools/build-site.mjs` (`npm run site`) writes
+every page and the result is committed: What's new from `CHANGELOG.md`, Privacy from
+`docs/privacy.md`, and Home, Download and the 404 page from `tools/site/`, each with the
+same header and footer; the quick checks fail if the pages differ from what it writes.
+The Download page doesn't ask GitHub's API: each release also uploads its installers
+under names without the version (`download-copies` in `.github/scripts/release.mjs`), so
+the page links to `releases/latest/download/<file>`, which always means the newest
+published release. `site/_redirects` is gone, as `/changes` is a page now.
 
 It comes after the first public release, when there is something to download. Until then
 a single placeholder page (built November 2026) says the app is in development and links

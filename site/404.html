@@ -1,6 +1,7 @@
 <!doctype html>
 <!-- Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
-     SPDX-License-Identifier: GPL-3.0-or-later -->
+     SPDX-License-Identifier: GPL-3.0-or-later
+     Written by tools/build-site.mjs from tools/site/404.html: edit that, then run npm run site. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -8,40 +9,46 @@
   <title>Page not found · Strandivo</title>
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#eef0f3">
-  <!-- Cloudflare Pages serves this page for any missing address, at that address, so
-       every link here starts from the root: a relative one would break under /a/b. -->
+  <!-- Every link starts from the root: the 404 page is served at any address, and the
+       others sit in folders. -->
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/icon.png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <!-- email_off: see index.html. -->
+  <!-- Cloudflare's email obfuscation would turn the addresses below into a script that
+       the Content Security Policy blocks, leaving "[email protected]": email_off keeps
+       them as written. -->
   <!--email_off-->
   <header class="bar">
     <a class="brand" href="/">
       <img src="/icon.png" alt="" width="32" height="32">
       <span>Strandivo</span>
     </a>
-    <a class="bar-link" href="https://github.com/Mateusz-Jaskolowski/Strandivo">GitHub</a>
+    <nav class="bar-links" aria-label="Site">
+      <a class="bar-link" href="/download/">Download</a>
+      <a class="bar-link" href="/changes/">What's new</a>
+      <a class="bar-link" href="/privacy/">Privacy</a>
+      <a class="bar-link" href="https://github.com/Mateusz-Jaskolowski/Strandivo">GitHub</a>
+    </nav>
   </header>
 
-  <main>
+<main>
     <section class="hero">
       <h1>Page not found.</h1>
       <p class="lede">
-        There is nothing at this address. Strandivo is in active development, so some
-        pages are yet to come.
+        There is nothing at this address. It may have moved, or never existed.
       </p>
       <div class="actions">
         <a class="button primary" href="/">Go to the home page</a>
-        <a class="button" href="https://github.com/Mateusz-Jaskolowski/Strandivo">Follow on GitHub</a>
+        <a class="button" href="/download/">Download Strandivo</a>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    <p>Strandivo is free software under the GPL-3.0. This page has no cookies and no
-    tracking.</p>
+    <p>Strandivo is free software under the GPL-3.0. This site has no cookies, no scripts
+    and no tracking; see <a href="/privacy/">Privacy</a> for what the app sends.</p>
     <p><a href="mailto:hello@strandivo.com">hello@strandivo.com</a> · Security issues:
     <a href="mailto:security@strandivo.com">security@strandivo.com</a></p>
   </footer>

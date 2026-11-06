@@ -127,8 +127,12 @@ it can (lists of files or features). CI checks that every path in backticks here
   main window asks about unsaved tabs, and the update is installed only once the last
   window has closed. A cancelled quit keeps the download, and an ordinary quit doesn't
   install it. So the updater and opener plugins' own commands stay out of the capability,
-  and the release page is opened from the version the shell found, not an address from
-  the page. Development builds don't update themselves. On Linux the AppImage replaces
+  and a version's notes on strandivo.com (`/changes#v<version>`, which every copy opens,
+  so it must keep working: `site/_redirects` until the page exists) are opened from a
+  version the shell checks, never an address from the page. What's new shows the short
+  notes as text: before updating they come from latest.json (`shortNotes` in
+  `src/lib/changelog.ts` cuts them short, as latest.json isn't signed), after updating
+  from the copy's own `CHANGELOG.md`, on the first start of the new version. Development builds don't update themselves. On Linux the AppImage replaces
   itself and a .deb copy installs the release's .deb (`linux-x86_64-deb` in latest.json,
   which the plugin looks for before `linux-x86_64`) with `pkexec`, so the system asks for a
   password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
@@ -411,11 +415,14 @@ it can (lists of files or features). CI checks that every path in backticks here
   keep the release jobs' third-party actions pinned to commits, as they run beside it.
   `.github/CODEOWNERS` names who reviews what runs beside it or reaches users without a
   release (the site, the updates Worker); a new file of that kind goes in it too.
-  Losing the key strands every install: it is backed up outside GitHub. A release is
-  `npm run version <x.y.z>`, a commit, a `v<x.y.z>` tag on it, approving the run, then
-  publishing the draft; `check-version` in `.github/scripts/release.mjs` fails a tag that
-  doesn't match the three files, and `latest-json` writes the manifest from the `.sig`
-  files the builds made.
+  Losing the key strands every install: it is backed up outside GitHub. A release is a
+  `CHANGELOG.md` section (its first paragraph the short notes the app shows, in two or
+  three plain sentences), `npm run version <x.y.z>` (which won't run without that section),
+  a commit, a `v<x.y.z>` tag on it, approving the run, then publishing the draft;
+  `check-version` in `.github/scripts/release.mjs` fails a tag that doesn't match the three
+  files or has no notes, `latest-json` writes the manifest from the `.sig` files the builds
+  made, and the section becomes the release's text. The script reads the changelog with
+  `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`.
 - **`updates.strandivo.com`** is built into every copy (`plugins.updater` in
   `src-tauri/tauri.conf.json`), so it must never change; the Worker behind it
   (`services/updates/`) hands over the published release's latest.json, or 204 for no

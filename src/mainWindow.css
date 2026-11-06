@@ -527,3 +527,9 @@
 .sv-welcome-done:empty {
   display: none;
 }
+
+/* What's new (showWhatsNew in src/updates.ts) */
+.sv-whats-new {
+  margin: 0;
+  line-height: 1.5;
+}

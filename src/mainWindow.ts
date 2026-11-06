@@ -359,6 +359,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     libraryNames: () => home.listedNames(),
     /** Check for Updates…, as the menu does. */
     checkForUpdates: () => updates.check(true),
+    /** What the main window does at start after an update. */
+    announceUpdate: () => updates.announce(),
     /** Help → Welcome…, as the menu does. */
     openWelcome: () => openWelcome(home, true)
   };

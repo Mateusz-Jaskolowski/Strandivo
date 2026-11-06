@@ -9,9 +9,13 @@
 
 import { h, toast } from "./ui/dom.ts";
 import { iconSvg } from "./ui/icons.ts";
-import { canUpdate, checkForUpdate, downloadUpdate, openReleaseNotes, restartToUpdate, takeUpdateFailure, type UpdateInfo } from "./platform.ts";
-import { dueForCheck, parseMemory, progressText, shouldOffer, type UpdateMemory } from "./lib/updates.ts";
+import { openDialog } from "./ui/modal.ts";
+import { appVersion, canUpdate, checkForUpdate, downloadUpdate, openWhatsNew, restartToUpdate, takeUpdateFailure, type UpdateInfo } from "./platform.ts";
+import { dueForCheck, parseMemory, progressText, shouldOffer, wasUpdated, type UpdateMemory } from "./lib/updates.ts";
+import { notesFor, shortNotes } from "./lib/changelog.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
+// The notes of the version this copy is, built in: shown after an update, with no network.
+import changelog from "../CHANGELOG.md?raw";
 
 const KEY = "strandivo.updates";
 /** The first automatic check waits this long, so it never competes with opening files. */
@@ -42,6 +46,21 @@ export interface Updates {
   el: HTMLElement;
   /** Check now; `asked` = the user picked Check for Updates…, so say when there is none. */
   check(asked: boolean): Promise<void>;
+  /** Says "Strandivo was updated to …" if this start follows an update (run once at start). */
+  announce(): Promise<void>;
+}
+
+/**
+ * A version's short notes in a small dialog, with the full notes a click away on
+ * strandivo.com. `lines` are plain text; with none, the dialog only points to the website.
+ */
+export function showWhatsNew(version: string, lines: string[]) {
+  const dlg = openDialog({ title: `What's new in Strandivo ${version}`, width: 480 });
+  dlg.body.replaceChildren(...(lines.length ? lines : ["The notes for this version are on strandivo.com."]).map(l => h("p", { class: "sv-whats-new" }, l)));
+  dlg.footer.replaceChildren(
+    h("button", { type: "button", class: "sv-btn", onclick: () => void openWhatsNew(version).catch(e => toast(errorText(e), "error", 6000)) }, "More on strandivo.com"),
+    h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => dlg.close() }, "Close")
+  );
 }
 
 /** `until`: nothing is checked on its own before it settles (the welcome window closing). */
@@ -76,7 +95,7 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     show(
       "download",
       `Strandivo ${u.version} is available.`,
-      button("What's new", () => void openReleaseNotes().catch(e => toast(errorText(e), "error", 6000))),
+      button("What's new…", () => showWhatsNew(u.version, shortNotes(u.notes))),
       button("Install and restart", () => void install(), true),
       button("Skip this version", () => {
         remember({ skipped: u.version });
@@ -148,14 +167,33 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     if (!held && dueForCheck(remembered(), Date.now(), loadSettings().checkForUpdates)) void check(false);
   };
 
+  async function announce() {
+    const version = await appVersion();
+    if (!version) return;
+    const memory = remembered();
+    remember({ shownVersion: version });
+    if (!wasUpdated(memory, version) || !el.hidden) return;
+    const notes = notesFor(changelog, version);
+    show(
+      "download",
+      `Strandivo was updated to ${version}.`,
+      button("What's new…", () => {
+        hide();
+        showWhatsNew(version, notes?.summary ? [notes.summary] : []);
+      }),
+      button("Close", hide)
+    );
+  }
+
   void takeUpdateFailure().then(why => why && show("warn", why, button("Later", hide)));
   void until.finally(() => {
     held = false;
+    void announce();
     setTimeout(checkIfDue, FIRST_CHECK_MS);
   });
   setInterval(checkIfDue, RECHECK_MS);
   // Turning checks back on in Settings checks then, if a day has passed.
   onSettingsChanged(s => s.checkForUpdates && checkIfDue());
 
-  return { el, check };
+  return { el, check, announce };
 }

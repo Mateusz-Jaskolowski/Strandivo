@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CHECK_EVERY_MS, dueForCheck, parseMemory, progressText, shouldOffer } from "./updates.ts";
+import { CHECK_EVERY_MS, dueForCheck, parseMemory, progressText, shouldOffer, wasUpdated } from "./updates.ts";
 
 const now = Date.UTC(2026, 10, 6, 12);
 
@@ -34,4 +34,11 @@ test("remembered state survives junk", () => {
   assert.deepEqual(parseMemory("not json"), {});
   assert.deepEqual(parseMemory('{"lastCheck":"yesterday","skipped":3}'), {});
   assert.deepEqual(parseMemory('{"lastCheck":5,"skipped":"0.3.0"}'), { lastCheck: 5, skipped: "0.3.0" });
+});
+
+test("an update is announced once, and a first install isn't", () => {
+  assert.equal(wasUpdated({}, "0.2.0"), false);
+  assert.equal(wasUpdated({ shownVersion: "0.2.0" }, "0.2.0"), false);
+  assert.equal(wasUpdated({ shownVersion: "0.2.0" }, "0.3.0"), true);
+  assert.deepEqual(parseMemory('{"shownVersion":"0.2.0"}'), { shownVersion: "0.2.0" });
 });

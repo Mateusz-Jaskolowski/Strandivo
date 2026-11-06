@@ -20,6 +20,13 @@ if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
 }
 const root = process.env.STRANDIVO_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
 
+// The notes come first: a release without them would offer an update with nothing to say.
+const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+if (!new RegExp(`^## +${version.replace(/[.]/g, "\\.")}\\s*$`, "m").test(changelog)) {
+  console.error(`Write ${version}'s notes in CHANGELOG.md first: a "## ${version}" section whose first paragraph is the short version the app shows.`);
+  process.exit(1);
+}
+
 function edit(path, change) {
   const file = join(root, path);
   const before = readFileSync(file, "utf8");

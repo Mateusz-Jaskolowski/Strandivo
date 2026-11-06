@@ -64,7 +64,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - run: node .github/scripts/release.mjs check-version "$GITHUB_REF_NAME"
+      # The release script reads CHANGELOG.md with the app's own TypeScript, so Node 22.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - run: node --experimental-strip-types .github/scripts/release.mjs check-version "$GITHUB_REF_NAME"
 
   build:
     name: ${{ matrix.name }} (unsigned)
@@ -119,12 +123,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           merge-multiple: true
-      - name: Write latest.json
-        run: node .github/scripts/release.mjs latest-json dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > dist/latest.json
+      # The short notes in CHANGELOG.md go in latest.json, for "What's new" in the app; the
+      # whole section is the release's text.
+      - name: Write latest.json and the release notes
+        run: |
+          node --experimental-strip-types .github/scripts/release.mjs latest-json dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > dist/latest.json
+          node --experimental-strip-types .github/scripts/release.mjs release-notes "$GITHUB_REF_NAME" > notes.md
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           draft: true
@@ -135,4 +146,4 @@ jobs:
             dist/*.AppImage
             dist/*.app.tar.gz
             dist/latest.json
-          generate_release_notes: true
+          body_path: notes.md

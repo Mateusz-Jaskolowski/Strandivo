@@ -7,13 +7,19 @@
 //   node .github/scripts/release.mjs check-version v0.2.0
 //     Fails unless package.json, src-tauri/Cargo.toml and src-tauri/tauri.conf.json all say
 //     0.2.0, so the version a release announces is the one its app reports.
+//     It also fails one CHANGELOG.md has no section for.
 //   node .github/scripts/release.mjs latest-json <dir> <tag> <owner/repo>
 //     Prints the updater's latest.json for the signed files in <dir>: each platform's file
-//     and the signature the build wrote beside it.
+//     and the signature the build wrote beside it, and the version's short notes.
+//   node .github/scripts/release.mjs release-notes <tag>
+//     Prints the version's notes from CHANGELOG.md, for the GitHub release.
+//
+// Run with --experimental-strip-types, as it reads the changelog with the app's own code.
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { notesFor } from "../../src/lib/changelog.ts";
 
 /**
  * The updater's platform keys and how each one's update file is named. The updater looks
@@ -48,12 +54,22 @@ export function versionProblems(tag, found) {
     .map(([file, v]) => `${file} says ${v ?? "no version"}, the tag ${m[1]}.`);
 }
 
+/** What is wrong with the changelog for releasing `tag`, or null. */
+export function changelogProblem(tag, changelog) {
+  const version = tag.replace(/^v/, "");
+  const notes = notesFor(changelog, version);
+  if (!notes) return `CHANGELOG.md has no "## ${version}" section.`;
+  if (!notes.summary) return `CHANGELOG.md's ${version} section has no short notes (its first paragraph).`;
+  return null;
+}
+
 /**
  * latest.json for the files in a release: `files` maps file names to their contents for
  * signatures (only `.sig` files are read). Every platform must be there, so a release
- * can't leave one platform's copies without updates.
+ * can't leave one platform's copies without updates. `notes` are the short notes the app
+ * shows in "What's new" before updating.
  */
-export function latestJson({ files, tag, repo, date = new Date() }) {
+export function latestJson({ files, tag, repo, notes, date = new Date() }) {
   const names = Object.keys(files);
   const platforms = {};
   const missing = [];
@@ -72,7 +88,7 @@ export function latestJson({ files, tag, repo, date = new Date() }) {
   if (missing.length) throw new Error(`No signed update file for ${missing.join(", ")}.`);
   return {
     version: tag.replace(/^v/, ""),
-    notes: `What's new: https://github.com/${repo}/releases/tag/${tag}`,
+    notes: notes || `What's new: https://github.com/${repo}/releases/tag/${tag}`,
     pub_date: date.toISOString().replace(/\.\d{3}Z$/, "Z"),
     platforms
   };
@@ -80,8 +96,11 @@ export function latestJson({ files, tag, repo, date = new Date() }) {
 
 function main([command, ...args]) {
   const root = fileURLToPath(new URL("../..", import.meta.url));
+  const changelog = () => readFileSync(join(root, "CHANGELOG.md"), "utf8");
   if (command === "check-version") {
     const problems = versionProblems(args[0] ?? "", versions(root));
+    const notes = problems.length ? null : changelogProblem(args[0], changelog());
+    if (notes) problems.push(notes);
     if (problems.length) {
       console.error(`Can't release ${args[0]}:\n  ${problems.join("\n  ")}\nRun npm run version <x.y.z>, commit, and tag that commit.`);
       process.exit(1);
@@ -90,9 +109,17 @@ function main([command, ...args]) {
   } else if (command === "latest-json") {
     const [dir, tag, repo] = args;
     const files = Object.fromEntries(readdirSync(dir).map(n => [n, n.endsWith(".sig") ? readFileSync(join(dir, n), "utf8") : ""]));
-    console.log(JSON.stringify(latestJson({ files, tag, repo }), null, 2));
+    const notes = notesFor(changelog(), tag.replace(/^v/, ""))?.summary;
+    console.log(JSON.stringify(latestJson({ files, tag, repo, notes }), null, 2));
+  } else if (command === "release-notes") {
+    const n = notesFor(changelog(), (args[0] ?? "").replace(/^v/, ""));
+    if (!n) {
+      console.error(`CHANGELOG.md has no section for ${args[0]}.`);
+      process.exit(1);
+    }
+    console.log([n.summary, n.details].filter(Boolean).join("\n\n"));
   } else {
-    console.error("Usage: release.mjs check-version <tag> | latest-json <dir> <tag> <owner/repo>");
+    console.error("Usage: release.mjs check-version <tag> | latest-json <dir> <tag> <owner/repo> | release-notes <tag>");
     process.exit(2);
   }
 }

@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { changesUrl, looksLikeAddress, notesFor, parseChangelog, shortNotes } from "./changelog.ts";
+import { changesUrl, looksLikeAddress, notesFor, parseChangelog, releaseUnreleased, shortNotes, summaryProblem } from "./changelog.ts";
 
 const sample = `# What's new
 
@@ -58,4 +58,28 @@ test("CHANGELOG.md's short notes are plain and short, as the app shows them", ()
     // The app wouldn't show them: an address in the notes means they go to the website only.
     assert.equal(looksLikeAddress(n.summary), false, `${n.version}'s short notes name an address (or something like pUC19.gb)`);
   }
+});
+
+test("Unreleased becomes the version's section, with a new one above it", () => {
+  const log = "# What's new\n\nIntro.\n\n## Unreleased\n\nFaster maps.\n\n- Labels.\n- Picking.\n\n## 0.2.0\n\nOld.\n";
+  const out = releaseUnreleased(log, "0.3.0");
+  assert.ok("text" in out);
+  assert.equal(out.text, "# What's new\n\nIntro.\n\n## Unreleased\n\n## 0.3.0\n\nFaster maps.\n\n- Labels.\n- Picking.\n\n## 0.2.0\n\nOld.\n");
+  assert.deepEqual(parseChangelog(out.text).map(n => n.version), ["0.3.0", "0.2.0"]);
+  // The new Unreleased is empty, so releasing again has nothing to release.
+  assert.match((releaseUnreleased(out.text, "0.4.0") as { problem: string }).problem, /empty/);
+  // At the end of the file too.
+  const last = releaseUnreleased("## Unreleased\n\nOnly this.\n", "1.0.0");
+  assert.ok("text" in last && last.text === "## Unreleased\n\n## 1.0.0\n\nOnly this.\n");
+});
+
+test("Unreleased isn't released without short notes the app can show", () => {
+  const problem = (log: string, v = "0.3.0") => (releaseUnreleased(log, v) as { problem?: string }).problem ?? null;
+  assert.match(problem("## Unreleased\n\n- Labels.\n- Picking.\n")!, /first paragraph is a list/);
+  assert.match(problem("## Unreleased\n\nSee **this**.\n")!, /formatting/);
+  assert.match(problem("## Unreleased\n\nOpens pUC19.gb faster.\n")!, /address/);
+  assert.match(problem("## Unreleased\n\nNew.\n\n## 0.3.0\n\nOld.\n")!, /already has/);
+  assert.match(problem("## 0.2.0\n\nOld.\n")!, /no "## Unreleased"/);
+  assert.match(problem("## Unreleased\n\nNew.\n", "next")!, /isn't a version/);
+  assert.equal(summaryProblem("Faster maps and new primer tools."), null);
 });

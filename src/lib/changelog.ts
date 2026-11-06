@@ -65,3 +65,41 @@ export function shortNotes(notes: string | null | undefined): string[] {
 
 /** The website's page for a version's notes; built here, never taken from the server. */
 export const changesUrl = (version: string) => `https://strandivo.com/changes#v${version}`;
+
+/**
+ * What is wrong with short notes for the app to show, or null: they are shown as plain
+ * text, a few lines at most, and not at all if they name an address.
+ */
+export function summaryProblem(summary: string): string | null {
+  if (!summary) return "has no short notes (its first paragraph)";
+  if (summary.length > 400) return `has short notes of ${summary.length} characters, more than the app shows (400)`;
+  if (/\]\(|`|\*\*/.test(summary)) return "has formatting in its short notes, which the app shows as plain text";
+  if (looksLikeAddress(summary)) return "has short notes that name an address or a file (such as example.com or pUC19.gb); put that in the details";
+  return null;
+}
+
+/** The heading of what is merged but not released yet; not a version, so nothing reads it. */
+const UNRELEASED = /^## +Unreleased[ \t]*$/m;
+
+/**
+ * CHANGELOG.md with Unreleased turned into `version`'s section and a new, empty Unreleased
+ * above it, or the problem that stops that. The short notes must already be written as
+ * Unreleased's first paragraph, above its bullets.
+ */
+export function releaseUnreleased(text: string, version: string): { text: string } | { problem: string } {
+  if (!VERSION_PATTERN.test(version)) return { problem: `"${version}" isn't a version such as 0.3.0.` };
+  if (notesFor(text, version)) return { problem: `CHANGELOG.md already has a "## ${version}" section.` };
+  const lf = text.replace(/\r\n?/g, "\n");
+  const head = UNRELEASED.exec(lf);
+  if (!head) return { problem: 'CHANGELOG.md has no "## Unreleased" section.' };
+  const bodyStart = head.index + head[0].length;
+  const next = lf.slice(bodyStart).search(/^## /m);
+  const bodyEnd = next < 0 ? lf.length : bodyStart + next;
+  const body = lf.slice(bodyStart, bodyEnd).trim();
+  if (!body) return { problem: "Unreleased is empty: there is nothing to release." };
+  const out = `${lf.slice(0, head.index)}## Unreleased\n\n## ${version}\n\n${body}\n${next < 0 ? "" : `\n${lf.slice(bodyEnd)}`}`;
+  // Bullets alone are what Unreleased holds until a release: the short notes go above them.
+  const summary = notesFor(out, version)?.summary ?? "";
+  const problem = /^[-*] /.test(summary) ? "has no short notes: its first paragraph is a list, so write two or three sentences above it" : summaryProblem(summary);
+  return problem ? { problem: `Unreleased ${problem}.` } : { text: out };
+}

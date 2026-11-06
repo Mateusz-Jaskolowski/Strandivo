@@ -22,7 +22,7 @@
 import { copyFileSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { looksLikeAddress, notesFor } from "../../src/lib/changelog.ts";
+import { notesFor, summaryProblem } from "../../src/lib/changelog.ts";
 
 /**
  * The updater's platform keys and how each one's update file is named. The updater looks
@@ -89,10 +89,9 @@ export function changelogProblem(tag, changelog) {
   const version = tag.replace(/^v/, "");
   const notes = notesFor(changelog, version);
   if (!notes) return `CHANGELOG.md has no "## ${version}" section.`;
-  if (!notes.summary) return `CHANGELOG.md's ${version} section has no short notes (its first paragraph).`;
-  // The app wouldn't show them, so What's new would be empty.
-  if (looksLikeAddress(notes.summary)) return `CHANGELOG.md's ${version} short notes name an address or a file (such as example.com or pUC19.gb); put that in the details.`;
-  return null;
+  // Notes the app wouldn't show leave What's new empty.
+  const problem = summaryProblem(notes.summary);
+  return problem ? `CHANGELOG.md's ${version} section ${problem}.` : null;
 }
 
 /**

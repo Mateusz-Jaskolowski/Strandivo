@@ -341,6 +341,11 @@ it can (lists of files or features). CI checks that every path in backticks here
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
   list and the regenerated catalog together.
+- `node tools/build-icon.mjs` draws the app icon and writes every file made from it: the
+  PNGs, `src-tauri/icons/icon.ico` and `src-tauri/icons/icon.icns`, and the website's icon
+  and favicon. Change the drawing there, never the images (the SVGs beside them are its
+  output too). Sizes of 32 px and under get a plainer drawing, as the full one blurs. It
+  needs macOS for the .icns.
 - `npm run check` runs all of the above, the agent guide's path check, a syntax check of
   the e2e script and clippy: what CI
   checks except the e2e, in a minute or two. Run it before every push where Rust is

@@ -409,7 +409,8 @@ it can (lists of files or features). CI checks that every path in backticks here
 
 - `npm test` (unit tests in `src/lib/`), `npm run typecheck`, `npm run build`.
 - `cd crates/seqcore && cargo test --release` for the alignment core, and the same in
-  `crates/seqcore-json/` for the JSON it answers with.
+  `crates/seqcore-json/` for the JSON it answers with; `cargo test --lib` in `src-tauri/`
+  for the shell's own (the crash hook, usage events, app data).
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
   list and the regenerated catalog together.

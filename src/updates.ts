@@ -45,7 +45,7 @@ export interface Updates {
 }
 
 export function startUpdates(): Updates {
-  const el = h("div", { class: "sv-offer sv-update", role: "status", hidden: true });
+  const el = h("div", { class: "sv-update", role: "status", hidden: true });
   let checking = false;
   /** The update on offer, and how far it has got. */
   let found: UpdateInfo | null = null;

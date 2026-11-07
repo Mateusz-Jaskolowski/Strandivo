@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { changelogProblem, latestJson, PLATFORMS, RELEASE_FILES, releaseNames, versionProblems, versions } from "./release.mjs";
+import { changelogProblem, DOWNLOADS, latestJson, PLATFORMS, RELEASE_FILES, releaseNames, versionProblems, versions } from "./release.mjs";
 
 const files = {
   "Strandivo_Mac_Apple-silicon_update.app.tar.gz": "",
@@ -112,7 +112,8 @@ test("each file the builds make is published under a name saying its system, wit
   assert.throws(() => releaseNames([...built, "Strandivo_0.4.0-rc.1_x64.msi"], "v0.4.0-rc.1"), /No release name for Strandivo_0\.4\.0-rc\.1_x64\.msi/);
 });
 
-test("every update file is a file the release carries", () => {
+test("every update file and every download the website links to is a file the release carries", () => {
   const names = RELEASE_FILES.map(f => f.name);
   for (const p of PLATFORMS) assert.ok(names.includes(p.file), p.file);
+  for (const d of DOWNLOADS) assert.ok(names.includes(d.file), d.file);
 });

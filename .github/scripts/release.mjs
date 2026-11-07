@@ -59,18 +59,13 @@ export const PLATFORMS = [
   { key: "linux-x86_64-deb", file: "Strandivo_Linux.deb" }
 ];
 
-/**
- * The installers strandivo.com/download links to, at `releases/latest/download/<file>`.
- * These are the names releases up to 0.4.0-rc.1 used: the page moves to RELEASE_FILES' names
- * once a release (not a candidate, which "latest" never means) carrying them is published,
- * or its links would lead nowhere until then.
- */
+/** The installers strandivo.com/download links to, at `releases/latest/download/<file>`. */
 export const DOWNLOADS = [
-  { file: "Strandivo_aarch64.dmg", os: "mac", label: "Mac with Apple silicon" },
-  { file: "Strandivo_x64.dmg", os: "mac", label: "Mac with Intel" },
-  { file: "Strandivo_x64-setup.exe", os: "windows", label: "Windows" },
-  { file: "Strandivo_amd64.deb", os: "linux", label: "Debian, Ubuntu and relatives" },
-  { file: "Strandivo_amd64.AppImage", os: "linux", label: "Other Linux (AppImage)" }
+  { file: "Strandivo_Mac_Apple-silicon.dmg", os: "mac", label: "Mac with Apple silicon" },
+  { file: "Strandivo_Mac_Intel.dmg", os: "mac", label: "Mac with Intel" },
+  { file: "Strandivo_Windows_setup.exe", os: "windows", label: "Windows" },
+  { file: "Strandivo_Linux.deb", os: "linux", label: "Debian, Ubuntu and relatives" },
+  { file: "Strandivo_Linux.AppImage", os: "linux", label: "Other Linux (AppImage)" }
 ];
 
 /**

@@ -313,7 +313,7 @@ export class MapView {
       const enzymeSet = this.enzymeSelect.value as EnzymeSet;
       ctx.setOptions({ enzymeSet, cutsites: enzymeSet !== "none" });
     } }, ENZYME_SETS.map(set => h("option", { value: set.id }, set.label))) as HTMLSelectElement;
-    const controls = h("div", { class: "sv-map-controls" }, h("label", { class: "sv-map-slider", title: "Enzymes to show" }, iconSvg("scissors"), this.enzymeSelect), rot.wrap, zoom.wrap, lab.wrap);
+    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, zoom.wrap, lab.wrap, h("label", { class: "sv-map-slider", title: "Enzymes to show" }, iconSvg("scissors"), this.enzymeSelect));
     this.el = h("div", { class: "sv-map" }, header, this.area, controls);
 
     this.installPointer();

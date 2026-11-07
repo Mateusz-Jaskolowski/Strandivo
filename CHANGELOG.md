@@ -39,6 +39,8 @@ them, count a little more, still only as fixed words and ranges.
   and a cut on the bottom strand that falls in the next row is drawn there.
 - **Codon shading** in the Sequence tab alternates evenly again: the first codon of a
   feature or row was sometimes partly shaded.
+- **Each map keeps its rotation**: a file's map opens turned the way you last turned it.
+  The enzymes to show now come last under the map, after rotation, zoom and label size.
 
 ## 0.3.1
 

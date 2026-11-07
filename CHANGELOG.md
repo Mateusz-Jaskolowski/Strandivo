@@ -41,6 +41,8 @@ them, count a little more, still only as fixed words and ranges.
   feature or row was sometimes partly shaded.
 - **Each map keeps its rotation**: a file's map opens turned the way you last turned it.
   The enzymes to show now come last under the map, after rotation, zoom and label size.
+- **Map labels on a Mac** sit in the middle of their coloured backgrounds, which no longer
+  run on past the end of the name; position numbers around the map are centred too.
 
 ## 0.3.1
 

@@ -8,41 +8,62 @@
 //     Fails unless package.json, src-tauri/Cargo.toml and src-tauri/tauri.conf.json all say
 //     0.2.0, so the version a release announces is the one its app reports.
 //     It also fails one CHANGELOG.md has no section for.
+//   node .github/scripts/release.mjs name-files <dir> <tag>
+//     Gives each file the builds left in <dir>, and its signature, the name it is published
+//     under (RELEASE_FILES), and fails if one is missing or unknown.
 //   node .github/scripts/release.mjs latest-json <dir> <tag> <owner/repo>
 //     Prints the updater's latest.json for the signed files in <dir>: each platform's file
 //     and the signature the build wrote beside it, and the version's short notes.
-//   node .github/scripts/release.mjs download-copies <dir> <tag>
-//     Copies each installer in <dir> to the name without the version that
-//     strandivo.com/download links to (DOWNLOADS).
 //   node .github/scripts/release.mjs release-notes <tag>
 //     Prints the version's notes from CHANGELOG.md, for the GitHub release. A release
 //     candidate (v0.4.0-rc.1) has Unreleased's notes, as it has no section of its own.
 //
 // Run with --experimental-strip-types, as it reads the changelog with the app's own code.
 
-import { copyFileSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { releaseNotesFor, summaryProblem } from "../../src/lib/changelog.ts";
 
 /**
- * The updater's platform keys and how each one's update file is named. The updater looks
- * for `<os>-<arch>-<installer>` before `<os>-<arch>`, so a copy installed from the .deb
- * finds the .deb and every other Linux copy (the AppImage) the plain key.
+ * The files a release carries: `built` ends the name the build gives a file, after
+ * `Strandivo_<version>_` (build-app adds version and processor to the Mac's update files,
+ * which are otherwise both Strandivo.app.tar.gz), and `name` is the one it is published
+ * under. Names say which system a file is for in words people use, not the build's
+ * aarch64, x64 and amd64, and carry no version, so the website can link to
+ * `releases/latest/download/<name>`, which always means the newest published release, and
+ * needs no change when one comes out; latest.json points at the same file under its tag.
+ * The Mac's update files say so, as people should take the .dmg.
  */
-export const PLATFORMS = [
-  { key: "darwin-aarch64", matches: f => f.endsWith("_aarch64.app.tar.gz") },
-  { key: "darwin-x86_64", matches: f => f.endsWith("_x64.app.tar.gz") },
-  { key: "windows-x86_64", matches: f => f.endsWith("-setup.exe") },
-  { key: "linux-x86_64", matches: f => f.endsWith(".AppImage") },
-  { key: "linux-x86_64-deb", matches: f => f.endsWith(".deb") }
+export const RELEASE_FILES = [
+  { built: "aarch64.dmg", name: "Strandivo_Mac_Apple-silicon.dmg" },
+  { built: "x64.dmg", name: "Strandivo_Mac_Intel.dmg" },
+  { built: "x64-setup.exe", name: "Strandivo_Windows_setup.exe" },
+  { built: "amd64.deb", name: "Strandivo_Linux.deb" },
+  { built: "amd64.AppImage", name: "Strandivo_Linux.AppImage" },
+  { built: "aarch64.app.tar.gz", name: "Strandivo_Mac_Apple-silicon_update.app.tar.gz" },
+  { built: "x64.app.tar.gz", name: "Strandivo_Mac_Intel_update.app.tar.gz" }
 ];
 
 /**
- * The installers strandivo.com/download links to. Each release also carries a copy of
- * each under a name without the version, so the page can link to
- * `releases/latest/download/<file>`, which always means the newest published release,
- * and needs no change when one comes out.
+ * The updater's platform keys and each one's update file. The updater looks for
+ * `<os>-<arch>-<installer>` before `<os>-<arch>`, so a copy installed from the .deb finds
+ * the .deb and every other Linux copy (the AppImage) the plain key. The updater tells what
+ * it downloaded from its contents, not its name.
+ */
+export const PLATFORMS = [
+  { key: "darwin-aarch64", file: "Strandivo_Mac_Apple-silicon_update.app.tar.gz" },
+  { key: "darwin-x86_64", file: "Strandivo_Mac_Intel_update.app.tar.gz" },
+  { key: "windows-x86_64", file: "Strandivo_Windows_setup.exe" },
+  { key: "linux-x86_64", file: "Strandivo_Linux.AppImage" },
+  { key: "linux-x86_64-deb", file: "Strandivo_Linux.deb" }
+];
+
+/**
+ * The installers strandivo.com/download links to, at `releases/latest/download/<file>`.
+ * These are the names releases up to 0.4.0-rc.1 used: the page moves to RELEASE_FILES' names
+ * once a release (not a candidate, which "latest" never means) carrying them is published,
+ * or its links would lead nowhere until then.
  */
 export const DOWNLOADS = [
   { file: "Strandivo_aarch64.dmg", os: "mac", label: "Mac with Apple silicon" },
@@ -52,17 +73,33 @@ export const DOWNLOADS = [
   { file: "Strandivo_amd64.AppImage", os: "linux", label: "Other Linux (AppImage)" }
 ];
 
-/** The copies a release makes for the website, as [built file, copy] pairs. */
-export function downloadCopies(names, tag) {
+/**
+ * How to rename the files the builds made (`names`) for release `tag`, as [built, published]
+ * pairs, signatures included. Every file must be there, and nothing else may be, so a
+ * release never carries a file under the build's own name.
+ */
+export function releaseNames(names, tag) {
   const version = tag.replace(/^v/, "");
+  const renames = [];
   const missing = [];
-  const copies = DOWNLOADS.map(d => {
-    const built = d.file.replace(/^Strandivo_/, `Strandivo_${version}_`);
-    if (!names.includes(built)) missing.push(built);
-    return [built, d.file];
-  });
-  if (missing.length) throw new Error(`No ${missing.join(", ")} to copy for the website.`);
-  return copies;
+  const known = new Set();
+  for (const f of RELEASE_FILES) {
+    const built = `Strandivo_${version}_${f.built}`;
+    if (!names.includes(built)) {
+      missing.push(built);
+      continue;
+    }
+    renames.push([built, f.name]);
+    known.add(built);
+    if (names.includes(`${built}.sig`)) {
+      renames.push([`${built}.sig`, `${f.name}.sig`]);
+      known.add(`${built}.sig`);
+    }
+  }
+  if (missing.length) throw new Error(`The builds made no ${missing.join(", ")}.`);
+  const unknown = names.filter(n => !known.has(n));
+  if (unknown.length) throw new Error(`No release name for ${unknown.join(", ")}.`);
+  return renames;
 }
 
 /** The versions a release must agree on, read from the three files that state one. */
@@ -106,7 +143,7 @@ export function latestJson({ files, tag, repo, notes, date = new Date() }) {
   const platforms = {};
   const missing = [];
   for (const p of PLATFORMS) {
-    const file = names.find(n => p.matches(n));
+    const file = names.includes(p.file) ? p.file : undefined;
     const sig = file && files[`${file}.sig`];
     if (!file || !sig) {
       missing.push(p.key + (file ? ` (${file} has no .sig)` : ""));
@@ -143,11 +180,11 @@ function main([command, ...args]) {
     const files = Object.fromEntries(readdirSync(dir).map(n => [n, n.endsWith(".sig") ? readFileSync(join(dir, n), "utf8") : ""]));
     const notes = releaseNotesFor(changelog(), tag.replace(/^v/, ""))?.summary;
     console.log(JSON.stringify(latestJson({ files, tag, repo, notes }), null, 2));
-  } else if (command === "download-copies") {
+  } else if (command === "name-files") {
     const [dir, tag] = args;
-    for (const [built, copy] of downloadCopies(readdirSync(dir), tag)) {
-      copyFileSync(join(dir, built), join(dir, copy));
-      console.log(`${built} → ${copy}`);
+    for (const [built, name] of releaseNames(readdirSync(dir), tag)) {
+      renameSync(join(dir, built), join(dir, name));
+      console.log(`${built} → ${name}`);
     }
   } else if (command === "release-notes") {
     const n = releaseNotesFor(changelog(), (args[0] ?? "").replace(/^v/, ""));
@@ -157,7 +194,7 @@ function main([command, ...args]) {
     }
     console.log([n.summary, n.details].filter(Boolean).join("\n\n"));
   } else {
-    console.error("Usage: release.mjs check-version <tag> | latest-json <dir> <tag> <owner/repo> | download-copies <dir> <tag> | release-notes <tag>");
+    console.error("Usage: release.mjs check-version <tag> | name-files <dir> <tag> | latest-json <dir> <tag> <owner/repo> | release-notes <tag>");
     process.exit(2);
   }
 }

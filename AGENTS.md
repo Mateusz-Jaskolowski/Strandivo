@@ -509,10 +509,12 @@ it can (lists of files or features). CI checks that every path in backticks here
   round the ruleset that keeps them to admins. `check-version` in
   `.github/scripts/release.mjs` fails a tag that doesn't match the three
   files or has no notes, `latest-json` writes the manifest from the `.sig` files the builds
-  made, and the section becomes the release's text. `download-copies` gives each
-  installer a second name without the version, which is what the website's Download page
-  links to (`releases/latest/download/…`, the newest published release), so the page
-  needs no change per release. The script reads the changelog with
+  made, and the section becomes the release's text. `name-files` gives each file its
+  published name first (`RELEASE_FILES`): the system in words people use
+  (`Strandivo_Mac_Intel.dmg`, not the build's x64) and no version, so a release lists each
+  installer once and the website's Download page links to
+  `releases/latest/download/…`, the newest published release, with no change per release.
+  The website's names (`DOWNLOADS`) move only once a release carrying them is published. The script reads the changelog with
   `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`. A release's
   section written by hand needs `npm run site` too, or the quick checks fail.
 - **`updates.strandivo.com`** is built into every copy (`plugins.updater` in

@@ -5,20 +5,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { changelogProblem, downloadCopies, DOWNLOADS, latestJson, versionProblems, versions } from "./release.mjs";
+import { changelogProblem, latestJson, PLATFORMS, RELEASE_FILES, releaseNames, versionProblems, versions } from "./release.mjs";
 
 const files = {
-  "Strandivo_0.2.0_aarch64.app.tar.gz": "",
-  "Strandivo_0.2.0_aarch64.app.tar.gz.sig": "sig-mac-arm\n",
-  "Strandivo_0.2.0_x64.app.tar.gz": "",
-  "Strandivo_0.2.0_x64.app.tar.gz.sig": "sig-mac-intel",
-  "Strandivo_0.2.0_x64-setup.exe": "",
-  "Strandivo_0.2.0_x64-setup.exe.sig": "sig-win",
-  "Strandivo_0.2.0_amd64.AppImage": "",
-  "Strandivo_0.2.0_amd64.AppImage.sig": "sig-linux",
-  "Strandivo_0.2.0_aarch64.dmg": "",
-  "Strandivo_0.2.0_amd64.deb": "",
-  "Strandivo_0.2.0_amd64.deb.sig": "sig-deb"
+  "Strandivo_Mac_Apple-silicon_update.app.tar.gz": "",
+  "Strandivo_Mac_Apple-silicon_update.app.tar.gz.sig": "sig-mac-arm\n",
+  "Strandivo_Mac_Intel_update.app.tar.gz": "",
+  "Strandivo_Mac_Intel_update.app.tar.gz.sig": "sig-mac-intel",
+  "Strandivo_Windows_setup.exe": "",
+  "Strandivo_Windows_setup.exe.sig": "sig-win",
+  "Strandivo_Linux.AppImage": "",
+  "Strandivo_Linux.AppImage.sig": "sig-linux",
+  "Strandivo_Mac_Apple-silicon.dmg": "",
+  "Strandivo_Linux.deb": "",
+  "Strandivo_Linux.deb.sig": "sig-deb"
 };
 
 test("latest.json names each platform's signed file and its signature", () => {
@@ -28,14 +28,14 @@ test("latest.json names each platform's signed file and its signature", () => {
   assert.deepEqual(Object.keys(j.platforms), ["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64", "linux-x86_64-deb"]);
   assert.deepEqual(j.platforms["darwin-aarch64"], {
     signature: "sig-mac-arm",
-    url: "https://github.com/owner/Strandivo/releases/download/v0.2.0/Strandivo_0.2.0_aarch64.app.tar.gz"
+    url: "https://github.com/owner/Strandivo/releases/download/v0.2.0/Strandivo_Mac_Apple-silicon_update.app.tar.gz"
   });
-  assert.equal(j.platforms["windows-x86_64"].url.endsWith("/Strandivo_0.2.0_x64-setup.exe"), true);
+  assert.equal(j.platforms["windows-x86_64"].url.endsWith("/Strandivo_Windows_setup.exe"), true);
   assert.equal(j.platforms["linux-x86_64"].signature, "sig-linux");
   // A copy installed from the .deb is updated with the .deb, never the AppImage.
   assert.deepEqual(j.platforms["linux-x86_64-deb"], {
     signature: "sig-deb",
-    url: "https://github.com/owner/Strandivo/releases/download/v0.2.0/Strandivo_0.2.0_amd64.deb"
+    url: "https://github.com/owner/Strandivo/releases/download/v0.2.0/Strandivo_Linux.deb"
   });
   assert.match(j.notes, /releases\/tag\/v0\.2\.0$/);
   assert.equal(latestJson({ files, tag: "v0.2.0", repo: "o/r", notes: "Faster maps." }).notes, "Faster maps.");
@@ -53,11 +53,11 @@ test("a release needs short notes in the changelog", () => {
 });
 
 test("latest.json refuses a release missing a platform or a signature", () => {
-  const noWindows = Object.fromEntries(Object.entries(files).filter(([n]) => !n.includes("setup.exe")));
+  const noWindows = Object.fromEntries(Object.entries(files).filter(([n]) => !n.includes("Windows")));
   assert.throws(() => latestJson({ files: noWindows, tag: "v0.2.0", repo: "o/r" }), /windows-x86_64/);
   const unsigned = { ...files };
-  delete unsigned["Strandivo_0.2.0_amd64.AppImage.sig"];
-  assert.throws(() => latestJson({ files: unsigned, tag: "v0.2.0", repo: "o/r" }), /linux-x86_64 \(Strandivo_0\.2\.0_amd64\.AppImage has no \.sig\)/);
+  delete unsigned["Strandivo_Linux.AppImage.sig"];
+  assert.throws(() => latestJson({ files: unsigned, tag: "v0.2.0", repo: "o/r" }), /linux-x86_64 \(Strandivo_Linux\.AppImage has no \.sig\)/);
 });
 
 test("a release tag must match the version in every file", () => {
@@ -76,13 +76,43 @@ test("the repository's three files agree on one version today", () => {
   assert.match([...values][0], /^\d+\.\d+\.\d+/);
 });
 
-test("each installer gets a copy without the version, for the website's links", () => {
-  const built = ["Strandivo_0.2.0_x64.dmg", "Strandivo_0.2.0_x64-setup.exe", "Strandivo_0.2.0_amd64.AppImage", "Strandivo_0.2.0_amd64.deb", ...Object.keys(files)];
-  const copies = downloadCopies(built, "v0.2.0");
-  assert.deepEqual(copies.map(c => c[1]), DOWNLOADS.map(d => d.file));
-  assert.deepEqual(copies[0], ["Strandivo_0.2.0_aarch64.dmg", "Strandivo_aarch64.dmg"]);
-  // A copy's name never carries a version, so the link to it stays the same.
-  for (const d of DOWNLOADS) assert.doesNotMatch(d.file, /\d+\.\d+\.\d+/);
-  // The update files alone aren't enough: the Intel Mac's .dmg is missing.
-  assert.throws(() => downloadCopies(Object.keys(files), "v0.2.0"), /^Error: No Strandivo_0\.2\.0_x64\.dmg to copy/);
+test("each file the builds make is published under a name saying its system, with no version", () => {
+  // What the four builds leave, as the 0.4.0-rc.1 release showed them.
+  const built = [
+    "Strandivo_0.4.0-rc.1_aarch64.dmg",
+    "Strandivo_0.4.0-rc.1_x64.dmg",
+    "Strandivo_0.4.0-rc.1_aarch64.app.tar.gz",
+    "Strandivo_0.4.0-rc.1_aarch64.app.tar.gz.sig",
+    "Strandivo_0.4.0-rc.1_x64.app.tar.gz",
+    "Strandivo_0.4.0-rc.1_x64.app.tar.gz.sig",
+    "Strandivo_0.4.0-rc.1_x64-setup.exe",
+    "Strandivo_0.4.0-rc.1_x64-setup.exe.sig",
+    "Strandivo_0.4.0-rc.1_amd64.deb",
+    "Strandivo_0.4.0-rc.1_amd64.deb.sig",
+    "Strandivo_0.4.0-rc.1_amd64.AppImage",
+    "Strandivo_0.4.0-rc.1_amd64.AppImage.sig"
+  ];
+  const renames = releaseNames(built, "v0.4.0-rc.1");
+  assert.deepEqual(renames.slice(0, 3), [
+    ["Strandivo_0.4.0-rc.1_aarch64.dmg", "Strandivo_Mac_Apple-silicon.dmg"],
+    ["Strandivo_0.4.0-rc.1_x64.dmg", "Strandivo_Mac_Intel.dmg"],
+    ["Strandivo_0.4.0-rc.1_x64-setup.exe", "Strandivo_Windows_setup.exe"]
+  ]);
+  assert.equal(renames.length, built.length);
+  // Signatures follow their file, so latest.json can be written from the new names.
+  const named = Object.fromEntries(renames.map(([, n]) => [n, n.endsWith(".sig") ? "sig" : ""]));
+  assert.deepEqual(Object.keys(latestJson({ files: named, tag: "v0.4.0-rc.1", repo: "o/r" }).platforms), PLATFORMS.map(p => p.key));
+  for (const f of RELEASE_FILES) {
+    assert.doesNotMatch(f.name, /\d+\.\d+|aarch64|x64|amd64/, f.name);
+    assert.match(f.name, /^Strandivo_(Mac|Windows|Linux)/, f.name);
+  }
+  // A missing build stops the release, and so does a file of another version or kind.
+  assert.throws(() => releaseNames(built.filter(n => !n.includes("x64.dmg")), "v0.4.0-rc.1"), /^Error: The builds made no Strandivo_0\.4\.0-rc\.1_x64\.dmg/);
+  assert.throws(() => releaseNames(built, "v0.4.0"), /made no Strandivo_0\.4\.0_aarch64\.dmg/);
+  assert.throws(() => releaseNames([...built, "Strandivo_0.4.0-rc.1_x64.msi"], "v0.4.0-rc.1"), /No release name for Strandivo_0\.4\.0-rc\.1_x64\.msi/);
+});
+
+test("every update file is a file the release carries", () => {
+  const names = RELEASE_FILES.map(f => f.name);
+  for (const p of PLATFORMS) assert.ok(names.includes(p.file), p.file);
 });

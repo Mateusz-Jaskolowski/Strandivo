@@ -1,0 +1,1080 @@
+{
+  "checks": [
+    {
+      "name": "The file opens in a tab with its map",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "On first launch the welcome window opens over the file",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nothing is checked online while the welcome window is open",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "It asks about usage statistics, unticked",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Start using Strandivo closes it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Its choices land in the settings, and an unticked box adds nothing",
+      "ok": true,
+      "detail": "{\"seen\":2,\"usage\":false,\"primers\":0,\"updates\":true}"
+    },
+    {
+      "name": "Once it closes, the update check runs",
+      "ok": true,
+      "detail": "1 checks"
+    },
+    {
+      "name": "Home and the file's tab are in the app bar",
+      "ok": true,
+      "detail": "{\"home\":true,\"tabs\":[\"pUC19-annotated.gb\"],\"active\":0}"
+    },
+    {
+      "name": "Outline lists the file's features",
+      "ok": true,
+      "detail": "lacZ-alpha, MCS, AmpR"
+    },
+    {
+      "name": "Map labels fit inside the map",
+      "ok": true,
+      "detail": "none clipped"
+    },
+    {
+      "name": "Label size slider changes the map labels",
+      "ok": true,
+      "detail": "9.66px → 12.075px"
+    },
+    {
+      "name": "Ruler button hides the map's ruler",
+      "ok": true,
+      "detail": "26 → 0 ticks"
+    },
+    {
+      "name": "Features that only touch share a lane on the map",
+      "ok": true,
+      "detail": "151 and 151"
+    },
+    {
+      "name": "Clicking a feature shows it in the inspector",
+      "ok": true,
+      "detail": "AmpR: CDSgenepromoterterminatorrep_originRBSmisc_featureprotein_bindprimer_bindpolyA_signalenhancersig_peptideLTRmRNA5'UTR3'UT"
+    },
+    {
+      "name": "The feature is highlighted on the map",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sequence view draws its rows",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sequence letters line up with features and the ruler",
+      "ok": true,
+      "detail": "width ratio 1.000"
+    },
+    {
+      "name": "Protein translation is shown under coding features",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Coding features are named under their amino acids, not in the margin",
+      "ok": true,
+      "detail": "{\"captions\":[\"lacZ-alpha ←\",\"lacZ-alpha ←\",\"lacZ-alpha ←\",\"lacZ-alpha ←\",\"lacZ-alpha ←\"],\"margin\":0}"
+    },
+    {
+      "name": "Colour amino acids colours each residue by its chemistry",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Features that only touch share a line in the sequence",
+      "ok": true,
+      "detail": "110px and 110px"
+    },
+    {
+      "name": "Clicking the sequence puts the cursor there",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Typing inserts bases",
+      "ok": true,
+      "detail": "2686 → 2693 bp"
+    },
+    {
+      "name": "Ctrl+Z undoes one typing step",
+      "ok": true,
+      "detail": "2693 → 2689 bp"
+    },
+    {
+      "name": "Ctrl+Y redoes it",
+      "ok": true,
+      "detail": "2689 → 2686 → 2689 bp"
+    },
+    {
+      "name": "Shift+arrows select bases",
+      "ok": true,
+      "detail": "{\"start\":8,\"end\":10}"
+    },
+    {
+      "name": "The status bar shows the selection's Tm, as the inspector does",
+      "ok": true,
+      "detail": "70.7 and 70.7"
+    },
+    {
+      "name": "Right-clicking selected bases offers forward and reverse primers",
+      "ok": true,
+      "detail": "Copy, Copy reverse complement, —, Add forward primer, Add reverse primer, Mutagenesis primers…, Add feature, —, Reverse-complement selection, —, Delete bases"
+    },
+    {
+      "name": "Add reverse primer adds the bottom-strand primer over the selection",
+      "ok": true,
+      "detail": "{\"start\":100,\"end\":119,\"rc\":true,\"strand\":-1}"
+    },
+    {
+      "name": "Designing primers for AmpR suggests a pair in a dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The pair waits for review before it is added",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Adding sites designs the pair again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The added sites don't cut inside the product",
+      "ok": true,
+      "detail": "gagTTACCAATGCTTAATCAGTGAGGCA1,629–1,653 → · 60.8 °CAmpR runs right to left, so AmpR-NdeI-F binds at its start (2,489). NdeI and XhoI don't cut inside the product.Other candidatesCancelAdd both primers"
+    },
+    {
+      "name": "Add both primers adds the pair and closes the dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "AmpR-NdeI-F starts at AmpR's start codon with NdeI",
+      "ok": true,
+      "detail": "[{\"name\":\"AmpR-NdeI-F\",\"start\":2464,\"end\":2488,\"strand\":-1,\"bases\":\"GCGCCATATGAGTATTCAACATTTCCGTGTCG\"},{\"name\":\"AmpR-XhoI-R\",\"start\":1628,\"end\":1652,\"strand\":1,\"bases\":\"GCGCCTCGAGTTACCAATGCTTAATCAGTGAGGCA\"}]"
+    },
+    {
+      "name": "Primers tab lists them",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Designed primers have Tm near 60 °C",
+      "ok": true,
+      "detail": "60.8, 59.9"
+    },
+    {
+      "name": "Sequence panel shows the selected primer with its ends",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Extending the 3′ end of a reverse primer adds the base on its left",
+      "ok": true,
+      "detail": "2464,2488,32 → 2463,2488,33"
+    },
+    {
+      "name": "Ctrl+Z puts the primer back",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Dragging over the bases around a primer selects them on both strands",
+      "ok": true,
+      "detail": "{\"still\":true,\"bands\":1,\"range\":{\"start\":2429,\"end\":2453},\"focus\":null,\"text\":\"\"}"
+    },
+    {
+      "name": "A primer's change is raised in red in the Sequence tab",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The inspector says what the primer changes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Primer colours leave out red, which marks changes",
+      "ok": true,
+      "detail": "Coral, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Grey, Default colour"
+    },
+    {
+      "name": "Choosing a colour colours the primer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "PCR product is AmpR plus the two tails",
+      "ok": true,
+      "detail": "878 bp"
+    },
+    {
+      "name": "No side products are reported",
+      "ok": true,
+      "detail": "12,689Size878 bpTemplate1,629–2,489Tm60.8 °C and 59.9 °C · 0.9 °C apartContainsAmpR"
+    },
+    {
+      "name": "Escape closes the dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Right-clicking selected bases offers mutagenesis primers",
+      "ok": true,
+      "detail": "Copy, Copy reverse complement, —, Mutagenesis primers…, Add feature, —, Reverse-complement selection, —, Delete bases"
+    },
+    {
+      "name": "A selected codon opens the dialog on its residue",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The dialog designs a back-to-back pair for the change",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Add both primers adds the mutagenesis pair",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The forward primer carries the change at its 5′ end, back to back with the reverse one",
+      "ok": true,
+      "detail": "{\"strands\":[1,-1],\"rEnd\":2279,\"r\":\"AmpR-F70A-R\",\"arm\":true,\"f\":\"AmpR-F70A-F\",\"start\":2280,\"id\":\"p-mw5ncqgu-8\",\"differs\":true}"
+    },
+    {
+      "name": "The mutagenesis primer's change is raised in the Sequence tab",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Common sequencing primers that bind are listed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Library primers are added where they bind",
+      "ok": true,
+      "detail": "[[\"M13 fwd (-21)\",1],[\"M13 rev\",-1]]"
+    },
+    {
+      "name": "Library primers bring their notes into a Notes column",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The filter keeps the primers whose name, note or bases match",
+      "ok": true,
+      "detail": "M13 fwd (-21), M13 rev"
+    },
+    {
+      "name": "A filter nothing matches says so",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Clearing the filter brings every primer back",
+      "ok": true,
+      "detail": "M13 fwd (-21), M13 rev, AmpR-XhoI-R, AmpR-NdeI-F"
+    },
+    {
+      "name": "Picking two rows offers what to do with both",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy, save and delete are offered for the selection",
+      "ok": true,
+      "detail": "Copy for ordering…, Save to library, Delete 2 primers"
+    },
+    {
+      "name": "While several are picked no one primer is selected",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A plain click is an ordinary selection again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Clicking the binding map replaces several picked rows",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Clicking a heading sorts the list and is remembered",
+      "ok": true,
+      "detail": "AmpR-NdeI-F, AmpR-XhoI-R, M13 fwd (-21), M13 rev"
+    },
+    {
+      "name": "Pairs lists what each forward and reverse primer would amplify",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Clicking a pair opens it in the PCR product dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Copy for ordering lists the primers the file has now",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Primer library window lists the library",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Saving writes the file",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "name": "Saving clears the edited mark",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Ctrl+S saves the file",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Opening another file adds a tab and shows it",
+      "ok": true,
+      "detail": "[\"edited.gb\",\"copy.gb\"]"
+    },
+    {
+      "name": "The saved file reopens with the same sequence, features and primers",
+      "ok": true,
+      "detail": "{\"primers\":[\"AmpR-NdeI-F 2464-2488\",\"AmpR-XhoI-R 1628-1652\",\"M13 fwd (-21) 381-397\",\"M13 rev 467-483\"],\"features\":[\"Saved with Ctrl+S 148-471\",\"MCS 398-456\",\"AmpR 1628-2488\"],\"len\":2689}"
+    },
+    {
+      "name": "Only the shown file's views are in the page",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Ctrl+Page Up goes back to the first file",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Closing a saved file's tab needs no question",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Simulate cloning opens a dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Gibson designs insert primers with 20-base overlap tails",
+      "ok": true,
+      "detail": "aaaacgacggccagtgaattATGGTGAGCAAGGGCGAG, gaccatgattacgccaagctTTACTTGTACAGCTCGTCCATGC"
+    },
+    {
+      "name": "The product opens in a new, unsaved tab",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The product has the insert, the vector's features and the primers",
+      "ok": true,
+      "detail": "{\"circular\":true,\"primers\":[\"AmpR-NdeI-F\",\"AmpR-XhoI-R\",\"M13 fwd (-21)\",\"M13 rev\",\"A206K.REV\",\"A206K.FOR\",\"mEGFP-F\",\"mEGFP-R\"],\"features\":[\"Saved with Ctrl+S\",\"MCS\",\"AmpR\",\"mEGFP\"],\"len\":3362}"
+    },
+    {
+      "name": "Closing the product asks to save it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The ORFs button draws ORFs on the map, AmpR among them",
+      "ok": true,
+      "detail": "-1:2488"
+    },
+    {
+      "name": "The inspector shows the selected ORF and its protein",
+      "ok": true,
+      "detail": "Open reading frameFound in the sequence, not saved with the file. Add it as a feature to keep it.Location1,629..2,489StrandReverse · frame −3Length861 bp · 286 "
+    },
+    {
+      "name": "ORFs show in the sequence too",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The ORFs button hides them again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Digest opens a dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "EcoRI and HindIII cut out pUC19's 51 bp MCS piece, the sizes adding up to the plasmid",
+      "ok": true,
+      "detail": "[2638,51] of 2689 bp"
+    },
+    {
+      "name": "The gel shows a band for each fragment next to the ladder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Done closes the Digest dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Selecting a site of an enzyme that cuts twice marks its other site on the map",
+      "ok": true,
+      "detail": "[\"BglI@1815\"]"
+    },
+    {
+      "name": "⌘/Ctrl-click picks more enzymes, and the inspector offers to digest with them",
+      "ok": true,
+      "detail": "[\"BglI\",\"EcoRI\",\"BamHI\"]"
+    },
+    {
+      "name": "Right-clicking a picked enzyme keeps the pick and digests with them all",
+      "ok": true,
+      "detail": "Copy recognition site | Digest with BglI, EcoRI and BamHI… | Show in sequence"
+    },
+    {
+      "name": "The Digest dialog opens with the picked enzymes ticked",
+      "ok": true,
+      "detail": "[\"BamHI\",\"BglI\",\"EcoRI\"]"
+    },
+    {
+      "name": "Esc drops the picked enzymes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The enzyme library opens in its own window",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The stock record for EcoRI is saved",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The stock record for PvuII is saved",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Product, freezer location and edited notes are kept in the JSON file",
+      "ok": true,
+      "detail": "{\"entries\":[{\"location\":\"Freezer 2, box A\",\"product\":\"E2E EcoRI\",\"notes\":\"Updated spare tube\",\"id\":\"enzyme-mw5ncz1d-1\",\"enzyme\":\"EcoRI\"},{\"location\":\"Freezer 2, box A\",\"product\":\"E2E PvuII\",\"notes\":\"Spare tube\",\"id\":\"enzyme-mw5ncz9t-2\",\"enzyme\":\"PvuII\"}],\"version\":1}"
+    },
+    {
+      "name": "Lab enzymes updates the open map, including every PvuII site",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The outline follows the map's lab enzyme choice",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Lab enzymes: unique cutters leaves out PvuII's two sites",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "An annotated file is not asked about",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Opening a file with no features offers to look for parts",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Not now puts the offer away",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Detect features finds parts in the sequence",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "pUC19's origin is among them",
+      "ok": true,
+      "detail": "ori, lac operator, CAP binding site"
+    },
+    {
+      "name": "AmpR is already annotated in this file, so it isn't offered again",
+      "ok": true,
+      "detail": "ori, lac operator, CAP binding site"
+    },
+    {
+      "name": "Every suggestion says where its sequence came from",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nothing is added while the dialog is open",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Adding the chosen features closes the dialog and puts them in",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The origin went in as a rep_origin, drawn without a direction",
+      "ok": true,
+      "detail": "[{\"name\":\"ori\",\"type\":\"rep_origin\",\"strand\":0},{\"name\":\"CAP binding site\",\"type\":\"protein_bind\",\"strand\":0},{\"name\":\"lac operator\",\"type\":\"protein_bind\",\"strand\":0}]"
+    },
+    {
+      "name": "They show on the map",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "One undo takes all of them back out again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A CDS offers regions from UniProt",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Looking up an entry offers what can be placed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Adding them adds no features",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "They are drawn inside the CDS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The entry goes in the file's cross-references",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "One undo takes them back out",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Split view shows the map and the sequence together",
+      "ok": true,
+      "detail": "{\"map\":true,\"feats\":3,\"rows\":14,\"seq\":true}"
+    },
+    {
+      "name": "The sidebar button hides and shows the sidebar",
+      "ok": true,
+      "detail": "{\"sidebarHidden\":true,\"sidebarBack\":true}"
+    },
+    {
+      "name": "The sidebar starts with primers, folds a section from its heading and follows the order in Settings",
+      "ok": true,
+      "detail": "{\"sidebarStart\":[\"primers\",\"enzymes\",\"features\"],\"sidebarFolded\":[\"primers\",\"enzymes\",\"features folded\"],\"sidebarMoved\":[\"features\",\"primers\",\"enzymes\"]}"
+    },
+    {
+      "name": "Three reads listed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Two reads align, one unrelated read doesn't",
+      "ok": true,
+      "detail": "2 of 3 reads aligned; 1 without a match"
+    },
+    {
+      "name": "Alignment view is drawn",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Alignment opens where the reads start",
+      "ok": true,
+      "detail": "scrollLeft 4728"
+    },
+    {
+      "name": "The .ab1 read's trace is drawn",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The wheel moves the rows and never sideways",
+      "ok": true,
+      "detail": "{\"moved\":0,\"room\":0,\"rows\":0}"
+    },
+    {
+      "name": "The alignment's scroll bar stays in view and is in step with the traces",
+      "ok": true,
+      "detail": "{\"width\":0,\"fromBar\":0,\"inPane\":true,\"barFollows\":true}"
+    },
+    {
+      "name": "Inspector shows the selected read",
+      "ok": true,
+      "detail": "Readbla-checkAligned, reverse strand · 1 differenceAligned to1,703–2,403Identity"
+    },
+    {
+      "name": "Mutation in the reverse read is called as W163R in AmpR",
+      "ok": true,
+      "detail": "Differences in this readA2003GW163R in AmpRmissenseTGG→CGGShowShow on mapUse read ba"
+    },
+    {
+      "name": "Alignment jumps to the selected read",
+      "ok": true,
+      "detail": "scrollLeft 4728 → 20736"
+    },
+    {
+      "name": "Next difference selects it in the sequence",
+      "ok": true,
+      "detail": "{\"start\":2002,\"end\":2002,\"base\":\"A\"}"
+    },
+    {
+      "name": "Differences table lists both changes",
+      "ok": true,
+      "detail": "PositionChangeEffectSeen inQualityActionsafter 450ins 30 bpin-frame insertion of 10 aa at codon 8 in Saved with Ctrl+Sin frame; in MCSteselagen-example1Q50Show "
+    },
+    {
+      "name": "Inspector shows how much of the feature the reads cover",
+      "ok": true,
+      "detail": "701 of 861 bp covered"
+    },
+    {
+      "name": "Removing a read takes it out of the list and the alignment",
+      "ok": true,
+      "detail": "{\"rows\":[\"→ teselagen-example1\"],\"cards\":2}"
+    },
+    {
+      "name": "Two reads of one clone are listed together",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The clone's consensus has W163R once, seen in both reads",
+      "ok": true,
+      "detail": "Differences in this cloneA2003GW163R in AmpRmissenseTGG→CGG · in 2 readsShowShow on mapUse read baseReads"
+    },
+    {
+      "name": "Where the clone's reads disagree is listed instead of a change",
+      "ok": true,
+      "detail": "2,103: PositionReferenceReads sayClone2,103A → ?c7_bla-F: A · c7_bla-R: Cc7_bla"
+    },
+    {
+      "name": "The Translation chip translates each read in the feature's frame",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Splitting the clone lists each read on its own",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Right-clicking two picked reads offers to group or remove both",
+      "ok": true,
+      "detail": "Group into one clone, —, Remove 2 reads"
+    },
+    {
+      "name": "Grouping makes one clone of them",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A clone's menu can split it",
+      "ok": true,
+      "detail": "Copy consensus, Open clone as file, —, Split into single reads, —, Remove clone"
+    },
+    {
+      "name": "Dropping a read on another makes a clone of them",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Dragging a read out of its clone takes it out",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Dragging reorders the list and the alignment, without aligning again",
+      "ok": true,
+      "detail": "c7_bla-R, c7_bla-F, teselagen-example1, 3730 / c7_bla-R, c7_bla-F, teselagen-example1"
+    },
+    {
+      "name": "Save check writes the reads, with paths relative to the check file",
+      "ok": true,
+      "detail": "{\"strandivo\":\"read check\",\"version\":1,\"reference\":\"edited.gb\",\"reads\":[{\"path\":\"../../home/runner/work/Strandivo/Strandivo/testdata/e2e/c7_bla-R.fasta\",\"clone\":\"#g1\"},{\"path\":\"../../home/runner/work/Strandivo/Strandivo/testdata/e2e/c7_bla-F"
+    },
+    {
+      "name": "Reopening the file brings its reads back, as they were grouped",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Opening the check file shows its reads in the Reads tab",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Identical clones share a row of the clone table",
+      "ok": true,
+      "detail": "[[\"c7_bla-F\",\"A01_bla\",\"A02_bla\"],\"c7_bla-F +2\",\"3\",\"Partly covered\",\"AmpR W163R\",\"1,653–2,253\"]"
+    },
+    {
+      "name": "The clone table flags a stop and a frameshift",
+      "ok": true,
+      "detail": "[[[\"A03_bla\"],\"A03_bla\",\"1\",\"StopPartly covered\",\"AmpR W163*\",\"1,703–2,353\"],[[\"A05_bla\"],\"A05_bla\",\"1\",\"FrameshiftPartly covered\",\"AmpR D129fs\",\"1,703–2,353\"]]"
+    },
+    {
+      "name": "The clone table has the column to itself until something is selected",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Reading TAG as Q turns A06's amber stop into W163Q",
+      "ok": true,
+      "detail": "[[\"A06_bla\"],\"A06_bla\",\"1\",\"Partly covered\",\"AmpR W163Q\",\"1,703–2,353\"]"
+    },
+    {
+      "name": "Selecting a clone opens the alignment under the table",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Open clone as file makes an unsaved copy with the clone's one change",
+      "ok": true,
+      "detail": "1 bases differ"
+    },
+    {
+      "name": "The summary counts different and broken clones",
+      "ok": true,
+      "detail": "[\"7 of 9\",\"3 of 9\",\"1.54\",\"4 : 1\"]"
+    },
+    {
+      "name": "Recurring mutations count different clones, not identical ones",
+      "ok": true,
+      "detail": "[[\"2,003\",\"AmpR W163R\",\"2 of 6\",\"c7_bla-R, c7_bla-F, A01_bla, A02_bla\"],[\"2,003\",\"AmpR W163*\",\"2 of 6\",\"A03_bla, A06_bla\"],[\"2,105\",\"AmpR D129E\",\"1 of 6\",\"c7_bla-R\"],[\"2,105\",\"AmpR D129fs\",\"1 of 6\",\"A05_bla\"],[\"451\",\"Saved with Ctrl+S S7_L8insYLGDTIEYSS\",\"1 of 1\",\"teselagen-example1\"]]"
+    },
+    {
+      "name": "Clicking a bar lists its clones",
+      "ok": true,
+      "detail": "[[\"2,003\",\"AmpR W163R\",\"2 of 6\",\"c7_bla-R, c7_bla-F, A01_bla, A02_bla\"],[\"2,003\",\"AmpR W163*\",\"2 of 6\",\"A03_bla, A06_bla\"]]"
+    },
+    {
+      "name": "A difference opens the alignment, which can be closed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Ctrl+5 opens Plasmid info",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Plasmid info detects ampicillin resistance",
+      "ok": true,
+      "detail": "Ampicillin"
+    },
+    {
+      "name": "Settings window opens",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Choosing the Wallace rule in Settings changes Tm in open windows",
+      "ok": true,
+      "detail": "72.0 and 72.0"
+    },
+    {
+      "name": "SnapGene .dna opens in a new tab",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Primers stored in the SnapGene file are imported",
+      "ok": true,
+      "detail": "A206K.REV, A206K.FOR, A206K.FOR, SEC13.REV, SEC13.FOR"
+    },
+    {
+      "name": "The library's parent opens in a new tab",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The inspector marks a feature as a variable region",
+      "ok": true,
+      "detail": "[\"cdr1=any\",\"cdr2=any\",\"cdr3=any\",\"FR2=v1:TGGTTTCGTCAGGCCCCGGGCAAAGAGCGGGAGTTCGTGGCC|v2:TGGGTTCGTCAGGCCCCGGGCAAAGAGCTGGAGTGCGTGGCC\"]"
+    },
+    {
+      "name": "The clone table has a column per variable region with each clone's CDR",
+      "ok": true,
+      "detail": "{\"cdr2\":\"AVSWSAGTTY\",\"Status\":\"Partly covered\",\"FR2\":\"v1 WFRQAPGKEREFVA\",\"Read\":\"1,985–2,957\",\"Mutations\":\"None in what was read3 changes among double peaks left out\",\"cdr3\":\"GCAGCGGATAGGCCGCCGGCCGGCGGGGAAGGTCGTGGTATGGATTAC\",\"Clone\":\"2026-10-13_C01_MJG5PRIMER\",\"Seen\":\"1\",\"cdr1\":\"GRTLGSLNMA\"}"
+    },
+    {
+      "name": "A clone's CDRs are not listed as mutations",
+      "ok": true,
+      "detail": "[\"None in what was read\",\"ins T after 2022\",\"None in what was read3 changes among double peaks left out\"]"
+    },
+    {
+      "name": "A region with versions shows the closest: the equal mix has FR2 v2",
+      "ok": true,
+      "detail": "[\"v2 WVXQAXXXXXXXXX\",\"v1 WFRQAPGKEREFVA\",\"ins T after 2022\"]"
+    },
+    {
+      "name": "Double peaks name the two mixes with their rough share, and not the single clone",
+      "ok": true,
+      "detail": "[\"Mixed, about 30%Partly covered\",\"Mixed, about 40%\",\"Partly covered\"]"
+    },
+    {
+      "name": "A mix's CDRs show as mixed, not as one plasmid's",
+      "ok": true,
+      "detail": "[\"mixed\",\"mixed\"]"
+    },
+    {
+      "name": "The traces mark double peaks",
+      "ok": true,
+      "detail": "{\"mixMarks\":{\"marks\":44,\"shown\":[2161,2213]},\"cleanMarks\":{\"marks\":0,\"shown\":[2051,2102]}}"
+    },
+    {
+      "name": "The summary leaves the mixes out of its numbers and says so",
+      "ok": true,
+      "detail": "{\"tiles\":[\"1 of 1\",\"0 of 1\",\"0.00\",\"0 : 0\"],\"note\":\"Left out of these numbers: 2 mixed, of 3 clones.\",\"bars\":[],\"rows\":[]}"
+    },
+    {
+      "name": "A FASTQ read of a whole plasmid is shown as one, with its size",
+      "ok": true,
+      "detail": "pUC19-wholeWhole plasmid2,697 bp (+11)2 differences · 1 uncertain"
+    },
+    {
+      "name": "The read is turned to the origin, and its changes are called",
+      "ok": true,
+      "detail": "ReadpUC19-wholeAligned, forward strand · 2 differences · 1 uncertainAligned to1–2,686Identity99.5% (2,684 of 2,698)Read length2,697 basesSize2,697 bp, 11 bp longer than this sequenceQualitymean Q40Clo"
+    },
+    {
+      "name": "An indel in a run of one base is flagged, not trusted",
+      "ok": true,
+      "detail": "apUse read basedel T1413uncertainoutside featuresQ40 · in a run of one base, often the sequence"
+    },
+    {
+      "name": "A new version is offered in a strip, not a dialog",
+      "ok": true,
+      "detail": "Strandivo 9.9.9 is available.What's new…Install and restartSkip this versionLater"
+    },
+    {
+      "name": "What's new shows the update's short notes in the app, as text",
+      "ok": true,
+      "detail": "{\"lines\":[\"Faster maps.\",\"<b>New</b> primer tools.\"],\"bold\":false}"
+    },
+    {
+      "name": "More on strandivo.com asks for that version's notes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Install and restart downloads it, then quits the way ⌘Q does",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "If the app stays open, the strip offers to restart",
+      "ok": true,
+      "detail": "Strandivo 9.9.9 is ready to install.Restart nowLater"
+    },
+    {
+      "name": "Later hides the strip",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "After an update the strip says which version it is now",
+      "ok": true,
+      "detail": "Strandivo was updated to 0.4.0-rc.1.What's new…Close"
+    },
+    {
+      "name": "Its What's new opens the dialog",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "It says so only once",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Report a Bug… opens the feedback dialog with Bug chosen",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Send waits for a summary",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Recent errors are shown before sending, without the file's path",
+      "ok": true,
+      "detail": "2026-11-07 00:10:56 Error: Couldn't read <path>"
+    },
+    {
+      "name": "What is sent with it is listed in full",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "If it can't be sent, the text stays, with Copy and Email instead",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Email instead starts a message with the report in it",
+      "ok": true,
+      "detail": "{\"subject\":\"Bug: Map stays blank\",\"body\":\"Bug: Map stays blank\\nOpened a plasmid from Home.\\n\\nStrandivo 0.4.0-rc.1 · Linux 24.4.0 · Intel or AMD\\nOpen view: Ho"
+    },
+    {
+      "name": "The report holds what the dialog showed, and no path",
+      "ok": true,
+      "detail": "{\"errors\":[\"2026-11-07 00:10:56 Error: Couldn't read <path>\"],\"kind\":\"bug\",\"summary\":\"Map stays blank\",\"email\":\"anna@lab.example.org\",\"file\":null,\"view\":\"Home\",\"crash\":null,\"app\":{\"osVersion\":\"24.4.0\""
+    },
+    {
+      "name": "It says which issue it became",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Open on GitHub asks for that issue by its number",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A crash last time is offered in a strip under the app bar",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nothing about it is sent on its own",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Report it… opens Report a Bug about the crash",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The crash is shown in full before sending, without the file's path",
+      "ok": true,
+      "detail": "Strandivo 0.4.0, 2026-11-06 09:30:00 UTC\nThread: tokio-runtime-worker\nAt: reqwest-0.13.0/src/async_impl/client.rs:2311:5\nCould not read <path>"
+    },
+    {
+      "name": "Send sends the crash as it was shown, and no path",
+      "ok": true,
+      "detail": "{\"errors\":null,\"kind\":\"bug\",\"summary\":\"Strandivo quit unexpectedly\",\"email\":null,\"file\":null,\"view\":\"Home\",\"crash\":{\"at\":\"2026-11-06T09:30:00.000Z\",\"thread\":\"tokio-runtime-worker\",\"message\":\"Could not read <path>\",\"location\":\"reqwest-0.13.0"
+    },
+    {
+      "name": "Once sent, the strip goes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A crash is offered once",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nothing is counted while statistics are off, errors included",
+      "ok": true,
+      "detail": "0 events"
+    },
+    {
+      "name": "Turned on, the app counts its start and what is used",
+      "ok": true,
+      "detail": "[{\"at\":\"2026-11-07T00:10:58.210Z\",\"name\":\"app_started\",\"props\":{\"installed\":\"first_day\",\"arch\":\"x86_64\",\"folders\":\"0\"}},{\"at\":\"2026-11-07T00:10:58.210Z\",\"name\":\"settings_chosen\",\"props\":{\"tm\":\"wallace\",\"amber\":\"off\",\"bases\":\"upper\"}},{\"at\":"
+    },
+    {
+      "name": "The start says how long the copy has been in use, as a range, and Settings' choices come with it",
+      "ok": true,
+      "detail": "[{\"at\":\"2026-11-07T00:10:58.210Z\",\"name\":\"app_started\",\"props\":{\"installed\":\"first_day\",\"arch\":\"x86_64\",\"folders\":\"0\"}},{\"at\":\"2026-11-07T00:10:58.210Z\",\"name\":\"settings_chosen\",\"props\":{\"tm\":\"wallace\",\"amber\":\"off\",\"bases\":\"upper\"}}]"
+    },
+    {
+      "name": "A view is counted once, not at every switch",
+      "ok": true,
+      "detail": "[{\"at\":\"2026-11-07T00:10:58.499Z\",\"name\":\"view_used\",\"props\":{\"view\":\"primers\"}},{\"at\":\"2026-11-07T00:10:58.573Z\",\"name\":\"view_used\",\"props\":{\"view\":\"sequence\"}}]"
+    },
+    {
+      "name": "Dismiss hides the crash strip",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A crash is counted as an error of kind crash, without its message",
+      "ok": true,
+      "detail": "[{\"at\":\"2026-11-07T00:10:58.210Z\",\"name\":\"error_caught\",\"props\":{\"kind\":\"command\"}},{\"at\":\"2026-11-07T00:10:58.647Z\",\"name\":\"error_caught\",\"props\":{\"kind\":\"crash\"}}]"
+    },
+    {
+      "name": "Events carry listed words alone, never a file's name or path",
+      "ok": true,
+      "detail": "[{\"installed\":\"first_day\",\"arch\":\"x86_64\",\"folders\":\"0\"},{\"tm\":\"wallace\",\"amber\":\"off\",\"bases\":\"upper\"},{\"kind\":\"command\"},{\"view\":\"primers\"},{\"view\":\"sequence\"},{\"kind\":\"crash\"}]"
+    },
+    {
+      "name": "Turned off, what was queued is dropped and nothing more goes",
+      "ok": true,
+      "detail": "6 events, 6 before"
+    },
+    {
+      "name": "Home lists the constructs in a library folder",
+      "ok": true,
+      "detail": "[\"bla-check.fasta\",\"c7_bla-F.fasta\",\"c7_bla-R.fasta\",\"pUC19-annotated.gb\",\"plate-bla.fasta\"]"
+    },
+    {
+      "name": "Opening a construct from Home adds a tab",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "date": "2026-11-07T00:10:59.818Z"
+}

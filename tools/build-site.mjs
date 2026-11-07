@@ -216,13 +216,13 @@ const fileFor = (os, part) => DOWNLOADS.find(d => d.os === os && d.file.includes
 export function suggestedBlock() {
   return `      <div class="suggested" id="suggested" hidden>
         <div data-os="mac" hidden>
-          <a class="button primary big" href="${download(fileFor("mac", "aarch64"))}">Download for Mac</a>
+          <a class="button primary big" href="${download(fileFor("mac", "Apple-silicon"))}">Download for Mac</a>
           <p class="note">For Macs with Apple silicon (M1 or later), which is nearly every Mac
           since 2020. Choose Apple menu → About This Mac: a “Processor” line instead of
-          “Chip” means Intel. <a href="${download(fileFor("mac", "x64"))}">Download for a Mac with Intel</a></p>
+          “Chip” means Intel. <a href="${download(fileFor("mac", "Intel"))}">Download for a Mac with Intel</a></p>
         </div>
         <div data-os="windows" hidden>
-          <a class="button primary big" href="${download(fileFor("windows", "setup"))}">Download for Windows</a>
+          <a class="button primary big" href="${download(fileFor("windows", "Windows"))}">Download for Windows</a>
           <p class="note">For 64-bit Windows 10 and 11. It installs for you alone, without an
           administrator.</p>
         </div>
@@ -248,7 +248,7 @@ export function fill(template) {
     return Object.entries(groups)
       .map(([os, name]) => {
         const links = DOWNLOADS.filter(d => d.os === os)
-          .map(d => `          <a class="button${os === "mac" && d.file.includes("aarch64") ? " primary" : ""}" href="${download(d.file)}">${escapeHtml(d.label)}</a>`)
+          .map(d => `          <a class="button${os === "mac" && d.file.includes("Apple-silicon") ? " primary" : ""}" href="${download(d.file)}">${escapeHtml(d.label)}</a>`)
           .join("\n");
         return `      <div class="download" id="${os}">
         <h2>${name}</h2>

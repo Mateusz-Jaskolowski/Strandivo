@@ -20,8 +20,9 @@ security problems privately, as `SECURITY.md` says, never in a public issue.
 
 `README.md` covers building from source. `AGENTS.md` is written for coding agents, but it is
 also the best guide for people: how the code is organised, its conventions, the decisions
-behind them and the traps. If your change makes something there wrong, update it in the
-same pull request.
+behind them and the traps, with a guide for each area (reads, primers, releases and so on)
+that it points to. If your change makes something there wrong, update it in the same pull
+request.
 
 Before you push, run:
 

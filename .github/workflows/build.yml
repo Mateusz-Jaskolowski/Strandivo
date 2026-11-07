@@ -133,15 +133,15 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      # The short notes in CHANGELOG.md go in latest.json, for "What's new" in the app; the
-      # whole section is the release's text. The installers' copies without the version
-      # are what strandivo.com/download links to; they come after latest.json, which lists
-      # the versioned files.
-      - name: Write latest.json, the release notes and the website's copies
+      # Each file gets the name it is published under, which says its system and has no
+      # version, so strandivo.com/download needs no change per release. The short notes in
+      # CHANGELOG.md go in latest.json, for "What's new" in the app; the whole section is
+      # the release's text.
+      - name: Name the files, write latest.json and the release notes
         run: |
+          node --experimental-strip-types .github/scripts/release.mjs name-files dist "$GITHUB_REF_NAME"
           node --experimental-strip-types .github/scripts/release.mjs latest-json dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > dist/latest.json
           node --experimental-strip-types .github/scripts/release.mjs release-notes "$GITHUB_REF_NAME" > notes.md
-          node --experimental-strip-types .github/scripts/release.mjs download-copies dist "$GITHUB_REF_NAME"
       # A release candidate (v0.4.0-rc.1) is drafted as a pre-release, which GitHub never
       # makes "latest": the updates Worker and the Download page follow "latest", so no copy
       # is offered it, even if it is published by mistake as it is.

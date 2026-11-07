@@ -10,7 +10,27 @@ it.
 
 **Keep this file true.** A change that makes something here wrong updates it in the same
 commit. Write down what the code can't tell you (conventions, decisions, traps), not what
-it can (lists of files or features). CI checks that every path in backticks here exists.
+it can (lists of files or features). The same goes for the guides below. CI checks that
+every path in backticks in them exists; write paths from the repository's root.
+
+## Guides for each area
+
+The rest of the guide is split by area, so an agent reads only what its task needs. Before
+changing code in an area, read its guide; their rules are as binding as this file's.
+
+- Reads, clones, mutations, translation of reads and the Reads tab: `docs/agents/reads.md`.
+- Primers, primer pairs, mutagenesis primers and the primer library:
+  `docs/agents/primers.md`.
+- Protein regions and UniProt: `docs/agents/proteins.md`.
+- Anything the app sends or fetches, updates, feedback, crash reports, usage statistics and
+  the welcome window: `docs/agents/updates-and-reports.md`.
+- Installers, releases, the update key and the website: `docs/agents/releases.md`.
+- Long-read alignment, feature detection and the parts catalog: `crates/seqcore/AGENTS.md`.
+- The Workers behind `updates.strandivo.com` and `feedback.strandivo.com`:
+  `services/AGENTS.md`.
+
+A guide in a code folder has a `CLAUDE.md` beside it, so Claude Code loads it on its own
+when it reads files there; the ones in `docs/agents/` are read when the task needs them.
 
 ## How the code is organised
 
@@ -77,255 +97,6 @@ it can (lists of files or features). CI checks that every path in backticks here
   once. The dialog (`src/views/cloningDialog.ts`) takes the open file as the vector and
   other open files (`DocContext.otherSequences`) as inserts; products open as new unsaved
   tabs (`DocContext.openNew`), which count as edited until saved.
-- **Clones**: reads of one clone (forward and reverse, or several primers) are checked
-  together. `src/lib/clones.ts` guesses clones from the reads' names, taken all together;
-  a read the user moves (the clone picker in the inspector, the menu or dragging) keeps
-  that choice in `LoadedRead.clone`. Each read goes to the core with its clone key, and the core returns
-  `clones` beside `reads`: a consensus per clone, its differences and its conflicts (good
-  reads that disagree, never reported as a change). What counts differences (Reads tab,
-  Info, coverage in the inspector) counts the clones', so a change two reads show counts
-  once; a read's own differences are only shown for that read. A clone of one read is
-  shown as the read. Clone results refer to reads by index, so regrouping or removing a
-  read drops them until aligned again.
-- **Mutations of a clone** come from `src/lib/variants.ts`, which reads the consensus codon
-  by codon in each CDS (two changes in one codon are one amino-acid change) and names
-  them short, HGVS-style: W163R, W163*, L54=, L54fs, G50_S52del, T7_L8insYLG, …delins…
-  (amino acids an in-frame change leaves alone are trimmed from both ends); outside a CDS
-  they are the app's DNA changes (A2000G). Identical clones share a key made of their DNA
-  changes and flags, so TGA and TAG are different clones though both are W163*.
-- **Variable regions**: a feature with a `/strandivo_variable` qualifier (anything, a pattern
-  such as NNK, or named versions; `src/lib/variable.ts`) is a part a library varies. The
-  core aligns reads with these regions as N, so their edges come out right, but calls
-  differences against the real bases. The read set then moves the differences in a region
-  (bases inserted right next to it included) from `differences` to `variable`, on reads and
-  clones alike, so whatever counts changes leaves them out. `cloneVariants` reads each
-  region's contents from the consensus, and still uses `variable` for proteins, the clone's
-  key and "Open clone as file". Code that uses differences must decide which list it means.
-- **Regions of a protein** (`src/lib/regions.ts`): transmembrane helices, topological domains
-  and signal peptides stay inside their CDS, in its `/strandivo_regions` qualifier, instead
-  of being features: a membrane protein should stay one feature. So they are
-  not `locations`, which say what the feature is made of and would be all that gets
-  translated. They are numbered in residues of the CDS, so rotating, turning round and
-  cloning need no code; only what changes the CDS's length or first base does (`carryRegions`):
-  edits (from `mapAnnotations`), moving an end or turning it round in the inspector, and a
-  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Ends round to the nearest
-  codon, not down: replacing a base is a deletion and an insertion, and rounding down would
-  creep everything downstream a residue per base typed over. A replacement across a region's
-  edge can still move that edge, as it clips a feature's own end. Each also keeps the
-  entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
-  makes a real one for files going to other software.
-- **UniProt** (`src/lib/uniprot.ts`) is one of the two things the page fetches from the
-  internet, and only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's
-  own `fetch`; the API allows any origin); the other is a feedback report the user sends
-  (below). `connect-src` in the Content Security Policy names both, so the page can reach
-  nothing else. The update check is the shell's, not the page's (below). A construct's protein is rarely the entry's (both mRNAs Q9UKG4
-  cites differ from it, one in length), so residues are never taken at face value: the
-  CDS's translation is aligned locally with gaps, and regions are carried across. Under
-  `MIN_IDENTITY` nothing is placed, since a wrong accession would otherwise mark the wrong
-  bases. The entry goes in `/db_xref` as `UniProtKB/Swiss-Prot:…`, as ENA's records have it,
-  so those files fill the field in themselves.
-- **Updates** (`src/updates.ts`, `src-tauri/src/updates.rs`): the page asks the shell to
-  check, download and restart, but can't install: Restart quits the way ⌘Q does, so the
-  main window asks about unsaved tabs, and the update is installed only once the last
-  window has closed. A cancelled quit keeps the download, and an ordinary quit doesn't
-  install it. So the updater and opener plugins' own commands stay out of the capability,
-  and a version's notes on strandivo.com (`/changes#v<version>`, which every copy opens,
-  so it must keep working: each version's section has that id) are opened from a
-  version the shell checks, never an address from the page. What's new shows the short
-  notes as text: before updating they come from latest.json (`shortNotes` in
-  `src/lib/changelog.ts` cuts them short and drops them if they name an address, as
-  latest.json isn't signed and tampered notes could point to a look-alike site), after updating
-  from the copy's own `CHANGELOG.md`, on the first start of the new version. Development builds don't update themselves. On Linux the AppImage replaces
-  itself and a .deb copy installs the release's .deb (`linux-x86_64-deb` in latest.json,
-  which the plugin looks for before `linux-x86_64`) with `pkexec`, so the system asks for a
-  password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
-  strip under the app bar, never a dialog. e2e fakes the shell with
-  `window.__strandivoUpdate`, so it never reaches the server.
-- **Feedback** (Help → Send Feedback… and Report a Bug…, `src/views/feedbackDialog.ts`):
-  the page posts the report to `feedback.strandivo.com` (`services/feedback/`), which
-  files it as a GitHub issue with a token that can only write issues. Issues are public,
-  so **the reporter's email address and an attached file never go in one**: the Worker
-  emails them to the maintainer alone (Email Routing, to a verified address kept as a
-  secret), and what the reporter wrote is fenced as plain text, so it can't mention
-  anyone or link anywhere. What a report may hold is `src/lib/feedback.ts`, which the
-  Worker bundles too, so the two can't disagree; change it and deploy the Worker in the
-  same PR. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`:
-  uncaught errors, rejected promises and failed shell commands of the past week) and the
-  open file are off until ticked, and errors lose their file paths (`scrubPaths`, which
-  takes a path under a home or volume folder to the end of its line, as folder names have
-  spaces). The shell opens only addresses it builds: an issue from its number, an email
-  to feedback@strandivo.com with the page's text as subject and body. e2e fakes the
-  service with `window.__strandivoFeedback`. On a Mac, Welcome and Check for Updates stay
-  in the app menu, where 0.2.0's notes put them; the Help menu has the rest.
-- **Crash reports** (`src-tauri/src/crash.rs`, `src/crash.ts`): release builds abort on a
-  panic and have no symbols, so the panic hook, set first in `run()`, writes the message,
-  `file:line:column`, thread, version, system and time to crash.json in the app's data
-  folder, from one buffer on the stack, then lets the abort happen. It keeps the location
-  short (a dependency from its crate's folder) but leaves the message as it is: the page
-  removes paths (`crashForReport` in `src/lib/feedback.ts`), and shows the crash exactly as
-  it is sent. The main window takes the file once (`take_crash_report` deletes it) and
-  offers it in a strip, never a dialog; Report it… opens Report a Bug with the crash ticked,
-  and nothing goes without Send. A report's `crash` is optional, as copies before 0.4.0
-  send none. With statistics on, a crash counts as `error` of kind `crash` on that next
-  launch. Recent errors (`src/feedback.ts`) are kept in local storage for a week, shared by
-  all windows, so a report after a crash still has them; still off until ticked. e2e hands
-  a crash file over with `window.__strandivoCrash`.
-- **Usage statistics** are off until the user turns them on (the welcome window or
-  Settings), for everyone, as the EU's rules want. Every event and what it may carry is
-  listed in `src/lib/usage.ts`, each property a list of words or a number put in one of a
-  few buckets (`BUCKETS`), so nothing typed or named can go; a unit test holds
-  `docs/privacy.md` to naming every event and property, so add one to both, with why it is
-  worth counting. An event is named for what happened to what, as the user would say it
-  (`file_opened`, `primers_designed`, never `dialog_completed` with the tool as a
-  property), as Aptabase's dashboard lists names alone; a test holds names to the verbs
-  in use. Renaming one splits its count from older copies', so do it early or not at all.
-  `track` in `src/usage.ts` is the only way to send (`trackOnce` for once a launch, as for
-  views); it queues in the page, so turning statistics off empties the queue at once and
-  sends nothing, not even that. Only the main window's page sends, so a library or
-  Settings window can't count anything yet. The shell (`src-tauri/src/usage.rs`) checks
-  the words again, adds a session number (random, never stored) and the system, and posts
-  to Aptabase's EU region with the key built in from `APTABASE_APP_KEY`, a variable of the
-  `release` environment: CI and e2e builds have none and send nothing. A development build
-  sends only if its developer builds it with the key, to try the whole path before a
-  release; its events and a release candidate's are marked `isDebug`, which Aptabase's
-  dashboard keeps apart (its bug icon). Aptabase's Tauri plugin isn't used: it keeps a queue
-  of its own that turning statistics off couldn't empty, sends the system's language, and
-  lets the page send any text. e2e receives events with `window.__strandivoTrack`.
-- **The welcome window** (`src/welcome.ts`) opens on first launch as a dialog over the
-  main window, not a window of its own, since what it asks acts on the main window (Home's
-  folders, holding back the update check, which waits for it). A choice users must make,
-  such as usage statistics, is added to `WELCOME_PARTS` in `src/lib/welcome.ts` with the
-  next version: that raises `WELCOME_VERSION`, and people who saw the older window are
-  asked only the new part. Closing it any way keeps the choices as shown; "Reset all
-  settings" leaves it seen. The e2e run starts as a fresh install, so it closes the window
-  first.
-- **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
-  the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
-  start and strand don't matter; it starts at the first in-frame codon of 10 good matching
-  bases, which may run on past the feature so short ones work, or at the feature's first
-  codon if such a stretch comes before it in the read (frameworks and CDRs are often a CDS
-  each), and follows the CDS's direction, on a reverse CDS right to left. In a variable
-  region or over Ns any clear good
-  base counts, so a CDR annotated as its own CDS is translated from the read. A variable
-  region that isn't a CDS but touches one in whole codons (`continuesFrame`) gets a frame
-  too, as CDR3 often is a `variation` between two frameworks. Features that touch in one
-  frame (`frameChains` in `src/lib/genetics.ts`: same direction, whole codons, the first
-  not ending in a stop) are one frame, here and in `cloneVariants`: a frameshift runs on
-  through them, an indel at their seam counts, and codons still number in each feature. An
-  indel only
-  counts if the clone is confident of it (`cloneCalls` in `src/views/readsView.ts`); others
-  leave the frame alone and get a tick, so one miscalled base doesn't redo the row.
-- **Double peaks** (`src/lib/mixes.ts`): each read keeps the second peak's share of the
-  first at every base (`peakRatios`, worked out once when it is added). A clone is mixed
-  when a variable region, or a change, has double peaks after clean bases; calls where
-  every read with a trace has double peaks around them are left out (`leftOut`) and read
-  as N, which drops a read's noisy ends. Peaks are looked at past quality trimming too,
-  counting on from the alignment's ends, since trimming cuts a mix short. Thresholds come
-  from the library's real reads; change them only against those.
-- **Summary of clones** (`src/lib/cloneSummary.ts`, the Reads tab's Summary view): mixed and
-  unaligned clones are only counted as such, since they say nothing about one plasmid.
-  Identical clones count once for recurring mutations, transitions and transversions, and
-  codons at degenerate sites, so one colony picked twice isn't a hot spot; the mutation rate
-  and the share of broken clones count them all, or a plate of unchanged clones would count
-  as one clone and the rate would look high. Bases counted for the rate are read, outside
-  variable regions and not among double peaks. A column's quality is 0 for reads without
-  scores, so don't use it to tell which bases were read.
-- **The Reads tab** shows one view at a time in its middle column: Coverage, Clones,
-  Differences or Summary. Under Coverage the alignment always shows; under the others a
-  table fills the column, and selecting a read, clone, difference or mutation opens the
-  alignment under it (`openAlignment`), with a divider between them, as stacked
-  panes left the traces too little room. Coverage takes the height
-  its reads need, up to half the column or what the divider chose (kept apart from the
-  tables' height, as a good height differs); its ruler and features stay while the read
-  rows scroll. The alignment has zero size
-  while closed, so anything that scrolls it opens it first. The reads' own actions (Align
-  again, Save check…, Clear) sit under the list, and what is about the results in the
-  view's header. Over the alignment an up-and-down wheel only ever moves the rows
-  (`installWheel` in `src/views/traceView.ts`); moving along it is for sideways scrolling,
-  Shift or the scroll bar. A wheel that turned sideways at the last row was tried and
-  found confusing. That scroll bar (`fitBar`) is a separate element under the rows, kept
-  in step with the traces' scroller, whose own bar would sit under the last row.
-- **Long reads**: a read without a trace over 1.6 kb is nanopore to the core (`align_long`
-  in `crates/seqcore/src/sanger.rs`; a trace makes it Sanger, whatever its length, as raw
-  Sanger reads can pass 1.4 kb): no quality trimming, and aligned along a
-  chain of seeds that occur once in the reference, with only the gaps between them filled
-  in. A read reaching 80% of a circular reference is a whole plasmid: it is turned to start
-  at the origin, so its ends join and it comes back as one stretch; `readPos` then counts
-  from there, not from the file's first base. A long read's indel of one or two bases in a
-  run of five or more of one base (`in_homopolymer`) is never confident, unless a Sanger
-  read shows it too. That run length is a guess until real reads are in `testdata/`.
-- **Keeping a check**: the app remembers each file's reads by path (`src/readChecks.ts`,
-  local storage) and adds them again when the file opens. A check file (`.svcheck`,
-  `src/lib/readCheck.ts`) holds paths relative to itself. Both keep only the groups the
-  user made; the rest are guessed again from the names. Reads picked in a browser have no
-  path, so they are neither remembered nor saved.
-- **Order of reads**: `LoadedRead.rank` is the user's order; the list, the coverage map,
-  the alignment and the clones follow it through `ReadSet.order()`, and check files keep it.
-  Read indices stay as they were: `results` and the clones hold them, and reordering
-  shouldn't mean aligning again. So never loop over `reads` where the order shows. A check
-  lists files, so reads from one FASTA file come back in the file's order.
-- **Dragging reads**: `src/lib/readDrag.ts` says what a drop means (a join, a move between
-  rows or within a clone) and the view only says where the pointer is. It uses pointer
-  events on the window, not HTML5 dragging, as the shell's native file drop can get in the
-  way. A whole clone only reorders; merging is left to the menu, as a slip would merge two
-  clones and align everything again.
-- **Several reads** (`src/lib/readSelection.ts`): ⌘ on Mac, Ctrl elsewhere, or Shift picks
-  rows of the Reads tab's list, by read id and clone key since realigning changes indices.
-  One row left is an ordinary selection. Ctrl-click can't be used on a Mac: it is a
-  right-click there. Removing more than one read asks first, as it can't be undone.
-- **Primers** (`src/lib/primerAlign.ts`): a primer's `start..end` is the stretch of
-  template it pairs with, from its 5′-most paired base to its 3′ end, changes included, as
-  SnapGene stores a binding site; its 5′ tail is whatever lies beyond. What happens inside is
-  worked out by aligning the primer to it (`alignPrimer`, cached by `primerAlignment` in
-  `src/doc/analysis.ts`), never stored, so files from other software work as they are and
-  typing over a base in a site shows as a mismatch. So never take the tail as
-  `bases.length − rangeLength`: an insertion or deletion makes that wrong. `findBindingSites`
-  crosses a change of up to 6 bases when 10 bases pair beyond it, so a mutagenic primer's 5′
-  arm binds rather than being a tail, and a primer with changes takes its Tm from its 3′ arm,
-  which must anneal for the first cycle. It seeds on the 3′ end alone, so "Binds once" means
-  once by the 3′ end; a 5′ tail is searched apart (`tailMatches`, every window of 15 bases,
-  either strand), as a Gibson overlap or a tail copied from the vector primes too. Left out
-  is only the primer's own 5′ arm, which a change too big to cross leaves outside the site
-  and so counted as tail: a match on the primer's own strand lying before the site in the
-  primer's own direction, by a gap no wider than the primer (template it skips) or running
-  into the site by no more than its own length (extension). A match on the 3′ side is a
-  second place however close it lies, as no 5′ arm can be there. `primerReport` needs the
-  site passed to tell them apart, and every view passes it. A primer can skip far more
-  template than it is long, so editing its sequence goes through `placeEdited`, which keeps
-  the site it had while the new bases still lie along the whole of it (no tail, both ends on
-  it, the 3′ end annealing and most of it pairing) and searches for the sequence otherwise:
-  a deletion over six bases would shrink the site onto the 3′ arm and the arm would read as
-  a tail that primes elsewhere. A sequence with no such history (Add by sequence, a file)
-  can only be searched for, so a long deletion arriving that way is still placed on its 3′
-  arm and warns; move the site by hand or type the bases into a primer that has one. On a circle a match across the origin is found again from the part after
-  it, so matches are compared around the circle, not by raw coordinates. One renderer draws primers in the Sequence tab and
-  the Primers tab's panel (`src/views/primerDraw.ts`): the primer's own bases against the
-  strand it pairs with, the ruler between the strands, the name and changes in a band raised
-  off it and the tail half a box off it. The name stays at the 3′ end and inside the row,
-  beside a change rather than over it (`tabLeft`), and lanes make room for wherever it goes.
-  Changes are always red, so the colours users can give a primer
-  (`PRIMER_COLOURS`) leave red out; the primer library keeps a primer's colour.
-  Under the tab's list a switch shows either the primers or the **pairs** they make
-  (`src/lib/primerPairs.ts`): every forward with every reverse, the product from
-  `pcrProduct` so a pair and the PCR product dialog can't disagree, shortest first. On a
-  circle any two face each other going round, so `MAX_PRODUCT` is what bounds the list; a
-  pair whose span is past that even after both sites are allowed for is dropped before the
-  product is built, as a primer only shortens a product by template its own site covers.
-  The pairs are worked out once per document, like each primer's report, and both are
-  dropped when Settings change, as the document is then the same but the Tms are not.
-- **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
-  `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
-  they change, so the renderer, `primerReport` and PCR products need nothing of their own.
-  A change is bases on the top strand (`SdmChange`), trimmed of bases it leaves alone, so a
-  codon change is only the bases that differ. Back to back (Q5 SDM): the forward primer's
-  site starts at the change (after it for a deletion, whose gap is between the primers; an
-  insertion is its 5′ tail, split between both tails past `SPLIT_INSERTION`), and the
-  reverse primer ends just before it, so their product is the whole mutant opened at the
-  change. Overlapping (QuikChange): one primer and its reverse complement on one site. Each
-  3′ arm is sized to a Tm with `meltingTemp`, so Settings apply; arms are 15 bases at least,
-  as `findBindingSites` needs 15 at the 3′ end or the checks would say "No site". A codon is
-  chosen by fewest changes, then not rare in E. coli, which is only a tie-break; TAG counts
-  as a stop even with amber suppression on, as a plasmid made that way works in one strain.
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that
   made it, so that view can skip scrolling to itself.
 - **Picked enzymes** (`src/lib/enzymePick.ts`, `src/doc/pickEnzyme.ts`): ⌘-click (Ctrl-click
@@ -356,62 +127,6 @@ it can (lists of files or features). CI checks that every path in backticks here
   `src/doc/convert.ts` turns them into `SeqData` and back, keeping fields we don't model
   in `raw`. SnapGene `.dna` is read but saved as GenBank. Lab fields from the Info tab live
   in GenBank COMMENT lines (`src/lib/labinfo.ts`).
-- **Feature detection** (`crates/seqcore/src/annotate.rs`) is not the Sanger path with a
-  different input, and must not be built from its pieces. A read has one position; a part
-  may have several, so every window above the threshold is returned and the index keeps
-  **all** positions of a k-mer — `unique_kmers` keeps only those occurring once, and on a
-  sequence doubled across the origin it returns nothing at all. What is left of a window is
-  searched again after a hit, while it has room for another whole copy: tandem copies closer
-  together than `BAND` vote for diagonals near enough to be grouped, so one alignment of
-  that window would report one of three tandem promoters. Hits follow pLannotate's
-  `_filter.py`: score is identity × coverage × aligned length, ten times that for an exact
-  full-length match, and where two hits **of the same feature type** collide the
-  lower-scoring one is dropped if its interval trimmed by 15% at each end still meets the
-  better hit's whole interval. A *partial* hit must also be at least `MIN_FRAGMENT_BASES`
-  long: pUC19 carries 36 exact bases of pBR322's rop and 77 of lacI's tail, neither of
-  which means that gene is there, while lacZ-alpha's 167 do. Trimming the lower hit is what lets a short part sit beside
-  a long one; comparing within a type is what keeps a polylinker inside a `lacZ`. A
-  suggestion is dropped against an existing feature by type, strand and how much of the
-  suggestion that feature covers (`SUPPRESS_SHARE`), never by name: files write the same
-  marker many ways (one testdata file says "NeoR/KanR"), and GenBank's own type for a
-  promoter is `regulatory`. Touching is not covering, or a CDS that merely abuts AmpR would
-  suppress it. Types are matched in families, and the gene family is **asymmetric**: a
-  file's `gene` or `misc_feature` covers our `CDS`, since that is how software with no type
-  for a marker writes one, but a file's `CDS` does not cover our `misc_feature` — tags are
-  typed that way, and reading it both ways would hide every His tag inside an annotated
-  gene. **Protein entries are searched in all
-  six frames**, because a codon-optimized insert matches nothing at the DNA level and
-  fluorescent proteins have no usable DNA source at all; extension there is ungapped,
-  since a synthesised gene encodes the *same* protein, so a real match differs by
-  substitutions and an indel means a different protein. It is **grown from its seed**, not
-  laid against the whole frame: a frame runs the length of the sequence, so measured over
-  all of it coverage is always 100% and no protein hit could ever be partial, while a
-  truncated entry or one in a fusion has its identity diluted by the stretch that doesn't
-  match and falls under the floor. Growing it stops at a stop codon, so a CDS suggestion
-  can't cover a sequence that isn't an open frame. A protein hit scores on its span
-  in bases, so it and a DNA hit compare on one scale, and it says "protein identity" in
-  the dialog rather than claiming the DNA matched.
-- **Offering detection** (`src/detectOffer.ts`): a file with far fewer features than its
-  length suggests gets a quiet strip under the toolbar, never a dialog, and a dismissal is
-  remembered by path or a sparse plasmid would ask every time it opened. Home works out
-  the contents of a file that annotates **nothing** itself and marks them "detected"; a
-  file with its own features is left alone, since what its author wrote beats a guess. Its
-  cache keys on `catalogVersion` (`catalog_version` in `crates/seqcore/src/parts.rs`), not
-  just `CACHE_VERSION`: raising that once would leave every detected result stale after
-  the next catalog change.
-- **The parts catalog** (`crates/seqcore/data/parts.tsv`) is generated by
-  `tools/build-catalog.mjs` from the curated list in `tools/catalog-sources.tsv` and built
-  in with `include_str!`, so detection fetches nothing and reads no file at run time. Never
-  edit the generated file by hand. An entry without a recorded source doesn't go in: the
-  app is GPL-3.0, so a source that allows only non-commercial use can't be used at all,
-  which is why SnapGene's feature database, Addgene's records and CARD are out. An entry's
-  **name and type are not cosmetic**, because `detectFromFeatures` and `describeContents`
-  match on the name and group by the type: an entry named `TetR` would be counted as
-  tetracycline resistance whatever it was, a marker whose name that table doesn't know
-  disappears from Home and Info, and a tag typed as a CDS pushes the real insert out of
-  Home's five names. `docs/feature-catalog.md` has the sources, their terms and the naming
-  rules; `src/lib/catalog.test.ts` ties the names to that code and
-  `crates/seqcore/tests/catalog.rs` checks the file itself.
 - **Styles**: design tokens are CSS variables in `src/styles.css`; document styles are
   `sv-*` classes in `src/doc/document.css`, the app bar's and Home's in `src/mainWindow.css`.
   Older `ps-*` classes remain for the Settings and Info screens. Dark tokens exist but no
@@ -445,7 +160,7 @@ it can (lists of files or features). CI checks that every path in backticks here
   and favicon. Change the drawing there, never the images (the SVGs beside them are its
   output too). Sizes of 32 px and under get a plainer drawing, as the full one blurs. It
   needs macOS for the .icns.
-- `npm run check` runs all of the above, the agent guide's path check, a syntax check of
+- `npm run check` runs all of the above, the agent guides' path check, a syntax check of
   the e2e script and clippy: what CI
   checks except the e2e, in a minute or two. Run it before every push where Rust is
   installed; CI stays the final word and the only place the e2e runs. A change to nothing
@@ -477,87 +192,6 @@ it can (lists of files or features). CI checks that every path in backticks here
   annotation, readable with `gh api repos/<owner>/<repo>/check-runs/<job id>/annotations`.
   The manual **Diagnostics** workflow runs any command on any OS and posts its output the
   same way; delete any branch it pushes afterwards.
-- Installers (`.github/workflows/build.yml`) are built for a version tag, which also drafts a
-  release, or when a maintainer runs the workflow; not on every push, as a full set takes
-  most of an hour. Both use `.github/actions/build-app/action.yml`. A tag's builds are
-  signed and make the update files; a manual run's are not
-  (`src-tauri/tauri.unsigned.conf.json`, which `npm run app:build` uses too, since a build
-  with update files stops when there is no key).
-- **Releases and the update key**: the key that signs updates is a secret of the `release`
-  environment only (`v*` tags may use it, a maintainer approves each run, and the "Protect
-  release tags" ruleset lets only admins create, move or delete `v*` tags). Never give it
-  to `.github/workflows/checks.yml`, a `pull_request_target` workflow or a manual run, and
-  keep the release jobs' third-party actions pinned to commits, as they run beside it.
-  `.github/CODEOWNERS` names who reviews what runs beside it or reaches users without a
-  release (the site, the updates Worker); a new file of that kind goes in it too.
-  Losing the key strands every install: it is backed up outside GitHub. To release, write
-  the short notes the app shows (two or three plain sentences) as the first paragraph of
-  Unreleased in `CHANGELOG.md`, above its bullets, then run `npm run release <x.y.z>` on
-  an up-to-date main (`tools/release.mjs`): it renames Unreleased to the version with a new
-  empty one above, sets the version (`tools/set-version.mjs`, also `npm run version`),
-  rebuilds the site, commits on `chore/release-<x.y.z>` and opens the pull request. Once
-  that is merged, `npm run release:tag` checks main as the release build will and pushes
-  the `v<x.y.z>` tag on it; then a maintainer approves the run and publishes the draft.
-  A minor release is first tried as a **release candidate** (`npm run release 0.4.0-rc.1`):
-  the same steps, but Unreleased stays as it is and gives the candidate its notes
-  (`releaseNotesFor` in `src/lib/changelog.ts`), and its build drafts a pre-release. GitHub
-  never makes a pre-release "latest", which is what the updates Worker and the Download page
-  follow, so only people who download it get it; the website shows sections only, so it
-  never lists one. 0.3.0 is why: its crash happened only in a signed build, the one thing
-  nothing ran before users had it. Use the candidate for a day with statistics on.
-  Tagging stays a person's step: an Actions token that could push `v*` tags would get
-  round the ruleset that keeps them to admins. `check-version` in
-  `.github/scripts/release.mjs` fails a tag that doesn't match the three
-  files or has no notes, `latest-json` writes the manifest from the `.sig` files the builds
-  made, and the section becomes the release's text. `name-files` gives each file its
-  published name first (`RELEASE_FILES`): the system in words people use
-  (`Strandivo_Mac_Intel.dmg`, not the build's x64) and no version, so a release lists each
-  installer once and the website's Download page links to
-  `releases/latest/download/…`, the newest published release, with no change per release. The script reads the changelog with
-  `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`. A release's
-  section written by hand needs `npm run site` too, or the quick checks fail.
-- **`updates.strandivo.com`** is built into every copy (`plugins.updater` in
-  `src-tauri/tauri.conf.json`), so it must never change; the Worker behind it
-  (`services/updates/`) hands over the published release's latest.json, or 204 for no
-  update when there is none. The app's version, OS and processor come in the query, and
-  each check adds one to a row for its day, version, OS and processor in a D1 database
-  (`services/updates/schema.sql`), as known words or "other": that count of copies in use
-  is what tells how far the opt-in statistics speak for everyone. The Worker keeps nothing
-  else and logs nothing. Deploy it with
-  `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
-- **`feedback.strandivo.com`** is built into every copy from the release that adds it (`FEEDBACK_URL` in
-  `src/platform.ts`), so it must keep answering. Its Worker (`services/feedback/`) needs
-  a fine-grained token with only Issues: write on this repository and the maintainer's
-  address, both as Worker secrets, never in the repository; its README says how to set
-  it up. Deploy it with `npx wrangler@4 deploy --config services/feedback/wrangler.toml`.
-- **The website**, `strandivo.com`, is the plain files in `site/` on Cloudflare Pages (a
-  project named `strandivo`), with no build step, so its Content Security Policy
-  (`site/_headers`) allows only its own images, stylesheet and one script,
-  `site/download.js`, which puts the visitor's own system's download first. That script
-  only shows what the page already holds, hidden: without it every download shows, and it
-  sends and stores nothing (the Privacy page says so; keep both true). A browser can't
-  tell an Apple silicon Mac from an Intel one, so Macs get Apple silicon first, with Intel
-  just under it. Its colours copy the
-  app's tokens, as the site can't load `src/styles.css`. Its pages are written by
-  `tools/build-site.mjs` (`npm run site`) and committed: What's new from `CHANGELOG.md`,
-  Privacy from `docs/privacy.md`, and Home, Download and the 404 page from
-  `tools/site/`, each with the same header and footer. Edit those, never the HTML in
-  `site/`; the quick checks fail when the two differ. `docs/privacy.md` is the one list of
-  what the app sends, so whatever makes the app send something new changes it in the same
-  PR. Its Markdown is a small subset (headings, paragraphs, `-` lists, links, `code`,
-  bold), and the generator fails on anything else rather than show it wrong; links may
-  only be https, mail or the site's own. Cloudflare builds it from this repository, but
-  only for a push that changes something in `site/` (the project's build watch paths, a
-  dashboard setting): on `main` it goes live, and other branches get a preview address.
-  Other pushes, the e2e-results branch's included, show as skipped. The project is
-  connected to GitHub, so never deploy it with wrangler, which would be overwritten by
-  the next push. Cloudflare's
-  email obfuscation rewrites addresses on the proxied domain (not on `pages.dev`) into
-  a script the policy blocks, so a page's body sits inside `<!--email_off-->` comments;
-  a new page needs them too, or its addresses read "[email protected]".
-  `site/.well-known/security.txt` repeats `SECURITY.md` for scanners, and its `Expires`
-  must be moved on by hand each year: `.github/scripts/check-security-txt.mjs` fails the
-  quick checks from 30 days before it.
 - From a cloud session the npm and crates registries may be blocked: Rust in `src-tauri/`
   then only compiles in CI, and CI is the final word.
 
@@ -587,12 +221,6 @@ it can (lists of files or features). CI checks that every path in backticks here
   Gibson splits a missing overlap between two amplified neighbours
   (NEBuilder's way); In-Fusion puts all 15 bases on the insert's primers (Takara's).
 - **Read alignment in Rust** (`crates/seqcore/`), so it is fast and testable on its own.
-- **A frameshift stops a read's translation**: chosen over translating on
-  with a marker, which could be missed when a real frameshift matters so much. It comes
-  from `cloneVariants`, so the row, the list and the Clones table can't disagree, and it
-  stops every read of the clone: a read starting past it would otherwise look clean, so it
-  says "After L54fs" instead. A stop codon from a substitution keeps the frame, so
-  translation carries on dimmed.
 - **Tm**: SantaLucia 1998 with primer3's default conditions by default, so numbers match
   primer3. Settings can choose Breslauer 1986 (primer3's older method), the Wallace rule or
   a basic GC formula, and the conditions. Each window applies the choice with `useTmSettings`
@@ -601,9 +229,6 @@ it can (lists of files or features). CI checks that every path in backticks here
   applied the same way (`useAmberSuppression`), so everything that translates through
   `translateCodon` follows it. ORF stops get it in `OrfOptions`, and caches of
   translations must include it in their key.
-- **The lab primer library** is kept by the app, not in documents (`src/primerLibrary.ts`,
-  in local storage like the settings, with an app event so every window sees changes).
-  Export/Import of a tab-separated list is the backup and the way to share it.
 - **Enzymes**: a curated list of common commercial enzymes (`src/lib/enzymes.ts`), not every
   isoschizomer, is what the map shows by default. The lab's stock (`src/enzymeLibrary.ts`)
   may name any enzyme TeselaGen knows (`enzymeName`), since a lab's Acc65I is not KpnI:
@@ -649,12 +274,6 @@ it can (lists of files or features). CI checks that every path in backticks here
   so `document.querySelector` in tests finds the current file's elements. A document must
   not measure or draw while inactive, and anything it subscribes to outside itself
   (settings, the primer library) must be undone in `dispose`, or closed tabs leak.
-- **Primer positions** cover the bases the primer pairs with, changes included; a 5′ tail
-  hangs off beyond them and is not part of the range.
-- **Designed primers are named by the region's direction**, as labs do: on a feature that
-  runs right to left, `-F` is the primer at its start codon, which binds the top strand (a
-  "reverse" primer for the plasmid) and gets the start site (NdeI). The PCR product picker
-  and `src/lib/pcr.ts` speak of plasmid forward/reverse.
 - **The inspector rebuilds on every change**, so a field edited live (a primer's sequence)
   would lose focus to its own edit: mark it `data-keep` and `render()` in
   `src/views/inspector.ts` moves focus, caret and unapplied keystrokes to the new one.
@@ -671,10 +290,6 @@ it can (lists of files or features). CI checks that every path in backticks here
   0-based), and it keeps a feature's `type="gap"` segments (introns) as parts of it.
 - **Saving** must not lose anything: `src/lib/saving.test.ts` saves and reopens every file
   in `testdata/`, also after edits. Add a file there when you meet one that breaks.
-- **Chromatograms are kept light** so a plate of reads fits in memory: `compactChromatogram`
-  (`src/lib/chromatogram.ts`) keeps the four traces as `Int16Array` and drops the parser's
-  `baseTraces`, which took about 90% of a read's 1.6 MB. Typed arrays become objects in
-  JSON, so turn traces into plain lists before sending them to Rust.
 - **HTTPS in the shell**: reqwest is built without a TLS provider (the updater's
   `rustls-no-provider`) and panics building a client until one is installed, and release
   builds abort on a panic. `install_tls_provider` in `src-tauri/src/lib.rs` runs first in

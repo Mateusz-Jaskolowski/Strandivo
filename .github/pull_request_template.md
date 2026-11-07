@@ -11,5 +11,5 @@
 ## Checklist
 
 - [ ] A user-visible change has a bullet under `## Unreleased` in `CHANGELOG.md` (or there is nothing users would notice)
-- [ ] `AGENTS.md` is still true after this change
+- [ ] `AGENTS.md` and the guides it points to are still true after this change
 - [ ] Something new that users do has a check in `e2e/run.mjs`

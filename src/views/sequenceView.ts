@@ -242,6 +242,9 @@ export class SequenceView {
 
   render() {
     this.stale = false;
+    // Options, edits and a new width change the rows' heights, so the same scroll offset
+    // would land elsewhere in the sequence: keep the row at the top of the view there.
+    const anchor = this.topAnchor();
     const o = this.ctx.options;
     for (const [k, b] of Object.entries(this.chips)) {
       const on = !!o[k as "complement"];
@@ -258,11 +261,23 @@ export class SequenceView {
     this.bpr = Math.max(10, Math.floor(avail / this.chPx / 10) * 10);
     this.layout();
     this.canvas.style.height = `${this.offsets[this.rows.length] ?? 0}px`;
+    if (anchor) {
+      const i = Math.min(this.rows.length - 1, Math.floor(anchor.base / this.bpr));
+      this.scroller.scrollTop = this.offsets[i] + Math.min(anchor.dy, this.rows[i].height - 1);
+    }
     for (const r of this.rendered.values()) r.el.remove();
     this.rendered.clear();
     this.renderStrip();
     this.renderVisible();
     this.renderSelection();
+  }
+
+  /** The first base of the row at the top of the view, and how far down that row the view starts. */
+  private topAnchor(): { base: number; dy: number } | null {
+    if (!this.rows.length || !this.scroller.clientHeight) return null;
+    const top = this.scroller.scrollTop;
+    const i = this.rowAt(top);
+    return { base: this.rows[i].start, dy: top - this.offsets[i] };
   }
 
   private layout() {

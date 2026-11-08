@@ -68,6 +68,9 @@ them, count a little more, still only as fixed words and ranges.
   and a cut on the bottom strand that falls in the next row is drawn there.
 - **Codon shading** in the Sequence tab alternates evenly again: the first codon of a
   feature or row was sometimes partly shaded.
+- **The Sequence tab stays where you are** when you turn on Translation, Both strands, ORFs,
+  Cut sites or Primers, or resize the window. It used to jump to another part of the
+  sequence, further the further down you were.
 - **Each map keeps its rotation**: a file's map opens turned the way you last turned it.
   The enzymes to show now come last under the map, after rotation, zoom and label size.
 - **Map labels on a Mac** sit in the middle of their coloured backgrounds, which no longer

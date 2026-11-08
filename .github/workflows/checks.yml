@@ -1,10 +1,12 @@
 name: Checks
 
 # Runs on every push, on Linux only (the cheapest runners). One job tests the alignment
-# core and the interface logic, type-checks and lints, builds the Linux app, then clicks
-# through it on a virtual display with WebDriver (e2e/run.mjs). Screenshots and a report
-# go to the `e2e-results` branch, or for a pull request from a fork (whose token can't
-# push) to the run's artifacts. Installers are built by build.yml, for a version tag.
+# core and the interface logic, type-checks and lints, builds the Linux app and the browser
+# version, then clicks through the app on a virtual display with WebDriver (e2e/run.mjs)
+# and the browser version in headless Chrome (e2e/web.mjs). Screenshots and reports go to
+# the `e2e-results` branch, the browser version's under web/, or for a pull request from a
+# fork (whose token can't push) to the run's artifacts. Installers are built by build.yml,
+# for a version tag.
 #
 # A change to nothing but docs or the website skips it: none of those reach the app, and
 # a run takes minutes. The guide and header checks, which such a change can break, run on
@@ -77,12 +79,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+          targets: wasm32-unknown-unknown
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: |
             crates/seqcore -> target
             crates/seqcore-json -> target
+            crates/seqcore-wasm -> target
             src-tauri -> target
           key: checks
 
@@ -100,6 +104,15 @@ jobs:
           ../../.github/scripts/run.sh "Core JSON tests" cargo test --release
           ../../.github/scripts/run.sh "Core JSON lint" cargo clippy --all-targets
 
+      - name: Core WebAssembly tests and lint
+        if: ${{ !cancelled() }}
+        env:
+          ANNOTATE_WARNINGS: "^(warning|error)"
+        working-directory: crates/seqcore-wasm
+        run: |
+          ../../.github/scripts/run.sh "Core WebAssembly tests" cargo test --release
+          ../../.github/scripts/run.sh "Core WebAssembly lint" cargo clippy --all-targets --target wasm32-unknown-unknown
+
       - name: Install JavaScript dependencies
         id: npm
         if: ${{ !cancelled() }}
@@ -112,6 +125,12 @@ jobs:
       - name: Type check interface
         if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
         run: .github/scripts/run.sh "Type check" npm run typecheck
+
+      # Also checks the core's .wasm: under 512 KB, and working in Node (tools/build-wasm.mjs).
+      - name: Build the browser version
+        id: web
+        if: ${{ !cancelled() && steps.npm.outcome == 'success' }}
+        run: .github/scripts/run.sh "Build browser version" npm run build:web
 
       - name: Build the app (debug build, needed for WebDriver)
         if: ${{ !cancelled() && steps.libs.outcome == 'success' && steps.npm.outcome == 'success' }}
@@ -141,6 +160,11 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
           NO_AT_BRIDGE: "1"
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1600x1000x24" node e2e/run.mjs src-tauri/target/debug/strandivo e2e-out
+
+      # Chrome and ChromeDriver come with GitHub's Ubuntu runners.
+      - name: Click through the browser version
+        if: ${{ !cancelled() && steps.web.outcome == 'success' }}
+        run: node e2e/web.mjs e2e-out/web
 
       - name: Publish screenshots and report
         if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}

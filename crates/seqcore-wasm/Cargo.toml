@@ -1,0 +1,23 @@
+[package]
+name = "seqcore-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "seqcore as WebAssembly for the browser version: JSON strings in and out through linear memory"
+publish = false
+
+# Built only for wasm32-unknown-unknown, by `npm run build:wasm`; the desktop never builds it.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+seqcore-json = { path = "../seqcore-json" }
+
+# Measured in November 2026: "s" made the module 259 KB and as fast as the native core;
+# 3 made it 314 KB and no faster. tools/build-wasm.mjs fails above 512 KB.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

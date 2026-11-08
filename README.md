@@ -179,6 +179,14 @@ npm test                                   # interface logic
 (cd crates/seqcore-json && cargo test --release) # what the interface sees of it
 ```
 
+The browser version, not published yet, needs Rust's WebAssembly target
+(`rustup target add wasm32-unknown-unknown`):
+
+```sh
+npm run dev:web     # run it with live reload
+npm run build:web   # build it into dist-web
+```
+
 ## Project layout
 
 Conventions, decisions and how to check changes are in [`AGENTS.md`](AGENTS.md), written for
@@ -194,6 +202,7 @@ says how to take part.
 | `src-tauri/` | Desktop shell (Rust/Tauri): windows, menus, file associations, folder listing, commands |
 | `crates/seqcore/` | Trimming, alignment, difference calling, and the parts catalog and its search for feature detection (Rust, no dependencies) |
 | `crates/seqcore-json/` | The core's requests and responses as the interface sees them (JSON) |
+| `crates/seqcore-wasm/` | The core as WebAssembly, for the browser version, where it runs in a worker (`src/core/`) |
 | `tools/` | Scripts run by hand: the parts catalog and its curated sources, the app icon, `npm run version`, and the website's pages (`npm run site`, from `tools/site/`) |
 | `services/updates/` | The Cloudflare Worker behind `updates.strandivo.com` |
 | `services/feedback/` | The Cloudflare Worker behind `feedback.strandivo.com`, which files reports as issues |

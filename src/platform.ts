@@ -153,35 +153,75 @@ interface AlignRequest {
   variable: [number, number][];
 }
 
+/**
+ * The core compiled to WebAssembly, in a worker (`src/core/client.ts`): the browser
+ * version's stand-in for the shell's alignment and detection commands. Its entry
+ * (`src/web.ts`) hands it over; the desktop and a plain `npm run dev` have none.
+ */
+export interface WebCore {
+  align(request: AlignRequest): Promise<AlignResponse>;
+  detect(request: DetectRequest): Promise<DetectResponse>;
+  catalogVersion(): Promise<string>;
+  /** Makes the core panic, for the browser check (e2e/web.mjs). */
+  trap(): Promise<void>;
+}
+
+let webCore: WebCore | null = null;
+
+export function useWebCore(core: WebCore) {
+  webCore = core;
+}
+
+/** A request to the worker, its failures kept for a bug report as the shell's are. */
+async function askWebCore<T>(what: string, run: (core: WebCore) => Promise<T>): Promise<T> {
+  try {
+    return await run(webCore!);
+  } catch (e) {
+    recordError(`${what} failed: ${e instanceof Error ? e.message : String(e)}`);
+    throw e;
+  }
+}
+
+/** Makes the browser version's core panic; the next request must still be answered. */
+export function trapWebCore(): Promise<void> {
+  if (!webCore) return Promise.reject(new Error("This page has no core in a worker."));
+  return askWebCore("trap", core => core.trap());
+}
+
+// Alignment and detection run in the core: through the shell on the desktop, in a worker
+// in the browser version. Each function tries, in order, a test's hook if the page defines
+// one, the shell, then the worker.
+
 export function alignReads(request: AlignRequest) {
-  // Alignment runs in the desktop app's Rust core. UI tests in a browser can supply one.
   const testAlign = (window as unknown as { __strandivoAlign?: (r: AlignRequest) => Promise<AlignResponse> }).__strandivoAlign;
   if (!isDesktop && testAlign) return testAlign(request);
+  if (!isDesktop && webCore) return askWebCore("align", core => core.align(request));
   return invoke<AlignResponse>("align_reads", { request });
 }
 
 const detectHook = () => (window as unknown as { __strandivoDetect?: (r: DetectRequest) => Promise<DetectResponse> }).__strandivoDetect;
 
 /** Whether this build can detect features at all: the core does the search. */
-export const canDetectFeatures = () => isDesktop || !!detectHook();
+export const canDetectFeatures = () => isDesktop || !!detectHook() || !!webCore;
 
 /** Fingerprint of the parts catalog this build carries; "" where detection isn't available. */
 export async function catalogVersion(): Promise<string> {
-  if (!isDesktop) return "";
   try {
-    return await invoke<string>("catalog_version");
+    if (isDesktop) return await invoke<string>("catalog_version");
+    if (webCore) return await askWebCore("catalog_version", core => core.catalogVersion());
   } catch {
-    return "";
+    /* as if there were no catalog: nothing is cached against it */
   }
+  return "";
 }
 
 export function detectFeatures(request: DetectRequest) {
-  // Detection runs in the desktop app's Rust core, like alignment. A browser has none
-  // unless the page supplies one, which is how a test can drive it.
+  // A browser without the worker (plain `npm run dev`) has no core, and finds nothing.
   const testDetect = detectHook();
   if (!isDesktop && testDetect) return testDetect(request);
-  if (!isDesktop) return Promise.resolve<DetectResponse>({ suggestions: [] });
-  return invoke<DetectResponse>("detect_features", { request });
+  if (isDesktop) return invoke<DetectResponse>("detect_features", { request });
+  if (webCore) return askWebCore("detect", core => core.detect(request));
+  return Promise.resolve<DetectResponse>({ suggestions: [] });
 }
 
 // ---------- updates (src-tauri/src/updates.rs) ----------

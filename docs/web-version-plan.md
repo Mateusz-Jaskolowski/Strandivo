@@ -1,7 +1,7 @@
 # Strandivo in a browser: plan
 
-Status: planned (November 2026). Part 1 is built (#4); the rest waits for 0.2.0 and the
-website. Each part below is one branch and one PR. It comes after the first public release (0.2.0) and the website (part 6 of
+Status: in progress (November 2026). Parts 1 (#4) and 2 are built; 0.2.0 and the website,
+which the rest waited for, are out. Each part below is one branch and one PR. It came after the first public release (0.2.0) and the website (part 6 of
 `docs/updates-feedback-usage-plan.md`). What is said here about browsers was read on
 5 November 2026; check it again before each part is built.
 
@@ -116,42 +116,53 @@ Desktop only; nothing changes for users.
   is organised" names the new crate and says it holds what the interface sees of the core.
 
 ### 2. The core as WebAssembly, in a worker
-`feat/web-core`: `crates/seqcore-wasm/`, `src/core/worker.ts`, `src/core/client.ts`,
-`src/platform.ts`, `vite.config.ts`, `package.json`, `.github/workflows/checks.yml`,
-`e2e/web.mjs`, `AGENTS.md`, `CONTRIBUTING.md`
+`feat/web-core`: `crates/seqcore-wasm/`, `src/core/instance.ts`, `src/core/worker.ts`,
+`src/core/client.ts`, `src/web.ts`, `src/platform.ts`, `src/mainWindow.ts`,
+`tools/build-wasm.mjs`, `vite.config.ts`, `package.json`, `.github/workflows/checks.yml`,
+`e2e/web.mjs`, `AGENTS.md`, `CONTRIBUTING.md`, `README.md`
 
-- **The crate**: `sv_alloc`, `sv_free`, `sv_align` and `sv_detect`, plus `sv_catalog_version`;
-  the result is left in a buffer the caller reads and copies. Its release profile is the
-  one measured above.
+- **The crate**: `sv_alloc`, `sv_free`, `sv_align` and `sv_detect`, plus `sv_catalog_version`.
+  Each answer is a buffer holding its length (4 bytes) and then its bytes, which the caller
+  copies and frees. Its one import, `sv_panic`, is how a panic hook hands the worker its
+  message just before the module traps. Its release profile is the one measured above;
+  as built it is 269 KB (109 KB gzipped).
 - **Building**: `npm run build:wasm` runs cargo for `wasm32-unknown-unknown` and copies the
   file to `src/core/seqcore.wasm` (ignored by git). `npm run build:web` and
-  `npm run dev:web` build it first and run Vite with `--mode web`; only in that mode does
-  the bundle include the worker, which imports the `.wasm` with `?url` so its name carries
-  a hash. `npm run build`, which Tauri runs, is unchanged, so desktop builds need no
-  WebAssembly target.
+  `npm run dev:web` build it first and run Vite with `--mode web`, into `dist-web` so the
+  desktop's `dist` is never overwritten. Only in that mode does `index.html` load
+  `src/web.ts`, the one file that imports the worker's client, so only that bundle holds
+  the worker, which imports the `.wasm` with `?url` so its name carries a hash.
+  `npm run build`, which Tauri runs, is unchanged, so desktop builds need no WebAssembly
+  target. `tools/build-wasm.mjs` checks what it built: it fails above 512 KB, and runs the
+  module in Node through the worker's own code, which must report a panic with its
+  message, answer the next request and find pUC19's parts.
 - **`src/platform.ts`**, in this order for both `alignReads` and `detectFeatures`: a test
   hook if the page defines one (so every existing e2e check works as it is), the shell on
   the desktop, the worker in a web build, and otherwise today's answer (an error for
   alignment, nothing for detection). `canDetectFeatures` and `catalogVersion` follow the
   same order, so Home's cache of detected parts keys on the real catalog in a browser too.
-- **The worker** (`src/core/worker.ts`) instantiates the module on its first request with
-  `WebAssembly.instantiateStreaming`, answers requests one at a time and starts a fresh
-  instance after a trap. `src/core/client.ts` sends requests as strings, so typed arrays
+- **The worker** (`src/core/worker.ts`) compiles the module on its first request and keeps
+  it, and answers requests one at a time. It compiles from the fetched bytes rather than
+  with `compileStreaming`, so a server's MIME type for `.wasm` doesn't matter; at 269 KB
+  the difference is nothing. Running requests and starting a fresh instance after a trap
+  is `src/core/instance.ts`, which has no DOM, so Node runs it too. `src/core/client.ts` sends requests as strings, so typed arrays
   in reads are already turned into lists, as `AGENTS.md` says for the shell. A plate of
   .ab1 reads with traces is tens of megabytes of JSON, well inside WebAssembly's memory;
   sending traces as binary is for later, if it is ever slow.
-- **The browser check** (`e2e/web.mjs`): builds the web version, serves `dist` and
+- **The browser check** (`e2e/web.mjs`): serves `dist-web` (Checks builds it first) and
   `testdata/` with a few lines of Node's `http`, and drives Chrome through ChromeDriver, both preinstalled on GitHub's
   Ubuntu runners, over plain WebDriver with Node's `fetch` as `e2e/run.mjs` does. With no
   hooks defined it opens `testdata/e2e/pUC19-annotated.gb`, adds the reads of
   `testdata/e2e/plate-bla.fasta` (`addReadPaths`, which fetches them there), waits for them to align and checks the clones and
-  differences match what the desktop e2e expects; then runs detection on a FASTA copy of
-  pUC19 and checks that AmpR and the ori are suggested. A second check
-  makes the worker trap and checks the next request still works. Screenshots and the
+  differences match what the desktop e2e expects. Before that it runs detection on the
+  same file and checks that the ori is suggested and AmpR, already in it, isn't, as the
+  desktop e2e does. A second check makes the worker trap (`trapCore` on
+  `window.__strandivo`) and checks the plate is aligned again afterwards.
+  `node e2e/web.mjs --serve` only serves, to try the build by hand. Screenshots and the
   report go to `e2e-results` beside the desktop's, under `web/`.
-- Checks installs the target (`rustup target add wasm32-unknown-unknown`), builds the web
-  version and fails if the `.wasm` passes 512 KB. `npm run check` builds it too;
-  `CONTRIBUTING.md` says to add the target once.
+- Checks installs the target (`rustup target add wasm32-unknown-unknown`), tests and lints
+  the crate and builds the web version, which fails if the `.wasm` passes 512 KB.
+  `npm run check` does the same; `CONTRIBUTING.md` says to add the target once.
 
 ### 3. Opening and saving files, and the menu
 `feat/web-files`: `src/platform.ts`, `src/webFiles.ts`, `src/mainWindow.ts`, `src/home.ts`,
@@ -231,13 +242,13 @@ Needs parts 2 and 3: a web version that can't open a file isn't worth publishing
   domain, free, beside the website's project. Cloudflare's own analytics script stays off.
 - **The workflow** (`.github/workflows/web.yml`): on a published release (not the tag
   push, which only drafts one), checks out the tag, runs the unit tests and
-  `npm run build:web`, then `wrangler pages deploy dist --branch main`. Run by hand on any
+  `npm run build:web`, then `wrangler pages deploy dist-web --branch main`. Run by hand on any
   branch, it deploys to that branch's preview address (`<branch>.strandivo-app.pages.dev`)
   instead, which never touches `app.strandivo.com`. It needs a Cloudflare token that can
   only deploy Pages, kept as a repository secret. The workflow sets `permissions:
   contents: read`, as `build.yml` does, so a job holding that secret can't also write to
   the repository.
-- **Headers** (`public-web/_headers`, copied into `dist` only by the web build): a Content
+- **Headers** (`public-web/_headers`, copied into `dist-web` only by the web build): a Content
   Security Policy that starts from the desktop's (`src-tauri/tauri.conf.json`), without
   the shell's `ipc:` addresses:
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self';
@@ -254,7 +265,7 @@ Needs parts 2 and 3: a web version that can't open a file isn't worth publishing
   JavaScript `eval`. `frame-ancestors` only works as a header, which is why the desktop
   has none. Also `Referrer-Policy: no-referrer`; `index.html` never cached, everything with
   a hash in its name cached for a year. From then on the browser check (`e2e/web.mjs`)
-  serves `dist` with the headers in `_headers`, so a violation fails CI before it reaches
+  serves `dist-web` with the headers in `_headers`, so a violation fails CI before it reaches
   users.
 - **A page left open across a deployment** still runs the old version, whose hashed files
   are gone from the new deployment. The worker and the `.wasm` are fetched when the page

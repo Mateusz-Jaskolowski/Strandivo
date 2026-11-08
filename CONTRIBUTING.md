@@ -31,7 +31,8 @@ npm run check
 ```
 
 This runs the unit tests, the type check, the build, the Rust tests and clippy, which is
-what CI runs except the end-to-end test. When you add something users do, add a check for
+what CI runs except the end-to-end tests. It also builds the browser version, which needs
+Rust's WebAssembly target; add it once with `rustup target add wasm32-unknown-unknown`. When you add something users do, add a check for
 it to `e2e/run.mjs`. If you only change docs, Markdown files or the website (`site/`),
 `npm run check:quick` is enough, and CI skips the rest too.
 

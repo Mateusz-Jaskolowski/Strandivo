@@ -11,7 +11,7 @@ import "./mainWindow.css";
 
 import { h, icon, toast } from "./ui/dom.ts";
 import { iconSvg, type IconName } from "./ui/icons.ts";
-import { closeWindow, isDesktop, onCloseRequested, onFileDrop, onMenu, onOpenRequests, openEnzymeLibrary, openLibrary, openSettings, readFile, setWindowTitle, showWindowsInPage, type PageWindow } from "./platform.ts";
+import { closeWindow, isDesktop, onCloseRequested, onFileDrop, onMenu, onOpenRequests, openEnzymeLibrary, openLibrary, openSettings, readFile, setWindowTitle, showWindowsInPage, trapWebCore, type PageWindow } from "./platform.ts";
 import { basename, extension } from "./lib/files.ts";
 import { CHECK_EXTENSION, parseCheckFile, type ReadCheck } from "./lib/readCheck.ts";
 import type { SeqData } from "./lib/seqdata.ts";
@@ -408,7 +408,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     /** Takes a crash again, as at start: from `window.__strandivoCrash` in e2e. */
     checkCrash: () => crashes.check(),
     /** Sends queued usage events now, to `window.__strandivoTrack` in e2e. */
-    flushUsage: () => flushUsage()
+    flushUsage: () => flushUsage(),
+    /** Makes the browser version's core panic (e2e/web.mjs); rejects with its message. */
+    trapCore: () => trapWebCore()
   };
   Object.defineProperty(window, "__strandivo", { configurable: true, get: () => ({ ...shellHook, ...(active?.doc?.testHook ?? {}) }) });
 

@@ -56,14 +56,25 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - `src/sanger/readSet.ts` loads reads, groups them into clones, has them aligned and
   summarises the results.
 - `src/platform.ts` is the only code that talks to the shell, with plain-browser fallbacks.
+  Alignment and detection try, in order, a test's hook if the page defines one, the shell,
+  then the core in a worker if the page has one.
+- The browser version (`docs/web-version-plan.md`) is the same interface built with
+  `--mode web` into `dist-web`: `index.html` then loads `src/web.ts`, which hands
+  `src/platform.ts` the core compiled to WebAssembly, run in a Web Worker
+  (`src/core/worker.ts`). Only `src/web.ts` imports it, so `npm run build`, which Tauri
+  runs, never needs Rust's WebAssembly target or holds the worker; keep it that way.
 - `src-tauri/src/lib.rs`: windows, native menus, file associations, file commands, listing
   the library's folders. Its alignment and detection commands hand typed requests to
   `crates/seqcore-json/`.
 - `crates/seqcore-json/` is what the interface sees of the core: the requests and
   responses of alignment and detection, with their JSON field names, and `align_json` and
-  `detect_json` for callers that pass strings. The shell uses it and so will the
+  `detect_json` for callers that pass strings. The shell uses it and so does the
   WebAssembly build, so the two can't disagree about a field. It needs serde, which is why
   it is not part of `crates/seqcore/`.
+- `crates/seqcore-wasm/` is the core for the browser version: `seqcore-json`'s strings
+  passed through linear memory, with no `wasm-bindgen`; an answer is its length, then its
+  bytes. A panic traps, so `src/core/instance.ts` starts a fresh instance for the next
+  request, having been handed the panic's message by a hook just before.
 - `crates/seqcore/`: .ab1 reading, quality trimming, seeded Smith-Waterman-Gotoh
   alignment, alignment of long reads along a chain of seeds, difference calling and each
   clone's consensus (`crates/seqcore/src/consensus.rs`), the catalog of common plasmid
@@ -150,8 +161,15 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 
 - `npm test` (unit tests in `src/lib/`), `npm run typecheck`, `npm run build`.
 - `cd crates/seqcore && cargo test --release` for the alignment core, and the same in
-  `crates/seqcore-json/` for the JSON it answers with; `cargo test --lib` in `src-tauri/`
-  for the shell's own (the crash hook, usage events, app data).
+  `crates/seqcore-json/` for the JSON it answers with and `crates/seqcore-wasm/` for its
+  buffers; `cargo test --lib` in `src-tauri/` for the shell's own (the crash hook, usage
+  events, app data).
+- `npm run build:web` builds the browser version into `dist-web`, and `npm run dev:web`
+  serves it with live reload; both need `rustup target add wasm32-unknown-unknown` once.
+  They build the core first (`tools/build-wasm.mjs`), which fails above 512 KB and runs the
+  module in Node through `src/core/instance.ts`, the worker's own code. Node only strips
+  types there, so that file uses only syntax that can be erased: no parameter properties,
+  enums or namespaces.
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
   list and the regenerated catalog together.
@@ -161,7 +179,7 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   output too). Sizes of 32 px and under get a plainer drawing, as the full one blurs. It
   needs macOS for the .icns.
 - `npm run check` runs all of the above, the agent guides' path check, a syntax check of
-  the e2e script and clippy: what CI
+  the e2e scripts and clippy: what CI
   checks except the e2e, in a minute or two. Run it before every push where Rust is
   installed; CI stays the final word and the only place the e2e runs. A change to nothing
   but docs, Markdown, the website or `CITATION.cff` needs only `npm run check:quick` (the
@@ -169,8 +187,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   then runs only that too.
 - In a browser, `npm run dev` (or any static server on the built `dist` folder) shows Home,
   and opens a file in a tab with `?open=<path or URL>`. Reads only align there if the page
-  defines `window.__strandivoAlign` (returning `{ reads, clones }` as the core does), and Home lists folders only if it defines
-  `window.__strandivoListFolder` (see `src/platform.ts`); in the app Rust does both. A
+  defines `window.__strandivoAlign` (returning `{ reads, clones }` as the core does), or
+  in the browser version (`npm run dev:web`), whose worker aligns them for real;
+  `node e2e/web.mjs --serve` serves `dist-web` and `testdata/` as its e2e does. Home
+  lists folders only if the page defines `window.__strandivoListFolder` (see
+  `src/platform.ts`); in the app Rust does both. A
   UniProt is asked for real unless the page defines `window.__strandivoUniprot`, which e2e
   tests do, in the app too. A
   right-click menu is drawn in the page there, or handed to `window.__strandivoMenu` if
@@ -187,7 +208,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   check when you add something users do. It drives the window through `window.__strandivo`:
   the main window's own actions (open, tabs, Home's folders, `saveSettings`) plus those of
   the file in the current tab (store, `command()`, adding reads, saving and `saveCheck`
-  without a file dialog).
+  without a file dialog). Then `e2e/web.mjs` clicks through the browser version in
+  headless Chrome with no hooks, so alignment and detection run in the worker, and checks
+  the worker answers after a panic (`trapCore`); its screenshots and report go in a `web`
+  folder beside the app's.
 - Steps run through `.github/scripts/run.sh`, which repeats a failing step's output as an
   annotation, readable with `gh api repos/<owner>/<repo>/check-runs/<job id>/annotations`.
   The manual **Diagnostics** workflow runs any command on any OS and posts its output the

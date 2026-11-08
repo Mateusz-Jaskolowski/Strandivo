@@ -275,11 +275,17 @@ async function main(outDir) {
       window.showSaveFilePicker = undefined;
       window.__e2eDownloads = [];
       HTMLAnchorElement.prototype.click = function () { if (this.download) window.__e2eDownloads.push({ name: this.download, href: this.href }); };
+      // Headless Chrome can't show a file dialog and cancels it at once, which the app takes
+      // for Cancel: the dialog is stood in for by WebDriver handing the input a file.
+      const click = HTMLInputElement.prototype.click;
+      HTMLInputElement.prototype.click = function () { if (this.type !== 'file') click.call(this); };
       window.__strandivo.menu('open');`);
     const snapgene = path.join(testdata, "snapgene", "pIB2-SEC13-mEGFP.dna");
-    if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", snapgene);
-    check("Open… falls back to a file input, and opens a SnapGene file", await s.waitFor("window.__strandivo.tabs().includes('pIB2-SEC13-mEGFP.dna') && document.querySelector('.sv-map-svgel .sv-map-feature')", 20000));
-    check("The SnapGene file's primers come with it", (await s.exec("return window.__strandivo.store.data.primers.map(p => p.name)")).includes("A206K.REV"));
+    const input = await s.waitFor("document.querySelector('input.sv-file-input')", 5000);
+    check("Open… falls back to a file input", input);
+    if (input) await s.keys("input.sv-file-input", snapgene);
+    check("The file input opens a SnapGene file", await s.waitFor("window.__strandivo.tabs().includes('pIB2-SEC13-mEGFP.dna') && document.querySelector('.sv-map-svgel .sv-map-feature')", 20000));
+    check("The SnapGene file's primers come with it", (await s.exec("return window.__strandivo.store?.data.primers.map(p => p.name) ?? []")).includes("A206K.REV"));
     await s.exec("window.__strandivo.command('save')");
     const downloaded = (await s.waitFor("window.__e2eDownloads.length === 1", 5000))
       ? await s.execAsync("const d = window.__e2eDownloads[0]; fetch(d.href).then(r => r.text()).then(t => done({ name: d.name, text: t.slice(0, 12) }), e => done(String(e)));")

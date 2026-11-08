@@ -235,7 +235,7 @@ export class PrimersView {
     const ids = new Set(list.map(p => p.id));
     this.picks = NO_PICKS;
     this.ctx.store.apply({ ...d, primers: d.primers.filter(p => !ids.has(p.id)) }, `Delete ${list.length} primers`, { range: null, focus: null });
-    toast(`Deleted ${list.length} primers. Undo to bring them back.`, "info", 3000);
+    this.ctx.noteEdit(`Deleted ${list.length} primers.`);
   }
 
   private renderPicked() {

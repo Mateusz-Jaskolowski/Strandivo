@@ -30,6 +30,16 @@ them, count a little more, still only as fixed words and ranges.
   sequence is and how long alignment takes, and three choices in Settings. Each view is
   counted once each time the app opens, not at every switch. The Privacy page lists every
   event and what it carries.
+- **Delete with a feature or primer selected** now deletes only the feature or primer, as
+  the inspector's Delete button does, and leaves its bases selected: press Delete again to
+  delete them too. Before, one press deleted the bases, and the feature went with them. A
+  cut site or an ORF comes from the sequence, so the first press only makes it a plain
+  selection of bases.
+- **Messages about edits have an Undo button.** Deleting a feature or primer says so with
+  Undo beside it, and deleting or replacing bases now says when a feature or primer that
+  lay wholly inside them was deleted too, which was easy to miss. A new message about an
+  edit replaces the last one instead of piling up, at most three messages show at once,
+  and one with a button, or an error, stays while the pointer is over it and can be closed.
 - **Gibson and In-Fusion say when two pieces already share their overlap**: where one piece
   ends with the bases the next one starts with, they are joined on those bases and the
   product keeps one copy. That is usually what you want, but not when each piece was meant

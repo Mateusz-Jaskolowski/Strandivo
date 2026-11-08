@@ -8,6 +8,7 @@
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
+import { TM_METHODS } from "../lib/primers.ts";
 import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -434,7 +435,7 @@ export function openCloningDialog(ctx: DocContext) {
       out.layout = plan.layout;
     }
     out.facts.push([
-      "Overlaps",
+      `Overlaps · Tm by the ${TM_METHODS.find(x => x.id === (method === "gibson" ? GIBSON : IN_FUSION).tmMethod)?.short ?? ""}`,
       h(
         "div",
         { class: "sv-clone-joins" },

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { compatible, cutsFor, digest, findOverlap, flip, fragmentWith, goldenGate, GIBSON, IN_FUSION, largest, ligateInsert, planAssembly, selfLigates, wholeFragment } from "./cloning.ts";
+import { DEFAULT_TM, meltingTemp, type TmMethod } from "./primers.ts";
 import { regionsOf, withRegions } from "./regions.ts";
 import { featureBases, reverseComplement, setOrigin, type SeqData, type SeqFeature } from "./seqdata.ts";
 
@@ -191,6 +192,43 @@ test("Gibson: two PCR pieces share the overlap's halves; existing overlaps are u
   assert.equal(none.product, null);
   assert.match(none.problems[0], /don't overlap/);
   assert.equal(findOverlap("AAAACCCCGGGG", "CCGGGGTTTT", 4), 6);
+});
+
+test("overlap assembly: the overlap Tm is measured by the method its threshold was set for", () => {
+  // 48 °C for this chemistry is a Wallace-rule figure, so the check must not follow the
+  // method Settings picked for what is shown elsewhere.
+  assert.equal(GIBSON.tmMethod, "wallace");
+  const planFor = (overlap: string, m: TmMethod, seed: number) =>
+    planAssembly(
+      [
+        { name: "A", fragment: wholeFragment(doc("A", filler(300, seed) + overlap, false)) },
+        { name: "B", fragment: wholeFragment(doc("B", overlap + filler(250, seed + 1), false)) }
+      ],
+      { ...GIBSON, tmMethod: m },
+      false
+    );
+  const warned = (overlap: string, m: TmMethod, seed: number) => {
+    const p = planFor(overlap, m, seed);
+    // Guard against the filler lengthening the match and changing what is being measured.
+    assert.equal(p.joins[0].bases.length, overlap.length);
+    return p.problems.some(x => /melts at/.test(x));
+  };
+
+  // What matters is that the method decides whether an overlap is accepted, not only what
+  // number is shown. These two straddle the 48 °C threshold in opposite directions, so
+  // each would get the wrong answer under the other method.
+  const wallacePasses = "GTTTACAGAGAGTTAGAG"; // Wallace 50.0 °C, nearest-neighbour 45.9 °C
+  const wallaceFails = "CTTTGCAACCCGACT"; //   Wallace 46.0 °C, nearest-neighbour 50.2 °C
+  assert.equal(warned(wallacePasses, "wallace", 41), false);
+  assert.equal(warned(wallacePasses, "santalucia", 41), true, "would have warned on an overlap the 48 °C guideline accepts");
+  assert.equal(warned(wallaceFails, "wallace", 43), true);
+  assert.equal(warned(wallaceFails, "santalucia", 43), false, "would have passed an overlap the 48 °C guideline rejects");
+
+  // The Tm reported alongside is the one the check used, so the two can be compared.
+  for (const m of ["wallace", "santalucia"] as TmMethod[]) {
+    assert.ok(Math.abs(planFor(wallacePasses, m, 41).joins[0].tm! - meltingTemp(wallacePasses, { ...DEFAULT_TM, method: m })!) < 0.05);
+  }
+
 });
 
 test("Golden Gate: overhangs set the order and orientation of the parts", () => {

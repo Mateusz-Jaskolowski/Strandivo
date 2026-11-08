@@ -8,7 +8,7 @@
 
 import { DEFAULT_DESIGN, designPair, type DesignOptions } from "./design.ts";
 import { enzymeSite, scanSites } from "./enzymes.ts";
-import { findBindingSites, meltingTemp } from "./primers.ts";
+import { DEFAULT_TM, findBindingSites, meltingTemp, TM_METHODS, type TmMethod } from "./primers.ts";
 import { carryRegions } from "./regions.ts";
 import { basesIn, deleteRange, insertBases, newId, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData } from "./seqdata.ts";
 
@@ -317,12 +317,22 @@ export interface OverlapMethod {
   split: boolean;
   /** Overlaps melting below this are flagged. */
   minTm: number;
+  /**
+   * How `minTm` is measured. A threshold only means something together with the method it
+   * was set for: the published 48 °C for this chemistry is a Wallace-rule figure, and the
+   * same overlap reads about 8 °C lower under nearest-neighbour. So the check names its own
+   * method instead of following the Tm shown elsewhere, which Settings lets the user change.
+   */
+  tmMethod: TmMethod;
 }
 
-/** NEBuilder's defaults: 20 bp overlaps, split across both primers when both pieces are amplified. */
-export const GIBSON: OverlapMethod = { overlap: 20, minOverlap: 15, split: true, minTm: 48 };
+/** 20 bp overlaps, split across both primers when both pieces are amplified. */
+export const GIBSON: OverlapMethod = { overlap: 20, minOverlap: 15, split: true, minTm: 48, tmMethod: "wallace" };
 /** In-Fusion: 15 bp of each neighbour's end on the insert's primers. */
-export const IN_FUSION: OverlapMethod = { overlap: 15, minOverlap: 15, split: false, minTm: 0 };
+export const IN_FUSION: OverlapMethod = { overlap: 15, minOverlap: 15, split: false, minTm: 0, tmMethod: "wallace" };
+
+/** The Tm of an assembly overlap, always by the method its threshold was set for. */
+const overlapTm = (bases: string, method: OverlapMethod): number | null => meltingTemp(bases, { ...DEFAULT_TM, method: method.tmMethod });
 
 export interface AssemblyInput {
   name: string;
@@ -428,11 +438,12 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   const joinInfo: AssemblyJoin[] = lengths.map((L, j) => {
     if (L === null) return { bases: "", tm: null, designed: designed[j] };
     const bases = pieces[(j + 1) % m].fragment.data.sequence.slice(0, L).toUpperCase();
-    return { bases, tm: meltingTemp(bases), designed: designed[j] };
+    return { bases, tm: overlapTm(bases, method), designed: designed[j] };
   });
+  const tmName = TM_METHODS.find(x => x.id === method.tmMethod)?.short ?? method.tmMethod;
   joinInfo.forEach((x, j) => {
     if (x.tm !== null && method.minTm && x.tm < method.minTm) {
-      problems.push(`The overlap between ${inputs[j].name} and ${inputs[(j + 1) % m].name} melts at ${x.tm.toFixed(1)} °C; ${method.minTm} °C or more joins more reliably.`);
+      problems.push(`The overlap between ${inputs[j].name} and ${inputs[(j + 1) % m].name} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
     }
   });
 

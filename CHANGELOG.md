@@ -30,6 +30,13 @@ them, count a little more, still only as fixed words and ranges.
   sequence is and how long alignment takes, and three choices in Settings. Each view is
   counted once each time the app opens, not at every switch. The Privacy page lists every
   event and what it carries.
+- **Overlap melting temperatures in Gibson** are now worked out the way the 48 °C guideline
+  they are checked against was, by the Wallace rule, and the result says so. They no longer
+  change with the method chosen in Settings, which is for the temperatures shown elsewhere.
+  A Gibson overlap that melts below the guideline is still only a warning: the product is
+  built either way. In-Fusion has no melting temperature to meet, so nothing is warned about
+  there, but the temperature it shows for an overlap is now worked out the same way, so both
+  methods mean the same thing by it.
 - **Keyboard shortcuts on Windows**: Ctrl+S saves again, and so do the other menu keys
   that did nothing there: Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+, and the rest.
 - **Menu bar on Windows** stays light, like the rest of the window, instead of switching

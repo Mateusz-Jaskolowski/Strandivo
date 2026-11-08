@@ -420,6 +420,79 @@ test("overlap assembly: a repeated overlap is reported whatever case the file is
   }
 });
 
+test("overlap assembly: a piece too short for the overlap is reported, not quietly trimmed", () => {
+  // Pre-existing: the overlap was recorded as the length the method asks for, while the
+  // tails could only carry what the shorter piece had. Joining on more bases than the
+  // pieces share cut the difference out of the product.
+  const short = "GCATGCAACGTTGCA"; // 15 bp, shorter than Gibson's 20
+  const body = filler(300, 52);
+  const b = doc("B", body, false);
+  const plan = (method: OverlapMethod) =>
+    planAssembly(
+      [
+        { name: "A", fragment: wholeFragment(doc("A", short, false)) },
+        { name: "B", fragment: wholeFragment(b), pcr: { template: b, range: { start: 0, end: body.length - 1 } } }
+      ],
+      method,
+      false
+    );
+
+  const gibson = plan(GIBSON);
+  assert.equal(gibson.product!.sequence, short + body, "every base of both pieces has to survive");
+  assert.equal(gibson.product!.sequence.length, short.length + body.length);
+  assert.equal(gibson.joins[0].bases.length, short.length, "the overlap is what the pieces can carry, not what was asked for");
+  // Two things are wrong with it and both are said: the overlap is shorter than asked for,
+  // and 15 bases of this sequence melt below the 48 C the method is checked against.
+  assert.equal(gibson.problems.length, 2);
+  assert.match(gibson.problems.join(" "), /too short to carry the whole 20 base overlap, so it can only be 15 bases\./);
+  // 15 is exactly minOverlap, so the "shorter than this method needs" clause stays quiet.
+  assert.doesNotMatch(gibson.problems.join(" "), /shorter than the 15 bases/);
+  assert.match(gibson.problems.join(" "), /melts at 46\.0 .C/);
+  // Each join's overlap must be somewhere in the product it builds; before this it was not.
+  assert.equal(overlapMatches(gibson.product!.sequence, false, gibson.joins[0].bases).length, 1);
+
+  // In-Fusion asks for exactly the 15 bases the piece has, so nothing is short and nothing
+  // is reported: the message belongs to the shortfall, not to small pieces as such.
+  const inFusion = plan(IN_FUSION);
+  assert.equal(inFusion.product!.sequence, short + body);
+  assert.deepEqual(inFusion.problems, []);
+});
+
+test("overlap assembly: degenerate overlaps are described accurately and briefly", () => {
+  const body = filler(300, 52);
+  const b = doc("B", body, false);
+  const plan = (piece: string) =>
+    planAssembly(
+      [
+        { name: "A", fragment: wholeFragment(doc("A", piece, false)) },
+        { name: "B", fragment: wholeFragment(b), pcr: { template: b, range: { start: 0, end: body.length - 1 } } }
+      ],
+      GIBSON,
+      false
+    );
+
+  // meltingTemp returns null for an overlap under two bases as well as for one holding
+  // anything but A, C, G or T. Reporting the wrong reason is worse than reporting neither.
+  const one = plan("G");
+  const joined = one.problems.join(" ");
+  assert.match(joined, /is 1 base, too short to work out a melting temperature for/);
+  assert.doesNotMatch(joined, /aren't A, C, G or T/, "the bases here are perfectly known");
+  assert.match(joined, /it can only be 1 base,/, "and a length of one is not '1 bases'");
+  assert.match(joined, /The 1 base joining A and B reads the same/);
+
+  // A one-base overlap reads the same in 134 places. Listing them all is unreadable, so
+  // the message names the first few and the total.
+  const repeated = one.problems.find(q => /reads the same/.test(q))!;
+  assert.match(repeated, /in 134 places in the product, at [^,]+(, [^,]+){5} and 128 more,/);
+  assert.equal(repeated.length < 300, true, `the message has to stay readable, was ${repeated.length} characters`);
+
+  // No bases to join on is not a short overlap. Keeping every base of nothing is not a
+  // product, so none is built.
+  const none = plan("");
+  assert.equal(none.product, null, "sequence preserved is not the same as an assembly");
+  assert.deepEqual(none.problems, ["There are no bases to join A and B on. Check that both pieces have sequence in them."]);
+});
+
 test("overlap assembly: an overlap that can't be measured is reported whatever the method", () => {
   // In-Fusion sets no minimum Tm. That must not switch off the check that an overlap's
   // sequence is known: the two questions are separate.

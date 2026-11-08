@@ -8,7 +8,6 @@
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
-import { TM_METHODS } from "../lib/primers.ts";
 import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -36,6 +35,7 @@ import {
   type Fragment,
   type Layout
 } from "../lib/cloning.ts";
+import { TM_METHODS } from "../lib/primers.ts";
 import { rangeLength, type Range, type SeqData } from "../lib/seqdata.ts";
 import { copyText } from "./inspector.ts";
 import { field, plural, rerender } from "./primerDialogs.ts";

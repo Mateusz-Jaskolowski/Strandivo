@@ -50,6 +50,12 @@ them, count a little more, still only as fixed words and ranges.
   collapsed. The result now names the join and lists where the other copies are, saying
   which are on the other strand. Copies across the origin of a circular product count, and
   capital or small letters make no difference.
+- **A piece too short to carry the whole overlap** no longer loses the difference. The
+  overlap used to be taken as the full length whether or not the pieces had that many bases
+  to share, which quietly cut the missing bases out of the product. The plan now joins on
+  the bases the pieces really share, keeps every base of both, and says the overlap came out
+  shorter than the method asks for. Where there are no bases to join on at all, it says so
+  and builds nothing.
 - **An overlap that can't be judged is now reported**, in both Gibson and In-Fusion: where
   the shared bases include anything other than A, C, G or T there is no telling whether
   they will anneal, and the plan says so instead of passing quietly.

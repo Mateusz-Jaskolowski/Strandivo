@@ -423,14 +423,35 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     const ampA = !!inputs[a].pcr;
     const ampB = !!inputs[b].pcr;
     designed.push(true);
-    lengths.push(ampA || ampB ? L : null);
+    // The overlap is cut from the neighbours' ends, so a piece shorter than its share of it
+    // can only give what it has. Record what the tails really carry, never what was asked
+    // for: joining on more bases than the pieces share eats sequence off the product.
+    let added: number | null = null;
     if (ampA && ampB && method.split && a !== b) {
       const half = Math.floor(L / 2);
       tails[b].forward = seqs[a].slice(-half);
       tails[a].reverse = reverseComplement(seqs[b].slice(0, L - half));
-    } else if (ampB && !(ampA && b === 0)) tails[b].forward = seqs[a].slice(-L);
-    else if (ampA) tails[a].reverse = reverseComplement(seqs[b].slice(0, L));
-    else problems.push(`${inputs[a].name} and ${inputs[b].name} don't overlap. Amplify one of them by PCR to add the overlap.`);
+      added = tails[b].forward.length + tails[a].reverse.length;
+    } else if (ampB && !(ampA && b === 0)) {
+      tails[b].forward = seqs[a].slice(-L);
+      added = tails[b].forward.length;
+    } else if (ampA) {
+      tails[a].reverse = reverseComplement(seqs[b].slice(0, L));
+      added = tails[a].reverse.length;
+    } else problems.push(`${inputs[a].name} and ${inputs[b].name} don't overlap. Amplify one of them by PCR to add the overlap.`);
+    // Nothing to join on is not a short overlap, it is not an assembly: a piece with no
+    // sequence in it leaves the two neighbours sharing nothing, and keeping every base of
+    // nothing is not a product. Say so and build none.
+    if (added === 0) {
+      problems.push(`There are no bases to join ${inputs[a].name} and ${inputs[b].name} on. Check that both pieces have sequence in them.`);
+      lengths.push(null);
+    } else {
+      lengths.push(added);
+      if (added !== null && added < L) {
+        const short = added < method.minOverlap ? `, shorter than the ${baseCount(method.minOverlap)} this method needs` : "";
+        problems.push(`${inputs[a].name} and ${inputs[b].name} are too short to carry the whole ${L} base overlap, so it can only be ${baseCount(added)}${short}. Lengthen the shorter piece, or join it some other way.`);
+      }
+    }
   }
 
   const pieces: AssemblyPlan["pieces"] = [];
@@ -471,9 +492,12 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     if (!x.bases) return;
     // Whether an overlap can be assessed at all is a separate question from whether it
     // meets a minimum, and it is asked of every method: In-Fusion sets no minimum, which
-    // must not switch off the check that the sequence is known.
+    // must not switch off the check that the sequence is known. There are two reasons a
+    // melting temperature can't be had, and saying the wrong one is worse than saying
+    // neither, so they are told apart here rather than reported as one.
     if (x.tm === null) {
-      problems.push(`The overlap between ${inputs[j].name} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
+      if (/[^ACGT]/.test(x.bases)) problems.push(`The overlap between ${inputs[j].name} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
+      else problems.push(`The overlap between ${inputs[j].name} and ${other} is ${baseCount(x.bases.length)}, too short to work out a melting temperature for.`);
       return;
     }
     if (method.minTm && x.tm < method.minTm) problems.push(`The overlap between ${inputs[j].name} and ${other} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
@@ -499,7 +523,7 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     // By construction the overlap is in the product it was cut from. If it is not, the plan
     // contradicts itself and must not be described as checked.
     if (!found.length) {
-      problems.push(`The ${x.bases.length} bases joining ${inputs[j].name} and ${other} aren't in the product this plan builds, so the plan doesn't hold together and shouldn't be relied on.`);
+      problems.push(`The ${baseCount(x.bases.length)} joining ${inputs[j].name} and ${other} ${x.bases.length === 1 ? "isn't" : "aren't"} in the product this plan builds, so the plan doesn't hold together and shouldn't be relied on.`);
       return;
     }
     if (found.length < 2) return;
@@ -507,7 +531,8 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     // that lists them all is a message nobody reads. Name the first few and the total.
     const shown = found.slice(0, 6).map(f => `${(f.start + 1).toLocaleString("en-GB")}${f.direct ? "" : " on the other strand"}`);
     const where = found.length > shown.length ? `${shown.join(", ")} and ${(found.length - shown.length).toLocaleString("en-GB")} more` : shown.join(", ");
-    problems.push(`The ${x.bases.length} bases joining ${inputs[j].name} and ${other} read the same in ${found.length.toLocaleString("en-GB")} places in the product, at ${where}, so more than one of them could pair with the join. An overlap is most dependable as the only match: move the join into sequence that isn't repeated.`);
+    const reads = x.bases.length === 1 ? "reads" : "read";
+    problems.push(`The ${baseCount(x.bases.length)} joining ${inputs[j].name} and ${other} ${reads} the same in ${found.length.toLocaleString("en-GB")} places in the product, at ${where}, so more than one of them could pair with the join. An overlap is most dependable as the only match: move the join into sequence that isn't repeated.`);
   });
   // The designed primers, where they bind in full on the product.
   const primers = pieces.flatMap(p => p.primers).flatMap(p => {
@@ -521,6 +546,9 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   notes.push(...reusedNotes(reused));
   return { pieces, joins: joinInfo, product: { ...data, primers: [...data.primers, ...primers] }, layout, problems, notes, reused };
 }
+
+/** "1 base", "20 bases": lengths appear in several messages and one of them read "1 bases". */
+const baseCount = (n: number) => `${n.toLocaleString("en-GB")} base${n === 1 ? "" : "s"}`;
 
 /** Where a stretch of bases reads the same again, and on which strand. */
 export interface OverlapMatch {

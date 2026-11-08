@@ -9,7 +9,8 @@
 
 import { h, toast } from "./ui/dom.ts";
 import { openDialog } from "./ui/modal.ts";
-import { openUsagePage, pickFiles } from "./platform.ts";
+import { canKeepFolders, openUsagePage, pickFiles } from "./platform.ts";
+import { shownPath } from "./webFiles.ts";
 import { basename } from "./lib/files.ts";
 import { WELCOME_VERSION, welcomeParts, type WelcomePart } from "./lib/welcome.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
@@ -67,7 +68,7 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
 
     const addFolder = async () => {
       const folder = await host.chooseFolder();
-      if (folder) folders.appendChild(h("li", { class: "sv-small", title: folder }, basename(folder) || folder));
+      if (folder) folders.appendChild(h("li", { class: "sv-small", title: shownPath(folder) }, basename(folder) || folder));
     };
     const importList = async () => {
       const files = await pickFiles("Primer list", ["txt", "tsv", "csv", "fasta", "fa"]);
@@ -98,7 +99,10 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
         section(
           "Your constructs",
           h("p", { class: "sv-small" }, "Home lists the plasmid files in folders you choose, with what each one carries. The files stay where they are."),
-          h("div", { class: "sv-welcome-actions" }, h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void addFolder() }, "Add a folder…")),
+          // Safari and Firefox can't keep a folder (src/home.ts).
+          canKeepFolders()
+            ? h("div", { class: "sv-welcome-actions" }, h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void addFolder() }, "Add a folder…"))
+            : h("p", { class: "sv-small sv-dim" }, "This browser can't keep folders: Home lists the files you open until you close the page. Chrome, Edge or the desktop app can list whole folders."),
           folders
         ),
       primers: () => {

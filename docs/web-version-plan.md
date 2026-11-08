@@ -1,7 +1,7 @@
 # Strandivo in a browser: plan
 
-Status: in progress (November 2026). Parts 1 (#4), 2 (#48) and 3 are built; 0.2.0 and the website,
-which the rest waited for, are out. Each part below is one branch and one PR. It came after the first public release (0.2.0) and the website (part 6 of
+Status: in progress (November 2026). Parts 1 (#4), 2 (#48), 3 (#49) and 4 are built; 0.2.0 and
+the website, which the rest waited for, are out. Each part below is one branch and one PR. It came after the first public release (0.2.0) and the website (part 6 of
 `docs/updates-feedback-usage-plan.md`). What is said here about browsers was read on
 5 November 2026; check it again before each part is built.
 
@@ -220,6 +220,27 @@ window closes, as Firefox asks the user.
 `src/readChecks.ts`, `src/mainWindow.ts`, `src/doc/document.ts`, `e2e/web.mjs`
 
 Can come before or after the first deployment; it only adds to Chrome and Edge.
+
+As built, where it differs from what follows: a folder's key is `web:<id>/<folder>` and a
+file in it `web:<id>/<folder>/<path>`, so Home shows the folder's name and a file's place
+in it without a lookup. A file picked or dropped from inside one of Home's folders gets
+the folder's key too (`resolve()` on the folder's handle), so it is one file however it
+was opened: one tab, one note, one set of remembered reads, and one permission prompt for
+a folder of reads. A folder the browser asks about again shows its files as last read,
+with "Allow access…" on the folder and its group in the list. A file's remembered reads
+that wait for permission, and a check's reads that can't be reached, are offered in a
+strip at the top of the file rather than under the list, as the file may open on another
+tab, and nothing is added until all can be, so the check's order and clones are kept;
+while they wait they stay remembered. A check whose sequence can't be reached uses the
+open tab of that name, or asks for the sequence and its reads in one picker. In a check
+file, keys in one folder are written as relative paths and other keys as bare names, so a
+check saved in Safari opens on the desktop when it sits beside its files. Elsewhere, Home
+lists the visit's files by name with no folders section, a note typed on Home isn't kept
+for them (the file's own Notes field shows), the welcome window's Your constructs says
+what Home says instead of offering Add a folder…, and the Reads tab's line shows whenever
+its reads are held only for the visit. Up to 2,000 files' handles are kept, the most
+recently used; folders' always. CI can't check the permission prompts, as the private
+file system's handles never ask.
 
 - **Folders in Chrome and Edge**: Add folder… uses `showDirectoryPicker`; the handle is
   kept in IndexedDB and the folder listed on Home under its own name. `listSequenceFiles`

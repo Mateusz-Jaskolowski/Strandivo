@@ -10,6 +10,7 @@ import "./doc/document.css";
 import "./mainWindow.css";
 
 import { h, icon, toast } from "./ui/dom.ts";
+import { choose } from "./ui/modal.ts";
 import { iconSvg, type IconName } from "./ui/icons.ts";
 import {
   closeWindow,
@@ -23,6 +24,7 @@ import {
   openLibrary,
   openProjectPage,
   openSettings,
+  pickFileKeys,
   readFile,
   setWindowTitle,
   showOpenDialog,
@@ -30,11 +32,11 @@ import {
   trapWebCore,
   type PageWindow
 } from "./platform.ts";
-import { isBrowserKey } from "./webFiles.ts";
+import { shownPath } from "./webFiles.ts";
 import { browserShortcut, shortcutHint } from "./lib/shortcuts.ts";
 import { appMenuButton } from "./views/appMenu.ts";
-import { basename, extension } from "./lib/files.ts";
-import { CHECK_EXTENSION, parseCheckFile, type ReadCheck } from "./lib/readCheck.ts";
+import { basename, extension, SEQUENCE_EXTENSIONS, TEXT_READ_EXTENSIONS, TRACE_EXTENSIONS } from "./lib/files.ts";
+import { CHECK_EXTENSION, matchByName, parseCheckFile, type ReadCheck } from "./lib/readCheck.ts";
 import type { SeqData } from "./lib/seqdata.ts";
 import { openDocument, type DocTab, type OpenSequence } from "./doc/document.ts";
 import { Home } from "./home.ts";
@@ -175,8 +177,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   function refreshTab(t: Tab) {
     const path = t.doc ? t.doc.path : t.path;
     t.name.textContent = t.doc ? t.doc.title : path ? basename(path) : "Untitled";
-    // A browser's key (src/webFiles.ts) means nothing to the user: only its name does.
-    t.el.title = path ? (isBrowserKey(path) ? basename(path) : path) : "Not saved yet";
+    // A browser's key (src/webFiles.ts) means nothing to the user: only its name and folder do.
+    t.el.title = path ? shownPath(path) : "Not saved yet";
     t.el.classList.toggle("sv-doctab-dirty", !!t.doc?.isDirty());
     if (t === active) refreshTitle();
   }
@@ -216,18 +218,15 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
 
   /** A check file: its sequence in a tab (the open one, if it is), with the check's reads. */
   async function openCheck(path: string) {
-    // Its paths lead nowhere from a browser's file (docs/web-version-plan.md, part 4).
-    if (isBrowserKey(path)) {
-      toast("Read checks open only in the desktop app for now. Open the sequence and add its reads.", "info", 8000);
-      return;
-    }
-    let check: ReadCheck;
+    let check: ReadCheck | null;
     try {
       check = parseCheckFile(new TextDecoder().decode(await readFile(path)), path);
     } catch (e) {
       toast(`Couldn't open ${basename(path)}: ${e instanceof Error ? e.message : e}`, "error", 8000);
       return;
     }
+    if (!isDesktop) check = await findCheckFiles(path, check);
+    if (!check) return;
     const existing = tabs.find(t => samePath(t.doc ? t.doc.path : t.path, check.reference));
     if (existing) {
       activate(existing);
@@ -241,6 +240,47 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     tabList.appendChild(t.el);
     activate(t);
     await load(t);
+  }
+
+  /**
+   * In a browser, a check's paths lead somewhere only inside one of Home's folders. Its
+   * sequence is otherwise the open tab of that name, or chosen with its reads and matched
+   * by name; reads still missing are asked for by the file's Reads tab. Null if cancelled.
+   */
+  async function findCheckFiles(path: string, check: ReadCheck): Promise<ReadCheck | null> {
+    if (await readFile(check.reference).then(() => true, () => false)) return check;
+    const name = basename(check.reference);
+    const named = tabs.find(t => {
+      const p = t.doc ? t.doc.path : t.path;
+      return !!p && basename(p) === name;
+    });
+    const namedPath = named && (named.doc ? named.doc.path : named.path);
+    if (namedPath) return { ...check, reference: namedPath };
+    const n = check.reads.length;
+    const go = await choose(
+      `Open “${basename(path)}”`,
+      `Choose ${name}${n ? ` and the ${n === 1 ? "read" : `${n} reads`} this check lists` : ""}. Your browser opens only files you choose; Strandivo matches them by name.`,
+      [
+        { label: "Cancel", value: false },
+        { label: "Choose files…", value: true, primary: true }
+      ],
+      false
+    );
+    if (!go) return null;
+    let picked: string[];
+    try {
+      picked = await pickFileKeys("Sequence and reads", [...SEQUENCE_EXTENSIONS, ...TRACE_EXTENSIONS, ...TEXT_READ_EXTENSIONS]);
+    } catch (e) {
+      toast(`Couldn't open: ${e instanceof Error ? e.message : e}`, "error", 6000);
+      return null;
+    }
+    if (!picked.length) return null;
+    const matched = matchByName(check, picked);
+    if (!picked.includes(matched.reference)) {
+      toast(`${name} wasn't among the files chosen, so the check can't be opened.`, "error", 8000);
+      return null;
+    }
+    return matched;
   }
 
   /** Opens a sequence made in the app in a new tab, unsaved. */
@@ -269,6 +309,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       return;
     }
     t.doc = doc;
+    if (doc.path) home.noteOpened(doc.path);
     // Its format, from the name; never the name itself. A product made in the app isn't counted.
     const data = doc.sequence?.().data;
     if (t.path) track("file_opened", { format: fileFormat(t.path), from: t.from, length: data && data.sequence.length / 1000, topology: data && (data.circular ? "circular" : "linear") });

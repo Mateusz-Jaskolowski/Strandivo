@@ -3,7 +3,9 @@
 
 // End-to-end check of the browser version in Chrome: that alignment and detection work
 // through the core compiled to WebAssembly, in its worker, with no test hooks standing in;
-// and opening, saving and dropping files, with and without the browser's file pickers.
+// opening, saving and dropping files, with and without the browser's file pickers; and
+// Home's folders, remembered reads and read checks, which last between visits only where
+// the browser gives handles.
 //
 // Serves dist-web (`npm run build:web`) and testdata/ (under /testdata/) with Node's
 // http, and drives headless Chrome through ChromeDriver over plain WebDriver, as
@@ -269,10 +271,82 @@ async function main(outDir) {
       await s.exec("window.__strandivo.showHome(); return Array.from(document.querySelectorAll('.sv-home-recent-name')).map(e => e.textContent).includes('pUC19-copy.gb') && Array.from(document.querySelectorAll('.sv-home-recent-dir')).every(e => !e.textContent.includes('web:'));")
     );
 
+    // --- Home's folders and remembered reads (Chrome and Edge) ---
+    // A folder in the page's private file system stands in for one the user picks; a read
+    // outside it for one picked on its own. Their handles are real, and kept in IndexedDB.
+    const made = await s.execAsync(`
+      (async () => {
+        const root = await navigator.storage.getDirectory();
+        const put = async (dir, name, url) => {
+          const out = await (await dir.getFileHandle(name, { create: true })).createWritable();
+          await out.write(await (await fetch(url)).arrayBuffer());
+          await out.close();
+          return dir.getFileHandle(name);
+        };
+        const lab = await root.getDirectoryHandle('Lab', { create: true });
+        await put(lab, 'pUC19.gb', '/testdata/e2e/pUC19-annotated.gb');
+        await put(lab, '.hidden.gb', '/testdata/e2e/pUC19-annotated.gb');
+        await put(await lab.getDirectoryHandle('plasmids', { create: true }), 'pIB2-SEC13-mEGFP.dna', '/testdata/snapgene/pIB2-SEC13-mEGFP.dna');
+        const sage = await put(await lab.getDirectoryHandle('reads', { create: true }), 'sage-sample.ab1', '/testdata/sanger/sage-sample.ab1');
+        const plate = await put(root, 'plate-bla.fasta', '/testdata/e2e/plate-bla.fasta');
+        window.showDirectoryPicker = async () => lab;
+        window.showOpenFilePicker = async () => [sage, plate];
+        window.showSaveFilePicker = async () => (await lab.getDirectoryHandle('reads')).getFileHandle('pUC19 reads.svcheck', { create: true });
+      })().then(() => done(true), e => done(String(e)));`);
+    await s.click("(//button[normalize-space()='Add folder…'])[1]");
+    const listed = (await s.waitFor("window.__strandivo.libraryNames().includes('pIB2-SEC13-mEGFP.dna')", 20000)) ? await s.exec("return window.__strandivo.libraryNames()") : [];
+    check("Add folder… lists the sequence files in a folder and its subfolders", made === true && listed.includes("pUC19.gb") && !listed.includes(".hidden.gb"), `${made}: ${listed.join(", ")}`);
+    check("Home shows the folder by its name, never its key", await s.exec("return document.querySelector('.sv-home-folder-name')?.textContent === 'Lab' && !document.querySelector('.sv-home').innerHTML.includes('web:')"));
+    await s.shot("06-folder");
+    const openFromHome = async name => {
+      await s.exec("window.__strandivo.showHome()");
+      await s.click(`//button[contains(@class,'sv-home-open') and normalize-space()='${name}']`);
+      return s.waitFor(`window.__strandivo.tabs().includes('${name}') && window.__strandivo.store`, 15000);
+    };
+    await openFromHome("pUC19.gb");
+    await s.exec("window.__strandivo.command('add-reads')");
+    check("Reads picked in the browser's picker are added", await s.waitFor(readsReady(7), 60000));
+    await s.exec("window.__strandivo.closeTab()");
+    await openFromHome("pUC19.gb");
+    await s.exec("window.__strandivo.setView('reads')");
+    check("They are remembered, and come back when the file opens again", await s.waitFor(readsReady(7), 60000));
+    await s.click("//button[normalize-space()='Save check…']");
+    const inLab = "return (async () => { let d = await navigator.storage.getDirectory(); const parts = arguments[0].split('/'); for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p); return (await (await d.getFileHandle(parts.at(-1))).getFile()).text(); })()";
+    const savedCheck = (await s.waitFor("Array.from(document.querySelectorAll('.ps-toast')).some(t => /Saved pUC19 reads.svcheck/.test(t.textContent))", 5000))
+      ? JSON.parse(await s.exec(inLab, "Lab/reads/pUC19 reads.svcheck"))
+      : null;
+    check(
+      "Save check… in the folder writes paths relative to it, and a read from elsewhere by name",
+      savedCheck?.reference === "../pUC19.gb" && savedCheck.reads.some(r => r.path === "sage-sample.ab1") && savedCheck.reads.some(r => r.path === "plate-bla.fasta"),
+      JSON.stringify(savedCheck)
+    );
+
+    // A later visit: the folder and the reads, through the handles kept in IndexedDB.
+    await s.go(`${base}/`);
+    check("After a reload, Home lists the folder again", await s.waitFor("window.__strandivo?.libraryNames().includes('pUC19.gb')", 20000));
+    await openFromHome("pUC19.gb");
+    await s.exec("window.__strandivo.setView('reads')");
+    check("The file's reads come back too", await s.waitFor(readsReady(7), 60000));
+    const checkOpened = await s.execAsync(`
+      (async () => {
+        const root = await navigator.storage.getDirectory();
+        const reads = await (await root.getDirectoryHandle('Lab')).getDirectoryHandle('reads');
+        window.showOpenFilePicker = async () => [await reads.getFileHandle('pUC19 reads.svcheck')];
+        window.__strandivo.menu('open');
+      })().then(() => done(true), e => done(String(e)));`);
+    const askedForRead = "Array.from(document.querySelectorAll('.sv-reads-offer button')).some(b => /^Add the read this check lists/.test(b.textContent))";
+    check("A check in the folder opens with its reads there, and asks for one from elsewhere", checkOpened === true && (await s.waitFor(askedForRead, 20000)), String(checkOpened));
+    await s.execAsync("navigator.storage.getDirectory().then(r => r.getFileHandle('plate-bla.fasta')).then(f => { window.showOpenFilePicker = async () => [f]; done(true); }, e => done(String(e)));");
+    await s.click("//*[contains(@class,'sv-reads-offer')]//button[starts-with(normalize-space(),'Add the read')]");
+    const offerGone = "!document.querySelector('.sv-reads-offer:not([hidden])')";
+    check("The read chosen is matched by name and added with the others", await s.waitFor(`${offerGone} && ${readsReady(7)}`, 60000));
+    await s.shot("07-check-in-folder");
+
     // --- a browser without them (Safari and Firefox): a file input, and downloads ---
     await s.exec(`
       window.showOpenFilePicker = undefined;
       window.showSaveFilePicker = undefined;
+      window.showDirectoryPicker = undefined;
       window.__e2eDownloads = [];
       HTMLAnchorElement.prototype.click = function () { if (this.download) window.__e2eDownloads.push({ name: this.download, href: this.href }); };
       // Headless Chrome can't show a file dialog and cancels it at once, which the app takes
@@ -296,13 +370,19 @@ async function main(outDir) {
     await s.exec("window.__strandivo.command('save')");
     await s.waitFor("window.__e2eDownloads.length === 2", 5000);
     check("The second doesn't say it again", (await s.exec(told)) === 1);
-    await s.shot("05-downloaded");
+    await s.shot("08-downloaded");
+    await s.exec("window.__strandivo.showHome()");
+    check(
+      "Without folders, Home lists the files opened during the visit, and says why",
+      await s.waitFor("/can't keep folders/.test(document.querySelector('.sv-home-note-line')?.textContent) && window.__strandivo.libraryNames().includes('pIB2-SEC13-mEGFP.dna') && document.querySelector('.sv-home-side section').hidden", 10000)
+    );
 
     // --- dropping files ---
+    // A file of that name, from a URL or with the text passed in.
     const drop = (file, url) => `
       (async () => {
         const dt = new DataTransfer();
-        dt.items.add(new File([await (await fetch('${url}')).arrayBuffer()], '${file}'));
+        dt.items.add(new File([${url ? `await (await fetch('${url}')).arrayBuffer()` : "arguments[0]"}], '${file}'));
         const fire = type => document.body.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
         fire('dragenter');
         window.__e2eOverlay = document.querySelector('.ps-drop-overlay').classList.contains('ps-visible');
@@ -314,13 +394,37 @@ async function main(outDir) {
     check("A file dragged over the window shows where it will go", overlay === true, String(overlay));
     check("A file dropped on Home opens in a tab", await s.waitFor("window.__strandivo.tabs().includes('dropped.gb') && window.__strandivo.store", 15000));
     await s.execAsync(drop("sage-sample.ab1", "/testdata/sanger/sage-sample.ab1"));
-    check("A trace dropped on a file is added to its reads", await s.waitFor("document.querySelectorAll('.sv-read-card').length === 1 && !document.querySelector('.sv-reads.sv-busy')", 20000));
-    await s.execAsync(drop("x reads.svcheck", "/testdata/e2e/bla-check.fasta"));
-    check(
-      "A read check dropped in a browser says where it opens",
-      await s.waitFor("Array.from(document.querySelectorAll('.ps-toast')).some(t => /Read checks open only in the desktop app/.test(t.textContent))", 3000)
-    );
-    await s.shot("06-dropped");
+    check("A trace dropped on a file is added to its reads", await s.waitFor(readsReady(1), 20000));
+    check("Held only for the visit, the reads aren't remembered, and the Reads tab says so", await s.exec("return /can't remember reads/.test(document.querySelector('.sv-reads-forgets')?.textContent)"));
+    const downloads = await s.exec("return window.__e2eDownloads.length");
+    await s.click("//button[normalize-space()='Save check…']");
+    const checkText = (await s.waitFor(`window.__e2eDownloads.length === ${downloads + 1}`, 5000))
+      ? await s.execAsync("fetch(window.__e2eDownloads.at(-1).href).then(r => r.text()).then(done, e => done(String(e)));")
+      : "";
+    const downloadedCheck = (() => {
+      try {
+        return JSON.parse(checkText);
+      } catch {
+        return null;
+      }
+    })();
+    check("Save check… downloads a check naming the files beside it", downloadedCheck?.reference === "dropped.gb" && downloadedCheck.reads[0]?.path === "sage-sample.ab1", checkText.slice(0, 200));
+    await s.shot("09-dropped");
+    // Opened again, its sequence is the open tab of that name, and its read is asked for.
+    const sage = path.join(testdata, "sanger", "sage-sample.ab1");
+    await s.execAsync(drop("dropped reads.svcheck"), checkText);
+    check("A check opened there finds its sequence among the open files, and asks for its reads", await s.waitFor(askedForRead, 10000));
+    await s.click("//*[contains(@class,'sv-reads-offer')]//button[starts-with(normalize-space(),'Add the read')]");
+    if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", sage);
+    check("The read chosen is matched by name", await s.waitFor(`${offerGone} && ${readsReady(1)}`, 20000));
+    // A check whose sequence isn't open asks for its files first.
+    await s.exec("window.__strandivo.showHome()");
+    await s.execAsync(drop("pUC19 reads.svcheck"), JSON.stringify({ strandivo: "read check", version: 1, reference: "pUC19-annotated.gb", reads: [{ path: "sage-sample.ab1", clone: null }] }));
+    check("A check whose sequence isn't open asks for its files", await s.waitFor("/Choose pUC19-annotated.gb and the read this check lists/.test(document.querySelector('.ps-modal')?.textContent)", 10000));
+    await s.shot("10-check-files");
+    await s.click("//*[contains(@class,'ps-modal-buttons')]//button[normalize-space()='Choose files…']");
+    if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
+    check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
   } catch (e) {
     check("The browser check ran to the end", false, e?.stack || e);
     await s?.shot("99-crash").catch(() => {});

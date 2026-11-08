@@ -142,12 +142,20 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   in GenBank COMMENT lines (`src/lib/labinfo.ts`).
 - **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
   working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in
-  IndexedDB, so it lasts between visits) and `upload:<n>/<name>` for one without (its
-  bytes in memory, for the visit). `readFile`, `saveText` and `chooseSavePath` in
-  `src/platform.ts` resolve them; anything else is a URL. Only a handle can be written
-  over (`canSaveInPlace`), so elsewhere Save is Save As and a save is a download. Show a
-  key's name (`basename`), never the key. Reads get none yet, so in a browser they are
-  neither remembered nor saved in a check, and a check file says it opens on the desktop.
+  IndexedDB, so it lasts between visits), `web:<id>/<folder>/<path>` for one in a folder
+  added to Home (the folder's handle is kept; a file picked from inside it gets this key
+  too, so it is one file wherever it was opened from), and `upload:<n>/<name>` for one
+  without a handle (its bytes in memory, for the visit; `keyLasts` is false). `readFile`,
+  `saveText`, `chooseSavePath` and `listSequenceFiles` in `src/platform.ts` resolve them;
+  anything else is a URL. Only a handle can be written over (`canSaveInPlace`), so
+  elsewhere Save is Save As and a save is a download. Show a key with `shownPath` (its
+  place in its folder, or its name), never the key itself. Nothing that lasts (recent
+  files, remembered reads, Home's cache and notes) keeps an `upload:` key. A browser may
+  ask again before a kept handle is read, and lets a page ask only from a click, so Home
+  offers "Allow access…" for such a folder and a file's remembered reads wait behind a
+  strip (`filesNeedingAccess`); code that reads kept keys without a click must check
+  first. In a check file, keys in one folder are relative paths and other keys are bare
+  names, and a check's files that can't be reached are chosen and matched by name.
 - **Styles**: design tokens are CSS variables in `src/styles.css`; document styles are
   `sv-*` classes in `src/doc/document.css`, the app bar's and Home's in `src/mainWindow.css`.
   Older `ps-*` classes remain for the Settings and Info screens. Dark tokens exist but no
@@ -200,8 +208,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   defines `window.__strandivoAlign` (returning `{ reads, clones }` as the core does), or
   in the browser version (`npm run dev:web`), whose worker aligns them for real;
   `node e2e/web.mjs --serve` serves `dist-web` and `testdata/` as its e2e does. Home
-  lists folders only if the page defines `window.__strandivoListFolder` (see
-  `src/platform.ts`); in the app Rust does both. A
+  lists folders if the page defines `window.__strandivoListFolder` (see
+  `src/platform.ts`), and in Chrome and Edge through the folder's handle; in the app Rust
+  does both. A
   UniProt is asked for real unless the page defines `window.__strandivoUniprot`, which e2e
   tests do, in the app too. A
   right-click menu is drawn in the page there, or handed to `window.__strandivoMenu` if
@@ -220,8 +229,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   the file in the current tab (store, `command()`, adding reads, saving and `saveCheck`
   without a file dialog). Then `e2e/web.mjs` clicks through the browser version in
   headless Chrome with no hooks, so alignment and detection run in the worker, and checks
-  the worker answers after a panic (`trapCore`), then its menu, keys, and opening, saving
-  and dropping files. Its file pickers are stood in for with files in the page's private
+  the worker answers after a panic (`trapCore`), then its menu, keys, opening, saving
+  and dropping files, Home's folders, and reads and checks remembered across a reload. Its file pickers are stood in for with files in the page's private
   file system, whose handles are real, and then taken away to check Safari's and
   Firefox's way (a file input, downloads); its screenshots and report go in a `web`
   folder beside the app's.

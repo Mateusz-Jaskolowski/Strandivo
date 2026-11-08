@@ -33,6 +33,8 @@ export interface ReadsActions {
   legacyFeatures(): Feature[];
   /** Save check…: the reads, their clones and settings in a file next to the reads. */
   saveCheck(): void;
+  /** Whether the reads won't be remembered, as the browser holds them only for the visit. */
+  forgetsReads(): boolean;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
@@ -724,6 +726,7 @@ export class ReadsView {
     const cards = groups.map(g => (g.reads.length === 1 ? this.readCard(g.reads[0]) : this.cloneCard(g.key, g.reads)));
     this.listEl.replaceChildren(...cards);
     this.listFoot.replaceChildren(
+      this.actions.forgetsReads() ? h("p", { class: "sv-reads-forgets" }, "This browser can't remember reads. Save check… to keep them with the file.") : "",
       h(
         "div",
         { class: "sv-reads-list-actions" },

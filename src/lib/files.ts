@@ -44,6 +44,9 @@ export const SEQUENCE_EXTENSIONS = [
 /** What Open… offers: the shell's `OPEN_EXTENSIONS` (src-tauri/src/lib.rs), for the browser's picker. */
 export const OPEN_EXTENSIONS = [...SEQUENCE_EXTENSIONS, "ab1", "abi", "svcheck"];
 
+/** What Home lists from a folder: the shell's `LIBRARY_EXTENSIONS`, for a browser's folders. */
+export const LIBRARY_EXTENSIONS = ["dna", "gb", "gbk", "gbff", "genbank", "ape", "fa", "fasta", "fas", "fna", "ffn"];
+
 export const isTraceFile = (path: string) => TRACE_EXTENSIONS.includes(extension(path));
 
 /** Formats we can write. */

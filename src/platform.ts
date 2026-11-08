@@ -11,7 +11,24 @@ import type { FeedbackReport, SystemInfo } from "./lib/feedback.ts";
 import { recordError } from "./feedback.ts";
 import type { UsageEvent } from "./lib/usage.ts";
 import { basename, OPEN_EXTENSIONS } from "./lib/files.ts";
-import { droppedKeys, isBrowserKey, isHandleKey, pickToOpen, pickToSave, pickWithInput, readKey, saveKey } from "./webFiles.ts";
+import {
+  allowFolder as allowFolderKey,
+  canPickFolders,
+  droppedKeys,
+  folderAccess as folderKeyAccess,
+  isBrowserKey,
+  isHandleKey,
+  listFolderKey,
+  needingAccess,
+  pickFolderKey,
+  pickToOpen,
+  pickToSave,
+  pickWithInput,
+  readKey,
+  requestAccess,
+  saveKey,
+  uploadInfo
+} from "./webFiles.ts";
 
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -75,17 +92,48 @@ export interface ListedFile {
   modified: number;
 }
 
+const listHook = () => (window as unknown as { __strandivoListFolder?: (f: string) => Promise<ListedFile[]> }).__strandivoListFolder;
+
 /** Sequence files in a folder and its subfolders (the construct library). */
 export async function listSequenceFiles(folder: string): Promise<ListedFile[]> {
   // In a browser, UI tests can supply a listing.
-  const testList = (window as unknown as { __strandivoListFolder?: (f: string) => Promise<ListedFile[]> }).__strandivoListFolder;
+  const testList = listHook();
   if (!isDesktop && testList) return testList(folder);
+  // A folder the browser gave a handle to (src/webFiles.ts).
+  if (!isDesktop && isHandleKey(folder)) return listFolderKey(folder);
   return invoke<ListedFile[]>("list_sequence_files", { folder });
 }
 
-/** Lets the user pick a folder; null if cancelled. */
+/** Whether Home can keep folders: on the desktop, and in browsers that give a folder's handle (Chrome and Edge). */
+export const canKeepFolders = () => isDesktop || canPickFolders() || !!listHook();
+
+/**
+ * Whether Home can read a folder now. In a browser it may want to ask first, which it
+ * allows only after a click (`allowFolder`); "gone" is a folder it no longer has.
+ */
+export async function folderAccess(folder: string): Promise<"granted" | "ask" | "gone"> {
+  return !isDesktop && isHandleKey(folder) ? folderKeyAccess(folder) : "granted";
+}
+
+/** Asks the browser for a folder's access, from a click; whether it was given. */
+export async function allowFolder(folder: string): Promise<boolean> {
+  return !isDesktop && isHandleKey(folder) ? allowFolderKey(folder) : true;
+}
+
+/** Files opened during this visit, listed on Home where a browser can't keep folders. */
+export function listOpened(paths: string[]): ListedFile[] {
+  return paths.map(path => ({ path, ...(uploadInfo(path) ?? { size: 0, modified: 0 }) }));
+}
+
+/** Of these files, those the browser asks about before they are read; none on the desktop. */
+export const filesNeedingAccess = (paths: string[]) => (isDesktop ? Promise.resolve([]) : needingAccess(paths));
+
+/** Asks the browser for access to these files, from a click; those still not allowed. */
+export const requestFileAccess = (paths: string[]) => (isDesktop ? Promise.resolve([]) : requestAccess(paths));
+
+/** Lets the user pick a folder; null if cancelled. In a browser, its key (src/webFiles.ts). */
 export async function pickFolder(title: string): Promise<string | null> {
-  if (!isDesktop) return null;
+  if (!isDesktop) return pickFolderKey();
   const { open } = await import("@tauri-apps/plugin-dialog");
   const picked = await open({ title, directory: true, multiple: false });
   return typeof picked === "string" ? picked : null;
@@ -530,13 +578,16 @@ export async function onAppDataChanged(name: AppData, fn: () => void): Promise<(
 
 export interface PickedFile {
   name: string;
-  /** Full path in the desktop app; absent in a browser. */
+  /** Full path in the desktop app, a key in a browser if asked to `keep` (or else none). */
   path?: string;
   bytes: Uint8Array;
 }
 
-/** Lets the user pick files to read (sequencing reads). */
-export async function pickFiles(title: string, extensions: string[]): Promise<PickedFile[]> {
+/**
+ * Lets the user pick files to read. `keep`: in a browser too, each gets a path (a key,
+ * src/webFiles.ts) to read it by again, as reads need to be remembered and saved in checks.
+ */
+export async function pickFiles(title: string, extensions: string[], keep = false): Promise<PickedFile[]> {
   if (isDesktop) {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const picked = await open({ title, multiple: true, directory: false, filters: [{ name: title, extensions }] });
@@ -549,9 +600,16 @@ export async function pickFiles(title: string, extensions: string[]): Promise<Pi
     }
     return out;
   }
+  if (keep) {
+    const keys = await pickToOpen(title, extensions);
+    return Promise.all(keys.map(async key => ({ name: basename(key), path: key, bytes: await readFile(key) })));
+  }
   const files = await pickWithInput(extensions, true);
   return Promise.all(files.map(async f => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
 }
+
+/** In a browser: lets the user pick files, and gives their keys (src/webFiles.ts). */
+export const pickFileKeys = (title: string, extensions: string[]) => pickToOpen(title, extensions);
 
 /**
  * Asks where to save; returns null if cancelled. In a browser: the browser's save dialog

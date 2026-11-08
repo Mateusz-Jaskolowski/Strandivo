@@ -187,6 +187,13 @@ test("Gibson: two PCR pieces share the overlap's halves; existing overlaps are u
   assert.equal(asIs.product!.sequence, x + y.slice(25));
   assert.equal(asIs.joins[0].designed, false);
   assert.equal(asIs.pieces.flatMap(p => p.primers).length, 0);
+  // Reusing shared bases keeps one copy, which is only one of the two molecules that fit.
+  assert.equal(asIs.reused.length, 1);
+  assert.deepEqual(
+    { merged: asIs.reused[0].merged, kept: asIs.reused[0].kept },
+    { merged: x.length + y.length - 25, kept: x.length + y.length }
+  );
+  assert.match(asIs.notes[0], /keeps one copy/);
   // Without overlaps or PCR, nothing joins.
   const none = planAssembly([{ name: "x", fragment: wholeFragment(doc("x", x, false)) }, { name: "z", fragment: wholeFragment(doc("z", filler(300, 15), false)) }], GIBSON);
   assert.equal(none.product, null);
@@ -576,6 +583,18 @@ test("overlap assembly: the overlap Tm is measured by the method its threshold w
     assert.ok(Math.abs(planFor(wallacePasses, m, 41).joins[0].tm! - meltingTemp(wallacePasses, { ...DEFAULT_TM, method: m })!) < 0.05);
   }
 
+  // An overlap whose Tm can't be worked out is reported, not quietly skipped.
+  const n = filler(200, 43) + "ATGCNNNNATGCATGCATGCATGC";
+  const withN = planAssembly(
+    [
+      { name: "A", fragment: wholeFragment(doc("A", n, false)) },
+      { name: "B", fragment: wholeFragment(doc("B", "ATGCNNNNATGCATGCATGCATGC" + filler(200, 44), false)) }
+    ],
+    GIBSON,
+    false
+  );
+  assert.equal(withN.joins[0].tm, null);
+  assert.match(withN.problems.join(" "), /aren't A, C, G or T/);
 });
 
 test("Golden Gate: overhangs set the order and orientation of the parts", () => {

@@ -30,6 +30,13 @@ them, count a little more, still only as fixed words and ranges.
   sequence is and how long alignment takes, and three choices in Settings. Each view is
   counted once each time the app opens, not at every switch. The Privacy page lists every
   event and what it carries.
+- **Gibson and In-Fusion say when two pieces already share their overlap**: where one piece
+  ends with the bases the next one starts with, they are joined on those bases and the
+  product keeps one copy. That is usually what you want, but not when each piece was meant
+  to carry its own copy of a linker or a tag, so the result now says so and gives both
+  lengths. Keeping both copies can't be done by moving the overlap around — two copies in
+  a row give the join two places to land — so it says to put both copies inside one piece
+  and to put the join past them, somewhere the sequence occurs only once.
 - **Overlap melting temperatures in Gibson** are now worked out the way the 48 °C guideline
   they are checked against was, by the Wallace rule, and the result says so. They no longer
   change with the method chosen in Settings, which is for the temperatures shown elsewhere.

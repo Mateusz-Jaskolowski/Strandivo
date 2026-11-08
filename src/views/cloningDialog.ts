@@ -428,6 +428,7 @@ export function openCloningDialog(ctx: DocContext) {
     }
     const plan = planAssembly(inputs, method === "gibson" ? GIBSON : IN_FUSION, true);
     out.problems = plan.problems;
+    out.notes.push(...plan.notes);
     out.primers = plan.pieces.flatMap(p => p.primers);
     if (plan.product && plan.layout) {
       const label = method === "gibson" ? "Gibson assembly" : "In-Fusion cloning";

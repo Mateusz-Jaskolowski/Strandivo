@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { compatible, cutsFor, digest, findOverlap, flip, fragmentWith, goldenGate, GIBSON, IN_FUSION, largest, ligateInsert, planAssembly, selfLigates, wholeFragment } from "./cloning.ts";
+import { compatible, cutsFor, digest, findOverlap, flip, fragmentWith, goldenGate, GIBSON, IN_FUSION, largest, ligateInsert, planAssembly, selfLigates, wholeFragment, type OverlapMethod } from "./cloning.ts";
 import { DEFAULT_TM, meltingTemp, type TmMethod } from "./primers.ts";
 import { regionsOf, withRegions } from "./regions.ts";
 import { featureBases, reverseComplement, setOrigin, type SeqData, type SeqFeature } from "./seqdata.ts";
@@ -194,6 +194,108 @@ test("Gibson: two PCR pieces share the overlap's halves; existing overlaps are u
   assert.equal(findOverlap("AAAACCCCGGGG", "CCGGGGTTTT", 4), 6);
 });
 
+test("overlap assembly: a repeat shared by two neighbours is never merged in silence", () => {
+  // A Gly-Ser linker at the end of one part and the start of the next. Sequence alone
+  // can't say whether that is one shared stretch or one copy in each part, so the plan
+  // has to say which molecule it built and what the other one would be.
+  const linker = "GGTGGCGGTAGCGGTGGCGG"; // 20, as both parts would legitimately carry it
+  const a = filler(300, 31) + linker;
+  const b = linker + filler(250, 32);
+  const docA = doc("A", a, false);
+  const docB = doc("B", b, false);
+  const plan = planAssembly(
+    [
+      { name: "A", fragment: wholeFragment(docA) },
+      { name: "B", fragment: wholeFragment(docB) }
+    ],
+    GIBSON,
+    false
+  );
+  assert.equal(plan.product!.sequence.length, a.length + b.length - linker.length);
+  assert.equal(plan.joins[0].designed, false);
+  assert.deepEqual(plan.reused.map(r => [r.left, r.right, r.bases.length, r.merged, r.kept]), [["A", "B", 20, a.length + b.length - 20, a.length + b.length]]);
+  assert.equal(plan.notes.length, 1);
+  assert.match(plan.notes[0], /keeps one copy/);
+  assert.match(plan.notes[0], new RegExp(String(a.length + b.length)));
+  // It is not an error: a plan that says what it did still produces its product.
+  assert.deepEqual(plan.problems, []);
+
+  // The note tells the user what to do, so check that doing it works rather than checking
+  // the wording — and check it under both methods, since the overlap is split across the
+  // junction in one and taken whole from one piece's end in the other.
+  const oneCopyEach = a + b; // what "a copy in each part" means, base for base
+  const rest = filler(250, 32);
+  const twoPieces = (left: string, right: string, method: OverlapMethod) => {
+    const dl = doc("A", left, false);
+    const dr = doc("B", right, false);
+    return planAssembly(
+      [
+        { name: "A", fragment: wholeFragment(dl), pcr: { template: dl, range: { start: 0, end: left.length - 1 } } },
+        { name: "B", fragment: wholeFragment(dr), pcr: { template: dr, range: { start: 0, end: right.length - 1 } } }
+      ],
+      method,
+      false
+    );
+  };
+  // Stepping one base at a time, because copies of a tandem repeat overlap each other and
+  // split() or a global regex would skip the second one — the very case this is about.
+  const occurrences = (haystack: string, needle: string) => {
+    let n = 0;
+    for (let i = haystack.indexOf(needle); i >= 0; i = haystack.indexOf(needle, i + 1)) n++;
+    return n;
+  };
+
+  // Both copies inside one piece AND the join past them, in sequence that occurs once.
+  // Counted on the product, not on a piece: Gibson splits the overlap across the junction
+  // so it lies in neither piece whole, while In-Fusion takes it from one piece's end.
+  for (const method of [GIBSON, IN_FUSION]) {
+    const left = filler(300, 31) + linker + linker + rest.slice(0, 40);
+    const fixed = twoPieces(left, rest.slice(40), method);
+    assert.equal(fixed.product!.sequence, oneCopyEach, "following the note's advice should build the molecule it describes");
+    assert.equal(fixed.joins[0].designed, true);
+    assert.equal(occurrences(fixed.product!.sequence, fixed.joins[0].bases), 1, "the overlap has to fall in sequence that occurs once");
+    assert.deepEqual(fixed.notes, [], "with the repeat off the junction there is nothing left to warn about");
+  }
+
+  // Grouping the copies without moving the join is NOT enough, which is why the note says
+  // more than "put them in one piece". The length comes out right either way, so length is
+  // no test of it: In-Fusion takes its overlap whole from the end of the piece, and the
+  // piece ends in a tandem repeat, so that overlap occurs twice and the join has two
+  // registers again. Nothing reports that yet; the note is all there is.
+  const groupedOnly = filler(300, 31) + linker + linker;
+  const stillRepeated = twoPieces(groupedOnly, rest, IN_FUSION);
+  assert.equal(stillRepeated.product!.sequence, oneCopyEach, "the length is right, which is exactly what makes this one hard to see");
+  assert.equal(occurrences(stillRepeated.product!.sequence, stillRepeated.joins[0].bases), 2, "In-Fusion's overlap still falls inside the repeat");
+  assert.equal(occurrences(groupedOnly, stillRepeated.joins[0].bases), 2, "and both copies are in the piece the overlap was taken from");
+  assert.deepEqual(stillRepeated.problems, [], "known gap: a repeated overlap is not reported");
+  // Gibson avoids it here only because a split overlap is half of each neighbour, so it is
+  // in neither input region — though it IS in both finished amplicons, which is the pairing
+  // the design intends. Geometry, not a check.
+  const split = twoPieces(groupedOnly, rest, GIBSON);
+  assert.equal(occurrences(split.product!.sequence, split.joins[0].bases), 1);
+  assert.equal(occurrences(groupedOnly, split.joins[0].bases), 0, "not in the input region");
+  assert.deepEqual(
+    split.pieces.map(x => occurrences(x.fragment.data.sequence, split.joins[0].bases)),
+    [1, 1],
+    "but in both amplicons once the tails are on"
+  );
+  assert.deepEqual(split.problems, []);
+
+  // And the advice the first version of this note gave — trim the shared bases from one
+  // piece and let the primers add the overlap — does not work: a designed overlap is built
+  // from bases the neighbours already have, so it adds none and the product is unchanged.
+  const trimmed = planAssembly(
+    [
+      { name: "A", fragment: wholeFragment(docA, { start: 0, end: a.length - 1 - linker.length }), pcr: { template: docA, range: { start: 0, end: a.length - 1 - linker.length } } },
+      { name: "B", fragment: wholeFragment(docB), pcr: { template: docB, range: { start: 0, end: b.length - 1 } } }
+    ],
+    GIBSON,
+    false
+  );
+  assert.equal(trimmed.product!.sequence.length, a.length + b.length - linker.length, "trimming does not recover the second copy");
+  assert.notEqual(trimmed.product!.sequence, oneCopyEach);
+});
+
 test("overlap assembly: an overlap that can't be measured is reported whatever the method", () => {
   // In-Fusion sets no minimum Tm. That must not switch off the check that an overlap's
   // sequence is known: the two questions are separate.
@@ -219,6 +321,27 @@ test("overlap assembly: an overlap that can't be measured is reported whatever t
   );
   assert.equal(ring.joins.length, 2);
   assert.match(ring.problems.join(" "), /no telling whether it will anneal/);
+});
+
+test("overlap assembly: a plan with no product reports no product lengths", () => {
+  const linker = "GGTGGCGGTAGCGGTGGCGG";
+  const p = planAssembly(
+    [
+      { name: "A", fragment: wholeFragment(doc("A", filler(300, 31) + linker, false)) },
+      { name: "B", fragment: wholeFragment(doc("B", linker + filler(250, 32), false)) },
+      { name: "C", fragment: wholeFragment(doc("C", filler(300, 58), false)) }
+    ],
+    GIBSON,
+    false
+  );
+  assert.equal(p.product, null);
+  // The reused join is still real and still worth saying; its lengths are not known.
+  assert.deepEqual(p.reused.map(r => [r.bases.length, r.merged, r.kept]), [[20, null, null]]);
+  assert.equal(p.notes.length, 1);
+  assert.doesNotMatch(p.notes[0], /\(\d+ bp\)/, "no length should be quoted when none was worked out");
+  // Nothing was built, so the note has to talk about what would happen, not what did.
+  assert.match(p.notes[0], /would be joined/);
+  assert.doesNotMatch(p.notes[0], /were joined/);
 });
 
 test("overlap assembly: the overlap Tm is measured by the method its threshold was set for", () => {

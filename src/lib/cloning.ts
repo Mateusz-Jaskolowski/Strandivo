@@ -359,6 +359,24 @@ export interface AssemblyJoin {
   designed: boolean;
 }
 
+/**
+ * A join taken from bases the two neighbours already share. Sequence alone can't say
+ * whether those bases are one shared stretch or one copy in each piece — a linker or a tag
+ * at the end of one part and the start of the next looks exactly the same — so every one of
+ * these is reported with both lengths and the user decides.
+ */
+export interface ReusedOverlap {
+  /** Index of the piece on the left of the join. */
+  index: number;
+  left: string;
+  right: string;
+  bases: string;
+  /** Length of the product as built, keeping one copy; null when no product was built. */
+  merged: number | null;
+  /** Length it would have with both copies kept; null when no product was built. */
+  kept: number | null;
+}
+
 export interface AssemblyPlan {
   /** Each piece as it goes into the reaction (PCR pieces with their tails), with its primers. */
   pieces: { name: string; fragment: Fragment; primers: AssemblyPrimer[] }[];
@@ -367,6 +385,10 @@ export interface AssemblyPlan {
   product: SeqData | null;
   layout: Layout | null;
   problems: string[];
+  /** Worth reading before ordering, but not wrong: reused overlaps, mostly. */
+  notes: string[];
+  /** Joins built on bases the pieces already shared, in case a view wants to offer a choice. */
+  reused: ReusedOverlap[];
 }
 
 /**
@@ -375,6 +397,8 @@ export interface AssemblyPlan {
  */
 export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, circular = true, design: DesignOptions = DEFAULT_DESIGN): AssemblyPlan {
   const problems: string[] = [];
+  const notes: string[] = [];
+  const reused: ReusedOverlap[] = [];
   const m = inputs.length;
   const prepared = inputs.map(i => {
     const f = assemblyBases(i.fragment);
@@ -392,6 +416,7 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     if (found) {
       lengths.push(found);
       designed.push(false);
+      reused.push({ index: a, left: inputs[a].name, right: inputs[b].name, bases: seqs[a].slice(-found), merged: null, kept: null });
       continue;
     }
     const L = method.overlap;
@@ -455,7 +480,8 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   });
 
   if (lengths.some(L => L === null) || pieces.some((p, i) => inputs[i].pcr && !p.primers.length)) {
-    return { pieces, joins: joinInfo, product: null, layout: null, problems };
+    // No product, so no lengths to quote, but a reused overlap is still worth saying.
+    return { pieces, joins: joinInfo, product: null, layout: null, problems, notes: [...notes, ...reusedNotes(reused)], reused };
   }
   const { data, layout } = joinFragments(
     pieces.map(p => p.fragment),
@@ -467,7 +493,40 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     const site = findBindingSites(p.bases, data.sequence, circular).find(s => s.strand === p.strand && s.length === p.bases.length && !s.mismatches && !s.insertions && !s.deletions);
     return site ? [{ id: newId("p"), name: p.name, start: site.start, end: site.end, strand: p.strand, bases: p.bases.toUpperCase(), notes: {}, raw: {} }] : [];
   });
-  return { pieces, joins: joinInfo, product: { ...data, primers: [...data.primers, ...primers] }, layout, problems };
+  for (const r of reused) {
+    r.merged = data.sequence.length;
+    r.kept = data.sequence.length + r.bases.length;
+  }
+  notes.push(...reusedNotes(reused));
+  return { pieces, joins: joinInfo, product: { ...data, primers: [...data.primers, ...primers] }, layout, problems, notes, reused };
+}
+
+/**
+ * Joining on bases the pieces already share keeps one copy of them, and two different
+ * molecules fit that sequence. Say which one was built and what the other would be.
+ *
+ * The other one can't be had by trimming the shared bases off a piece and letting the
+ * primers put an overlap back: a designed overlap is made from bases the neighbours
+ * already have, so it adds nothing and the product comes out the same length.
+ *
+ * Nor is it enough to group both copies into one piece. The overlap is what has to be
+ * unique, and where it isn't split across the junction (In-Fusion) it is taken whole from
+ * one piece's end, so a piece ending in a tandem repeat hands the join an overlap that
+ * occurs twice inside it. The copies have to be grouped *and* the join moved past them,
+ * into sequence that occurs once. `overlapMatches` reports it when they aren't; this note
+ * says the one thing that check can't, which of the two molecules was built.
+ */
+function reusedNotes(reused: ReusedOverlap[]): string[] {
+  return reused.map(r => {
+    // merged and kept are null when no product was built, so the note turns hypothetical.
+    const joined = r.merged === null
+      ? `${r.left} ends with the ${r.bases.length} bases ${r.right} starts with, so they would be joined on them and the product would keep one copy.`
+      : `${r.left} already ends with the ${r.bases.length} bases ${r.right} starts with, so they were joined on them and the product keeps one copy (${r.merged} bp).`;
+    const each = r.kept === null
+      ? "If each piece was meant to keep its own copy, that isn't what this builds:"
+      : `If each piece was meant to keep its own copy (${r.kept} bp), this won't build it:`;
+    return `${joined} ${each} two copies in a row give the join two places to land. Both copies have to go inside one piece, and the join has to sit past them in sequence that occurs only once; grouping them is not enough on its own, as an overlap taken whole from one piece's end can fall inside the repeat.`;
+  });
 }
 
 // ---------- Golden Gate ----------

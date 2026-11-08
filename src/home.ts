@@ -9,6 +9,7 @@ import { h, toast } from "./ui/dom.ts";
 import { iconSvg } from "./ui/icons.ts";
 import { fmt } from "./ui/format.ts";
 import { catalogVersion, detectFeatures, isDesktop, listSequenceFiles, pickFolder, readFile, showOpenDialog, type ListedFile } from "./platform.ts";
+import { isBrowserKey } from "./webFiles.ts";
 import { recentFiles } from "./recent.ts";
 import { basename, dirname, stripExtension } from "./lib/files.ts";
 import { describeContents, matchesSearch, subfolder, type ConstructInfo } from "./lib/constructs.ts";
@@ -169,8 +170,11 @@ export class Home {
   }
 
   private async openDialog() {
-    if (isDesktop) await showOpenDialog();
-    else toast("Open files from the desktop app, or with ?open=<url> here.", "info");
+    try {
+      await showOpenDialog();
+    } catch (e) {
+      toast(`Couldn't open: ${e instanceof Error ? e.message : e}`, "error", 6000);
+    }
   }
 
   /** Lists the folders and reads files that are new or changed since last time. */
@@ -238,10 +242,11 @@ export class Home {
       ...recent.map(path =>
         h(
           "button",
-          { type: "button", class: "sv-home-recent-item", title: path, onclick: () => this.host.open([path]) },
+          { type: "button", class: "sv-home-recent-item", title: isBrowserKey(path) ? basename(path) : path, onclick: () => this.host.open([path]) },
           h("span", { class: "sv-home-recent-name" }, basename(path)),
           // Marks keep the slashes in place in the right-to-left box that shows the path's end.
-          h("span", { class: "sv-home-recent-dir" }, `\u200e${dirname(path)}\u200e`)
+          // A browser's key (src/webFiles.ts) has no folder to show.
+          isBrowserKey(path) ? "" : h("span", { class: "sv-home-recent-dir" }, `\u200e${dirname(path)}\u200e`)
         )
       ),
       recent.length ? "" : h("p", { class: "sv-small sv-dim" }, "Files you open appear here.")

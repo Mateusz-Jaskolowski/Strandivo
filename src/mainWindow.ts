@@ -11,7 +11,28 @@ import "./mainWindow.css";
 
 import { h, icon, toast } from "./ui/dom.ts";
 import { iconSvg, type IconName } from "./ui/icons.ts";
-import { closeWindow, isDesktop, onCloseRequested, onFileDrop, onMenu, onOpenRequests, openEnzymeLibrary, openLibrary, openSettings, readFile, setWindowTitle, showWindowsInPage, trapWebCore, type PageWindow } from "./platform.ts";
+import {
+  closeWindow,
+  isDesktop,
+  keepStorage,
+  onCloseRequested,
+  onFileDrop,
+  onMenu,
+  onOpenRequests,
+  openEnzymeLibrary,
+  openLibrary,
+  openProjectPage,
+  openSettings,
+  readFile,
+  setWindowTitle,
+  showOpenDialog,
+  showWindowsInPage,
+  trapWebCore,
+  type PageWindow
+} from "./platform.ts";
+import { isBrowserKey } from "./webFiles.ts";
+import { browserShortcut, shortcutHint } from "./lib/shortcuts.ts";
+import { appMenuButton } from "./views/appMenu.ts";
 import { basename, extension } from "./lib/files.ts";
 import { CHECK_EXTENSION, parseCheckFile, type ReadCheck } from "./lib/readCheck.ts";
 import type { SeqData } from "./lib/seqdata.ts";
@@ -27,6 +48,8 @@ import { needsWelcome } from "./lib/welcome.ts";
 import type { CrashReport, FeedbackKind } from "./lib/feedback.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+/** Where keys are pressed, for the shortcuts tooltips show (src/lib/shortcuts.ts). */
+const where = { mac: isMac, browser: !isDesktop };
 
 /** Home, a drop on the window, or anything else (Open…, the system, a check file). */
 type OpenedFrom = "home" | "drop" | "other";
@@ -59,7 +82,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   const home = new Home({ open: paths => open(paths, "home") });
   const homeButton = h(
     "button",
-    { type: "button", role: "tab", class: "sv-apptab sv-apptab-home", title: `Home: your constructs (${isMac ? "⇧⌘H" : "Ctrl+Shift+H"})`, onclick: () => activate(null) },
+    { type: "button", role: "tab", class: "sv-apptab sv-apptab-home", title: `Home: your constructs${shortcutHint("home", where)}`, onclick: () => activate(null) },
     iconSvg("home", 16),
     h("span", null, "Home")
   );
@@ -76,11 +99,20 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     // "deep": empty space in the bar moves the window (buttons don't).
     { class: "sv-appbar", "data-tauri-drag-region": "deep" },
     tabList,
-    h("div", { class: "sv-appbar-tools" }, appButtons.library, appButtons.enzymes, appButtons.settings)
+    h(
+      "div",
+      { class: "sv-appbar-tools" },
+      appButtons.library,
+      appButtons.enzymes,
+      appButtons.settings,
+      // A browser has no menu bar: its items are here instead.
+      isDesktop ? "" : appMenuButton(id => runMenu(id), () => !!active)
+    )
   );
   const content = h("div", { class: "sv-shell-body" });
   // The welcome window opens over everything on first launch; the update check waits for it.
   const welcome = needsWelcome(loadSettings().welcomeSeen) ? openWelcome(home) : Promise.resolve();
+  void welcome.then(keepStorage);
   // Counting starts once the welcome window, which asks about it, has closed.
   startUsage(welcome);
   const updates = startUpdates(welcome);
@@ -132,7 +164,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   function newTab(path: string | null, data?: SeqData): Tab {
     const name = h("span", { class: "sv-doctab-name" }, path ? basename(path) : data?.name || "Untitled");
     const main = h("button", { type: "button", role: "tab", class: "sv-doctab-main", onclick: () => activate(tab) }, name) as HTMLButtonElement;
-    const close = h("button", { type: "button", class: "sv-doctab-close", "aria-label": "Close tab", title: `Close (${isMac ? "⌘W" : "Ctrl+W"})`, onclick: () => void closeTab(tab) }, iconSvg("x", 12));
+    const close = h("button", { type: "button", class: "sv-doctab-close", "aria-label": "Close tab", title: `Close${shortcutHint("close", where)}`, onclick: () => void closeTab(tab) }, iconSvg("x", 12));
     const el = h("div", { class: "sv-doctab", "data-tauri-drag-region": "false" }, main, close);
     // Middle-click closes, as in browsers.
     el.addEventListener("auxclick", e => e.button === 1 && void closeTab(tab));
@@ -143,7 +175,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   function refreshTab(t: Tab) {
     const path = t.doc ? t.doc.path : t.path;
     t.name.textContent = t.doc ? t.doc.title : path ? basename(path) : "Untitled";
-    t.el.title = path ?? "Not saved yet";
+    // A browser's key (src/webFiles.ts) means nothing to the user: only its name does.
+    t.el.title = path ? (isBrowserKey(path) ? basename(path) : path) : "Not saved yet";
     t.el.classList.toggle("sv-doctab-dirty", !!t.doc?.isDirty());
     if (t === active) refreshTitle();
   }
@@ -183,6 +216,11 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
 
   /** A check file: its sequence in a tab (the open one, if it is), with the check's reads. */
   async function openCheck(path: string) {
+    // Its paths lead nowhere from a browser's file (docs/web-version-plan.md, part 4).
+    if (isBrowserKey(path)) {
+      toast("Read checks open only in the desktop app for now. Open the sequence and add its reads.", "info", 8000);
+      return;
+    }
     let check: ReadCheck;
     try {
       check = parseCheckFile(new TextDecoder().decode(await readFile(path)), path);
@@ -316,6 +354,14 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       cycle(e.key === "]" || e.key === "}" ? 1 : -1);
       return;
     }
+    // Keys a browser leaves to the page in place of ones it keeps (src/lib/shortcuts.ts).
+    const own = isDesktop ? null : browserShortcut(e, isMac);
+    // Outside a Mac, Ctrl+Alt is AltGr, which types characters in fields.
+    if (own && !e.defaultPrevented && !(own === "new" && !isMac && inField())) {
+      e.preventDefault();
+      runMenu(own);
+      return;
+    }
     if (active?.doc) active.doc.keydown(e);
     else if (!active && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "f") {
       e.preventDefault();
@@ -323,7 +369,27 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     }
   });
 
-  void onMenu(id => {
+  /**
+   * Runs a menu item: from the native menu, which runs some in the shell (New Sequence,
+   * Open…, the windows, Help's pages), or from the browser version's menu, which has no shell.
+   */
+  function runMenu(id: string) {
+    if (id === "new") {
+      open([null]);
+      return;
+    }
+    if (id === "open") {
+      showOpenDialog().catch(e => toast(`Couldn't open: ${e instanceof Error ? e.message : e}`, "error", 6000));
+      return;
+    }
+    if (id === "settings" || id === "library" || id === "enzyme-library") {
+      void { settings: openSettings, library: openLibrary, "enzyme-library": openEnzymeLibrary }[id]();
+      return;
+    }
+    if (id === "website" || id === "github") {
+      void openProjectPage(id);
+      return;
+    }
     if (id === "close") {
       if (active) void closeTab(active);
       else if (!tabs.length) void closeWindow();
@@ -353,7 +419,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     if (id === "find") home.focusSearch();
     else if ((id === "undo" || id === "redo") && inField()) document.execCommand(id);
     else if (id === "select-all" && inField()) (document.activeElement as HTMLInputElement).select?.();
-  });
+  }
+  void onMenu(runMenu);
 
   void onFileDrop(
     paths => {
@@ -375,7 +442,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     // What is queued goes now, if it can within a second; statistics never hold a quit up.
     await Promise.race([flushUsage(), new Promise(r => setTimeout(r, 1000))]);
     return true;
-  });
+  }, () => tabs.some(t => t.doc?.isDirty()));
 
   /** Help → Send Feedback… (an idea, unless chosen) and Report a Bug…, about what is open. */
   async function feedback(kind: FeedbackKind, crashed?: { crash: CrashReport; sent(): void }) {
@@ -409,6 +476,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     checkCrash: () => crashes.check(),
     /** Sends queued usage events now, to `window.__strandivoTrack` in e2e. */
     flushUsage: () => flushUsage(),
+    /** Runs a menu item by its id, as the native menu or the browser's menu does. */
+    menu: (id: string) => runMenu(id),
     /** Makes the browser version's core panic (e2e/web.mjs); rejects with its message. */
     trapCore: () => trapWebCore()
   };

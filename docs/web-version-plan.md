@@ -1,6 +1,6 @@
 # Strandivo in a browser: plan
 
-Status: in progress (November 2026). Parts 1 (#4) and 2 are built; 0.2.0 and the website,
+Status: in progress (November 2026). Parts 1 (#4), 2 (#48) and 3 are built; 0.2.0 and the website,
 which the rest waited for, are out. Each part below is one branch and one PR. It came after the first public release (0.2.0) and the website (part 6 of
 `docs/updates-feedback-usage-plan.md`). What is said here about browsers was read on
 5 November 2026; check it again before each part is built.
@@ -169,6 +169,19 @@ Desktop only; nothing changes for users.
 `src/doc/document.ts`, `src/views/appMenu.ts`, `e2e/web.mjs`
 
 After this part the web version does everything the desktop does with one file at a time.
+
+As built, where it differs from what follows: reads in a browser get no key yet, as one
+that lasts is part 4's, so they are neither remembered nor saved in a check, and a check
+file opened there says it opens on the desktop. Close Tab has no key in a browser, as
+Safari's ⌥⌘W closes the other tabs, and neither do Settings, the libraries and Align
+Sequencing Reads… (⌘, and ⇧⌘L open browser windows in some browsers, ⇧⌘R reloads); they
+have their buttons. The menu's groups are the native menu's (File, Edit, View, Tools,
+Window, Help), with no Check for Updates or Quit, and a unit test compares its ids and
+labels with `src-tauri/src/lib.rs` instead of the e2e. Settings says "Your browser keeps
+these settings, apart from the desktop app's.", as it has no Export. The first download's
+note says "Saved as a download. This browser can't save over a file, so each save is a new
+download.", as it also follows exports. Storage is asked to persist once the welcome
+window closes, as Firefox asks the user.
 
 - **Opening**: Home's Open… button and ⌘O/Ctrl+O use `showOpenFilePicker` where the
   browser has it (Chrome and Edge) and a file input elsewhere (Safari and Firefox), with

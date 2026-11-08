@@ -9,7 +9,7 @@ import { h, toast } from "./ui/dom.ts";
 import { iconSvg } from "./ui/icons.ts";
 import { fmt } from "./ui/format.ts";
 import { choose } from "./ui/modal.ts";
-import { chooseSavePath, pickFiles, saveText, setWindowTitle } from "./platform.ts";
+import { chooseSavePath, isDesktop, pickFiles, saveText, setWindowTitle } from "./platform.ts";
 import { primerLibrary } from "./primerLibrary.ts";
 import { onSettingsChanged } from "./settings.ts";
 import { COMMON_SEQUENCING_PRIMERS, formatPrimerList, parsePrimerList, type LibraryPrimer } from "./lib/library.ts";
@@ -229,7 +229,7 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
       h(
         "header",
         { class: "sv-libwin-head" },
-        h("div", { class: "sv-libwin-title" }, h("h1", null, "Primer library", count), h("p", { class: "sv-small sv-dim" }, "Your lab's primers, kept on this computer. Plasmids you open show which of them bind.")),
+        h("div", { class: "sv-libwin-title" }, h("h1", null, "Primer library", count), h("p", { class: "sv-small sv-dim" }, `Your lab's primers, kept ${isDesktop ? "on this computer" : "by this browser. Export… to keep a copy"}. Plasmids you open show which of them bind.`)),
         h(
           "div",
           { class: "sv-libwin-tools" },

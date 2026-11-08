@@ -16,6 +16,8 @@ export function recentFiles(): string[] {
 }
 
 export function addRecentFile(path: string) {
+  // A file without a handle in a browser lasts only for the visit (src/webFiles.ts).
+  if (path.startsWith("upload:")) return;
   try {
     const list = [path, ...recentFiles().filter(p => p !== path)].slice(0, MAX);
     localStorage.setItem(KEY, JSON.stringify(list));

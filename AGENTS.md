@@ -63,6 +63,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `src/platform.ts` the core compiled to WebAssembly, run in a Web Worker
   (`src/core/worker.ts`). Only `src/web.ts` imports it, so `npm run build`, which Tauri
   runs, never needs Rust's WebAssembly target or holds the worker; keep it that way.
+  There is no menu bar there, so the app bar gets a menu button (`src/views/appMenu.ts`)
+  with the native menu's items, listed again in `src/lib/appMenu.ts`.
 - `src-tauri/src/lib.rs`: windows, native menus, file associations, file commands, listing
   the library's folders. Its alignment and detection commands hand typed requests to
   `crates/seqcore-json/`.
@@ -94,7 +96,7 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.
 - **Where things go**: the app bar holds what is about the app (Home, a tab per open file,
-  the primer and enzyme libraries and Settings); the bar under it is the file's own (its five views,
+  the primer and enzyme libraries, Settings and, in a browser, the menu); the bar under it is the file's own (its five views,
   search, editing tools). Views show the document (Map, Sequence, Primers, Reads, Info), and
   there are five; a task with a start and an end (design primers, a PCR product, adding
   from the library) is a dialog (`openDialog` in `src/ui/modal.ts`, see
@@ -138,6 +140,14 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `src/doc/convert.ts` turns them into `SeqData` and back, keeping fields we don't model
   in `raw`. SnapGene `.dna` is read but saved as GenBank. Lab fields from the Info tab live
   in GenBank COMMENT lines (`src/lib/labinfo.ts`).
+- **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
+  working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in
+  IndexedDB, so it lasts between visits) and `upload:<n>/<name>` for one without (its
+  bytes in memory, for the visit). `readFile`, `saveText` and `chooseSavePath` in
+  `src/platform.ts` resolve them; anything else is a URL. Only a handle can be written
+  over (`canSaveInPlace`), so elsewhere Save is Save As and a save is a download. Show a
+  key's name (`basename`), never the key. Reads get none yet, so in a browser they are
+  neither remembered nor saved in a check, and a check file says it opens on the desktop.
 - **Styles**: design tokens are CSS variables in `src/styles.css`; document styles are
   `sv-*` classes in `src/doc/document.css`, the app bar's and Home's in `src/mainWindow.css`.
   Older `ps-*` classes remain for the Settings and Info screens. Dark tokens exist but no
@@ -210,7 +220,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   the file in the current tab (store, `command()`, adding reads, saving and `saveCheck`
   without a file dialog). Then `e2e/web.mjs` clicks through the browser version in
   headless Chrome with no hooks, so alignment and detection run in the worker, and checks
-  the worker answers after a panic (`trapCore`); its screenshots and report go in a `web`
+  the worker answers after a panic (`trapCore`), then its menu, keys, and opening, saving
+  and dropping files. Its file pickers are stood in for with files in the page's private
+  file system, whose handles are real, and then taken away to check Safari's and
+  Firefox's way (a file input, downloads); its screenshots and report go in a `web`
   folder beside the app's.
 - Steps run through `.github/scripts/run.sh`, which repeats a failing step's output as an
   annotation, readable with `gh api repos/<owner>/<repo>/check-runs/<job id>/annotations`.
@@ -287,6 +300,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   key on to the shell (`MENU_KEYS` in `src/lib/shortcuts.ts`, `menu_shortcut` in
   `src-tauri/src/lib.rs`), which runs it once even where the menu hears it too. A new
   accelerator goes in that list as well; a unit test reads the menu to check.
+- **Keys a browser keeps**: ⌘N, ⌘W, ⌘T and ⌘1–⌘9 (Ctrl elsewhere) never reach the page,
+  ⇧⌘R reloads and Safari's ⌥⌘W closes the other tabs. So in a browser New Sequence is
+  ⌥⌘N and some items have no key (`WEB_SHORTCUTS` in `src/lib/shortcuts.ts`). Tooltips and
+  the menu show a key with `shortcutHint` or `shortcutFor`, which give the one that works
+  where the user is, never a hard-coded one.
+- **A new native menu item** goes in `src/lib/appMenu.ts` too, or the browser has no way
+  to it; a unit test compares the two lists' ids and labels.
 - **Windows are light on Windows** (`app_window` in `src-tauri/src/lib.rs`), since the
   interface is: a menu bar following the system's dark mode is drawn by hand and turned
   light again when another window opened. Take that out when dark tokens get a setting.

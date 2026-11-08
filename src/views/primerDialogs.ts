@@ -14,7 +14,7 @@ import type { DocContext } from "../doc/context.ts";
 import { primerLibrary } from "../primerLibrary.ts";
 import { serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
-import { chooseSavePath, isDesktop, openFiles, openLibrary, saveText } from "../platform.ts";
+import { chooseSavePath, openFiles, openLibrary, saveText } from "../platform.ts";
 import { bindingTm, changesText, crossDimer, DIMER_BASES, findBindingSites, meltingTemp } from "../lib/primers.ts";
 import { alignPrimer } from "../lib/primerAlign.ts";
 import { COMMON_SEQUENCING_PRIMERS, libraryHits, type LibraryHit } from "../lib/library.ts";
@@ -354,7 +354,7 @@ function productBar(n: number, product: PcrProduct): HTMLElement {
   );
 }
 
-/** Saves the product with its features as a GenBank file and opens it in a new window. */
+/** Saves the product with its features as a GenBank file and opens it in a new tab. */
 async function saveProduct(d: SeqData, product: PcrProduct) {
   const doc = productDocument(d, product);
   const safe = (doc.name || "PCR product").replace(/[\\/:*?"<>|]+/g, "-");
@@ -363,8 +363,7 @@ async function saveProduct(d: SeqData, product: PcrProduct) {
   try {
     const empty = fromParsed({ name: doc.name, sequence: "", circular: false });
     await saveText(path, serialize(toParsed(empty, doc), "genbank"));
-    if (isDesktop) await openFiles([path]);
-    else toast("Saved the product as GenBank.", "success");
+    await openFiles([path]);
   } catch (e) {
     toast(`Couldn't save the product: ${e instanceof Error ? e.message : e}`, "error", 6000);
   }
@@ -455,7 +454,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
           "Show on map"
         ),
         h("button", { type: "button", class: "sv-btn", onclick: () => void copyText(product.sequence, `the ${fmt(product.length)} bp product`) }, iconSvg("copy", 14), "Copy sequence"),
-        h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => void saveProduct(d, product) }, isDesktop ? "Open as new file…" : "Save as GenBank…")
+        h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => void saveProduct(d, product) }, "Open as new file…")
       );
     }
     dlg.body.replaceChildren(pickers, h("div", { class: "sv-pcr-result", "aria-live": "polite" }, ...result));

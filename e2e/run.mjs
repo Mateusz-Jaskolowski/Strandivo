@@ -280,7 +280,8 @@ async function main() {
       document.querySelector('.sv-clipboard').focus();
       return { start: f.start, end: f.end };`);
     const beforeDelete = await state();
-    const toastWith = (re, css = "") => `return Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => ${re}.test(t.textContent)${css ? ` && t.querySelector('${css}')` : ""})`;
+    // An expression, as waitFor wraps it in its own return.
+    const toastWith = (re, css = "") => `Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => ${re}.test(t.textContent)${css ? ` && t.querySelector('${css}')` : ""})`;
     await s.press(BACKSPACE);
     await sleep(300);
     const firstPress = await state();

@@ -7,7 +7,7 @@ import { h } from "./ui/dom.ts";
 import { DEFAULT_LAB_FIELDS, DEFAULT_SETTINGS, loadSettings, onSettingsChanged, saveSettings, type Settings } from "./settings.ts";
 import { DEFAULT_SIDEBAR_ORDER, moveSection, SIDEBAR_SECTIONS } from "./lib/sidebar.ts";
 import { iconSvg } from "./ui/icons.ts";
-import { openUsagePage, setWindowTitle } from "./platform.ts";
+import { isDesktop, openUsagePage, setWindowTitle } from "./platform.ts";
 import { DEFAULT_CONDITIONS, TM_METHODS, usesConditions, type TmConditions, type TmMethod } from "./lib/primers.ts";
 
 const TRIM_LEVELS: [string, number][] = [
@@ -363,6 +363,8 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       "div",
       { class: "ps-settings" },
       h("header", { class: "ps-settings-head" }, h("h1", null, "Settings"), saved),
+      // Browsers can clear what a site keeps, and the app has its own.
+      isDesktop ? "" : h("p", { class: "sv-small sv-dim ps-settings-note" }, "Your browser keeps these settings, apart from the desktop app's."),
       ...sections,
       h(
         "footer",

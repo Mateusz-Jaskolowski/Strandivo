@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // End-to-end check of the browser version in Chrome: that alignment and detection work
-// through the core compiled to WebAssembly, in its worker, with no test hooks standing in.
+// through the core compiled to WebAssembly, in its worker, with no test hooks standing in;
+// and opening, saving and dropping files, with and without the browser's file pickers.
 //
 // Serves dist-web (`npm run build:web`) and testdata/ (under /testdata/) with Node's
 // http, and drives headless Chrome through ChromeDriver over plain WebDriver, as
@@ -125,6 +126,19 @@ class Session {
     const v = await wd("POST", `/session/${this.id}/element`, { using: "xpath", value: xpath });
     await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/click`, {});
   }
+  /** Types into an element; for a file input, the text is a file's path. */
+  async keys(css, text) {
+    const v = await wd("POST", `/session/${this.id}/element`, { using: "css selector", value: css });
+    await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/value`, { text });
+  }
+  /** Real key presses, with `mods` (WebDriver key codes) held down. */
+  async press(text, mods = []) {
+    const down = mods.map(value => ({ type: "keyDown", value }));
+    const up = [...mods].reverse().map(value => ({ type: "keyUp", value }));
+    const keys = Array.from(text).flatMap(value => [{ type: "keyDown", value }, { type: "keyUp", value }]);
+    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "key", id: "keyboard", actions: [...down, ...keys, ...up] }] });
+    await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
+  }
   async shot(name) {
     const b64 = await wd("GET", `/session/${this.id}/screenshot`);
     writeFileSync(path.join(this.outDir, `${name}.png`), Buffer.from(b64, "base64"));
@@ -199,6 +213,114 @@ async function main(outDir) {
     check("After it, the core aligns the plate again (A06's amber stop as W163Q)", /W163Q/.test(amber[4] ?? ""), JSON.stringify(amber));
     check("No alignment failed along the way", !(await s.exec("return Array.from(document.querySelectorAll('.ps-toast')).some(t => /failed/i.test(t.textContent))")));
     await s.shot("03-after-panic");
+
+    // --- the menu, in place of a menu bar ---
+    await s.exec("window.__strandivo.showHome()");
+    await s.click("//button[@aria-label='Menu']");
+    const groups = await s.exec("return Array.from(document.querySelectorAll('.ps-context-menu > button')).map(b => b.textContent)");
+    check("The app bar's menu has the menu bar's groups", groups.join() === "File,Edit,View,Tools,Window,Help", groups.join());
+    await s.click("//*[contains(@class,'ps-context-menu')]/button[normalize-space()='File']");
+    const fileItems = await s.exec("return Array.from(document.querySelectorAll('.ps-context-sub button')).map(b => ({ label: b.firstChild.textContent, key: b.querySelector('.ps-context-key')?.textContent ?? '', on: !b.disabled }))");
+    const item = label => fileItems.find(i => i.label === label) ?? {};
+    check(
+      "It shows the keys that work in a browser, and greys out what needs a file",
+      item("New Sequence").key === "Ctrl+Alt+N" && item("Open…").key === "Ctrl+O" && item("Close Tab").key === "" && item("Open…").on && !item("Save").on,
+      JSON.stringify(fileItems)
+    );
+    await s.shot("04-menu");
+    await s.press("\uE00C"); // Escape
+    const CTRL = "\uE009";
+    const ALT = "\uE00A";
+    await s.exec("document.activeElement?.blur()");
+    await s.press("n", [CTRL, ALT]);
+    check("Ctrl+Alt+N makes a new sequence, as the browser keeps Ctrl+N", await s.waitFor("window.__strandivo.tabs().includes('Untitled')", 5000));
+    await s.exec("window.__strandivo.closeTab()");
+
+    // --- opening and saving a file the browser has a handle to (Chrome and Edge) ---
+    // The file pickers are stood in for with files in the page's private file system, whose
+    // handles are real ones: the app reads, writes and keeps them as it would a user's.
+    const fileText = "return (async () => { const root = await navigator.storage.getDirectory(); return (await (await root.getFileHandle(arguments[0])).getFile()).text(); })()";
+    const opened = await s.execAsync(`
+      (async () => {
+        const root = await navigator.storage.getDirectory();
+        const text = await (await fetch('/testdata/e2e/pUC19-annotated.gb')).text();
+        const file = await root.getFileHandle('pUC19-handle.gb', { create: true });
+        const out = await file.createWritable();
+        await out.write(text);
+        await out.close();
+        window.showOpenFilePicker = async () => [file];
+        window.showSaveFilePicker = async () => root.getFileHandle('pUC19-copy.gb', { create: true });
+        window.__strandivo.menu('open');
+      })().then(() => done(true), e => done(String(e)));`);
+    check("Open… opens the file the browser's picker gave", opened === true && (await s.waitFor("window.__strandivo.tabs().includes('pUC19-handle.gb') && window.__strandivo.store", 15000)), String(opened));
+    const leaving = "const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented;";
+    check("Leaving the page isn't asked about with nothing unsaved", !(await s.exec(leaving)));
+    await s.exec("const s = window.__strandivo.store; s.apply({ ...s.data, name: 'pUC19 from the browser' }, 'Rename');");
+    check("With unsaved changes, the browser asks before leaving", await s.exec(leaving));
+    await s.exec("window.__strandivo.command('save')");
+    await s.waitFor("!window.__strandivo.isDirty()", 5000);
+    const inPlace = await s.exec(fileText, "pUC19-handle.gb");
+    check("Save writes over the file it opened", /^LOCUS {7}pUC19_from_the_browser/.test(inPlace), inPlace.slice(0, 40));
+    await s.exec("window.__strandivo.command('save-as')");
+    const copied = (await s.waitFor("window.__strandivo.tabs().includes('pUC19-copy.gb')", 5000)) ? await s.exec(fileText, "pUC19-copy.gb") : "";
+    check("Save As writes the file chosen in the browser's save dialog, and the tab follows it", /^LOCUS {7}pUC19_from_the_browser/.test(copied), copied.slice(0, 40));
+    check(
+      "Recent files keep files with a handle, shown by name",
+      await s.exec("window.__strandivo.showHome(); return Array.from(document.querySelectorAll('.sv-home-recent-name')).map(e => e.textContent).includes('pUC19-copy.gb') && Array.from(document.querySelectorAll('.sv-home-recent-dir')).every(e => !e.textContent.includes('web:'));")
+    );
+
+    // --- a browser without them (Safari and Firefox): a file input, and downloads ---
+    await s.exec(`
+      window.showOpenFilePicker = undefined;
+      window.showSaveFilePicker = undefined;
+      window.__e2eDownloads = [];
+      HTMLAnchorElement.prototype.click = function () { if (this.download) window.__e2eDownloads.push({ name: this.download, href: this.href }); };
+      // Headless Chrome can't show a file dialog and cancels it at once, which the app takes
+      // for Cancel: the dialog is stood in for by WebDriver handing the input a file.
+      const click = HTMLInputElement.prototype.click;
+      HTMLInputElement.prototype.click = function () { if (this.type !== 'file') click.call(this); };
+      window.__strandivo.menu('open');`);
+    const snapgene = path.join(testdata, "snapgene", "pIB2-SEC13-mEGFP.dna");
+    const input = await s.waitFor("document.querySelector('input.sv-file-input')", 5000);
+    check("Open… falls back to a file input", input);
+    if (input) await s.keys("input.sv-file-input", snapgene);
+    check("The file input opens a SnapGene file", await s.waitFor("window.__strandivo.tabs().includes('pIB2-SEC13-mEGFP.dna') && document.querySelector('.sv-map-svgel .sv-map-feature')", 20000));
+    check("The SnapGene file's primers come with it", (await s.exec("return window.__strandivo.store?.data.primers.map(p => p.name) ?? []")).includes("A206K.REV"));
+    await s.exec("window.__strandivo.command('save')");
+    const downloaded = (await s.waitFor("window.__e2eDownloads.length === 1", 5000))
+      ? await s.execAsync("const d = window.__e2eDownloads[0]; fetch(d.href).then(r => r.text()).then(t => done({ name: d.name, text: t.slice(0, 12) }), e => done(String(e)));")
+      : null;
+    check("Save, which can't write over it, downloads a GenBank copy", downloaded?.name === "pIB2-SEC13-mEGFP.gb" && downloaded.text.startsWith("LOCUS"), JSON.stringify(downloaded));
+    const told = "return Array.from(document.querySelectorAll('.ps-toast')).filter(t => /each save is a new download/.test(t.textContent)).length";
+    check("The first download says why", (await s.exec(told)) === 1);
+    await s.exec("window.__strandivo.command('save')");
+    await s.waitFor("window.__e2eDownloads.length === 2", 5000);
+    check("The second doesn't say it again", (await s.exec(told)) === 1);
+    await s.shot("05-downloaded");
+
+    // --- dropping files ---
+    const drop = (file, url) => `
+      (async () => {
+        const dt = new DataTransfer();
+        dt.items.add(new File([await (await fetch('${url}')).arrayBuffer()], '${file}'));
+        const fire = type => document.body.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
+        fire('dragenter');
+        window.__e2eOverlay = document.querySelector('.ps-drop-overlay').classList.contains('ps-visible');
+        fire('dragover');
+        fire('drop');
+      })().then(() => done(window.__e2eOverlay), e => done(String(e)));`;
+    await s.exec("window.__strandivo.showHome()");
+    const overlay = await s.execAsync(drop("dropped.gb", "/testdata/e2e/pUC19-annotated.gb"));
+    check("A file dragged over the window shows where it will go", overlay === true, String(overlay));
+    check("A file dropped on Home opens in a tab", await s.waitFor("window.__strandivo.tabs().includes('dropped.gb') && window.__strandivo.store", 15000));
+    await s.execAsync(drop("sage-sample.ab1", "/testdata/sanger/sage-sample.ab1"));
+    check("A trace dropped on a file is added to its reads", await s.waitFor("document.querySelectorAll('.sv-read-card').length === 1 && !document.querySelector('.sv-reads.sv-busy')", 20000));
+    await s.execAsync(drop("x reads.svcheck", "/testdata/e2e/bla-check.fasta"));
+    check(
+      "A read check dropped in a browser says where it opens",
+      await s.waitFor("Array.from(document.querySelectorAll('.ps-toast')).some(t => /Read checks open only in the desktop app/.test(t.textContent))", 3000)
+    );
+    await s.shot("06-dropped");
   } catch (e) {
     check("The browser check ran to the end", false, e?.stack || e);
     await s?.shot("99-crash").catch(() => {});

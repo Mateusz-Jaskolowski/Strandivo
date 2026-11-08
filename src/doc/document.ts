@@ -14,6 +14,7 @@ import { choose } from "../ui/modal.ts";
 import {
   alertDialog,
   canDetectFeatures,
+  canSaveInPlace,
   chooseSavePath,
   confirmDialog,
   isDesktop,
@@ -65,6 +66,8 @@ import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
 import { fmt } from "../ui/format.ts";
+import { shortcutHint } from "../lib/shortcuts.ts";
+import { isBrowserKey } from "../webFiles.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const VIEW_KEY = "strandivo.view";
@@ -293,7 +296,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     if (badge) badges[t.id] = badge;
     return h(
       "button",
-      { type: "button", role: "tab", class: "sv-tab", "data-tab": t.id, title: `${t.label} (${isMac ? "⌘" : "Ctrl+"}${t.key})`, onclick: () => setTab(t.id) },
+      { type: "button", role: "tab", class: "sv-tab", "data-tab": t.id, title: `${t.label}${shortcutHint(`show-${t.id}`, { mac: isMac, browser: !isDesktop })}`, onclick: () => setTab(t.id) },
       t.label,
       badge
     );
@@ -592,7 +595,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     try {
       let target = path;
       let fmtOut: SaveFormat | null = target ? formatForPath(target) : null;
-      if (saveAs || !target || !fmtOut) {
+      // A browser can only write over a file it has a handle to; otherwise Save is Save As.
+      if (saveAs || !target || !fmtOut || !canSaveInPlace(target)) {
         const wasUnwritable = !saveAs && !!target && !fmtOut;
         const suggestion = joinPath(target ? dirname(target) : "", suggestedSaveName(target, store.data.name, "genbank"));
         if (wasUnwritable && isDesktop) toast(`${extension(target!).toUpperCase()} files can't be written yet — saving a GenBank copy instead.`, "info", 5000);
@@ -924,7 +928,9 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       const files: PickedFile[] = [];
       for (const p of readPaths) {
         try {
-          files.push({ name: basename(p), path: p, bytes: await readFile(p) });
+          // A browser's key for a read doesn't last beyond the visit yet, so it is neither
+          // remembered nor saved in a check (docs/web-version-plan.md, part 4).
+          files.push({ name: basename(p), path: isBrowserKey(p) ? undefined : p, bytes: await readFile(p) });
         } catch (e) {
           toast(String(e), "error");
         }

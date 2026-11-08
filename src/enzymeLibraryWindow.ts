@@ -8,7 +8,7 @@ import "./doc/document.css";
 import { enzymeLibrary } from "./enzymeLibrary.ts";
 import { enzymeName, enzymeSite, KNOWN_ENZYMES } from "./lib/enzymes.ts";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, parseEnzymeLibrary, parseEnzymeTable, type EnzymeStock, type LabEnzyme } from "./lib/enzymeLibrary.ts";
-import { chooseSavePath, pickFiles, saveText, setWindowTitle } from "./platform.ts";
+import { chooseSavePath, isDesktop, pickFiles, saveText, setWindowTitle } from "./platform.ts";
 import { h, toast } from "./ui/dom.ts";
 import { fmt } from "./ui/format.ts";
 import { iconSvg } from "./ui/icons.ts";
@@ -283,7 +283,7 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
   root.appendChild(h("div", { class: "sv-app sv-libwin" },
     known,
     h("header", { class: "sv-libwin-head" },
-      h("div", { class: "sv-libwin-title" }, h("h1", null, "Enzyme library", count), h("p", { class: "sv-small sv-dim" }, "Your lab's enzyme stock, kept on this computer.")),
+      h("div", { class: "sv-libwin-title" }, h("h1", null, "Enzyme library", count), h("p", { class: "sv-small sv-dim" }, isDesktop ? "Your lab's enzyme stock, kept on this computer." : "Your lab's enzyme stock, kept by this browser. Export… to keep a copy.")),
       h("div", { class: "sv-libwin-tools" }, h("div", { class: "sv-outline-filter sv-libwin-search sv-enzyme-search" }, iconSvg("search", 14), search), addButton, importButton, exportButton, status)
     ), panel, h("main", { class: "sv-libwin-body" }, table)
   ));

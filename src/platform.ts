@@ -10,6 +10,8 @@ import { changesUrl } from "./lib/changelog.ts";
 import type { FeedbackReport, SystemInfo } from "./lib/feedback.ts";
 import { recordError } from "./feedback.ts";
 import type { UsageEvent } from "./lib/usage.ts";
+import { basename, OPEN_EXTENSIONS } from "./lib/files.ts";
+import { droppedKeys, isBrowserKey, isHandleKey, pickToOpen, pickToSave, pickWithInput, readKey, saveKey } from "./webFiles.ts";
 
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -91,6 +93,8 @@ export async function pickFolder(title: string): Promise<string | null> {
 
 export async function readFile(path: string): Promise<Uint8Array> {
   if (!isDesktop) {
+    // A file opened or saved in the browser (src/webFiles.ts); anything else is a URL.
+    if (isBrowserKey(path)) return readKey(path);
     const res = await fetch(path);
     if (!res.ok) throw new Error(`Could not read ${path}: HTTP ${res.status}`);
     // A dev server answers a missing file with its page.
@@ -123,13 +127,24 @@ export async function fetchUniprotEntry(accession: string): Promise<unknown> {
 }
 
 export const writeFile = (path: string, contents: string) => invoke<void>("write_file", { path, contents });
-export const openFiles = (paths: string[]) => invoke<void>("open_files", { paths });
 export const cancelQuit = () => invoke<void>("cancel_quit").catch(() => undefined);
 
-export async function showOpenDialog(): Promise<void> {
-  if (!isDesktop) return;
-  return invoke<void>("show_open_dialog");
+/** Opens files in tabs of the main window: through the shell, or straight to it in a browser. */
+export async function openFiles(paths: string[]): Promise<void> {
+  if (isDesktop) return invoke<void>("open_files", { paths });
+  if (openHandler) openHandler(paths);
+  else openQueue.push(...paths);
 }
+
+/** Open…: the shell's dialog, or the browser's file picker; what is picked opens in tabs. */
+export async function showOpenDialog(): Promise<void> {
+  if (isDesktop) return invoke<void>("show_open_dialog");
+  const keys = await pickToOpen("Sequences and traces", OPEN_EXTENSIONS);
+  if (keys.length) await openFiles(keys);
+}
+
+/** Whether Save can write over this file: always on the desktop, only with a handle in a browser. */
+export const canSaveInPlace = (path: string) => isDesktop || isHandleKey(path);
 
 export interface AlignReadInput {
   name: string;
@@ -278,6 +293,12 @@ export function restartToUpdate(): Promise<void> {
   return invoke<void>("restart_to_update");
 }
 
+/** The website or the repository, in the browser (Help in the menu). */
+export async function openProjectPage(which: "website" | "github"): Promise<void> {
+  if (isDesktop) return invoke<void>("open_project_page", { which });
+  window.open(which === "website" ? "https://strandivo.com" : "https://github.com/Mateusz-Jaskolowski/Strandivo", "_blank", "noopener");
+}
+
 /** Opens a version's notes on strandivo.com in the browser (the shell checks the version). */
 export async function openWhatsNew(version: string): Promise<void> {
   const hook = updateHook();
@@ -416,6 +437,15 @@ export async function emailFeedback(subject: string, body: string): Promise<void
   window.location.href = `mailto:feedback@strandivo.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body.slice(0, 1800))}`;
 }
 
+/**
+ * Asks a browser to keep the page's storage (settings, libraries, file handles) rather than
+ * clear it when space runs low, or after weeks without a visit in Safari. Firefox asks the
+ * user, so it is asked once something is worth keeping: after the welcome window.
+ */
+export function keepStorage() {
+  if (!isDesktop) void navigator.storage?.persist?.().catch(() => false);
+}
+
 export async function copyText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
@@ -519,38 +549,25 @@ export async function pickFiles(title: string, extensions: string[]): Promise<Pi
     }
     return out;
   }
-  return new Promise(resolve => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = extensions.map(e => "." + e).join(",");
-    input.onchange = async () => {
-      const files = Array.from(input.files || []);
-      resolve(
-        await Promise.all(files.map(async f => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })))
-      );
-    };
-    input.click();
-  });
+  const files = await pickWithInput(extensions, true);
+  return Promise.all(files.map(async f => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
 }
 
-/** Asks where to save; returns null if cancelled. */
+/**
+ * Asks where to save; returns null if cancelled. In a browser: the browser's save dialog
+ * where it has one, or else a download of the suggested name (src/webFiles.ts).
+ */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
-  if (!isDesktop) return defaultPath.split(/[\\/]/).pop() || defaultPath;
+  if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);
   const { save } = await import("@tauri-apps/plugin-dialog");
   const p = await save({ defaultPath, filters });
   return p ? String(p) : null;
 }
 
-/** Saves text: to disk in the app, as a download in a browser. */
+/** Saves text: to disk in the app; in a browser over a file it has a handle to, or else as a download. */
 export async function saveText(path: string, contents: string): Promise<void> {
   if (isDesktop) return writeFile(path, contents);
-  const blob = new Blob([contents], { type: "text/plain" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = path.split(/[\\/]/).pop() || "sequence.txt";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  await saveKey(path, contents);
 }
 
 export async function confirmDialog(message: string, opts: { title?: string; okLabel?: string; cancelLabel?: string; kind?: "info" | "warning" | "error" } = {}): Promise<boolean> {
@@ -585,13 +602,14 @@ export async function closeWindow(): Promise<void> {
   await getCurrentWindow().close();
 }
 
-/** Runs `check` when the window is about to close; returning false keeps it open. */
-export async function onCloseRequested(check: () => Promise<boolean>): Promise<void> {
+/**
+ * Runs `check` when the window is about to close; returning false keeps it open. A
+ * browser only allows its own question, asked when `unsaved` says there is something to lose.
+ */
+export async function onCloseRequested(check: () => Promise<boolean>, unsaved: () => boolean): Promise<void> {
   if (!isDesktop) {
     window.addEventListener("beforeunload", e => {
-      // Browsers only allow a generic prompt.
-      void check;
-      e.preventDefault();
+      if (unsaved()) e.preventDefault();
     });
     return;
   }
@@ -621,9 +639,36 @@ export async function onMenu(handler: (id: string) => void): Promise<void> {
 
 export type DropState = "over" | "leave";
 
-/** Files dropped on the window (paths are only available in the desktop app). */
+/** Files dropped on the window: paths in the app, keys in a browser (src/webFiles.ts). */
 export async function onFileDrop(onDrop: (paths: string[]) => void, onHover?: (state: DropState) => void): Promise<void> {
-  if (!isDesktop) return;
+  if (!isDesktop) {
+    const withFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    // Entering a child leaves its parent: only the last leave is the window's.
+    let depth = 0;
+    window.addEventListener("dragenter", e => {
+      if (!withFiles(e)) return;
+      e.preventDefault();
+      if (depth++ === 0) onHover?.("over");
+    });
+    window.addEventListener("dragover", e => {
+      if (!withFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = "copy";
+    });
+    window.addEventListener("dragleave", e => {
+      if (!withFiles(e) || depth === 0) return;
+      if (--depth === 0) onHover?.("leave");
+    });
+    window.addEventListener("drop", e => {
+      if (!withFiles(e)) return;
+      // Or the browser opens the file in place of the app.
+      e.preventDefault();
+      depth = 0;
+      onHover?.("leave");
+      void droppedKeys(e.dataTransfer!).then(keys => keys.length && onDrop(keys));
+    });
+    return;
+  }
   const { getCurrentWebview } = await import("@tauri-apps/api/webview");
   await getCurrentWebview().onDragDropEvent(event => {
     const p = event.payload;
@@ -639,7 +684,7 @@ export async function onFileDrop(onDrop: (paths: string[]) => void, onHover?: (s
 }
 
 export type ContextMenuEntry =
-  | { label: string; enabled?: boolean; /** Shown as a swatch. */ color?: string; run: () => void }
+  | { label: string; enabled?: boolean; /** Shown as a swatch. */ color?: string; /** A key, shown in menus drawn in the page. */ shortcut?: string; run: () => void }
   | { label: string; items: ContextMenuEntry[] }
   | "separator";
 
@@ -755,6 +800,7 @@ export async function showContextMenu(entries: ContextMenuEntry[], at: { x: numb
           b.appendChild(sw);
         }
         b.append(e.label);
+        if (e.shortcut) b.appendChild(Object.assign(document.createElement("span"), { className: "ps-context-key", textContent: e.shortcut }));
         b.disabled = e.enabled === false;
         // Moving onto another item of this menu closes a submenu that was open from it.
         b.addEventListener("pointerenter", () => closeSub(into));

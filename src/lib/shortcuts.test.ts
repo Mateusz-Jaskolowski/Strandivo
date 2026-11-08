@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { DOCUMENT_KEYS, MENU_KEYS, menuShortcut } from "./shortcuts.ts";
+import { browserShortcut, DOCUMENT_KEYS, MENU_KEYS, menuShortcut, shortcutFor, shortcutHint, shortcutText } from "./shortcuts.ts";
 
 const shell = readFileSync(new URL("../../src-tauri/src/lib.rs", import.meta.url), "utf8");
 
@@ -52,4 +52,51 @@ test("only Ctrl counts, and AltGr never does", () => {
   assert.equal(menuShortcut({ ...base, key: "s", ctrlKey: false }), null);
   assert.equal(menuShortcut({ ...base, key: "s", metaKey: true }), null);
   assert.equal(menuShortcut({ ...base, key: "z" }), null);
+});
+
+test("the keys shown in the app are the menu's own", () => {
+  const menu = accelerators();
+  for (const [id, accel] of menu) {
+    if (id === "quit") continue;
+    const s = shortcutFor(id, { mac: false, browser: false });
+    assert.ok(s, `${id} has a key in the app`);
+    assert.equal(`CmdOrCtrl+${s.shift ? "Shift+" : ""}${s.key}`, accel, id);
+  }
+  // Redo is ⇧⌘Z on a Mac.
+  assert.match(shell, /"CmdOrCtrl\+Shift\+Z"/);
+  assert.deepEqual(shortcutFor("redo", { mac: true, browser: false }), { key: "Z", shift: true });
+});
+
+test("a browser shows no key it keeps for itself", () => {
+  const where = { mac: false, browser: true };
+  for (const id of [...accelerators().keys(), "redo"]) {
+    const s = shortcutFor(id, where);
+    if (!s) continue;
+    assert.ok(!/^[NWTQ1-9]$/.test(s.key) || s.alt, `${id}: ${s.key} is the browser's`);
+    assert.ok(!(s.key === "R" && s.shift), `${id}: Shift+R reloads`);
+    assert.ok(!(s.key === "W" && s.alt), `${id}: Safari's ⌥⌘W closes the other tabs`);
+  }
+  assert.equal(shortcutHint("new", { mac: true, browser: true }), " (⌥⌘N)");
+  assert.equal(shortcutHint("close", { mac: true, browser: true }), "");
+  assert.equal(shortcutHint("show-map", { mac: false, browser: true }), "");
+  assert.equal(shortcutHint("show-map", { mac: false, browser: false }), " (Ctrl+1)");
+});
+
+test("keys read the same as the app's tooltips always have", () => {
+  assert.equal(shortcutText({ key: "H", shift: true }, true), "⇧⌘H");
+  assert.equal(shortcutText({ key: "H", shift: true }, false), "Ctrl+Shift+H");
+  assert.equal(shortcutText({ key: "N", alt: true }, false), "Ctrl+Alt+N");
+});
+
+test("a browser's own keys for New Sequence, Open… and Home", () => {
+  const mac = { ctrlKey: false, metaKey: true, altKey: false, shiftKey: false };
+  // ⌥ on a Mac types another character: the key's place is what counts.
+  assert.equal(browserShortcut({ ...mac, altKey: true, key: "˜", code: "KeyN" }, true), "new");
+  assert.equal(browserShortcut({ ...mac, key: "n", code: "KeyN" }, true), null);
+  assert.equal(browserShortcut({ ...mac, key: "o", code: "KeyO" }, true), "open");
+  assert.equal(browserShortcut({ ...mac, shiftKey: true, key: "H", code: "KeyH" }, true), "home");
+  const pc = { ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+  assert.equal(browserShortcut({ ...pc, altKey: true, key: "n", code: "KeyN" }, false), "new");
+  assert.equal(browserShortcut({ ...pc, key: "o", code: "KeyO" }, false), "open");
+  assert.equal(browserShortcut({ ...pc, key: "o", code: "KeyO" }, true), null);
 });

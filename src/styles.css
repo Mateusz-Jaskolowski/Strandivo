@@ -625,6 +625,9 @@ select.ps-field-input {
   margin: 0;
   font-size: 20px;
 }
+.ps-settings-note {
+  margin: -8px 0 14px;
+}
 .ps-saved {
   font-size: 12px;
   color: var(--ps-ok);
@@ -806,4 +809,20 @@ select.ps-field-input {
   align-items: center;
   justify-content: space-between;
   margin-top: 6px;
+}
+
+/* Keys in a menu drawn in the page (the browser version's menu). */
+.ps-context-menu button:has(.ps-context-key) {
+  display: flex;
+  gap: 24px;
+}
+.ps-context-key {
+  margin-left: auto;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.ps-context-menu button:hover:not(:disabled) .ps-context-key,
+.ps-context-menu button:focus-visible .ps-context-key {
+  color: inherit;
+  opacity: 0.85;
 }

@@ -41,6 +41,9 @@ export const SEQUENCE_EXTENSIONS = [
   "json", "xml", "rdf", "sbol", "gff", "gff3", "geneious", "prot", "gp", "genpep", "fastq", "fq"
 ];
 
+/** What Open… offers: the shell's `OPEN_EXTENSIONS` (src-tauri/src/lib.rs), for the browser's picker. */
+export const OPEN_EXTENSIONS = [...SEQUENCE_EXTENSIONS, "ab1", "abi", "svcheck"];
+
 export const isTraceFile = (path: string) => TRACE_EXTENSIONS.includes(extension(path));
 
 /** Formats we can write. */

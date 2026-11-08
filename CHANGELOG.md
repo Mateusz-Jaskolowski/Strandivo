@@ -37,6 +37,9 @@ them, count a little more, still only as fixed words and ranges.
   built either way. In-Fusion has no melting temperature to meet, so nothing is warned about
   there, but the temperature it shows for an overlap is now worked out the same way, so both
   methods mean the same thing by it.
+- **An overlap that can't be judged is now reported**, in both Gibson and In-Fusion: where
+  the shared bases include anything other than A, C, G or T there is no telling whether
+  they will anneal, and the plan says so instead of passing quietly.
 - **Keyboard shortcuts on Windows**: Ctrl+S saves again, and so do the other menu keys
   that did nothing there: Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+, and the rest.
 - **Menu bar on Windows** stays light, like the rest of the window, instead of switching

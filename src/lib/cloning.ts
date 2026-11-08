@@ -442,9 +442,16 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   });
   const tmName = TM_METHODS.find(x => x.id === method.tmMethod)?.short ?? method.tmMethod;
   joinInfo.forEach((x, j) => {
-    if (x.tm !== null && method.minTm && x.tm < method.minTm) {
-      problems.push(`The overlap between ${inputs[j].name} and ${inputs[(j + 1) % m].name} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
+    const other = inputs[(j + 1) % m].name;
+    if (!x.bases) return;
+    // Whether an overlap can be assessed at all is a separate question from whether it
+    // meets a minimum, and it is asked of every method: In-Fusion sets no minimum, which
+    // must not switch off the check that the sequence is known.
+    if (x.tm === null) {
+      problems.push(`The overlap between ${inputs[j].name} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
+      return;
     }
+    if (method.minTm && x.tm < method.minTm) problems.push(`The overlap between ${inputs[j].name} and ${other} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
   });
 
   if (lengths.some(L => L === null) || pieces.some((p, i) => inputs[i].pcr && !p.primers.length)) {

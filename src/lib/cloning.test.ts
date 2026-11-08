@@ -194,6 +194,33 @@ test("Gibson: two PCR pieces share the overlap's halves; existing overlaps are u
   assert.equal(findOverlap("AAAACCCCGGGG", "CCGGGGTTTT", 4), 6);
 });
 
+test("overlap assembly: an overlap that can't be measured is reported whatever the method", () => {
+  // In-Fusion sets no minimum Tm. That must not switch off the check that an overlap's
+  // sequence is known: the two questions are separate.
+  assert.equal(IN_FUSION.minTm, 0);
+  const amb = "ATGCNNNNATGCATGCATGCATGC";
+  const linear = [
+    { name: "A", fragment: wholeFragment(doc("A", filler(200, 43) + amb, false)) },
+    { name: "B", fragment: wholeFragment(doc("B", amb + filler(200, 44), false)) }
+  ];
+  for (const method of [GIBSON, IN_FUSION]) {
+    const p = planAssembly(linear, method, false);
+    assert.equal(p.joins[0].tm, null);
+    assert.match(p.problems.join(" "), /no telling whether it will anneal/, `${method.overlap} bp method missed an unmeasurable overlap`);
+  }
+  // Circular too, where the last piece joins the first.
+  const ring = planAssembly(
+    [
+      { name: "A", fragment: wholeFragment(doc("A", amb + filler(200, 45) + "GCTAGCTTACGGATCCTTAA", false)) },
+      { name: "B", fragment: wholeFragment(doc("B", "GCTAGCTTACGGATCCTTAA" + filler(200, 46) + amb, false)) }
+    ],
+    IN_FUSION,
+    true
+  );
+  assert.equal(ring.joins.length, 2);
+  assert.match(ring.problems.join(" "), /no telling whether it will anneal/);
+});
+
 test("overlap assembly: the overlap Tm is measured by the method its threshold was set for", () => {
   // 48 °C for this chemistry is a Wallace-rule figure, so the check must not follow the
   // method Settings picked for what is shown elsewhere.

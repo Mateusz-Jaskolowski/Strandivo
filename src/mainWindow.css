@@ -383,6 +383,23 @@
 .sv-home-group th {
   padding-top: 10px;
 }
+/* A folder a browser asks about again before it is read (src/home.ts). */
+.sv-home-locked {
+  margin-left: 10px;
+  font-weight: 400;
+}
+.sv-home-locked .sv-link-btn {
+  margin-left: 4px;
+}
+.sv-home-folder .sv-home-allow {
+  padding: 2px 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* Where a browser can't keep folders: what Home lists instead. */
+.sv-home-note-line {
+  margin: 0 0 10px;
+}
 .sv-home-subgroup th {
   padding-left: 14px;
   color: var(--text-2);

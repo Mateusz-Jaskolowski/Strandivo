@@ -17,17 +17,20 @@ import {
   canSaveInPlace,
   chooseSavePath,
   confirmDialog,
+  filesNeedingAccess,
   isDesktop,
   openSettings,
+  pickFileKeys,
   pickFiles,
   readFile,
+  requestFileAccess,
   saveText,
   type PickedFile
 } from "../platform.ts";
 import { addRecentFile } from "../recent.ts";
 import { track, trackOnce } from "../usage.ts";
 import { basename, dirname, extension, formatForPath, isTraceFile, joinPath, stripExtension, suggestedSaveName, TEXT_READ_EXTENSIONS, type SaveFormat } from "../lib/files.ts";
-import { CHECK_EXTENSION, checkFileText, type ReadCheck } from "../lib/readCheck.ts";
+import { CHECK_EXTENSION, checkFileText, matchByName, type ReadCheck } from "../lib/readCheck.ts";
 import { rememberedReads, rememberReads } from "../readChecks.ts";
 import { rememberedRotation, rememberRotation } from "../mapRotations.ts";
 import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
@@ -67,7 +70,7 @@ import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
 import { fmt } from "../ui/format.ts";
 import { shortcutHint } from "../lib/shortcuts.ts";
-import { isBrowserKey } from "../webFiles.ts";
+import { keyLasts } from "../webFiles.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const VIEW_KEY = "strandivo.view";
@@ -274,7 +277,9 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     },
     copy: (text, what) => void copyText(text, what),
     legacyFeatures: () => legacyFeatures(store.data),
-    saveCheck: () => void saveCheck()
+    saveCheck: () => void saveCheck(),
+    // Safari and Firefox hold a file only for the visit (src/webFiles.ts).
+    forgetsReads: () => !isDesktop && ((!!path && !keyLasts(path)) || reads.saved().some(r => !keyLasts(r.path)))
   });
   const infoHost = h("div", { class: "sv-pane-inner sv-info-host" });
   const panes: Record<Tab | "split", HTMLElement> = {
@@ -341,8 +346,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // A quiet strip, never a dialog: the file is only sparsely annotated, which is a
   // suggestion worth making once and not an interruption worth making every time.
   const offer = h("div", { class: "sv-offer", hidden: true });
+  // Reads that wait on the browser: its permission, or for the user to choose them.
+  const readsOffer = h("div", { class: "sv-offer sv-reads-offer", hidden: true });
   const body = h("div", { class: "sv-body" }, outline.el, main, inspector.el);
-  const app = h("div", { class: "sv-app" }, header, offer, body, status);
+  const app = h("div", { class: "sv-app" }, header, offer, readsOffer, body, status);
 
   function showOffer() {
     const d = store.data;
@@ -366,9 +373,12 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // ---------- reads and info ----------
   // The app remembers a file's reads (decision 1 in docs/clone-checking.md).
   let remembered = "";
+  /** Remembered reads the browser asks about before they are read: still remembered meanwhile. */
+  let waiting: ReadCheck["reads"] = [];
   reads.onChange(() => {
     if (!path || reads.running) return;
-    const saved = reads.saved();
+    const added = reads.saved();
+    const saved = [...waiting.filter(w => !added.some(r => r.path === w.path)), ...added];
     const text = JSON.stringify(saved);
     if (text === remembered) return;
     remembered = text;
@@ -661,8 +671,54 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   }
 
   // ---------- reads ----------
-  /** Adds the reads of a check, or those remembered for this file; names any not found. */
+  const readCount = (n: number) => (n === 1 ? "the read" : `the ${fmt(n)} reads`);
+
+  function offerReads(text: string, label: string, act: () => Promise<void>) {
+    readsOffer.replaceChildren(
+      iconSvg("wave", 16),
+      h("span", { class: "sv-offer-text", title: text }, text),
+      h("button", { type: "button", class: "sv-btn sv-btn-small sv-btn-primary", onclick: () => void act() }, label),
+      h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: hideReadsOffer }, "Not now")
+    );
+    readsOffer.hidden = false;
+  }
+  function hideReadsOffer() {
+    readsOffer.hidden = true;
+    readsOffer.replaceChildren();
+  }
+
+  /**
+   * Adds the reads of a check, or those remembered for this file. In a browser, reads it
+   * wants to ask about first wait for a click (it allows asking only then), and a check's
+   * reads that can't be reached from here are chosen by the user, matched by name
+   * (docs/web-version-plan.md, part 4). Nothing is added until all can be, so the check's
+   * order and clones are kept.
+   */
   async function restoreReads(c: ReadCheck, fromCheckFile: boolean) {
+    if (fromCheckFile) {
+      reads.useCheckSettings(c);
+      setTab("reads");
+    }
+    const locked = await filesNeedingAccess(c.reads.map(r => r.path));
+    if (locked.length) {
+      if (!fromCheckFile) waiting = c.reads;
+      offerReads(
+        `Your browser asks before Strandivo reads ${readCount(c.reads.length)} ${fromCheckFile ? "this check lists" : "checked against this file before"}.`,
+        "Allow access",
+        async () => {
+          const refused = await requestFileAccess(c.reads.map(r => r.path));
+          hideReadsOffer();
+          waiting = [];
+          if (refused.length) toast(`Your browser didn't allow Strandivo to read ${refused.length === 1 ? "one of the reads" : `${fmt(refused.length)} of the reads`}.`, "info", 6000);
+          await addCheckReads({ ...c, reads: c.reads.filter(r => !refused.includes(r.path)) }, fromCheckFile, fromCheckFile);
+        }
+      );
+      return;
+    }
+    await addCheckReads(c, fromCheckFile, fromCheckFile);
+  }
+
+  async function addCheckReads(c: ReadCheck, fromCheckFile: boolean, askMissing: boolean) {
     const files: PickedFile[] = [];
     const clones: (string | null)[] = [];
     const missing: string[] = [];
@@ -671,17 +727,26 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         files.push({ name: basename(r.path), path: r.path, bytes: await readFile(r.path) });
         clones.push(r.clone);
       } catch {
-        missing.push(basename(r.path));
+        missing.push(r.path);
       }
     }
-    if (fromCheckFile) {
-      reads.useCheckSettings(c);
-      setTab("reads");
+    if (missing.length && askMissing && !isDesktop) {
+      offerReads("Your browser opens only files you choose. Strandivo matches them to the check by name.", `Add ${readCount(missing.length)} this check lists…`, async () => {
+        const picked = await pickFileKeys("Sequencing reads", READ_EXTENSIONS).catch(e => {
+          toast(`Couldn't open: ${e instanceof Error ? e.message : e}`, "error", 6000);
+          return [] as string[];
+        });
+        if (!picked.length) return;
+        hideReadsOffer();
+        await addCheckReads(matchByName(c, picked), true, false);
+      });
+      return;
     }
     if (missing.length) {
-      const which = `${missing.slice(0, 3).join(", ")}${missing.length > 3 ? ", …" : ""}`;
+      const names = missing.map(p => basename(p));
+      const which = `${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""}`;
       const where = fromCheckFile ? "in the check" : "checked against this file before";
-      toast(`${missing.length === 1 ? "A read" : `${missing.length} reads`} ${where} couldn't be found (moved or deleted?): ${which}`, "error", 9000);
+      toast(`${missing.length === 1 ? "A read" : `${missing.length} reads`} ${where} couldn't be found (${isDesktop ? "moved or deleted?" : "not chosen, moved or deleted?"}): ${which}`, "error", 9000);
     }
     if (files.length) await reads.addFiles(files, clones);
   }
@@ -711,7 +776,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
 
   async function addReads(files?: PickedFile[]) {
     setTab("reads");
-    const picked = files ?? (await pickFiles("Sequencing reads", READ_EXTENSIONS));
+    // In a browser too, picked reads get a path (a key), to be remembered and saved in checks.
+    const picked = files ?? (await pickFiles("Sequencing reads", READ_EXTENSIONS, true));
     if (picked.length) await reads.addFiles(picked);
   }
 
@@ -928,9 +994,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       const files: PickedFile[] = [];
       for (const p of readPaths) {
         try {
-          // A browser's key for a read doesn't last beyond the visit yet, so it is neither
-          // remembered nor saved in a check (docs/web-version-plan.md, part 4).
-          files.push({ name: basename(p), path: isBrowserKey(p) ? undefined : p, bytes: await readFile(p) });
+          files.push({ name: basename(p), path: p, bytes: await readFile(p) });
         } catch (e) {
           toast(String(e), "error");
         }
@@ -1005,6 +1069,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       file: { name: `${stripExtension(title) || "Untitled"}.gb`, contents: () => serialize(fileJson(), "genbank") }
     }),
     openCheck: async (c: ReadCheck) => {
+      hideReadsOffer();
+      waiting = [];
       reads.clear();
       await restoreReads(c, true);
     },

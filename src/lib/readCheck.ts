@@ -22,10 +22,19 @@ export interface ReadCheck {
   trimCutoff?: number;
 }
 
-const isAbsolute = (p: string) => /^([a-z][a-z0-9+.-]*:\/\/|\/|\\\\|[a-z]:[\\/])/i.test(p);
+/**
+ * A browser's key (src/webFiles.ts) starts at `web:<id>` (a file, or a folder of Home's)
+ * or `upload:<n>`, as a path starts at a drive: keys in one of Home's folders are relative
+ * to each other like paths, and keys with different starts have nothing in common.
+ */
+const KEY = /^((?:web|upload):[^/]*)(.*)$/;
+const isAbsolute = (p: string) => KEY.test(p) || /^([a-z][a-z0-9+.-]*:\/\/|\/|\\\\|[a-z]:[\\/])/i.test(p);
+const nameOf = (p: string) => p.split(/[\\/]/).pop() || p;
 
-/** Where a path starts (scheme and host, drive, or "/") and its folders and file. */
+/** Where a path starts (a key's start, scheme and host, drive, or "/") and its folders and file. */
 function parts(p: string): { root: string; segments: string[] } {
+  const key = p.match(KEY);
+  if (key) return { root: key[1], segments: key[2].split("/").filter(Boolean) };
   const url = p.match(/^([a-z][a-z0-9+.-]*:\/\/[^/]*)(.*)$/i);
   if (url) return { root: url[1].toLowerCase(), segments: url[2].split("/").filter(Boolean) };
   const drive = p.match(/^([a-z]:)[\\/]?(.*)$/i);
@@ -33,11 +42,15 @@ function parts(p: string): { root: string; segments: string[] } {
   return { root: p.startsWith("/") || p.startsWith("\\") ? "/" : "", segments: p.split(/[\\/]/).filter(Boolean) };
 }
 
-/** `to` relative to the folder `fromDir`, written with "/"; `to` itself on another drive or host. */
+/**
+ * `to` relative to the folder `fromDir`, written with "/"; `to` itself on another drive or
+ * host. A browser's key from elsewhere is written as its name, as a key leads nowhere
+ * outside the browser that made it: a check made there names files that sit beside it.
+ */
 export function relativePath(fromDir: string, to: string): string {
   const a = parts(fromDir);
   const b = parts(to);
-  if (a.root !== b.root || !isAbsolute(to)) return to;
+  if (a.root !== b.root || !isAbsolute(to)) return KEY.test(to) ? nameOf(to) : to;
   // Windows paths compare without case.
   const same = (x: string, y: string) => (/^[A-Z]:$/.test(a.root) ? x.toLowerCase() === y.toLowerCase() : x === y);
   let common = 0;
@@ -115,4 +128,16 @@ export function parseCheckFile(text: string, checkPath: string): ReadCheck {
     ...(typeof o.minQuality === "number" ? { minQuality: o.minQuality } : {}),
     ...(typeof o.trimCutoff === "number" ? { trimCutoff: o.trimCutoff } : {})
   };
+}
+
+/**
+ * The check with each file it lists swapped for the picked file of the same name, if one
+ * was picked: in a browser, a check's paths often lead nowhere, so its files are chosen.
+ */
+export function matchByName(check: ReadCheck, picked: string[]): ReadCheck {
+  const find = (p: string) => {
+    const name = nameOf(p);
+    return picked.find(k => nameOf(k) === name) ?? picked.find(k => nameOf(k).toLowerCase() === name.toLowerCase()) ?? p;
+  };
+  return { ...check, reference: find(check.reference), reads: check.reads.map(r => ({ ...r, path: find(r.path) })) };
 }

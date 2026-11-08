@@ -4,17 +4,44 @@
 // Home, the first tab of the main window: the construct library. It lists the sequence
 // files in the user's folders (and their subfolders) with what each construct carries and
 // a short note, next to Open, New sequence and recent files. Opening one adds a tab.
+//
+// In a browser, folders are kept only where it gives their handles (Chrome and Edge), and
+// it may ask again before one is read on a later visit, which it allows only after a click:
+// until then the folder offers "Allow access…" and its files show as they were last read.
+// Elsewhere (Safari and Firefox), Home lists the files opened during the visit instead.
 
 import { h, toast } from "./ui/dom.ts";
 import { iconSvg } from "./ui/icons.ts";
 import { fmt } from "./ui/format.ts";
-import { catalogVersion, detectFeatures, isDesktop, listSequenceFiles, pickFolder, readFile, showOpenDialog, type ListedFile } from "./platform.ts";
-import { isBrowserKey } from "./webFiles.ts";
+import {
+  allowFolder,
+  canKeepFolders,
+  catalogVersion,
+  detectFeatures,
+  folderAccess,
+  listOpened,
+  listSequenceFiles,
+  pickFolder,
+  readFile,
+  showOpenDialog,
+  type ListedFile
+} from "./platform.ts";
+import { isBrowserKey, shownPath } from "./webFiles.ts";
 import { recentFiles } from "./recent.ts";
-import { basename, dirname, stripExtension } from "./lib/files.ts";
+import { basename, dirname, extension, LIBRARY_EXTENSIONS, stripExtension } from "./lib/files.ts";
 import { describeContents, matchesSearch, subfolder, type ConstructInfo } from "./lib/constructs.ts";
 import { parseComments } from "./lib/labinfo.ts";
-import { cacheConstructs, cachedConstruct, constructNote, libraryFolders, setConstructNote, setLibraryFolders } from "./constructLibrary.ts";
+import {
+  cacheConstructs,
+  cachedConstruct,
+  cachedConstructs,
+  canKeepNote,
+  constructNote,
+  isCurrent,
+  libraryFolders,
+  setConstructNote,
+  setLibraryFolders
+} from "./constructLibrary.ts";
 
 export interface HomeHost {
   /** Opens files in tabs (null = a new sequence). */
@@ -63,6 +90,9 @@ async function readConstruct(f: ListedFile, catalog: string): Promise<ConstructI
   }
 }
 
+/** Said where a browser can't keep folders, above what Home lists instead. */
+const NO_FOLDERS = "This browser can't keep folders. Files you open are listed until you close the page. Chrome, Edge or the desktop app can list whole folders.";
+
 const VERIFIED_CLASS: Record<string, string> = { Yes: "sv-home-ok", Partially: "sv-home-warn", No: "sv-home-bad", "Differences found": "sv-home-bad" };
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
@@ -71,6 +101,10 @@ export class Home {
   private host: HomeHost;
   private infos: ConstructInfo[] = [];
   private folderErrors = new Map<string, string>();
+  /** Folders the browser wants to ask about before they are read again. */
+  private locked = new Set<string>();
+  /** Files opened during this visit, listed where the browser can't keep folders. */
+  private opened: string[] = [];
   private progress: { done: number; total: number } | null = null;
   private scanId = 0;
   private lastScan = 0;
@@ -80,6 +114,7 @@ export class Home {
   private list = h("div", { class: "sv-home-list" });
   private folderList = h("div", { class: "sv-home-folders" });
   private recentList = h("div", { class: "sv-home-recent" });
+  private folderSection: HTMLElement;
   private countEl = h("span", { class: "sv-count" });
   private progressEl = h("span", { class: "sv-pane-note" });
 
@@ -103,12 +138,12 @@ export class Home {
         h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => void this.openDialog() }, "Open…"),
         h("button", { type: "button", class: "sv-btn", onclick: () => host.open([null]) }, "New sequence")
       ),
-      h(
+      (this.folderSection = h(
         "section",
         null,
         h("div", { class: "sv-section-head" }, h("h2", { class: "sv-section-title" }, "Library folders"), h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": "Add folder", title: "Add folder", onclick: () => void this.chooseFolder() }, iconSvg("plus", 14))),
         this.folderList
-      ),
+      )),
       h("section", null, h("div", { class: "sv-section-head" }, h("h2", { class: "sv-section-title" }, "Recent")), this.recentList),
       h("p", { class: "sv-small sv-dim sv-home-hint" }, "Drop files anywhere to open them. To check sequencing results, open a construct and drop .ab1 files on it.")
     );
@@ -146,6 +181,13 @@ export class Home {
     return Array.from(this.list.querySelectorAll(".sv-home-open")).map(b => b.textContent || "");
   }
 
+  /** A file opened in a tab: listed for the visit where the browser can't keep folders. */
+  noteOpened(path: string) {
+    if (!LIBRARY_EXTENSIONS.includes(extension(path)) || this.opened.includes(path)) return;
+    this.opened.push(path);
+    this.lastScan = 0;
+  }
+
   addFolder(folder: string) {
     setLibraryFolders([...libraryFolders(), folder]);
     this.renderSide();
@@ -160,13 +202,30 @@ export class Home {
 
   /** Asks for a folder and adds it; the folder, or null if none was chosen. */
   async chooseFolder(): Promise<string | null> {
-    if (!isDesktop) {
-      toast("Folders can only be read in the desktop app.", "info");
+    if (!canKeepFolders()) {
+      toast(NO_FOLDERS, "info", 8000);
       return null;
     }
-    const folder = await pickFolder("Add a folder of constructs");
+    let folder: string | null;
+    try {
+      folder = await pickFolder("Add a folder of constructs");
+    } catch (e) {
+      toast(`Couldn't add the folder: ${e instanceof Error ? e.message : e}`, "error", 6000);
+      return null;
+    }
     if (folder) await this.addFolder(folder);
     return folder;
+  }
+
+  /** Asks the browser to let Home read these folders again, from a click. */
+  private async allow(folders: string[]) {
+    for (const folder of folders) {
+      if (!(await allowFolder(folder))) {
+        toast(`Strandivo wasn't allowed to read ${basename(folder)}.`, "info", 6000);
+        break;
+      }
+    }
+    await this.scan();
   }
 
   private async openDialog() {
@@ -181,12 +240,16 @@ export class Home {
   async scan() {
     const id = ++this.scanId;
     this.lastScan = Date.now();
-    const folders = libraryFolders();
+    const keepsFolders = canKeepFolders();
+    const folders = keepsFolders ? libraryFolders() : [];
     const listed = new Map<string, ListedFile>();
     const errors = new Map<string, string>();
+    const locked = new Set<string>();
+    if (!keepsFolders) for (const f of listOpened(this.opened)) listed.set(f.path, f);
     for (const folder of folders) {
       try {
-        for (const f of await listSequenceFiles(folder)) listed.set(f.path, f);
+        if ((await folderAccess(folder)) === "ask") locked.add(folder);
+        else for (const f of await listSequenceFiles(folder)) listed.set(f.path, f);
       } catch (e) {
         errors.set(folder, e instanceof Error ? e.message : String(e));
       }
@@ -195,10 +258,14 @@ export class Home {
     const catalog = await catalogVersion();
     if (id !== this.scanId) return;
     this.folderErrors = errors;
-    const known: ConstructInfo[] = [];
+    this.locked = locked;
+    const before = new Map(this.infos.map(i => [i.path, i]));
+    // A folder the browser asks about first shows what was read from it last time.
+    const known: ConstructInfo[] = cachedConstructs().filter(i => !listed.has(i.path) && [...locked].some(f => subfolderOf(i.path, f) !== null));
     const toRead: ListedFile[] = [];
     for (const f of listed.values()) {
-      const hit = cachedConstruct(f.path, f.size, f.modified, catalog);
+      const seen = before.get(f.path);
+      const hit = seen && isCurrent(seen, f.size, f.modified, catalog) ? seen : cachedConstruct(f.path, f.size, f.modified, catalog);
       if (hit) known.push(hit);
       else toRead.push(f);
     }
@@ -221,16 +288,18 @@ export class Home {
 
   private renderSide() {
     const folders = libraryFolders();
+    this.folderSection.hidden = !canKeepFolders();
     this.folderList.replaceChildren(
       ...folders.map(folder => {
         const count = this.infos.filter(i => subfolderOf(i.path, folder) !== null).length;
         const error = this.folderErrors.get(folder);
+        const locked = this.locked.has(folder);
         return h(
           "div",
-          { class: "sv-home-folder", title: error ? `${folder}\n${error}` : folder },
+          { class: "sv-home-folder", title: error ? `${shownPath(folder)}\n${error}` : locked ? `${shownPath(folder)}\nYour browser asks before Strandivo reads it again.` : shownPath(folder) },
           iconSvg(error ? "warn" : "folder", 14),
           h("span", { class: "sv-home-folder-name" }, basename(folder) || folder),
-          h("span", { class: "sv-count" }, error ? "not found" : String(count)),
+          locked ? this.allowButton([folder]) : h("span", { class: "sv-count" }, error ? "not found" : String(count)),
           h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": `Remove ${basename(folder)} from the library`, title: "Remove from the library (the files stay)", onclick: () => this.removeFolder(folder) }, iconSvg("x", 12))
         );
       }),
@@ -242,11 +311,11 @@ export class Home {
       ...recent.map(path =>
         h(
           "button",
-          { type: "button", class: "sv-home-recent-item", title: isBrowserKey(path) ? basename(path) : path, onclick: () => this.host.open([path]) },
+          { type: "button", class: "sv-home-recent-item", title: shownPath(path), onclick: () => this.host.open([path]) },
           h("span", { class: "sv-home-recent-name" }, basename(path)),
           // Marks keep the slashes in place in the right-to-left box that shows the path's end.
-          // A browser's key (src/webFiles.ts) has no folder to show.
-          isBrowserKey(path) ? "" : h("span", { class: "sv-home-recent-dir" }, `\u200e${dirname(path)}\u200e`)
+          // A browser's key (src/webFiles.ts) has a folder to show only if it is in one of Home's.
+          dirname(shownPath(path)) ? h("span", { class: "sv-home-recent-dir" }, `\u200e${dirname(shownPath(path))}\u200e`) : ""
         )
       ),
       recent.length ? "" : h("p", { class: "sv-small sv-dim" }, "Files you open appear here.")
@@ -259,39 +328,61 @@ export class Home {
       return;
     }
     this.renderLater = false;
-    const folders = libraryFolders();
+    const keepsFolders = canKeepFolders();
+    const folders = keepsFolders ? libraryFolders() : [];
     const shown = this.infos.filter(i => matchesSearch(i, this.note(i), this.query));
     this.countEl.textContent = this.query ? `${fmt(shown.length)} of ${fmt(this.infos.length)}` : fmt(this.infos.length);
     this.progressEl.textContent = this.progress ? `Reading ${fmt(this.progress.done)} of ${fmt(this.progress.total)} files…` : "";
 
-    if (!folders.length) {
+    if (keepsFolders ? !folders.length : !this.opened.length) {
       this.list.replaceChildren(
         h(
           "div",
           { class: "sv-home-empty" },
           iconSvg("folder", 28),
           h("h2", null, "Your constructs in one place"),
-          h("p", null, "Add the folders where you keep plasmid and construct files (GenBank, SnapGene, FASTA). Home lists every file in them and their subfolders, with what each construct carries and a note you can add."),
-          h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => void this.chooseFolder() }, "Add folder…"),
-          isDesktop ? "" : h("p", { class: "sv-small sv-dim" }, "Folders can only be read in the desktop app.")
+          keepsFolders
+            ? h("p", null, "Add the folders where you keep plasmid and construct files (GenBank, SnapGene, FASTA). Home lists every file in them and their subfolders, with what each construct carries and a note you can add.")
+            : h("p", null, NO_FOLDERS),
+          keepsFolders
+            ? h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => void this.chooseFolder() }, "Add folder…")
+            : h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => void this.openDialog() }, "Open…")
         )
       );
       return;
     }
-    if (!shown.length) {
+    const note = keepsFolders ? "" : h("p", { class: "sv-small sv-dim sv-home-note-line" }, NO_FOLDERS);
+    if (!shown.length && !this.locked.size) {
       const text = this.progress ? "Reading files…" : this.query ? `No construct matches “${this.query.trim()}”.` : "No sequence files in these folders yet.";
-      this.list.replaceChildren(h("div", { class: "sv-empty" }, text));
+      this.list.replaceChildren(note, h("div", { class: "sv-empty" }, text));
       return;
     }
 
     // Grouped by library folder, then subfolder; each file under the first folder that holds it.
+    // Where folders can't be kept, the files opened during the visit, by name.
     const rows: HTMLElement[] = [];
     const placed = new Set<string>();
+    if (!keepsFolders) rows.push(...shown.sort((a, b) => byName(basename(a.path), basename(b.path))).map(i => this.row(i)));
     for (const folder of folders) {
       const mine = shown.filter(i => !placed.has(i.path) && subfolderOf(i.path, folder) !== null);
-      if (!mine.length) continue;
+      const locked = this.locked.has(folder);
+      if (!mine.length && !locked) continue;
       mine.forEach(i => placed.add(i.path));
-      rows.push(h("tr", { class: "sv-home-group" }, h("th", { colspan: "5", scope: "colgroup", title: folder }, basename(folder) || folder, h("span", { class: "sv-dim" }, ` ${dirname(folder)}`))));
+      // A browser's key (src/webFiles.ts) has no place on disk to show.
+      const where = isBrowserKey(folder) ? "" : dirname(folder);
+      rows.push(
+        h(
+          "tr",
+          { class: "sv-home-group" },
+          h(
+            "th",
+            { colspan: "5", scope: "colgroup", title: shownPath(folder) },
+            basename(folder) || folder,
+            where ? h("span", { class: "sv-dim" }, ` ${where}`) : "",
+            locked ? h("span", { class: "sv-home-locked" }, h("span", { class: "sv-dim" }, mine.length ? "Shown as last read: your browser asks before Strandivo reads it again." : "Your browser asks before Strandivo reads it again."), this.allowButton([folder])) : ""
+          )
+        )
+      );
       const bySub = new Map<string, ConstructInfo[]>();
       for (const i of mine) {
         const sub = subfolderOf(i.path, folder) ?? "";
@@ -303,6 +394,7 @@ export class Home {
       }
     }
     this.list.replaceChildren(
+      note,
       h(
         "table",
         { class: "sv-table sv-home-table" },
@@ -317,11 +409,16 @@ export class Home {
     return constructNote(i.path) ?? i.fields.Notes ?? "";
   }
 
+  private allowButton(folders: string[]): HTMLElement {
+    return h("button", { type: "button", class: "sv-link-btn sv-home-allow", onclick: () => void this.allow(folders) }, "Allow access…");
+  }
+
   private row(i: ConstructInfo): HTMLElement {
     const file = basename(i.path);
     const verified = i.fields["Sequence verified"];
     const open = () => this.host.open([i.path]);
-    const note = h("input", {
+    // A file held only for the visit can't keep a note: the file's own Notes field shows.
+    const note = !canKeepNote(i.path) ? h("span", { class: "sv-small sv-dim", title: "Notes typed on Home are kept for files in a folder." }, i.fields.Notes ?? "") : h("input", {
       type: "text",
       class: "sv-input sv-home-note",
       value: this.note(i),
@@ -337,7 +434,7 @@ export class Home {
       h(
         "td",
         { class: "sv-home-name" },
-        h("button", { type: "button", class: "sv-home-open", title: `Open ${i.path}`, onclick: open }, file),
+        h("button", { type: "button", class: "sv-home-open", title: `Open ${shownPath(i.path)}`, onclick: open }, file),
         i.error ? h("div", { class: "sv-small sv-text-warn", title: i.error }, "Couldn't be read") : "",
         !i.error && i.name && i.name !== stripExtension(file) ? h("div", { class: "sv-small sv-dim" }, i.name) : "",
         verified ? h("span", { class: `sv-home-verified ${VERIFIED_CLASS[verified] ?? ""}`, title: "Sequence verified (Info tab)" }, verified === "Yes" ? "Verified" : verified) : ""

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { checkFileText, parseCheckFile, relativePath, resolvePath, savedClones } from "./readCheck.ts";
+import { checkFileText, matchByName, parseCheckFile, relativePath, resolvePath, savedClones } from "./readCheck.ts";
 
 test("paths relative to a folder, on macOS, Windows and the web", () => {
   assert.equal(relativePath("/Users/mj/plates/run1", "/Users/mj/plates/run1/A01_M13F.ab1"), "A01_M13F.ab1");
@@ -45,6 +45,33 @@ test("a check file round-trips, wherever the folder is moved", () => {
   const moved = parseCheckFile(text, "E:\\shared\\lab\\reads\\pUC19 reads.svcheck");
   assert.equal(moved.reference, "E:\\shared\\lab\\pUC19.gb");
   assert.equal(moved.reads[1].path, "E:\\shared\\lab\\reads\\A01_M13R.ab1");
+});
+
+test("in a browser, keys in one of Home's folders are relative to each other, and other keys are names", () => {
+  // A folder added to Home in Chrome or Edge (src/webFiles.ts).
+  assert.equal(relativePath("web:1f2e/Lab/reads", "web:1f2e/Lab/pUC19.gb"), "../pUC19.gb");
+  assert.equal(resolvePath("web:1f2e/Lab/reads", "../pUC19.gb"), "web:1f2e/Lab/pUC19.gb");
+  assert.equal(resolvePath("web:1f2e/Lab/reads", "A01.ab1"), "web:1f2e/Lab/reads/A01.ab1");
+  // A file picked on its own, or one held for the visit: only its name means anything elsewhere.
+  assert.equal(relativePath("web:1f2e/Lab/reads", "web:77aa/A01.ab1"), "A01.ab1");
+  assert.equal(relativePath("upload:4", "upload:2/pUC19.gb"), "pUC19.gb");
+  assert.equal(resolvePath("upload:4", "pUC19.gb"), "upload:4/pUC19.gb");
+  // A check from the desktop opened in a folder of Home's, and one saved in Safari opened on the desktop.
+  const desktop = checkFileText("/Users/mj/lab/reads/x.svcheck", { reference: "/Users/mj/lab/pUC19.gb", reads: [{ path: "/Users/mj/lab/reads/A01.ab1", clone: null }] });
+  assert.deepEqual(parseCheckFile(desktop, "web:1f2e/lab/reads/x.svcheck"), { reference: "web:1f2e/lab/pUC19.gb", reads: [{ path: "web:1f2e/lab/reads/A01.ab1", clone: null }] });
+  const safari = checkFileText("upload:9/x.svcheck", { reference: "upload:1/pUC19.gb", reads: [{ path: "upload:2/A01.ab1", clone: "#g1" }] });
+  assert.deepEqual(parseCheckFile(safari, "/Users/mj/lab/x.svcheck"), { reference: "/Users/mj/lab/pUC19.gb", reads: [{ path: "/Users/mj/lab/A01.ab1", clone: "#g1" }] });
+});
+
+test("files chosen for a check are matched by name, keeping its order and clones", () => {
+  const check = { reference: "upload:9/pUC19.gb", reads: [{ path: "upload:9/A01.ab1", clone: "#g1" }, { path: "upload:9/A02.ab1", clone: null }], minQuality: 25 };
+  assert.deepEqual(matchByName(check, ["upload:12/a02.AB1", "upload:11/pUC19.gb", "upload:13/A01.ab1"]), {
+    reference: "upload:11/pUC19.gb",
+    reads: [{ path: "upload:13/A01.ab1", clone: "#g1" }, { path: "upload:12/a02.AB1", clone: null }],
+    minQuality: 25
+  });
+  // What wasn't chosen keeps its path, which leads nowhere: the caller says so.
+  assert.equal(matchByName(check, ["upload:13/A01.ab1"]).reads[1].path, "upload:9/A02.ab1");
 });
 
 test("other files are refused with a message", () => {

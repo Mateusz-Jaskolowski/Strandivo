@@ -8,7 +8,7 @@
 
 import { DEFAULT_DESIGN, designPair, type DesignOptions } from "./design.ts";
 import { enzymeSite, scanSites } from "./enzymes.ts";
-import { findBindingSites, meltingTemp } from "./primers.ts";
+import { DEFAULT_TM, findBindingSites, meltingTemp, TM_METHODS, type TmMethod } from "./primers.ts";
 import { carryRegions } from "./regions.ts";
 import { basesIn, deleteRange, insertBases, newId, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData } from "./seqdata.ts";
 
@@ -317,12 +317,22 @@ export interface OverlapMethod {
   split: boolean;
   /** Overlaps melting below this are flagged. */
   minTm: number;
+  /**
+   * How `minTm` is measured. A threshold only means something together with the method it
+   * was set for: the published 48 °C for this chemistry is a Wallace-rule figure, and the
+   * same overlap reads about 8 °C lower under nearest-neighbour. So the check names its own
+   * method instead of following the Tm shown elsewhere, which Settings lets the user change.
+   */
+  tmMethod: TmMethod;
 }
 
-/** NEBuilder's defaults: 20 bp overlaps, split across both primers when both pieces are amplified. */
-export const GIBSON: OverlapMethod = { overlap: 20, minOverlap: 15, split: true, minTm: 48 };
+/** 20 bp overlaps, split across both primers when both pieces are amplified. */
+export const GIBSON: OverlapMethod = { overlap: 20, minOverlap: 15, split: true, minTm: 48, tmMethod: "wallace" };
 /** In-Fusion: 15 bp of each neighbour's end on the insert's primers. */
-export const IN_FUSION: OverlapMethod = { overlap: 15, minOverlap: 15, split: false, minTm: 0 };
+export const IN_FUSION: OverlapMethod = { overlap: 15, minOverlap: 15, split: false, minTm: 0, tmMethod: "wallace" };
+
+/** The Tm of an assembly overlap, always by the method its threshold was set for. */
+const overlapTm = (bases: string, method: OverlapMethod): number | null => meltingTemp(bases, { ...DEFAULT_TM, method: method.tmMethod });
 
 export interface AssemblyInput {
   name: string;
@@ -349,6 +359,24 @@ export interface AssemblyJoin {
   designed: boolean;
 }
 
+/**
+ * A join taken from bases the two neighbours already share. Sequence alone can't say
+ * whether those bases are one shared stretch or one copy in each piece — a linker or a tag
+ * at the end of one part and the start of the next looks exactly the same — so every one of
+ * these is reported with both lengths and the user decides.
+ */
+export interface ReusedOverlap {
+  /** Index of the piece on the left of the join. */
+  index: number;
+  left: string;
+  right: string;
+  bases: string;
+  /** Length of the product as built, keeping one copy; null when no product was built. */
+  merged: number | null;
+  /** Length it would have with both copies kept; null when no product was built. */
+  kept: number | null;
+}
+
 export interface AssemblyPlan {
   /** Each piece as it goes into the reaction (PCR pieces with their tails), with its primers. */
   pieces: { name: string; fragment: Fragment; primers: AssemblyPrimer[] }[];
@@ -357,6 +385,10 @@ export interface AssemblyPlan {
   product: SeqData | null;
   layout: Layout | null;
   problems: string[];
+  /** Worth reading before ordering, but not wrong: reused overlaps, mostly. */
+  notes: string[];
+  /** Joins built on bases the pieces already shared, in case a view wants to offer a choice. */
+  reused: ReusedOverlap[];
 }
 
 /**
@@ -365,6 +397,8 @@ export interface AssemblyPlan {
  */
 export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, circular = true, design: DesignOptions = DEFAULT_DESIGN): AssemblyPlan {
   const problems: string[] = [];
+  const notes: string[] = [];
+  const reused: ReusedOverlap[] = [];
   const m = inputs.length;
   const prepared = inputs.map(i => {
     const f = assemblyBases(i.fragment);
@@ -382,20 +416,42 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     if (found) {
       lengths.push(found);
       designed.push(false);
+      reused.push({ index: a, left: inputs[a].name, right: inputs[b].name, bases: seqs[a].slice(-found), merged: null, kept: null });
       continue;
     }
     const L = method.overlap;
     const ampA = !!inputs[a].pcr;
     const ampB = !!inputs[b].pcr;
     designed.push(true);
-    lengths.push(ampA || ampB ? L : null);
+    // The overlap is cut from the neighbours' ends, so a piece shorter than its share of it
+    // can only give what it has. Record what the tails really carry, never what was asked
+    // for: joining on more bases than the pieces share eats sequence off the product.
+    let added: number | null = null;
     if (ampA && ampB && method.split && a !== b) {
       const half = Math.floor(L / 2);
       tails[b].forward = seqs[a].slice(-half);
       tails[a].reverse = reverseComplement(seqs[b].slice(0, L - half));
-    } else if (ampB && !(ampA && b === 0)) tails[b].forward = seqs[a].slice(-L);
-    else if (ampA) tails[a].reverse = reverseComplement(seqs[b].slice(0, L));
-    else problems.push(`${inputs[a].name} and ${inputs[b].name} don't overlap. Amplify one of them by PCR to add the overlap.`);
+      added = tails[b].forward.length + tails[a].reverse.length;
+    } else if (ampB && !(ampA && b === 0)) {
+      tails[b].forward = seqs[a].slice(-L);
+      added = tails[b].forward.length;
+    } else if (ampA) {
+      tails[a].reverse = reverseComplement(seqs[b].slice(0, L));
+      added = tails[a].reverse.length;
+    } else problems.push(`${inputs[a].name} and ${inputs[b].name} don't overlap. Amplify one of them by PCR to add the overlap.`);
+    // Nothing to join on is not a short overlap, it is not an assembly: a piece with no
+    // sequence in it leaves the two neighbours sharing nothing, and keeping every base of
+    // nothing is not a product. Say so and build none.
+    if (added === 0) {
+      problems.push(`There are no bases to join ${inputs[a].name} and ${inputs[b].name} on. Check that both pieces have sequence in them.`);
+      lengths.push(null);
+    } else {
+      lengths.push(added);
+      if (added !== null && added < L) {
+        const short = added < method.minOverlap ? `, shorter than the ${baseCount(method.minOverlap)} this method needs` : "";
+        problems.push(`${inputs[a].name} and ${inputs[b].name} are too short to carry the whole ${L} base overlap, so it can only be ${baseCount(added)}${short}. Lengthen the shorter piece, or join it some other way.`);
+      }
+    }
   }
 
   const pieces: AssemblyPlan["pieces"] = [];
@@ -428,28 +484,129 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   const joinInfo: AssemblyJoin[] = lengths.map((L, j) => {
     if (L === null) return { bases: "", tm: null, designed: designed[j] };
     const bases = pieces[(j + 1) % m].fragment.data.sequence.slice(0, L).toUpperCase();
-    return { bases, tm: meltingTemp(bases), designed: designed[j] };
+    return { bases, tm: overlapTm(bases, method), designed: designed[j] };
   });
+  const tmName = TM_METHODS.find(x => x.id === method.tmMethod)?.short ?? method.tmMethod;
   joinInfo.forEach((x, j) => {
-    if (x.tm !== null && method.minTm && x.tm < method.minTm) {
-      problems.push(`The overlap between ${inputs[j].name} and ${inputs[(j + 1) % m].name} melts at ${x.tm.toFixed(1)} °C; ${method.minTm} °C or more joins more reliably.`);
+    const other = inputs[(j + 1) % m].name;
+    if (!x.bases) return;
+    // Whether an overlap can be assessed at all is a separate question from whether it
+    // meets a minimum, and it is asked of every method: In-Fusion sets no minimum, which
+    // must not switch off the check that the sequence is known. There are two reasons a
+    // melting temperature can't be had, and saying the wrong one is worse than saying
+    // neither, so they are told apart here rather than reported as one.
+    if (x.tm === null) {
+      if (/[^ACGT]/.test(x.bases)) problems.push(`The overlap between ${inputs[j].name} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
+      else problems.push(`The overlap between ${inputs[j].name} and ${other} is ${baseCount(x.bases.length)}, too short to work out a melting temperature for.`);
+      return;
     }
+    if (method.minTm && x.tm < method.minTm) problems.push(`The overlap between ${inputs[j].name} and ${other} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
   });
 
   if (lengths.some(L => L === null) || pieces.some((p, i) => inputs[i].pcr && !p.primers.length)) {
-    return { pieces, joins: joinInfo, product: null, layout: null, problems };
+    // No product, so no lengths to quote, but a reused overlap is still worth saying.
+    return { pieces, joins: joinInfo, product: null, layout: null, problems, notes: [...notes, ...reusedNotes(reused)], reused };
   }
   const { data, layout } = joinFragments(
     pieces.map(p => p.fragment),
     lengths as number[],
     circular
   );
+  // Whether a join's overlap reads the same anywhere else in the product it builds. This
+  // looks for repeated sequence, which is what makes a second pairing possible; it does not
+  // work out which ends are free to react, so it reports competition as possible, not
+  // certain. See the scope note on this check in docs/cloning-plan.md.
+  joinInfo.forEach((x, j) => {
+    if (!x.bases) return;
+    const found = overlapMatches(data.sequence, circular, x.bases);
+    const other = inputs[(j + 1) % m].name;
+    // By construction the overlap is in the product it was cut from. If it is not, the plan
+    // contradicts itself and must not be described as checked.
+    if (!found.length) {
+      problems.push(`The ${baseCount(x.bases.length)} joining ${inputs[j].name} and ${other} ${x.bases.length === 1 ? "isn't" : "aren't"} in the product this plan builds, so the plan doesn't hold together and shouldn't be relied on.`);
+      return;
+    }
+    if (found.length < 2) return;
+    // A short or repetitive overlap can read the same in hundreds of places, and a message
+    // that lists them all is a message nobody reads. Name the first few and the total.
+    const shown = found.slice(0, 6).map(f => `${(f.start + 1).toLocaleString("en-GB")}${f.direct ? "" : " on the other strand"}`);
+    const where = found.length > shown.length ? `${shown.join(", ")} and ${(found.length - shown.length).toLocaleString("en-GB")} more` : shown.join(", ");
+    const reads = x.bases.length === 1 ? "reads" : "read";
+    problems.push(`The ${baseCount(x.bases.length)} joining ${inputs[j].name} and ${other} ${reads} the same in ${found.length.toLocaleString("en-GB")} places in the product, at ${where}, so more than one of them could pair with the join. An overlap is most dependable as the only match: move the join into sequence that isn't repeated.`);
+  });
   // The designed primers, where they bind in full on the product.
   const primers = pieces.flatMap(p => p.primers).flatMap(p => {
     const site = findBindingSites(p.bases, data.sequence, circular).find(s => s.strand === p.strand && s.length === p.bases.length && !s.mismatches && !s.insertions && !s.deletions);
     return site ? [{ id: newId("p"), name: p.name, start: site.start, end: site.end, strand: p.strand, bases: p.bases.toUpperCase(), notes: {}, raw: {} }] : [];
   });
-  return { pieces, joins: joinInfo, product: { ...data, primers: [...data.primers, ...primers] }, layout, problems };
+  for (const r of reused) {
+    r.merged = data.sequence.length;
+    r.kept = data.sequence.length + r.bases.length;
+  }
+  notes.push(...reusedNotes(reused));
+  return { pieces, joins: joinInfo, product: { ...data, primers: [...data.primers, ...primers] }, layout, problems, notes, reused };
+}
+
+/** "1 base", "20 bases": lengths appear in several messages and one of them read "1 bases". */
+const baseCount = (n: number) => `${n.toLocaleString("en-GB")} base${n === 1 ? "" : "s"}`;
+
+/** Where a stretch of bases reads the same again, and on which strand. */
+export interface OverlapMatch {
+  /** 0-based start on the sequence; on a circle a match may run on past the end. */
+  start: number;
+  /** True when it reads the same way round, false when it is the reverse complement. */
+  direct: boolean;
+}
+
+/**
+ * Every place in a sequence that a stretch of bases could pair with, on either strand: a
+ * join can land on any of them. Matches are found a base at a time, because copies of a
+ * tandem repeat overlap each other and that is the case this exists for. A circular
+ * sequence runs on past its end, so the seam is searched too. Case is ignored, since a
+ * file's own capitalisation is kept in `SeqData` and says nothing about the bases. A
+ * stretch that is its own reverse complement is reported once per place, not twice.
+ */
+export function overlapMatches(sequence: string, circular: boolean, bases: string): OverlapMatch[] {
+  const needle = bases.toUpperCase();
+  if (!needle) return [];
+  const upper = sequence.toUpperCase();
+  const hay = circular && upper.length >= needle.length ? upper + upper.slice(0, needle.length - 1) : upper;
+  const out: OverlapMatch[] = [];
+  const find = (what: string, direct: boolean) => {
+    for (let i = hay.indexOf(what); i >= 0; i = hay.indexOf(what, i + 1)) out.push({ start: i, direct });
+  };
+  find(needle, true);
+  const rc = reverseComplement(needle);
+  if (rc !== needle) find(rc, false);
+  return out.sort((x, y) => x.start - y.start);
+}
+
+/**
+ * Joining on bases the pieces already share keeps one copy of them, and two different
+ * molecules fit that sequence. Say which one was built and what the other would be.
+ *
+ * The other one can't be had by trimming the shared bases off a piece and letting the
+ * primers put an overlap back: a designed overlap is made from bases the neighbours
+ * already have, so it adds nothing and the product comes out the same length.
+ *
+ * Nor is it enough to group both copies into one piece. The overlap is what has to be
+ * unique, and where it isn't split across the junction (In-Fusion) it is taken whole from
+ * one piece's end, so a piece ending in a tandem repeat hands the join an overlap that
+ * occurs twice inside it. The copies have to be grouped *and* the join moved past them,
+ * into sequence that occurs once. `overlapMatches` reports it when they aren't; this note
+ * says the one thing that check can't, which of the two molecules was built.
+ */
+function reusedNotes(reused: ReusedOverlap[]): string[] {
+  return reused.map(r => {
+    // merged and kept are null when no product was built, so the note turns hypothetical.
+    const joined = r.merged === null
+      ? `${r.left} ends with the ${r.bases.length} bases ${r.right} starts with, so they would be joined on them and the product would keep one copy.`
+      : `${r.left} already ends with the ${r.bases.length} bases ${r.right} starts with, so they were joined on them and the product keeps one copy (${r.merged} bp).`;
+    const each = r.kept === null
+      ? "If each piece was meant to keep its own copy, that isn't what this builds:"
+      : `If each piece was meant to keep its own copy (${r.kept} bp), this won't build it:`;
+    return `${joined} ${each} two copies in a row give the join two places to land. Both copies have to go inside one piece, and the join has to sit past them in sequence that occurs only once; grouping them is not enough on its own, as an overlap taken whole from one piece's end can fall inside the repeat.`;
+  });
 }
 
 // ---------- Golden Gate ----------

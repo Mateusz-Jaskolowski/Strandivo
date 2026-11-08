@@ -35,6 +35,7 @@ import {
   type Fragment,
   type Layout
 } from "../lib/cloning.ts";
+import { TM_METHODS } from "../lib/primers.ts";
 import { rangeLength, type Range, type SeqData } from "../lib/seqdata.ts";
 import { copyText } from "./inspector.ts";
 import { field, plural, rerender } from "./primerDialogs.ts";
@@ -427,6 +428,7 @@ export function openCloningDialog(ctx: DocContext) {
     }
     const plan = planAssembly(inputs, method === "gibson" ? GIBSON : IN_FUSION, true);
     out.problems = plan.problems;
+    out.notes.push(...plan.notes);
     out.primers = plan.pieces.flatMap(p => p.primers);
     if (plan.product && plan.layout) {
       const label = method === "gibson" ? "Gibson assembly" : "In-Fusion cloning";
@@ -434,7 +436,7 @@ export function openCloningDialog(ctx: DocContext) {
       out.layout = plan.layout;
     }
     out.facts.push([
-      "Overlaps",
+      `Overlaps · Tm by the ${TM_METHODS.find(x => x.id === (method === "gibson" ? GIBSON : IN_FUSION).tmMethod)?.short ?? ""}`,
       h(
         "div",
         { class: "sv-clone-joins" },

@@ -30,6 +30,35 @@ them, count a little more, still only as fixed words and ranges.
   sequence is and how long alignment takes, and three choices in Settings. Each view is
   counted once each time the app opens, not at every switch. The Privacy page lists every
   event and what it carries.
+- **Gibson and In-Fusion say when two pieces already share their overlap**: where one piece
+  ends with the bases the next one starts with, they are joined on those bases and the
+  product keeps one copy. That is usually what you want, but not when each piece was meant
+  to carry its own copy of a linker or a tag, so the result now says so and gives both
+  lengths. Keeping both copies can't be done by moving the overlap around — two copies in
+  a row give the join two places to land — so it says to put both copies inside one piece
+  and to put the join past them, somewhere the sequence occurs only once.
+- **Overlap melting temperatures in Gibson** are now worked out the way the 48 °C guideline
+  they are checked against was, by the Wallace rule, and the result says so. They no longer
+  change with the method chosen in Settings, which is for the temperatures shown elsewhere.
+  A Gibson overlap that melts below the guideline is still only a warning: the product is
+  built either way. In-Fusion has no melting temperature to meet, so nothing is warned about
+  there, but the temperature it shows for an overlap is now worked out the same way, so both
+  methods mean the same thing by it.
+- **Gibson and In-Fusion say when an overlap reads the same somewhere else.** An overlap
+  that turns up again in the product gives the join another sequence that could pair with
+  it, which is one way an assembly comes back with its pieces rearranged or a repeat
+  collapsed. The result now names the join and lists where the other copies are, saying
+  which are on the other strand. Copies across the origin of a circular product count, and
+  capital or small letters make no difference.
+- **A piece too short to carry the whole overlap** no longer loses the difference. The
+  overlap used to be taken as the full length whether or not the pieces had that many bases
+  to share, which quietly cut the missing bases out of the product. The plan now joins on
+  the bases the pieces really share, keeps every base of both, and says the overlap came out
+  shorter than the method asks for. Where there are no bases to join on at all, it says so
+  and builds nothing.
+- **An overlap that can't be judged is now reported**, in both Gibson and In-Fusion: where
+  the shared bases include anything other than A, C, G or T there is no telling whether
+  they will anneal, and the plan says so instead of passing quietly.
 - **Keyboard shortcuts on Windows**: Ctrl+S saves again, and so do the other menu keys
   that did nothing there: Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+, and the rest.
 - **Menu bar on Windows** stays light, like the rest of the window, instead of switching

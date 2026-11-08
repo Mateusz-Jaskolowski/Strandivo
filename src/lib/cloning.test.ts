@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { compatible, cutsFor, digest, findOverlap, flip, fragmentWith, goldenGate, GIBSON, IN_FUSION, largest, ligateInsert, planAssembly, selfLigates, wholeFragment, type OverlapMethod } from "./cloning.ts";
+import { compatible, cutsFor, digest, findOverlap, flip, fragmentWith, goldenGate, GIBSON, IN_FUSION, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, wholeFragment, type OverlapMethod } from "./cloning.ts";
 import { DEFAULT_TM, meltingTemp, type TmMethod } from "./primers.ts";
 import { regionsOf, withRegions } from "./regions.ts";
 import { featureBases, reverseComplement, setOrigin, type SeqData, type SeqFeature } from "./seqdata.ts";
@@ -255,22 +255,24 @@ test("overlap assembly: a repeat shared by two neighbours is never merged in sil
     assert.equal(fixed.joins[0].designed, true);
     assert.equal(occurrences(fixed.product!.sequence, fixed.joins[0].bases), 1, "the overlap has to fall in sequence that occurs once");
     assert.deepEqual(fixed.notes, [], "with the repeat off the junction there is nothing left to warn about");
+    assert.deepEqual(fixed.problems, [], "and a unique overlap is not reported");
   }
 
   // Grouping the copies without moving the join is NOT enough, which is why the note says
   // more than "put them in one piece". The length comes out right either way, so length is
   // no test of it: In-Fusion takes its overlap whole from the end of the piece, and the
   // piece ends in a tandem repeat, so that overlap occurs twice and the join has two
-  // registers again. Nothing reports that yet; the note is all there is.
+  // registers again. The uniqueness check is what catches it.
   const groupedOnly = filler(300, 31) + linker + linker;
   const stillRepeated = twoPieces(groupedOnly, rest, IN_FUSION);
   assert.equal(stillRepeated.product!.sequence, oneCopyEach, "the length is right, which is exactly what makes this one hard to see");
   assert.equal(occurrences(stillRepeated.product!.sequence, stillRepeated.joins[0].bases), 2, "In-Fusion's overlap still falls inside the repeat");
   assert.equal(occurrences(groupedOnly, stillRepeated.joins[0].bases), 2, "and both copies are in the piece the overlap was taken from");
-  assert.deepEqual(stillRepeated.problems, [], "known gap: a repeated overlap is not reported");
+  assert.equal(stillRepeated.problems.length, 1);
+  assert.match(stillRepeated.problems[0], /read the same in 2 places/);
   // Gibson avoids it here only because a split overlap is half of each neighbour, so it is
   // in neither input region — though it IS in both finished amplicons, which is the pairing
-  // the design intends. Geometry, not a check.
+  // the design intends. Geometry, not a check; the check agrees all the same.
   const split = twoPieces(groupedOnly, rest, GIBSON);
   assert.equal(occurrences(split.product!.sequence, split.joins[0].bases), 1);
   assert.equal(occurrences(groupedOnly, split.joins[0].bases), 0, "not in the input region");
@@ -294,6 +296,128 @@ test("overlap assembly: a repeat shared by two neighbours is never merged in sil
   );
   assert.equal(trimmed.product!.sequence.length, a.length + b.length - linker.length, "trimming does not recover the second copy");
   assert.notEqual(trimmed.product!.sequence, oneCopyEach);
+});
+
+test("overlap assembly: a designed overlap taken whole from one end is checked for uniqueness too", () => {
+  // The shared-overlap note cannot reach either arrangement here: it fires only when
+  // neighbours already share minOverlap bases, and these share nothing. The overlap is
+  // designed, and still taken whole from one piece — which is why the risk is not
+  // In-Fusion's alone. Only the uniqueness check catches these.
+  // Stepping one base at a time, because copies of a tandem repeat overlap each other and
+  // split() or a global regex would skip the second one — the very case this is about.
+  const occurrences = (haystack: string, needle: string) => {
+    let n = 0;
+    for (let i = haystack.indexOf(needle); i >= 0; i = haystack.indexOf(needle, i + 1)) n++;
+    return n;
+  };
+  const linker = "GGTGGCGGTAGCGGTGGCGG";
+
+  // A vector that is not amplified: the overlap goes on the insert's primer, taken whole
+  // from the vector's start, so a repeat there is repeated in the overlap. Gibson cannot
+  // split it, because only one of the two neighbours has primers to split it across.
+  const vector = linker + linker + filler(300, 51);
+  const insertSeq = filler(400, 52);
+  const insert = doc("I", insertSeq, false);
+  for (const method of [GIBSON, IN_FUSION]) {
+    const p = planAssembly(
+      [
+        { name: "V", fragment: wholeFragment(doc("V", vector, false)) },
+        { name: "I", fragment: wholeFragment(insert), pcr: { template: insert, range: { start: 0, end: insertSeq.length - 1 } } }
+      ],
+      method,
+      true
+    );
+    const back = p.joins[1];
+    assert.equal(back.designed, true);
+    assert.equal(occurrences(vector, back.bases), 2, "the overlap was cut out of a tandem repeat");
+    assert.equal(p.problems.length, 1, "Gibson is exposed to this as well: with one piece amplified there is nothing to split across");
+    assert.match(p.problems[0], /bases joining I and V read the same in 2 places/);
+    assert.deepEqual(p.notes, [], "no note can fire, because the neighbours share nothing");
+  }
+
+  // A repeat whose period is below minOverlap, so findOverlap never sees it, but whose run
+  // is long enough for the overlap to sit inside it twice. The two registers are 12 bases
+  // apart and the overlap is 15, so they overlap each other: a count that skipped past each
+  // match would see one place and report nothing.
+  const short = "GGTGGCGGTAGC"; // 12 bp, under minOverlap
+  const left = filler(300, 61) + short.repeat(3);
+  const right = filler(250, 62);
+  const dl = doc("A", left, false);
+  const dr = doc("B", right, false);
+  const p = planAssembly(
+    [
+      { name: "A", fragment: wholeFragment(dl), pcr: { template: dl, range: { start: 0, end: left.length - 1 } } },
+      { name: "B", fragment: wholeFragment(dr), pcr: { template: dr, range: { start: 0, end: right.length - 1 } } }
+    ],
+    IN_FUSION,
+    false
+  );
+  assert.equal(findOverlap(left, right, IN_FUSION.minOverlap), 0, "the neighbours share nothing, so no note fires");
+  assert.equal(occurrences(left, p.joins[0].bases), 2);
+  assert.equal(p.problems.length, 1, "a repeat too short for findOverlap still makes the overlap ambiguous");
+  assert.match(p.problems[0], /read the same in 2 places/);
+  assert.deepEqual(p.notes, []);
+});
+
+test("finding where a join can land reads both strands, ignores case and crosses the origin", () => {
+  const tag = "GCATGCAACGTTGCATTACG"; // 20 bp, and not its own reverse complement
+  const pad = filler(200, 71);
+  const places = (sequence: string, circular: boolean, bases: string) => overlapMatches(sequence, circular, bases).length;
+
+  assert.equal(places(tag + pad, false, tag), 1);
+  assert.equal(places(tag + pad + tag, false, tag), 2, "a second forward copy is a second place to land");
+  // A join anneals to whichever strand matches, so an inverted copy counts as well, and the
+  // report has to say which it was and where.
+  const inverted = overlapMatches(tag + pad + reverseComplement(tag), false, tag);
+  assert.deepEqual(inverted.map(m => m.direct), [true, false]);
+  assert.deepEqual(inverted.map(m => m.start), [0, tag.length + pad.length]);
+  // A palindrome reads the same both ways; counting each strand would double it.
+  const palindrome = "GAATTCGCGCGAATTC";
+  assert.equal(reverseComplement(palindrome), palindrome);
+  assert.equal(places(palindrome + pad, false, palindrome), 1, "a palindrome is one place, not two");
+  // Copies of a tandem repeat overlap each other, and those are the ones that matter most:
+  // a count that resumed after each match instead of one base on would miss the second.
+  assert.equal(places("GGTGGCGGTAGC".repeat(3) + pad, false, "AGCGGTGGCGGTAGC"), 2, "overlapping registers are two places");
+
+  // A file keeps its own capitalisation, which says nothing about the bases, so case is
+  // ignored on both sides and in the reverse complement.
+  assert.equal(places((tag + pad + tag).toLowerCase(), false, tag), 2, "a lower-case sequence holds the same bases");
+  assert.equal(places(tag + pad + tag, false, tag.toLowerCase()), 2, "and so does a lower-case overlap");
+  assert.equal(places((tag + pad + reverseComplement(tag)).toLowerCase(), false, tag), 2, "the inverted copy too");
+  const mixed = tag.toLowerCase() + pad + tag.slice(0, 10) + tag.slice(10).toLowerCase();
+  assert.equal(places(mixed, false, tag), 2, "and a sequence that mixes the two");
+
+  // On a circle the bases run on past the end, so a copy split across the origin is real.
+  const wrapped = tag.slice(10) + pad + tag.slice(0, 10); // ends with the first half, starts with the second
+  assert.equal(places(wrapped, false, tag), 0, "linear: the halves are at opposite ends and never meet");
+  assert.equal(places(wrapped, true, tag), 1, "circular: they are neighbours across the origin");
+  assert.equal(places(wrapped.toLowerCase(), true, tag), 1, "whatever case it is written in");
+  // The seam must not invent a match that isn't there, nor count an interior one twice.
+  assert.equal(places(tag + pad, true, tag), 1);
+});
+
+test("overlap assembly: a repeated overlap is reported whatever case the file is written in", () => {
+  // The overlap is uppercased before it is compared, while a document keeps the
+  // capitalisation it was read with, so a lower-case file once passed every check.
+  const repeat = "GGTGGCGGTAGCGGTGGCGG";
+  const vectorSeq = repeat + repeat + filler(300, 51);
+  const insertSeq = filler(400, 52);
+  for (const method of [GIBSON, IN_FUSION]) {
+    for (const written of [(s: string) => s, (s: string) => s.toLowerCase(), (s: string) => s.slice(0, 20) + s.slice(20).toLowerCase()]) {
+      const insert = doc("I", written(insertSeq), false);
+      const p = planAssembly(
+        [
+          { name: "V", fragment: wholeFragment(doc("V", written(vectorSeq), false)) },
+          { name: "I", fragment: wholeFragment(insert), pcr: { template: insert, range: { start: 0, end: insertSeq.length - 1 } } }
+        ],
+        method,
+        true
+      );
+      assert.equal(p.product!.sequence.length, 740);
+      assert.equal(p.problems.length, 1, "the same bases are the same bases in any case");
+      assert.match(p.problems[0], /read the same in 2 places/);
+    }
+  }
 });
 
 test("overlap assembly: an overlap that can't be measured is reported whatever the method", () => {

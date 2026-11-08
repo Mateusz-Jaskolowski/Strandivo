@@ -488,6 +488,27 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     lengths as number[],
     circular
   );
+  // Whether a join's overlap reads the same anywhere else in the product it builds. This
+  // looks for repeated sequence, which is what makes a second pairing possible; it does not
+  // work out which ends are free to react, so it reports competition as possible, not
+  // certain. See the scope note on this check in docs/cloning-plan.md.
+  joinInfo.forEach((x, j) => {
+    if (!x.bases) return;
+    const found = overlapMatches(data.sequence, circular, x.bases);
+    const other = inputs[(j + 1) % m].name;
+    // By construction the overlap is in the product it was cut from. If it is not, the plan
+    // contradicts itself and must not be described as checked.
+    if (!found.length) {
+      problems.push(`The ${x.bases.length} bases joining ${inputs[j].name} and ${other} aren't in the product this plan builds, so the plan doesn't hold together and shouldn't be relied on.`);
+      return;
+    }
+    if (found.length < 2) return;
+    // A short or repetitive overlap can read the same in hundreds of places, and a message
+    // that lists them all is a message nobody reads. Name the first few and the total.
+    const shown = found.slice(0, 6).map(f => `${(f.start + 1).toLocaleString("en-GB")}${f.direct ? "" : " on the other strand"}`);
+    const where = found.length > shown.length ? `${shown.join(", ")} and ${(found.length - shown.length).toLocaleString("en-GB")} more` : shown.join(", ");
+    problems.push(`The ${x.bases.length} bases joining ${inputs[j].name} and ${other} read the same in ${found.length.toLocaleString("en-GB")} places in the product, at ${where}, so more than one of them could pair with the join. An overlap is most dependable as the only match: move the join into sequence that isn't repeated.`);
+  });
   // The designed primers, where they bind in full on the product.
   const primers = pieces.flatMap(p => p.primers).flatMap(p => {
     const site = findBindingSites(p.bases, data.sequence, circular).find(s => s.strand === p.strand && s.length === p.bases.length && !s.mismatches && !s.insertions && !s.deletions);
@@ -499,6 +520,37 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   }
   notes.push(...reusedNotes(reused));
   return { pieces, joins: joinInfo, product: { ...data, primers: [...data.primers, ...primers] }, layout, problems, notes, reused };
+}
+
+/** Where a stretch of bases reads the same again, and on which strand. */
+export interface OverlapMatch {
+  /** 0-based start on the sequence; on a circle a match may run on past the end. */
+  start: number;
+  /** True when it reads the same way round, false when it is the reverse complement. */
+  direct: boolean;
+}
+
+/**
+ * Every place in a sequence that a stretch of bases could pair with, on either strand: a
+ * join can land on any of them. Matches are found a base at a time, because copies of a
+ * tandem repeat overlap each other and that is the case this exists for. A circular
+ * sequence runs on past its end, so the seam is searched too. Case is ignored, since a
+ * file's own capitalisation is kept in `SeqData` and says nothing about the bases. A
+ * stretch that is its own reverse complement is reported once per place, not twice.
+ */
+export function overlapMatches(sequence: string, circular: boolean, bases: string): OverlapMatch[] {
+  const needle = bases.toUpperCase();
+  if (!needle) return [];
+  const upper = sequence.toUpperCase();
+  const hay = circular && upper.length >= needle.length ? upper + upper.slice(0, needle.length - 1) : upper;
+  const out: OverlapMatch[] = [];
+  const find = (what: string, direct: boolean) => {
+    for (let i = hay.indexOf(what); i >= 0; i = hay.indexOf(what, i + 1)) out.push({ start: i, direct });
+  };
+  find(needle, true);
+  const rc = reverseComplement(needle);
+  if (rc !== needle) find(rc, false);
+  return out.sort((x, y) => x.start - y.start);
 }
 
 /**

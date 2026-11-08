@@ -513,7 +513,7 @@ export class Inspector {
   private removeFeature(f: SeqFeature) {
     const d = this.ctx.store.data;
     this.ctx.store.apply({ ...d, features: d.features.filter(x => x.id !== f.id) }, "Delete feature", { range: { start: f.start, end: f.end } });
-    toast(`Deleted ${f.name} (the bases are still there). Undo to bring it back.`, "info", 3500);
+    this.ctx.noteEdit(`Deleted ${f.name}; its bases are still there.`);
   }
 
   // ---------- primer ----------
@@ -671,7 +671,7 @@ export class Inspector {
             }),
         this.button("Delete", () => {
           this.ctx.store.apply({ ...d, primers: d.primers.filter(x => x.id !== p.id) }, "Delete primer", { range: { start: p.start, end: p.end } });
-          toast(`Deleted ${p.name}. Undo to bring it back.`, "info", 3000);
+          this.ctx.noteEdit(`Deleted ${p.name}.`);
         }, { icon: "trash", danger: true })
       )
     ];

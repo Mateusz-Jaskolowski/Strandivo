@@ -8,7 +8,7 @@
 
 import "./document.css";
 
-import { h, icon, toast } from "../ui/dom.ts";
+import { h, icon, toast, type ToastHandle } from "../ui/dom.ts";
 import { iconSvg, type IconName } from "../ui/icons.ts";
 import { choose } from "../ui/modal.ts";
 import {
@@ -59,6 +59,7 @@ import { openDetectDialog } from "../views/detectDialog.ts";
 import { regionsOf } from "../lib/regions.ts";
 import { dismissOffer, offerDismissed } from "../detectOffer.ts";
 import { looksUnannotated } from "../lib/detect.ts";
+import { describeLost, lostWith } from "../lib/deletion.ts";
 import { enzymeOf, prunePick } from "../lib/enzymePick.ts";
 import { cutSites } from "./analysis.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
@@ -207,6 +208,42 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     d.features.map(f => ({ id: f.id, name: f.name, type: f.type, start: f.start, end: f.end, forward: f.strand !== -1, strand: f.strand === -1 ? -1 : 1, locations: f.locations, variable: designOf(f.notes) ?? undefined }));
   let dataVersion = 0;
   store.subscribe(c => c.data && dataVersion++);
+
+  // A message about the last edit, with Undo while that edit is still the last one.
+  let editNote: { toast: ToastHandle; after: SeqData } | null = null;
+  const closeEditNote = () => {
+    editNote?.toast.close();
+    editNote = null;
+  };
+  const noteEdit = (message: string) => {
+    closeEditNote();
+    const note: ToastHandle = toast(message, "info", {
+      key: "edit",
+      action: {
+        label: "Undo",
+        title: `Undo${shortcutHint("undo", { mac: isMac, browser: !isDesktop })}`,
+        run: () => {
+          // Another edit since (the message may still be fading out): Undo would take that back.
+          if (editNote?.toast !== note || store.data !== editNote.after) return;
+          store.undo();
+          // The button took the keyboard from the sequence.
+          if (tab === "sequence") seqView.focus();
+        }
+      }
+    });
+    editNote = { toast: note, after: store.data };
+  };
+  store.subscribe(c => {
+    if (!c.data) return;
+    if (editNote && store.data !== editNote.after) {
+      // Typing on joins the same undo step, which its Undo still takes back whole.
+      if (c.merged) editNote.after = store.data;
+      else closeEditNote();
+    }
+    // Deleting or replacing bases takes whatever lies wholly inside them along, out of sight.
+    const lost = c.before && lostWith(c.before, store.data);
+    if (lost) noteEdit(describeLost(lost));
+  });
   const reads = new ReadSet(() => {
     const d = store.data;
     return { name: d.name, sequence: d.sequence, circular: d.circular, features: legacyFeatures(d), version: String(dataVersion) };
@@ -251,7 +288,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         onMap
       ),
     openNew: data => host.openNew(data),
-    otherSequences: () => host.sequences()
+    otherSequences: () => host.sequences(),
+    noteEdit
   };
 
   // ---------- views ----------
@@ -967,6 +1005,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       }
       scrolls = [];
     } else {
+      // Its Undo would act on a file that isn't showing.
+      closeEditNote();
       scrolls = Array.from(app.querySelectorAll("*"))
         .filter(el => el.scrollTop || el.scrollLeft)
         .map(el => [el, el.scrollTop, el.scrollLeft]);
@@ -1009,6 +1049,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       await restoreReads(c, true);
     },
     dispose: () => {
+      closeEditNote();
       offSettings();
       offEnzymeLibrary();
       inspector.dispose();

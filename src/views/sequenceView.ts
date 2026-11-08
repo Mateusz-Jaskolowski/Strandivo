@@ -16,6 +16,7 @@ import { regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
+import { firstDelete } from "../lib/deletion.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import type { CutSite } from "../lib/enzymes.ts";
@@ -992,6 +993,10 @@ export class SequenceView {
       } else store.select({ range: null, caret: target, anchor: target }, "sequence");
       this.revealCaret();
     };
+    let heldAfterFirst = false;
+    area.addEventListener("keyup", e => {
+      if (e.key === "Backspace" || e.key === "Delete") heldAfterFirst = false;
+    });
     area.addEventListener("keydown", e => {
       const mod = e.metaKey || e.ctrlKey;
       const sel = store.selection;
@@ -1031,6 +1036,22 @@ export class SequenceView {
         case "Backspace":
         case "Delete": {
           e.preventDefault();
+          // Held down after a first press on something clicked: its bases wait for a new press.
+          if (e.repeat && heldAfterFirst) return;
+          const first = firstDelete(store.data, sel);
+          if (first) {
+            heldAfterFirst = true;
+            const left = { range: first.range, caret: sel.caret, anchor: sel.anchor };
+            if (first.data !== store.data) {
+              store.apply(first.data, first.label ?? "Delete", left);
+              this.ctx.noteEdit(first.message);
+            } else {
+              // Only the selection changed: there is nothing to undo.
+              store.select(left, "sequence");
+              toast(first.message, "info", { key: "edit", ms: 5000 });
+            }
+            return;
+          }
           if (sel.range) this.deleteSelection();
           else if (e.key === "Backspace" && caret > 0) {
             store.apply(deleteRange(store.data, { start: caret - 1, end: caret - 1 }), "Delete", { caret: caret - 1 }, "delete");

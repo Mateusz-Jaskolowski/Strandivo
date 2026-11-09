@@ -91,9 +91,14 @@ pub fn set_aside_app_data(app: AppHandle, name: String) -> Result<Option<String>
 mod tests {
     use super::*;
 
+    /// A new folder for each call. The clock alone is not enough: macOS gives only
+    /// microseconds, so tests running in parallel could get the same folder.
     fn folder() -> PathBuf {
-        let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        std::env::temp_dir().join(format!("strandivo-app-data-{}-{unique}", std::process::id()))
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static CALLS: AtomicU64 = AtomicU64::new(0);
+        let call = CALLS.fetch_add(1, Ordering::Relaxed);
+        let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        std::env::temp_dir().join(format!("strandivo-app-data-{}-{time}-{call}", std::process::id()))
     }
 
     #[test]

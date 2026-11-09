@@ -793,14 +793,29 @@ async function main() {
       const range = f.strand === -1 ? { start: f.end - 59, end: f.end - 42 } : { start: f.start + 42, end: f.start + 59 };
       s.selectRange(range, null, "e2e");`);
     check("Protein regions have labelled tracks in Sequence", await s.waitFor("document.querySelectorAll('.sv-seq-region-bar').length > 0 && Array.from(document.querySelectorAll('.sv-region-caption')).some(e => e.textContent === 'CDR1 edited')", 5000));
-    const firstSequenceBase = await s.exec("return document.querySelector('.sv-seq .sv-pane-note').textContent.split('–')[0];");
+    // A selection scrolls before its scroll event redraws the range label. Let the view
+    // finish that redraw, then measure the row itself rather than a possibly stale label.
+    const sequenceTopRow = () => s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const scroller = document.querySelector('.sv-seq-scroll');
+        const row = Array.from(scroller.querySelectorAll('.sv-row'))
+          .filter(el => parseFloat(el.style.top) <= scroller.scrollTop)
+          .sort((a, b) => parseFloat(b.style.top) - parseFloat(a.style.top))[0];
+        done({ row: Number(row.dataset.row), scrollTop: scroller.scrollTop,
+          label: document.querySelector('.sv-seq .sv-pane-note').textContent });
+      }));
+    `);
+    const sequenceBeforeToggle = await sequenceTopRow();
     await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
     check("Regions can be hidden without hiding the CDS", await s.waitFor("document.querySelectorAll('.sv-seq-region-bar').length === 0 && document.querySelectorAll('.sv-feature-bar').length > 0", 5000));
     check("The Sequence region toggle is separate from the map's", await s.exec("return Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'Regions').getAttribute('aria-pressed') === 'true';"));
-    check("The Regions toggle keeps the same sequence row in view", (await s.exec("return document.querySelector('.sv-seq .sv-pane-note').textContent.split('–')[0];")) === firstSequenceBase);
+    const sequenceAfterToggle = await sequenceTopRow();
+    check("The Regions toggle keeps the same sequence row in view", sequenceAfterToggle.row === sequenceBeforeToggle.row, JSON.stringify({ before: sequenceBeforeToggle, after: sequenceAfterToggle }));
     await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
     await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Translation']", "xpath");
-    check("Region names remain visible without translation", await s.waitFor("document.querySelectorAll('.sv-aa').length === 0 && document.querySelectorAll('.sv-region-caption').length > 0", 5000));
+    // Hidden views keep their old DOM until shown; only the Sequence view redraws here.
+    check("Region names remain visible without translation", await s.waitFor("document.querySelectorAll('.sv-seq .sv-aa, .sv-seq .sv-aa-box').length === 0 && Array.from(document.querySelectorAll('.sv-seq .sv-region-caption')).some(e => e.textContent === 'CDR1 edited')", 5000));
     await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Translation']", "xpath");
 
     const selectionMenu = await s.exec(`${doc}

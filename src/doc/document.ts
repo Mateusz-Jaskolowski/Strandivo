@@ -326,7 +326,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       undoButton,
       redoButton,
       toolButton("featureAdd", "Add feature for the selection", () => addFeature()),
-      toolButton("detect", "Detect features: find common parts to add", () => openDetectDialog(ctx)),
+      toolButton("detect", "Detect common features…", () => openDetectDialog(ctx)),
       toolButton("primerAdd", "Add primer for the selection", () => addPrimer()),
       toolButton("gel", "Digest…", () => openDigestDialog(ctx)),
       toolButton("clone", "Simulate cloning…", () => openCloningDialog(ctx)),
@@ -544,7 +544,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   function addFeature(as: { name: string; type: string; strand: 1 | -1 } = { name: "New feature", type: "misc_feature", strand: 1 }, how: "selection" | "orf" = "selection") {
     const { range } = store.selection;
     if (!range) {
-      toast("Select the bases for the new feature first (drag across the map or the sequence).", "info", 4000);
+      toast("Select a region on the map or sequence first.", "info", 4000);
       return;
     }
     const id = newId("f");
@@ -564,7 +564,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const d = store.data;
     const len = range ? rangeLength(range, d.sequence.length) : 0;
     if (!range || len < PRIMER_BASES.min || len > PRIMER_BASES.max) {
-      toast(`Select ${PRIMER_BASES.min}–${PRIMER_BASES.max} bases to make a primer from (it reads along the top strand; flip it in the inspector).`, "info", 4500);
+      toast(`Select ${PRIMER_BASES.min}–${PRIMER_BASES.max} bases to create a primer.`, "info", 4500);
       return;
     }
     const id = newId("p");
@@ -703,7 +703,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     if (locked.length) {
       if (!fromCheckFile) waiting = c.reads;
       offerReads(
-        `Your browser asks before Strandivo reads ${readCount(c.reads.length)} ${fromCheckFile ? "this check lists" : "checked against this file before"}.`,
+        `Allow browser access to load ${readCount(c.reads.length)} ${fromCheckFile ? "from this check" : "previously aligned to this file"}.`,
         "Allow access",
         async () => {
           const refused = await requestFileAccess(c.reads.map(r => r.path));
@@ -731,7 +731,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       }
     }
     if (missing.length && askMissing && !isDesktop) {
-      offerReads("Your browser opens only files you choose. Strandivo matches them to the check by name.", `Add ${readCount(missing.length)} this check lists…`, async () => {
+      offerReads("Select the read files for this check — Strandivo will match them by filename.", `Add ${readCount(missing.length)} this check lists…`, async () => {
         const picked = await pickFileKeys("Sequencing reads", READ_EXTENSIONS).catch(e => {
           toast(`Couldn't open: ${e instanceof Error ? e.message : e}`, "error", 6000);
           return [] as string[];
@@ -759,7 +759,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     }
     const saved = reads.saved();
     if (!saved.length) {
-      toast("Only reads opened from files can go in a check.", "info", 5000);
+      toast("Only reads loaded from files can be saved in a check.", "info", 5000);
       return;
     }
     const suggestion = joinPath(dirname(saved[0].path), `${stripExtension(basename(path))} reads.${CHECK_EXTENSION}`);
@@ -887,7 +887,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       case "reverse-complement": {
         const { range } = store.selection;
         if (range && range.start > range.end) {
-          toast("Select a stretch that doesn't cross the origin to reverse-complement it.", "info", 4000);
+          toast("Selections that cross the origin can't be reverse-complemented.", "info", 4000);
           return true;
         }
         if (!store.length) return true;
@@ -896,8 +896,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       }
       case "set-origin": {
         const c = store.selection.range ? store.selection.range.start : store.selection.caret;
-        if (!store.data.circular) toast("Only a circular sequence has an origin to move.", "info");
-        else if (c <= 0 || c >= store.length) toast("Put the cursor where the sequence should start.", "info");
+        if (!store.data.circular) toast("Only circular sequences have an origin.", "info");
+        else if (c <= 0 || c >= store.length) toast("Place the cursor where the sequence should start.", "info");
         else store.apply(setOrigin(store.data, c), "Set origin", { range: null, caret: 0 });
         return true;
       }

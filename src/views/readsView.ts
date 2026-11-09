@@ -264,9 +264,8 @@ export class ReadsView {
         { class: "sv-reads-empty-card" },
         iconSvg("wave", 28),
         h("h2", null, "Check sequencing reads against this sequence"),
-        h("p", null, "Drop .ab1 trace files (or .seq and FASTQ reads) on this window, or add them here. Reads are quality-trimmed, aligned on both strands, and every difference is listed with its effect on your features."),
-        h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => this.actions.addReads() }, iconSvg("plus", 15), "Add reads…"),
-        h("p", { class: "sv-dim sv-small" }, "Everything runs on this computer — nothing is uploaded.")
+        h("p", null, "Drop .ab1, .seq or FASTQ files anywhere on the window to align them and check for mutations."),
+        h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => this.actions.addReads() }, iconSvg("plus", 15), "Add reads…")
       )
     );
     this.el = h("div", { class: "sv-reads" }, this.empty, this.grid);
@@ -331,7 +330,7 @@ export class ReadsView {
     const r = this.reads;
     const res = layoutAlignment(this.ctx.store.data.sequence, r.results, r.reads, r.order());
     this.layout = res && "layout" in res ? res.layout : null;
-    const message = !res ? (r.count ? "No reads aligned, so there is nothing to show here." : "") : "error" in res ? res.error : "";
+    const message = !res ? (r.count ? "No reads aligned to this sequence." : "") : "error" in res ? res.error : "";
     this.trace.setData(this.layout, r.results, this.trackLabels(), message);
     this.sites = r.sites();
   }

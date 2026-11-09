@@ -54,10 +54,10 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
       resolve();
     };
     const dlg = openDialog({
-      title: upgrade ? "Something new to choose" : "Welcome to Strandivo",
+      title: upgrade ? "New settings" : "Welcome to Strandivo",
       note: upgrade
-        ? "This version of Strandivo asks about something it didn't before. Nothing changes until you choose."
-        : "Plan, build and check your plasmids. Everything runs on your computer: your files and sequences never leave it.",
+        ? "New options in this version of Strandivo."
+        : "Plan, build and check your plasmids. Your files and sequences stay on your computer.",
       width: 560,
       onClose: () => void finish()
     });
@@ -83,7 +83,7 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
       updates: () =>
         section(
           "Updates",
-          option(updates, "Check for updates automatically", "Once a day, Strandivo asks its server for the latest version. An update installs only when you choose.")
+          option(updates, "Check for updates automatically", "Checks once a day; updates install only when you choose.")
         ),
       usage: () =>
         section(
@@ -91,18 +91,18 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
           option(
             usage,
             "Share anonymous usage statistics",
-            "Which features are used, and on which systems, so work goes where it helps most. Never your files, sequences or names, and nothing that tells you apart."
+            "Which features are used and on which operating systems. Never your files, sequences, names or anything that identifies you."
           ),
           h("div", { class: "sv-welcome-actions" }, h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void openUsagePage() }, "What is sent"))
         ),
       constructs: () =>
         section(
           "Your constructs",
-          h("p", { class: "sv-small" }, "Home lists the plasmid files in folders you choose, with what each one carries. The files stay where they are."),
+          h("p", { class: "sv-small" }, "Home lists the plasmid files in folders you choose and shows what each construct carries."),
           // Safari and Firefox can't keep a folder (src/home.ts).
           canKeepFolders()
             ? h("div", { class: "sv-welcome-actions" }, h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void addFolder() }, "Add a folder…"))
-            : h("p", { class: "sv-small sv-dim" }, "This browser can't keep folders: Home lists the files you open until you close the page. Chrome, Edge or the desktop app can list whole folders."),
+            : h("p", { class: "sv-small sv-dim" }, "This browser can't keep folders between visits: Home lists only the files opened in this tab. Use Chrome, Edge or the desktop app to keep folders."),
           folders
         ),
       primers: () => {
@@ -110,7 +110,7 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
           libraryEmpty = primerLibrary.all.length === 0;
           commonOption.hidden = !libraryEmpty;
         });
-        const commonOption = option(commonPrimers, "Start with common sequencing primers", "M13, T7, T3, SP6, CMV, BGH and others, as university sequencing cores list them.");
+        const commonOption = option(commonPrimers, "Start with common sequencing primers", "M13, T7, T3, SP6, CMV, BGH and other standard core-facility primers.");
         return section(
           "Primer library",
           h("p", { class: "sv-small" }, "Each plasmid you open shows which of your lab's primers bind it."),

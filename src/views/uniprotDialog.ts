@@ -35,7 +35,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
   let closed = false;
   const dlg = openDialog({
     title: "Get regions from UniProt",
-    note: `Transmembrane helices, topological domains and signal peptides for ${f.name}. Nothing is added until you choose it.`,
+    note: `Transmembrane helices, topological domains and signal peptides for ${f.name}.`,
     width: 640,
     onClose: () => (closed = true)
   });
@@ -101,9 +101,9 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
         "p",
         { class: "sv-uniprot-message" },
         h("strong", null, title),
-        ` ${entry.reviewed ? "(reviewed)" : "(unreviewed)"}. ${percent(match.identity)} of the CDS's protein matches, over ${fmt(match.aligned)} of the entry's ${fmt(entry.sequence.length)} residues.`
+        ` ${entry.reviewed ? "(reviewed)" : "(unreviewed)"}. ${percent(match.identity)} identity across ${fmt(match.aligned)} of ${fmt(entry.sequence.length)} residues.`
       ),
-      match.identity < 0.9 ? h("p", { class: "sv-uniprot-message sv-text-warn" }, "That is far from identical, so check that this is the right entry.") : "",
+      match.identity < 0.9 ? h("p", { class: "sv-uniprot-message sv-text-warn" }, "Low sequence identity — check that this is the right UniProt entry.") : "",
       ...(placed.length
         ? kinds.flatMap(kind => [
             h("div", { class: "sv-detect-head" }, h("span", { class: "sv-detect-title" }, kind)),
@@ -115,7 +115,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
           ])
         : [h("p", { class: "sv-uniprot-message sv-dim" }, "UniProt lists no membrane regions or signal peptides for this entry.")]),
       missed ? h("p", { class: "sv-small sv-dim" }, `${plural(missed, "region")} of the entry ${missed === 1 ? "isn't" : "aren't"} in this CDS.`) : "",
-      h("p", { class: "sv-small sv-dim" }, "Numbers are UniProt's. Data from UniProtKB, CC BY 4.0.")
+      h("p", { class: "sv-small sv-dim" }, "Residue numbers are from UniProtKB (CC BY 4.0).")
     );
   };
 
@@ -136,7 +136,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
       const match = describeAlignment(alignment);
       if (!match.ok) {
         const why = match.aligned < MIN_ALIGNED ? `only ${plural(match.aligned, "residue")} line up` : `only ${percent(match.identity)} of the ${fmt(match.aligned)} residues that line up match`;
-        return say(`${f.name} doesn't look like ${entry.title || entry.accession}: ${why}, so its regions can't be placed.`, "sv-text-warn");
+        return say(`${f.name} doesn't match ${entry.title || entry.accession} (${why}), so its regions can't be mapped.`, "sv-text-warn");
       }
       show(entry, placeFeatures(entry, alignment), match);
     } catch (e) {

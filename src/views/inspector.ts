@@ -504,7 +504,7 @@ export class Inspector {
         });
         body.push(text, h("p", { class: "sv-small sv-dim" }, "One per line, as name: bases. Each clone is matched to the closest; differences from it are mutations."));
       } else {
-        body.push(h("p", { class: "sv-small sv-dim" }, "Clones may have anything here, of any length. Each clone's bases show in a column of their own, not as mutations."));
+        body.push(h("p", { class: "sv-small sv-dim" }, "Clones can have any sequence or length here. Each clone's sequence is shown in its own column rather than called as mutations."));
       }
     }
     return this.section("Variable region", ...body);
@@ -513,7 +513,7 @@ export class Inspector {
   private removeFeature(f: SeqFeature) {
     const d = this.ctx.store.data;
     this.ctx.store.apply({ ...d, features: d.features.filter(x => x.id !== f.id) }, "Delete feature", { range: { start: f.start, end: f.end } });
-    toast(`Deleted ${f.name} (the bases are still there). Undo to bring it back.`, "info", 3500);
+    toast(`Deleted ${f.name} (sequence bases kept).`, "info", 3500);
   }
 
   // ---------- primer ----------
@@ -671,7 +671,7 @@ export class Inspector {
             }),
         this.button("Delete", () => {
           this.ctx.store.apply({ ...d, primers: d.primers.filter(x => x.id !== p.id) }, "Delete primer", { range: { start: p.start, end: p.end } });
-          toast(`Deleted ${p.name}. Undo to bring it back.`, "info", 3000);
+          toast(`Deleted ${p.name}.`, "info", 3000);
         }, { icon: "trash", danger: true })
       )
     ];
@@ -752,7 +752,7 @@ export class Inspector {
         "div",
         { class: "sv-insp-head" },
         h("h2", { class: "sv-insp-heading" }, "Open reading frame"),
-        h("div", { class: "sv-dim sv-small" }, "Found in the sequence, not saved with the file. Add it as a feature to keep it."),
+        h("div", { class: "sv-dim sv-small" }, "Detected from the sequence and not saved in the file. Add it as a feature to save it."),
         this.facts([
           ["Location", loc(o)],
           ["Strand", `${o.strand === 1 ? "Forward" : "Reverse"} · frame ${frameLabel(o)}`],
@@ -844,7 +844,7 @@ export class Inspector {
         h(
           "p",
           { class: "sv-small sv-dim" },
-          "Click a feature, primer or enzyme to see it here. Drag across the map or the sequence to select bases; type to insert bases at the cursor."
+          "Click a feature, primer or cut site to inspect it, or drag across the map or sequence to select bases."
         ),
         h("p", { class: "sv-small sv-dim" }, `Cursor at ${fmt(this.ctx.store.selection.caret)} of ${fmt(n)}.`)
       ),

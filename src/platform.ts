@@ -507,7 +507,12 @@ export async function sendUsage(events: UsageEvent[]): Promise<void> {
 async function sendUsageFromPage(events: UsageEvent[]): Promise<void> {
   if (!validUsageKey(__USAGE_KEY__)) return;
   const now = Date.now();
-  if (!webSession || now - webSession.last > 4 * 60 * 60 * 1000) webSession = { id: usageSession(now, Math.random()), last: now };
+  if (!webSession || now - webSession.last > 4 * 60 * 60 * 1000) {
+    // Not a secret, but taken from the browser's cryptographic source so no one could
+    // guess another visitor's session from their own.
+    const random = crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
+    webSession = { id: usageSession(now, random), last: now };
+  }
   webSession.last = now;
   const session = webSession.id;
   await Promise.all(

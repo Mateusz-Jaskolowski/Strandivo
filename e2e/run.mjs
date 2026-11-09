@@ -795,24 +795,38 @@ async function main() {
     check("Protein regions have labelled tracks in Sequence", await s.waitFor("document.querySelectorAll('.sv-seq-region-bar').length > 0 && Array.from(document.querySelectorAll('.sv-region-caption')).some(e => e.textContent === 'CDR1 edited')", 5000));
     // A selection scrolls before its scroll event redraws the range label. Let the view
     // finish that redraw, then measure the row itself rather than a possibly stale label.
-    const sequenceTopRow = () => s.execAsync(`
+    const sequenceTopRow = targetRow => s.execAsync(`
       const done = arguments[arguments.length - 1];
+      const targetRow = arguments[0];
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const scroller = document.querySelector('.sv-seq-scroll');
         const row = Array.from(scroller.querySelectorAll('.sv-row'))
           .filter(el => parseFloat(el.style.top) <= scroller.scrollTop)
           .sort((a, b) => parseFloat(b.style.top) - parseFloat(a.style.top))[0];
+        const target = scroller.querySelector('.sv-row[data-row="' + targetRow + '"]');
         done({ row: Number(row.dataset.row), scrollTop: scroller.scrollTop,
+          maxScrollTop: scroller.scrollHeight - scroller.clientHeight,
+          targetTop: target ? parseFloat(target.style.top) : null,
           label: document.querySelector('.sv-seq .sv-pane-note').textContent });
       }));
-    `);
+    `, targetRow ?? null);
     const sequenceBeforeToggle = await sequenceTopRow();
     await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
     check("Regions can be hidden without hiding the CDS", await s.waitFor("document.querySelectorAll('.sv-seq-region-bar').length === 0 && document.querySelectorAll('.sv-feature-bar').length > 0", 5000));
     check("The Sequence region toggle is separate from the map's", await s.exec("return Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'Regions').getAttribute('aria-pressed') === 'true';"));
-    const sequenceAfterToggle = await sequenceTopRow();
-    check("The Regions toggle keeps the same sequence row in view", sequenceAfterToggle.row === sequenceBeforeToggle.row, JSON.stringify({ before: sequenceBeforeToggle, after: sequenceAfterToggle }));
+    const sequenceAfterToggle = await sequenceTopRow(sequenceBeforeToggle.row);
+    // Near the sequence's end, shorter rows may leave too little content below the
+    // anchor to fill the viewport. The browser must stop at the new scroll limit.
+    const atSequenceEnd = sequenceAfterToggle.targetTop !== null && sequenceAfterToggle.targetTop > sequenceAfterToggle.maxScrollTop && Math.abs(sequenceAfterToggle.scrollTop - sequenceAfterToggle.maxScrollTop) < 1;
+    check("Hiding regions preserves the row or stops at the sequence's end", sequenceAfterToggle.row === sequenceBeforeToggle.row || atSequenceEnd, JSON.stringify({ before: sequenceBeforeToggle, after: sequenceAfterToggle }));
     await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
+    await s.exec("const scroller = document.querySelector('.sv-seq-scroll'); scroller.scrollTop = Math.max(0, scroller.scrollTop - scroller.clientHeight);");
+    const sequenceAwayFromEnd = await sequenceTopRow();
+    await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
+    const sequenceAwayAfterToggle = await sequenceTopRow();
+    check("The Regions toggle keeps the same sequence row away from the end", sequenceAwayAfterToggle.row === sequenceAwayFromEnd.row, JSON.stringify({ before: sequenceAwayFromEnd, after: sequenceAwayAfterToggle }));
+    await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
+    await s.exec(`${doc} s.selectRange(s.selection.range, null, "e2e");`);
     await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Translation']", "xpath");
     // Hidden views keep their old DOM until shown; only the Sequence view redraws here.
     check("Region names remain visible without translation", await s.waitFor("document.querySelectorAll('.sv-seq .sv-aa, .sv-seq .sv-aa-box').length === 0 && Array.from(document.querySelectorAll('.sv-seq .sv-region-caption')).some(e => e.textContent === 'CDR1 edited')", 5000));

@@ -42,20 +42,86 @@ export function clear(el: Element) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
-let toastHost: HTMLElement | null = null;
+export interface ToastOptions {
+  /** How long it shows, in ms, not counting while the pointer is over it. */
+  ms?: number;
+  /** A button on it, such as Undo; clicking it closes the message. */
+  action?: { label: string; title?: string; run: () => void };
+  /** A message with the same key replaces the one showing, so quick edits don't pile up. */
+  key?: string;
+}
 
-/** Small notification in the bottom corner. */
-export function toast(message: string, kind: "info" | "success" | "error" = "info", ms = 3500) {
+export interface ToastHandle {
+  close(): void;
+}
+
+let toastHost: HTMLElement | null = null;
+/** More would cover the window; the oldest goes first. */
+const MAX_TOASTS = 3;
+
+/**
+ * Small notification in the bottom corner, gone after a while. One with a button, and an
+ * error, can be closed and waits while the pointer is over it; others let clicks through.
+ */
+export function toast(message: string, kind: "info" | "success" | "error" = "info", options: number | ToastOptions = {}): ToastHandle {
+  const o = typeof options === "number" ? { ms: options } : options;
+  const ms = o.ms ?? (o.action ? 6000 : 3500);
   if (!toastHost) {
     toastHost = h("div", { class: "ps-toasts" });
     document.body.appendChild(toastHost);
   }
-  const t = h("div", { class: `ps-toast ps-toast-${kind}` }, message);
-  toastHost.appendChild(t);
-  setTimeout(() => {
+  const host = toastHost;
+  const showing = () => Array.from(host.querySelectorAll<HTMLElement>(".ps-toast:not(.ps-toast-out)"));
+  if (o.key) for (const old of showing()) if (old.dataset.key === o.key) old.remove();
+
+  const interactive = !!o.action || kind === "error";
+  let timer = 0;
+  let deadline = 0;
+  const close = () => {
+    clearTimeout(timer);
+    if (!t.isConnected || t.classList.contains("ps-toast-out")) return;
     t.classList.add("ps-toast-out");
     setTimeout(() => t.remove(), 300);
-  }, ms);
+  };
+  const wait = (time: number) => {
+    clearTimeout(timer);
+    deadline = Date.now() + time;
+    timer = window.setTimeout(close, time);
+  };
+  const t = h(
+    "div",
+    {
+      class: `ps-toast ps-toast-${kind}${interactive ? " ps-toast-interactive" : ""}`,
+      role: kind === "error" ? "alert" : "status",
+      "data-key": o.key
+    },
+    h("span", { class: "ps-toast-text" }, message),
+    o.action
+      ? h(
+          "button",
+          {
+            type: "button",
+            class: "ps-toast-action",
+            title: o.action.title,
+            onclick: () => {
+              close();
+              o.action?.run();
+            }
+          },
+          o.action.label
+        )
+      : null,
+    interactive ? h("button", { type: "button", class: "ps-toast-close", "aria-label": "Close", title: "Close", onclick: close }, "×") : null
+  );
+  if (interactive) {
+    t.addEventListener("pointerenter", () => clearTimeout(timer));
+    t.addEventListener("pointerleave", () => wait(Math.max(deadline - Date.now(), 1500)));
+  }
+  host.appendChild(t);
+  const now = showing();
+  for (const old of now.slice(0, Math.max(0, now.length - MAX_TOASTS))) old.remove();
+  wait(ms);
+  return { close };
 }
 
 export function icon(name: "open" | "new" | "reads" | "map" | "copy" | "check" | "warn" | "x" | "arrow-right" | "arrow-left" | "file" | "settings"): SVGSVGElement {

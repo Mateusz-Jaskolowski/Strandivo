@@ -76,7 +76,7 @@ export function openLibraryPicker(ctx: DocContext) {
         h(
           "div",
           { class: "sv-empty sv-pick-empty" },
-          h("p", null, "Your primer library is empty. Start with the common sequencing primers, or import your lab's list in the library window."),
+          h("p", null, "Your primer library is empty. Add common sequencing primers or import a list."),
           h(
             "div",
             { class: "sv-pcr-actions" },
@@ -125,7 +125,7 @@ export function openLibraryPicker(ctx: DocContext) {
     });
     const others = lib.length - bindingLibraryPrimers(d).length;
     list.replaceChildren(
-      ...(rows.length ? rows : [h("p", { class: "sv-list-empty" }, q ? `No primer that binds matches “${search.value.trim()}”.` : "None of the library primers bind this sequence.")]),
+      ...(rows.length ? rows : [h("p", { class: "sv-list-empty" }, q ? `No binding primer matches “${search.value.trim()}”.` : "None of the library primers bind this sequence.")]),
       others > 0 && !q ? h("p", { class: "sv-small sv-dim sv-pick-foot" }, `${plural(others, "other primer")} in the library ${others === 1 ? "doesn't" : "don't"} bind.`) : ""
     );
     updateButton();
@@ -181,7 +181,7 @@ export function openOrderDialog(ctx: DocContext, ordered?: SeqPrimer[]) {
     toast("There are no primers to copy.", "info");
     return;
   }
-  const dlg = openDialog({ title: "Copy for ordering", note: "Choose the primers to order. Their names and sequences are copied, ready to paste into an order form or a spreadsheet.", width: 600 });
+  const dlg = openDialog({ title: "Copy for ordering", note: "Copy primer names and sequences to paste into a vendor order form or spreadsheet.", width: 600 });
   const chosen = new Set(primers.map(p => p.id));
   const format = h(
     "select",
@@ -271,7 +271,7 @@ export async function exportPrimerList(ctx: DocContext, rows: ExportRow[]) {
 // ---------- add by sequence ----------
 
 export function openAddBySequence(ctx: DocContext) {
-  const dlg = openDialog({ title: "Add a primer by its sequence", note: "Strandivo finds where it binds, on either strand. A 5′ tail that doesn't match is fine, and so are changes for mutagenesis.", width: 560 });
+  const dlg = openDialog({ title: "Add a primer by its sequence", note: "Finds where the primer binds on either strand, allowing 5′ tails and mismatches.", width: 560 });
   const name = h("input", { class: "sv-input", placeholder: "e.g. pET-seq-F", "aria-label": "Primer name" }) as HTMLInputElement;
   const seq = h("textarea", { class: "sv-input sv-mono sv-dlg-seq", rows: "2", placeholder: "Sequence 5′→3′", "aria-label": "Primer sequence", spellcheck: "false" }) as HTMLTextAreaElement;
   const save = h("input", { type: "checkbox" }) as HTMLInputElement;
@@ -284,7 +284,7 @@ export function openAddBySequence(ctx: DocContext) {
     const sites = b.length >= 15 ? findBindingSites(b, d.sequence, d.circular) : [];
     addBtn.disabled = !sites.length;
     if (b.length < 15) status.replaceChildren(b.length ? `${b.length} bases; at least 15 at the 3′ end must match the sequence.` : "");
-    else if (!sites.length) status.replaceChildren(h("span", { class: "sv-text-warn" }, "It doesn't bind this sequence (at least 15 bases at its 3′ end must match)."));
+    else if (!sites.length) status.replaceChildren(h("span", { class: "sv-text-warn" }, "Doesn't bind this sequence (needs at least 15 matching bases at the 3′ end)."));
     else {
       const s = sites[0];
       const tm = bindingTm(alignPrimer({ ...s, bases: b }, d.sequence));
@@ -305,7 +305,7 @@ export function openAddBySequence(ctx: DocContext) {
     track("primer_added", { how: "sequence" });
     if (save.checked) primerLibrary.add([{ name: primerName, bases: b, notes: "" }]);
     dlg.close();
-    if (sites.length > 1) toast(`It binds ${sites.length} places; added at the first (${fmt(s.start + 1)}).`, "info", 5000);
+    if (sites.length > 1) toast(`Binds ${sites.length} sites; added at the first (${fmt(s.start + 1)}).`, "info", 5000);
   };
   seq.addEventListener("input", check);
   seq.addEventListener("keydown", e => {
@@ -372,7 +372,7 @@ async function saveProduct(d: SeqData, product: PcrProduct) {
 export function openPcrDialog(ctx: DocContext, preset: { forward?: string; reverse?: string } = {}) {
   const d0 = ctx.store.data;
   let off = () => {};
-  const dlg = openDialog({ title: "PCR product", note: `What two primers amplify from ${d0.name || "this sequence"}: from this plasmid or the lab library.`, width: 680, onClose: () => off() });
+  const dlg = openDialog({ title: "PCR product", note: `Check the product amplified from ${d0.name || "this sequence"} by two primers.`, width: 680, onClose: () => off() });
   const pick = { forward: preset.forward ?? "", reverse: preset.reverse ?? "" };
   // With a primer selected, start from it.
   const focus = ctx.store.selection.focus;
@@ -416,7 +416,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     const actions: Node[] = [];
     let result: Node[] = [];
     if (!f || !r) {
-      result = [h("p", { class: "sv-small sv-dim" }, "Pick a forward and a reverse primer to see what they make.")];
+      result = [h("p", { class: "sv-small sv-dim" }, "Choose a forward and a reverse primer to see the product.")];
     } else if (!product) {
       result = [h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), d.circular ? " These primers don't make a product here." : " These primers point away from each other on this linear sequence, so they make no product.")];
     } else {
@@ -503,7 +503,7 @@ export function selectionTarget(ctx: DocContext): DesignTarget | null {
 }
 
 export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null = selectionTarget(ctx)) {
-  const dlg = openDialog({ title: "Design primers", note: "A pair that amplifies exactly the region, with matched Tms and optional restriction sites at its ends.", width: 760 });
+  const dlg = openDialog({ title: "Design primers", note: "Design a primer pair with matched Tms and optional 5′ restriction sites.", width: 760 });
   const d0 = ctx.store.data;
   const n0 = d0.sequence.length;
   // Regions to choose from: the selection (if any) and every feature.

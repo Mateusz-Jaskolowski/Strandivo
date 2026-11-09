@@ -7,13 +7,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy · Strandivo</title>
-  <meta name="description" content="What the Strandivo app sends, and when: everything, listed in one place. Your files never leave your computer.">
+  <meta name="description" content="What Strandivo sends over the network and when. Your files and sequences never leave your computer.">
   <!-- strandivo.pages.dev serves the same page; this names the real address. -->
   <link rel="canonical" href="https://strandivo.com/privacy/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Strandivo">
   <meta property="og:title" content="Privacy · Strandivo">
-  <meta property="og:description" content="What the Strandivo app sends, and when: everything, listed in one place. Your files never leave your computer.">
+  <meta property="og:description" content="What Strandivo sends over the network and when. Your files and sequences never leave your computer.">
   <meta property="og:image" content="https://strandivo.com/map.png">
   <meta property="og:image:width" content="1360">
   <meta property="og:image:height" content="855">
@@ -48,7 +48,7 @@
 <main class="prose">
     <h1 id="privacy">Privacy</h1>
     <p>Strandivo runs on your computer, as a desktop app or in your web browser, and your work stays there. Your sequences, files, file names, folders, features, primers and notes are never sent anywhere by the app.</p>
-    <p>This page lists everything the app does send, and when. It is the one list: strandivo.com/privacy is made from it, so the two can't disagree. Strandivo is maintained by Mateusz Jaskolowski; questions about this page go to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
+    <p>This page lists everything the app sends over the network and when. Strandivo is maintained by Mateusz Jaskolowski; questions about this page go to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
     <h2 id="the-browser-version">The browser version</h2>
     <p>Strandivo also runs in a web browser. It is the same app, served as plain files with nothing of ours behind them that could receive anything, and your files stay on your computer:</p>
     <ul>
@@ -65,38 +65,38 @@
     <p>The page is served by Cloudflare, which sees each visit as any website's host does: that the page was loaded, from which address and browser. It never sees a file.</p>
     <p>You can check all this. The page's Content Security Policy, a rule your browser enforces whatever the page's code tries, lets it connect to its own site, UniProt (<code>rest.uniprot.org</code>), the feedback service (<code>feedback.strandivo.com</code>) and Aptabase (<code>eu.aptabase.com</code>), and nothing else. The policy is in the page's headers for anyone to read, and your browser's developer tools list every request the page makes: none carries a file.</p>
     <h2 id="checking-for-updates">Checking for updates</h2>
-    <p>Once a day, while &quot;Check for updates automatically&quot; is on, and whenever you choose Check for Updates…, the app asks <code>updates.strandivo.com</code> whether there is a newer version. The question carries:</p>
+    <p>Once a day, while &quot;Check for updates automatically&quot; is on, and whenever you choose Check for Updates…, the app asks <code>updates.strandivo.com</code> whether there is a newer version. The request carries:</p>
     <ul>
       <li>the app's version, such as 0.2.1;</li>
       <li>the operating system, such as macOS or Windows;</li>
       <li>the processor, such as Apple silicon or Intel.</li>
     </ul>
-    <p>Like any connection on the internet, it also comes from your network's address. The service answers with the newest version's details. All it keeps is a count: one more check that day for that version, operating system and processor, which tells roughly how many copies are in use. It doesn't record the address or anything that tells one copy from another, and it has no logs. It runs on Cloudflare, which carries the connection.</p>
+    <p>Like any internet connection, the request comes from your IP address. The service replies with the latest version's details and only increments a daily counter for that version, operating system and processor. It keeps no logs and never records your IP address or anything that identifies your copy of the app. It runs on Cloudflare.</p>
     <p>You can turn automatic checks off in the welcome window or in Settings → Updates and privacy. Check for Updates… still works when you ask.</p>
     <h2 id="installing-an-update">Installing an update</h2>
     <p>When you choose to install an update, the app downloads it from GitHub, where Strandivo's releases are published. GitHub sees that download as it sees any other, under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
     <h2 id="looking-up-a-protein-in-uniprot">Looking up a protein in UniProt</h2>
-    <p>When you look up a UniProt entry for a protein's regions, the app asks UniProt (<code>rest.uniprot.org</code>, run by EMBL-EBI and its partners) for that one entry, by its accession, such as P42212. Nothing else goes with it: not the sequence, not the file. It happens only when you ask. UniProt's own <a href="https://www.uniprot.org/help/privacy">privacy notice</a> covers what it keeps.</p>
+    <p>When you look up a UniProt entry for a protein's regions, the app queries UniProt (<code>rest.uniprot.org</code>, run by EMBL-EBI and its partners) for that accession alone, such as P42212. Neither your sequence nor your file is sent, and the lookup happens only when you ask. UniProt's <a href="https://www.uniprot.org/help/privacy">privacy notice</a> covers what it keeps.</p>
     <h2 id="sending-feedback">Sending feedback</h2>
-    <p>Help → Send Feedback… and Report a Bug… send what you write to <code>feedback.strandivo.com</code>, only when you click Send. The dialog shows everything that goes with it before you send:</p>
+    <p>Help → Send Feedback… and Report a Bug… send your report to <code>feedback.strandivo.com</code> only when you click Send. The dialog shows everything included with the report before you send it:</p>
     <ul>
-      <li>what kind it is (a bug, an idea or a question), your summary and your details;</li>
-      <li>the app's version, the operating system and its version, and the processor;</li>
-      <li>which part of the app was open, such as Home or the Map.</li>
+      <li>the report type (bug, idea or question), summary and details;</li>
+      <li>the app's version, operating system and processor;</li>
+      <li>which view was open, such as Home or Map.</li>
     </ul>
-    <p>Two more things go only if you tick them, and both are off each time the dialog opens:</p>
+    <p>Two optional items are included only if you tick them (both are unticked by default):</p>
     <ul>
-      <li><strong>Recent errors</strong>: what went wrong in the app's windows in the past week, at most the last 20, with file paths removed. The dialog shows them as they will be sent. They are kept on your computer, so a report after a crash still has them, and dropped after a week.</li>
-      <li><strong>The open file</strong>, as GenBank.</li>
+      <li><strong>Recent errors</strong>: up to 20 app errors from the past week, with file paths removed and previewed in the dialog. They are stored locally on your computer for up to a week so a report after a crash can still include them.</li>
+      <li><strong>The open file</strong>, formatted as GenBank.</li>
     </ul>
-    <p>The service files your report as an issue in Strandivo's repository on GitHub, where anyone can read it, and tells you its number. Your email address, if you give one, and the open file, if you attach it, never go in the issue: they are emailed to the maintainer alone, with the issue's link, so the maintainer can answer you. The service keeps nothing itself and has no logs. To stop floods it lets each network send a few reports a minute, which Cloudflare counts for that minute and forgets. GitHub keeps the issue under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>; the email stays in the maintainer's mailbox. To have an issue or an email removed, write to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
-    <p>If a report can't be sent, nothing leaves the app: you can copy it, or email it to <a href="mailto:feedback@strandivo.com">feedback@strandivo.com</a> from your own mail app instead.</p>
+    <p>The service posts your report as a public issue on Strandivo's GitHub repository and returns the issue number. Your email address and any attached file are never included in the public issue — they are emailed privately to the maintainer with a link to the issue. The service keeps no logs or copies of its own, aside from a per-minute rate limit in Cloudflare to prevent spam. GitHub stores the issue under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>, and any email stays in the maintainer's mailbox. To have an issue or email removed, write to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
+    <p>If a report can't be sent, nothing leaves the app: you can copy the report text or email it to <a href="mailto:feedback@strandivo.com">feedback@strandivo.com</a> from your mail app instead.</p>
     <h2 id="reporting-a-crash">Reporting a crash</h2>
-    <p>If Strandivo quits unexpectedly, it writes down why, in a small file in the app's own folder on your computer: the error's message, where in Strandivo's code it happened, which part of the app was running (its thread), the app's version, the operating system and the processor, and the time. Nothing is sent then.</p>
-    <p>The next time it opens, the app reads that file once and deletes it, and a strip under the app bar says &quot;Strandivo quit unexpectedly last time.&quot; Dismiss forgets it. Report it… opens Report a Bug with <strong>Why it quit</strong> ticked and shown in full, as it will be sent: the message with file paths removed, where in the code, the thread, the version that quit and the time. It goes only if you click Send, as part of a bug report (see Sending feedback), and you can untick it first. Recent errors stay off unless you tick them.</p>
+    <p>If Strandivo quits unexpectedly, it writes a local crash log in its app data folder with the error message, code location, thread, app version, operating system, processor and timestamp. Nothing is sent automatically.</p>
+    <p>On the next launch, Strandivo reads that file once, deletes it, and shows a banner: &quot;Strandivo quit unexpectedly last time.&quot; Clicking Dismiss clears it. Clicking Report it… opens the bug report dialog with <strong>Crash details</strong> ticked and previewed in full (with file paths removed). It is sent only if you click Send, and you can untick it first. Recent errors remain unticked unless you opt in.</p>
     <h2 id="usage-statistics">Usage statistics</h2>
-    <p>From Strandivo 0.3.0 the app can count which of its features are used, and on which systems, so that work goes where it helps most. In the desktop app it is <strong>off unless you turn it on</strong>: the welcome window asks, and &quot;Share anonymous usage statistics&quot; in Settings → Updates and privacy turns it on or off at any time. Until you turn it on, nothing is sent. In the browser version it is on unless you turn it off (see The browser version). Turning it off sends nothing, not even that you turned it off; anything waiting to be sent is dropped at once.</p>
-    <p>When it is on, the app sends these events, and nothing else. Every detail an event carries is one of a few fixed words or a number put in a range, so none can hold a name, a sequence or anything you typed. A count's ranges are 0, 1, 2–5, 6–20 and more than 20; other numbers have their own few ranges, given below.</p>
+    <p>Strandivo can share anonymous counts of which features are used and on which operating systems. In the desktop app this is <strong>off by default</strong>: you can turn it on or off on first launch or at any time in Settings → Updates and privacy. In the browser version it is on by default (see The browser version). When it is off, nothing is sent; turning it off takes effect immediately and discards any queued events.</p>
+    <p>When enabled, the app sends only the events listed below. Event properties use fixed categories or coarse numeric buckets (0, 1, 2–5, 6–20 and &gt;20 unless noted below), never file names, sequences or user text.</p>
     <ul>
       <li><code>app_started</code>: the app was opened, with <code>arch</code>, the processor (Apple silicon or ARM, Intel or AMD); <code>installed</code>, how long ago this copy was first opened (its first day, first week, first month or longer: the date itself stays on your computer); and <code>folders</code>, how many folders Home lists, as a range.</li>
       <li><code>settings_chosen</code>: once each time the app opens, three choices from Settings: <code>tm</code>, the Tm method; <code>amber</code>, whether TAG is read as Q; and <code>bases</code>, whether bases are shown in upper case, lower case or as in the file.</li>
@@ -122,12 +122,12 @@
     <h2 id="opening-the-website">Opening the website</h2>
     <p>What's new… and some help items open strandivo.com or GitHub in your web browser. The app sends nothing itself; your browser visits the page as it would any other.</p>
     <h2 id="this-website">This website</h2>
-    <p>strandivo.com has no cookies and no tracking. Its one script, on the home and Download pages, asks your browser which system it runs on, so that the right download comes first; it sends nothing and stores nothing. The site is served by Cloudflare, which handles each visit to deliver the page.</p>
+    <p>strandivo.com uses no cookies and no tracking. Its single script (on the home and Download pages) checks which operating system your browser runs on so the matching installer is shown first; it sends and stores nothing. The site is hosted on Cloudflare Pages.</p>
     <h2 id="what-the-app-doesn-t-do">What the app doesn't do</h2>
     <ul>
-      <li>No usage statistics in the desktop app unless you turn them on, none in the browser version once you turn them off, and only ever the events listed above.</li>
-      <li>No account, no sign-in, no identifier for your copy of the app.</li>
-      <li>No crash reports and no error messages are sent on their own: they go only in a bug report you send, and only as shown in it. With usage statistics on, an error or a crash is counted by its kind alone.</li>
+      <li>No usage statistics in the desktop app unless you opt in, none in the browser version once you turn them off, and only ever the events listed above.</li>
+      <li>No user accounts, sign-in or persistent device identifiers.</li>
+      <li>No automatic crash or error reporting: logs are sent only when you submit a bug report, and only as shown in the dialog. With usage statistics enabled, errors and crashes are counted by category alone.</li>
     </ul>
   </main>
 

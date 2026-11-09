@@ -173,7 +173,7 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       h("h2", null, "Maps"),
       row(
         "Label size",
-        "Circular map labels. The slider on the map changes it too.",
+        "Font size of labels on the circular map.",
         segmented(LABEL_SIZES, nearestLabel, v => commit({ ...s, labelSize: v }))
       ),
       row(
@@ -191,7 +191,7 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       ),
       row(
         "Show when opening a file",
-        "Each open file can still switch them with the buttons above its map and sequence.",
+        "Default visibility for newly opened files.",
         h(
           "div",
           { class: "ps-check-grid" },
@@ -205,7 +205,7 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       ),
       row(
         "Sidebar",
-        "The order of the sections left of a file. You can also drag a section's heading there, or click it to fold the section.",
+        "Order of sections in the left sidebar.",
         h(
           "div",
           { class: "ps-set-stack" },
@@ -255,12 +255,12 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       ),
       row(
         "Amber stop codon",
-        "Suppressor strains such as TG1 and XL1-Blue, used for phage display, read TAG as glutamine. Applies to translations, ORFs and the effect of changes found in reads.",
+        "For amber suppressor strains such as TG1 and XL1-Blue (phage display). Applies to translations, ORFs and read differences.",
         check("Read TAG as Q", s.amberAsQ, v => commit({ ...s, amberAsQ: v }))
       ),
       row(
         "Feature detection",
-        "When a file opens with few features for its size, offer to look for common parts. The search runs on your computer, and nothing is added unless you choose it.",
+        "Offer to scan for common plasmid parts when opening a file with few features.",
         check("Offer when a file looks unannotated", s.offerDetection !== false, v => commit({ ...s, offerDetection: v }))
       )
     ),
@@ -268,10 +268,10 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       "section",
       { class: "ps-set-section" },
       h("h2", null, "Primers"),
-      row("Tm method", "Used for every Tm in the app: the inspector, the status bar, primer tables and primer design.", h("div", { class: "ps-set-stack" }, tmMethod, tmAbout)),
+      row("Tm method", "Used for all primer Tm calculations and primer design.", h("div", { class: "ps-set-stack" }, tmMethod, tmAbout)),
       row(
         "Reaction conditions",
-        "Your PCR's salt, Mg²⁺, dNTPs and primer concentration, used by the SantaLucia and Breslauer methods. The defaults are the ones primer3 uses.",
+        "Used by the SantaLucia and Breslauer methods. Defaults match primer3.",
         h(
           "div",
           { class: "ps-set-stack" },
@@ -344,17 +344,17 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       isDesktop
         ? row(
             "Updates",
-            "Once a day, Strandivo asks updates.strandivo.com for the latest version, telling it your version and system; it keeps no record of who asked. An update installs only when you choose.",
+            "Checks updates.strandivo.com once a day and installs updates only when you choose.",
             check("Check for updates automatically", s.checkForUpdates !== false, v => commit({ ...s, checkForUpdates: v }))
           )
         : "",
       row(
         "Usage statistics",
         isDesktop
-          ? "Which features are used, and on which systems: never your files, sequences or names, and nothing that tells you apart. Turning it off stops it at once."
+          ? "Which features are used and on which operating systems — never your files, sequences, names or anything that identifies you."
           : browserAsksNotToTrack()
             ? "Off, as your browser asks sites not to track you."
-            : "Which features are used, and in which browsers: never your files, file names or sequences, and nothing that tells you apart. On unless you turn it off; turning it off stops it at once.",
+            : "Which features are used and in which browsers — never your files, file names, sequences or anything that identifies you. On unless you turn it off.",
         h(
           "div",
           null,
@@ -371,7 +371,7 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       { class: "ps-settings" },
       h("header", { class: "ps-settings-head" }, h("h1", null, "Settings"), saved),
       // Browsers can clear what a site keeps, and the app has its own.
-      isDesktop ? "" : h("p", { class: "sv-small sv-dim ps-settings-note" }, "Your browser keeps these settings, apart from the desktop app's."),
+      isDesktop ? "" : h("p", { class: "sv-small sv-dim ps-settings-note" }, "These settings are saved in this browser, separate from the desktop app."),
       ...sections,
       h(
         "footer",
@@ -389,8 +389,7 @@ export function mountSettings(root: HTMLElement, embedded = false) {
             }
           },
           "Reset all settings"
-        ),
-        h("span", { class: "ps-muted ps-small" }, "Changes apply to open windows straight away.")
+        )
       )
     )
   );

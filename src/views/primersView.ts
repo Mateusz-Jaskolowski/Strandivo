@@ -235,7 +235,7 @@ export class PrimersView {
     const ids = new Set(list.map(p => p.id));
     this.picks = NO_PICKS;
     this.ctx.store.apply({ ...d, primers: d.primers.filter(p => !ids.has(p.id)) }, `Delete ${list.length} primers`, { range: null, focus: null });
-    toast(`Deleted ${list.length} primers. Undo to bring them back.`, "info", 3000);
+    this.ctx.noteEdit(`Deleted ${list.length} primers.`);
   }
 
   private renderPicked() {
@@ -294,7 +294,7 @@ export class PrimersView {
     } else this.renderTable();
     this.foot.textContent =
       this.listView === "pairs"
-        ? `A pair is a forward and a reverse primer that face each other. Tm: ${tmLabel()}.`
+        ? `Forward and reverse primers that face each other. Tm: ${tmLabel()}.`
         : `Lower-case bases are 5′ tails that don't bind. Tm: ${tmLabel()}.`;
   }
 
@@ -343,8 +343,8 @@ export class PrimersView {
           "div",
           { class: "sv-empty" },
           d.primers.length < 2
-            ? "Pairs need a forward and a reverse primer in this file."
-            : "No forward and reverse primer here face each other closely enough to amplify anything."
+            ? "Add at least one forward and one reverse primer to see pairs."
+            : "No forward and reverse primers face each other to form a PCR product."
         )
       );
       return;
@@ -461,7 +461,7 @@ export class PrimersView {
     if (!n) {
       this.listNote.textContent = "";
       this.shownOrder = [];
-      this.table.replaceChildren(h("div", { class: "sv-empty" }, "No primers yet. Add them from your lab's library, by sequence, or design a pair; or select bases and choose “Add primer from selection”."));
+      this.table.replaceChildren(h("div", { class: "sv-empty" }, "No primers yet. Add primers using the buttons above, or select bases on the map or sequence."));
       return;
     }
     const sorted = this.listRows(true);
@@ -470,7 +470,7 @@ export class PrimersView {
       ? `${sorted.length} of ${n} ${n === 1 ? "primer" : "primers"}`
       : `${n === 1 ? "1 primer" : `${n} primers`} · click a heading to sort, right-click a primer for more`;
     if (!sorted.length) {
-      this.table.replaceChildren(h("div", { class: "sv-empty" }, `No primer matches “${this.filter}”. The filter looks at names, notes and sequences.`));
+      this.table.replaceChildren(h("div", { class: "sv-empty" }, `No primer matches “${this.filter}”.`));
       return;
     }
     const reports = this.reports();

@@ -96,7 +96,7 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
       const seq = bases.value.replace(/\s+/g, "").toUpperCase();
       if (!name.value.trim()) return void name.focus();
       if (seq.length < 6 || !BASES.test(seq)) {
-        toast("Enter the sequence as bases (at least 6).", "info");
+        toast("Enter a sequence of at least 6 bases.", "info");
         bases.focus();
         return;
       }
@@ -121,14 +121,14 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
     if (!path) return;
     try {
       await saveText(path, formatPrimerList([...lib].sort(byName)) + "\n");
-      toast(`Exported ${plural(lib.length, "primer")}. Open it in a spreadsheet, or import it on another computer.`, "success", 5000);
+      toast(`Exported ${plural(lib.length, "primer")}.`, "success", 5000);
     } catch (e) {
       toast(`Couldn't export: ${e instanceof Error ? e.message : e}`, "error", 6000);
     }
   };
 
   const remove = async (p: LibraryPrimer) => {
-    const ok = await choose(`Remove ${p.name}?`, "It goes from the library on this computer. Plasmids that already have it keep their copy.", [{ label: "Cancel", value: false }, { label: "Remove", value: true, primary: true }], false);
+    const ok = await choose(`Remove ${p.name}?`, "Plasmids that already use this primer will keep their copy.", [{ label: "Cancel", value: false }, { label: "Remove", value: true, primary: true }], false);
     if (ok) primerLibrary.remove(p.id);
   };
 
@@ -169,14 +169,14 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
         h(
           "div",
           { class: "sv-empty sv-libwin-empty" },
-          h("p", null, "Keep your lab's primers here. Each plasmid you open then shows which of them bind it, and adds them in one click."),
+          h("p", null, "Add your lab's primers to automatically see where they bind on any plasmid you open."),
           h(
             "div",
             { class: "sv-pcr-actions" },
             h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => toast(addCommonPrimers(), "success") }, iconSvg("plus", 15), "Add common sequencing primers"),
             h("button", { type: "button", class: "sv-btn", onclick: openImport }, iconSvg("upload", 15), "Import a list…")
           ),
-          h("p", { class: "sv-small sv-dim" }, "Common primers are M13, T7, T3, SP6, CMV, BGH, pBAD, pGEX and EGFP, as listed by university sequencing cores. Check them against your own provider's list.")
+          h("p", { class: "sv-small sv-dim" }, "Includes M13, T7, T3, SP6, CMV, BGH, pBAD, pGEX, EGFP and other standard core-facility primers.")
         )
       );
       return;
@@ -229,7 +229,7 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
       h(
         "header",
         { class: "sv-libwin-head" },
-        h("div", { class: "sv-libwin-title" }, h("h1", null, "Primer library", count), h("p", { class: "sv-small sv-dim" }, `Your lab's primers, kept ${isDesktop ? "on this computer" : "by this browser. Export… to keep a copy"}. Plasmids you open show which of them bind.`)),
+        h("div", { class: "sv-libwin-title" }, h("h1", null, "Primer library", count), h("p", { class: "sv-small sv-dim" }, `Your lab's primers${isDesktop ? "." : " (saved in this browser — Export… to keep a backup)."}`)),
         h(
           "div",
           { class: "sv-libwin-tools" },

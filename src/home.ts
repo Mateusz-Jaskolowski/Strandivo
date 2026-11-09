@@ -93,7 +93,7 @@ async function readConstruct(f: ListedFile, catalog: string): Promise<ConstructI
 }
 
 /** Said where a browser can't keep folders, above what Home lists instead. */
-const NO_FOLDERS = "This browser can't keep folders. Files you open are listed until you close the page. Chrome, Edge or the desktop app can list whole folders.";
+const NO_FOLDERS = "This browser can't keep folders between visits: Home lists only the files opened in this tab. Use Chrome, Edge or the desktop app to keep folders.";
 
 const VERIFIED_CLASS: Record<string, string> = { Yes: "sv-home-ok", Partially: "sv-home-warn", No: "sv-home-bad", "Differences found": "sv-home-bad" };
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -307,7 +307,7 @@ export class Home {
         const locked = this.locked.has(folder);
         return h(
           "div",
-          { class: "sv-home-folder", title: error ? `${shownPath(folder)}\n${error}` : locked ? `${shownPath(folder)}\nYour browser asks before Strandivo reads it again.` : shownPath(folder) },
+          { class: "sv-home-folder", title: error ? `${shownPath(folder)}\n${error}` : locked ? `${shownPath(folder)}\nAllow access to read this folder again.` : shownPath(folder) },
           iconSvg(error ? "warn" : "folder", 14),
           h("span", { class: "sv-home-folder-name" }, basename(folder) || folder),
           locked ? this.allowButton([folder]) : h("span", { class: "sv-count" }, error ? "not found" : String(count)),
@@ -351,9 +351,9 @@ export class Home {
           "div",
           { class: "sv-home-empty" },
           iconSvg("folder", 28),
-          h("h2", null, "Your constructs in one place"),
+          h("h2", null, "Construct library"),
           keepsFolders
-            ? h("p", null, "Add the folders where you keep plasmid and construct files (GenBank, SnapGene, FASTA). Home lists every file in them and their subfolders, with what each construct carries and a note you can add.")
+            ? h("p", null, "Add the folders where you keep plasmid files (GenBank, SnapGene, FASTA) to browse them and their features.")
             : h("p", null, NO_FOLDERS),
           keepsFolders
             ? h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => void this.chooseFolder() }, "Add folder…")
@@ -390,7 +390,7 @@ export class Home {
             { colspan: "5", scope: "colgroup", title: shownPath(folder) },
             basename(folder) || folder,
             where ? h("span", { class: "sv-dim" }, ` ${where}`) : "",
-            locked ? h("span", { class: "sv-home-locked" }, h("span", { class: "sv-dim" }, mine.length ? "Shown as last read: your browser asks before Strandivo reads it again." : "Your browser asks before Strandivo reads it again."), this.allowButton([folder])) : ""
+            locked ? h("span", { class: "sv-home-locked" }, h("span", { class: "sv-dim" }, mine.length ? "Showing cached files — allow access to refresh." : "Allow access to read this folder again."), this.allowButton([folder])) : ""
           )
         )
       );

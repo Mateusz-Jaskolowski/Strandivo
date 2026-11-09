@@ -36,6 +36,10 @@ export interface Change {
   selection: boolean;
   /** Which view made the change, so it can skip scrolling to itself. */
   source?: string;
+  /** The data before an edit (not an undo or redo), to tell what it changed. */
+  before?: SeqData;
+  /** The edit joined the last undo step (typing on), so one undo still takes both back. */
+  merged?: boolean;
 }
 
 interface Snapshot {
@@ -127,6 +131,7 @@ export class DocStore {
     this.future = [];
     this.lastKey = key;
     this.lastTime = now;
+    const before = this.data;
     this.data = next;
     if (selection) {
       const n = next.sequence.length;
@@ -140,7 +145,7 @@ export class DocStore {
     } else {
       this.selection = fitSelection(this.selection, next.sequence.length);
     }
-    this.emit({ data: true, selection: true });
+    this.emit({ data: true, selection: true, before, ...(merge ? { merged: true } : {}) });
   }
 
   get canUndo() {

@@ -118,6 +118,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   tabs (`DocContext.openNew`), which count as edited until saved.
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that
   made it, so that view can skip scrolling to itself.
+- **Delete with something clicked** (a feature, primer, protein region, cut site or ORF)
+  first deletes that thing, or for a cut site or ORF only drops it from the selection, and
+  leaves its bases selected; the next press deletes the bases (`src/lib/deletion.ts`). A
+  view that gets a Delete key keeps to this, as one press used to take a feature's bases
+  along when the user meant the feature.
+- **Messages** (`toast` in `src/ui/dom.ts`) are for what the user can't see happen: side
+  effects, work finishing, errors, not an edit that shows where they are looking. One about
+  an edit goes through `ctx.noteEdit`, which adds Undo while that edit is the last one. An
+  edit to bases that removes a feature or primer whole is reported by the document itself
+  (`lostWith`), so a call site needs no message for that.
 - **Picked enzymes** (`src/lib/enzymePick.ts`, `src/doc/pickEnzyme.ts`): ⌘-click (Ctrl-click
   outside macOS, where Ctrl-click is a right-click) on a cut site in the map, the Sequence
   tab or the outline picks its enzyme for a digest; the selection keeps them in `enzymes`
@@ -168,8 +178,17 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   setting turns them on yet.
 - **Interface text** is plain and short, sentence case, says what happens ("Add reads…",
   "Use read base"), with ranges as 1,700–2,400 and an ellipsis on commands that open a
-  dialog. New screens follow the ones there are: their spacing, `sv-*` components and the
-  design tokens in `src/styles.css`.
+  dialog. Write like a colleague in the lab, using standard everyday and wet-lab words
+  ("identifies you", not "tells you apart"; "Crash details", not "Why it quit"; "5′
+  overhang", "co-migrate"). Keep dialog subtitles, Settings hints and empty states to one
+  sentence (about 15–20 words); if a control's label already says what it does, leave the
+  hint out. Don't add reassurances the UI already shows ("Nothing is added until you choose
+  it" when there is a Cancel button, "Undo to bring it back" on routine delete toasts, or
+  "Shown below when ticked" next to a checkbox), don't explain how to use nearby controls
+  or what to do with a standard exported file (like a TSV), and state privacy or local
+  processing as plain fact once where relevant rather than repeating it across screens. New
+  screens follow the ones there are: their spacing, `sv-*` components and the design tokens
+  in `src/styles.css`.
 - **Commits**: Conventional Commits (`feat(scope): summary` and a short body saying what
   and why), one logical change each, under your own name. Never rewrite pushed commits.
 - **What's new**: a pull request that changes something users notice adds a bullet under

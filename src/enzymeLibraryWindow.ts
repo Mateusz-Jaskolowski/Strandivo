@@ -60,7 +60,7 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
   /** The name as Strandivo writes it, or null after telling the user it isn't known. */
   const knownName = (written: string): string | null => {
     const name = enzymeName(written);
-    if (!name) toast(`Strandivo doesn't know an enzyme called “${written.trim()}”. Choose one from the list.`, "error", 6000);
+    if (!name) toast(`Unknown enzyme “${written.trim()}”. Choose a standard name from the list.`, "error", 6000);
     return name;
   };
 
@@ -90,7 +90,7 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
     h("label", null, "Freezer location", location),
     h("label", null, "Notes", notes),
     h("div", { class: "sv-lib-import-actions sv-enzyme-add-actions" }, submit, h("button", { type: "button", class: "sv-btn sv-btn-small sv-btn-quiet", onclick: closePanel }, "Done")));
-    panel.replaceChildren(h("h2", { class: "sv-section-title" }, "Add an enzyme"), form, h("p", { class: "sv-small sv-dim" }, "Choose the enzyme as its recognition and cut are known, such as Acc65I rather than KpnI. Record the supplier's product name separately, including an HF or other version."));
+    panel.replaceChildren(h("h2", { class: "sv-section-title" }, "Add an enzyme"), form, h("p", { class: "sv-small sv-dim" }, "Pick the exact isoschizomer for the cut site and overhang (e.g. Acc65I vs. KpnI), and put the vendor name or HF version in Product / supplier."));
     panel.hidden = false;
     enzyme.focus();
   };
@@ -109,7 +109,7 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
       const how = enzymeLibrary.all.length
         ? await choose(
             "Import enzymes",
-            `Add the ${records(entries.length)} to your list, or replace your ${records(enzymeLibrary.all.length)} with them (to restore a backup)?`,
+            `Add ${records(entries.length)} to your current list, or replace all ${records(enzymeLibrary.all.length)}?`,
             [{ label: "Cancel", value: "" }, { label: "Replace list", value: "replace", danger: true }, { label: "Add to list", value: "add", primary: true }],
             ""
           )
@@ -136,11 +136,11 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
     } catch (e) { toast(`Couldn't export: ${message(e)}`, "error", 7000); }
   };
   const remove = async (entry: LabEnzyme) => {
-    const ok = await choose(`Remove ${entry.product}?`, "Remove this stock record from the library on this computer?", [{ label: "Cancel", value: false }, { label: "Remove", value: true, danger: true }], false);
+    const ok = await choose(`Remove ${entry.product}?`, "Remove this enzyme from your lab's stock list?", [{ label: "Cancel", value: false }, { label: "Remove", value: true, danger: true }], false);
     if (ok) await save(() => enzymeLibrary.remove(entry.id));
   };
   const startNew = async () => {
-    const ok = await choose("Start a new list?", "The list that couldn't be read is kept beside the new one, so nothing is deleted.", [{ label: "Cancel", value: false }, { label: "Start a new list", value: true, primary: true }], false);
+    const ok = await choose("Start a new list?", "The unreadable file will be kept alongside the new list as a backup.", [{ label: "Cancel", value: false }, { label: "Start a new list", value: true, primary: true }], false);
     if (!ok) return;
     try {
       const aside = await enzymeLibrary.startNew();
@@ -229,7 +229,7 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
     }
     updateStatus();
     if (!lib.length) {
-      table.replaceChildren(h("div", { class: "sv-empty sv-libwin-empty" }, h("p", null, "Keep the enzymes your lab has, their freezer locations and your notes here. Choose Lab enzymes on the map to show their cut sites."), h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: openAdd }, iconSvg("plus", 14), "Add enzyme…")));
+      table.replaceChildren(h("div", { class: "sv-empty sv-libwin-empty" }, h("p", null, "Track your lab's restriction enzymes and freezer locations. Select “Lab enzymes” on a map to show only their cut sites."), h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: openAdd }, iconSvg("plus", 14), "Add enzyme…")));
       return;
     }
     const byId = new Map(lib.map(e => [e.id, e]));
@@ -283,7 +283,7 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
   root.appendChild(h("div", { class: "sv-app sv-libwin" },
     known,
     h("header", { class: "sv-libwin-head" },
-      h("div", { class: "sv-libwin-title" }, h("h1", null, "Enzyme library", count), h("p", { class: "sv-small sv-dim" }, isDesktop ? "Your lab's enzyme stock, kept on this computer." : "Your lab's enzyme stock, kept by this browser. Export… to keep a copy.")),
+      h("div", { class: "sv-libwin-title" }, h("h1", null, "Enzyme library", count), h("p", { class: "sv-small sv-dim" }, isDesktop ? "Your lab's restriction enzyme stock." : "Your lab's restriction enzyme stock (saved in this browser — Export… to keep a backup).")),
       h("div", { class: "sv-libwin-tools" }, h("div", { class: "sv-outline-filter sv-libwin-search sv-enzyme-search" }, iconSvg("search", 14), search), addButton, importButton, exportButton, status)
     ), panel, h("main", { class: "sv-libwin-body" }, table)
   ));

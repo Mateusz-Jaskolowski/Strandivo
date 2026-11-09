@@ -70,7 +70,7 @@ export class InfoPanel {
     this.set("Sequence verified", s.confidentDifferences ? "Differences found" : "Yes");
     this.set("Verified on", today());
     this.set("Verified with", s.readNames.join(", "), true);
-    toast("Filled in from the sequencing results — check and adjust if needed.", "success");
+    toast("Filled in from sequencing results.", "success");
   }
 
   /** Current lab fields, in display order. */
@@ -116,7 +116,7 @@ export class InfoPanel {
     const desc = h("textarea", {
       class: "ps-info-desc",
       rows: "2",
-      placeholder: "Description (what this plasmid is for)",
+      placeholder: "Description",
       onchange: (e: Event) => this.cb.setDescription((e.target as HTMLTextAreaElement).value.trim())
     }) as HTMLTextAreaElement;
     desc.value = f.description || "";
@@ -256,7 +256,7 @@ export class InfoPanel {
             ),
             h("div", { class: "ps-fields" }, names.map(fieldRow)),
             addRow,
-            h("p", { class: "ps-muted ps-small" }, "Saved inside the file, so it travels with the plasmid. Change the list of fields in Settings.")
+            h("p", { class: "ps-muted ps-small" }, "Saved in the GenBank file. Customize fields in Settings.")
           )
         )
       )
@@ -271,7 +271,7 @@ export class InfoPanel {
       h("h2", null, "Sequencing"),
       h("button", { class: "ps-link", onclick: () => this.cb.openReads() }, r ? "Open reads" : "Add reads")
     );
-    if (!r) return h("section", { class: "ps-info-section", "aria-label": "Sequencing" }, head, h("p", { class: "ps-muted ps-small" }, "No reads checked in this window yet. Drop .ab1 files on the window to check this plasmid against them."));
+    if (!r) return h("section", { class: "ps-info-section", "aria-label": "Sequencing" }, head, h("p", { class: "ps-muted ps-small" }, "No reads aligned yet. Drop .ab1 files on the window to check this construct."));
     const pct = r.total ? Math.floor((r.covered / r.total) * 100) : 0;
     const failed = r.reads - r.aligned;
     return h(

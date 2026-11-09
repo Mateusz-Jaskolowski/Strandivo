@@ -179,13 +179,13 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
     case "delete-feature":
       if (feature) {
         store.apply({ ...d, features: d.features.filter(f => f.id !== feature.id) }, "Delete feature", { range: { start: feature.start, end: feature.end } });
-        toast(`Deleted ${feature.name} (the bases are still there). Undo to bring it back.`, "info", 3500);
+        ctx.noteEdit(`Deleted ${feature.name} (sequence bases kept).`);
       }
       return;
     case "delete-primer":
       if (primer) {
         store.apply({ ...d, primers: d.primers.filter(p => p.id !== primer.id) }, "Delete primer", { range: { start: primer.start, end: primer.end } });
-        toast(`Deleted ${primer.name}. Undo to bring it back.`, "info", 3000);
+        ctx.noteEdit(`Deleted ${primer.name}.`);
       }
       return;
     case "select-all":

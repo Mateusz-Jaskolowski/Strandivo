@@ -112,6 +112,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   tabs (`DocContext.openNew`), which count as edited until saved.
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that
   made it, so that view can skip scrolling to itself.
+- **Delete with something clicked** (a feature, primer, protein region, cut site or ORF)
+  first deletes that thing, or for a cut site or ORF only drops it from the selection, and
+  leaves its bases selected; the next press deletes the bases (`src/lib/deletion.ts`). A
+  view that gets a Delete key keeps to this, as one press used to take a feature's bases
+  along when the user meant the feature.
+- **Messages** (`toast` in `src/ui/dom.ts`) are for what the user can't see happen: side
+  effects, work finishing, errors, not an edit that shows where they are looking. One about
+  an edit goes through `ctx.noteEdit`, which adds Undo while that edit is the last one. An
+  edit to bases that removes a feature or primer whole is reported by the document itself
+  (`lostWith`), so a call site needs no message for that.
 - **Picked enzymes** (`src/lib/enzymePick.ts`, `src/doc/pickEnzyme.ts`): ⌘-click (Ctrl-click
   outside macOS, where Ctrl-click is a right-click) on a cut site in the map, the Sequence
   tab or the outline picks its enzyme for a digest; the selection keeps them in `enzymes`

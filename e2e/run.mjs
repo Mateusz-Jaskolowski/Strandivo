@@ -137,6 +137,7 @@ const CTRL = "\uE009";
 const SHIFT = "\uE008";
 const ARROW_RIGHT = "\uE014";
 const ESCAPE = "\uE00C";
+const BACKSPACE = "\uE003";
 const PAGE_UP = "\uE00E";
 
 /** Drawn width of the first row's bases relative to the width the layout gives them (1.0 = lined up). */
@@ -272,6 +273,36 @@ async function main() {
     await s.press(ARROW_RIGHT + ARROW_RIGHT + ARROW_RIGHT, [SHIFT]);
     const shiftSel = (await state()).sel.range;
     check("Shift+arrows select bases", shiftSel && shiftSel.end - shiftSel.start === 2, JSON.stringify(shiftSel));
+
+    // --- Delete with a feature selected: the feature goes first, its bases on the next press ---
+    const lacZ = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'lacZ-alpha');
+      s.select({ range: { start: f.start, end: f.end }, caret: f.end + 1, focus: { kind: 'feature', id: f.id } }, 'e2e');
+      document.querySelector('.sv-clipboard').focus();
+      return { start: f.start, end: f.end };`);
+    const beforeDelete = await state();
+    // An expression, as waitFor wraps it in its own return.
+    const toastWith = (re, css = "") => `Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => ${re}.test(t.textContent)${css ? ` && t.querySelector('${css}')` : ""})`;
+    await s.press(BACKSPACE);
+    await sleep(300);
+    const firstPress = await state();
+    check(
+      "The first Delete on a selected feature deletes the feature, not its bases",
+      firstPress.len === beforeDelete.len && !firstPress.features.includes("lacZ-alpha") && firstPress.features.includes("MCS") && firstPress.sel.range?.start === lacZ.start && !firstPress.sel.focus,
+      JSON.stringify({ len: firstPress.len, features: firstPress.features, sel: firstPress.sel })
+    );
+    check("It says the bases are still selected, with an Undo button", await s.waitFor(toastWith("/lacZ-alpha; its bases are still selected/", ".ps-toast-action"), 2000));
+    await s.shot("03-delete-feature");
+    await s.press(BACKSPACE);
+    await sleep(300);
+    const secondPress = await state();
+    check("The next Delete deletes its bases", secondPress.len === beforeDelete.len - (lacZ.end - lacZ.start + 1), `${beforeDelete.len} → ${secondPress.len} bp`);
+    check("It says the feature inside them went too", await s.waitFor(toastWith("/The feature MCS was inside the deleted bases/"), 2000));
+    await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Undo']", "xpath");
+    await sleep(300);
+    const undoneDelete = await state();
+    check("Undo in the message brings the bases back", undoneDelete.len === beforeDelete.len && undoneDelete.features.includes("MCS"), `${undoneDelete.len} bp, ${undoneDelete.features.join(", ")}`);
+    await s.exec(`${doc} s.undo();`);
+    check("Undo once more brings the feature back", JSON.stringify((await state()).features) === JSON.stringify(beforeDelete.features));
     await s.exec(`${doc} s.selectRange({ start: 100, end: 119 }, null, "e2e");`);
     await s.waitFor("/Tm/.test(document.querySelector('.sv-inspector')?.textContent)", 3000);
     const statusTms = await s.exec("const tm = el => el?.textContent.match(/Tm\\s*([\\d.]+) °C/)?.[1]; return [tm(document.querySelector('.sv-status-left')), tm(document.querySelector('.sv-inspector'))];");

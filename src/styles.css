@@ -300,6 +300,51 @@ body {
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
   transition: opacity 0.3s, transform 0.3s;
 }
+.ps-toast-interactive {
+  /* The others let clicks through to the window under them. */
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 6px;
+}
+.ps-toast-text {
+  flex: 1;
+}
+.ps-toast-action,
+.ps-toast-close {
+  flex: none;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.ps-toast-action {
+  padding: 4px 10px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.14);
+}
+.ps-toast-action:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+.ps-toast-close {
+  width: 24px;
+  height: 24px;
+  font-size: 17px;
+  line-height: 1;
+  opacity: 0.7;
+}
+.ps-toast-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.14);
+}
+.ps-toast-action:focus-visible,
+.ps-toast-close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
 .ps-toast-success {
   background: #1f6e45;
 }
@@ -309,6 +354,7 @@ body {
 .ps-toast-out {
   opacity: 0;
   transform: translateY(6px);
+  pointer-events: none;
 }
 .ps-modal-overlay {
   position: fixed;

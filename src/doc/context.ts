@@ -65,6 +65,11 @@ export interface DocContext {
   openNew(data: SeqData): void;
   /** The other open files' sequences and selections. */
   otherSequences(): { title: string; data: SeqData; selection: Range | null }[];
+  /**
+   * Says what an edit just made did, such as deleting a feature, with an Undo button for as
+   * long as it is the last edit and the file's tab is showing.
+   */
+  noteEdit(message: string): void;
 }
 
 export function optionsStore(initial: ViewOptions, persist: (o: ViewOptions) => void) {

@@ -22,7 +22,9 @@ and CI checks that they exist.
   notes as text: before updating they come from latest.json (`shortNotes` in
   `src/lib/changelog.ts` cuts them short and drops them if they name an address, as
   latest.json isn't signed and tampered notes could point to a look-alike site), after updating
-  from the copy's own `CHANGELOG.md`, on the first start of the new version. Development builds don't update themselves. On Linux the AppImage replaces
+  from the copy's own `CHANGELOG.md`, on the first start of the new version. Development builds don't update themselves, and
+  a browser has nothing to install (a reload is the latest release), so there the welcome
+  window, Settings and the menu offer no updates. On Linux the AppImage replaces
   itself and a .deb copy installs the release's .deb (`linux-x86_64-deb` in latest.json,
   which the plugin looks for before `linux-x86_64`) with `pkexec`, so the system asks for a
   password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
@@ -42,7 +44,9 @@ and CI checks that they exist.
   takes a path under a home or volume folder to the end of its line, as folder names have
   spaces). The shell opens only addresses it builds: an issue from its number, an email
   to feedback@strandivo.com with the page's text as subject and body. e2e fakes the
-  service with `window.__strandivoFeedback`. On a Mac, Welcome and Check for Updates stay
+  service with `window.__strandivoFeedback`. In a browser, `systemInfo` gives the browser
+  and its major version as `os`, "on" and the system as `osVersion`, and "web" as `arch`
+  (`src/lib/browser.ts`), so the service, unchanged, shows "Chrome 142 on macOS · web". On a Mac, Welcome and Check for Updates stay
   in the app menu, where 0.2.0's notes put them; the Help menu has the rest.
 - **Crash reports** (`src-tauri/src/crash.rs`, `src/crash.ts`): release builds abort on a
   panic and have no symbols, so the panic hook, set first in `run()`, writes the message,
@@ -57,8 +61,14 @@ and CI checks that they exist.
   launch. Recent errors (`src/feedback.ts`) are kept in local storage for a week, shared by
   all windows, so a report after a crash still has them; still off until ticked. e2e hands
   a crash file over with `window.__strandivoCrash`.
-- **Usage statistics** are off until the user turns them on (the welcome window or
-  Settings), for everyone, as the EU's rules want. Every event and what it may carry is
+- **Usage statistics** are off in the app until the user turns them on (the welcome
+  window or Settings), as the EU's rules want. In the browser version they are on until
+  turned off, a decision made for it alone: the welcome window says so with Turn off,
+  Settings has the switch, and they are off whenever the browser sends Global Privacy
+  Control (`browserAsksNotToTrack` in `src/platform.ts`). What makes that defensible is
+  that the page stores nothing for them (no `installed`, no first start kept) and keeps
+  its session only in memory; keep it so, as anything stored on a visitor's computer for
+  statistics, or anything that tells visitors apart, would need their yes first. Every event and what it may carry is
   listed in `src/lib/usage.ts`, each property a list of words or a number put in one of a
   few buckets (`BUCKETS`), so nothing typed or named can go; a unit test holds
   `docs/privacy.md` to naming every event and property, so add one to both, with why it is
@@ -77,12 +87,20 @@ and CI checks that they exist.
   release; its events and a release candidate's are marked `isDebug`, which Aptabase's
   dashboard keeps apart (its bug icon). Aptabase's Tauri plugin isn't used: it keeps a queue
   of its own that turning statistics off couldn't empty, sends the system's language, and
-  lets the page send any text. e2e receives events with `window.__strandivoTrack`.
+  lets the page send any text. The browser version posts each event itself
+  (`sendUsage` in `src/platform.ts`) to Aptabase's single-event address, as Aptabase's web
+  SDK does, without the language, so Aptabase reads the browser and system from the
+  request; the key is built in from `APTABASE_APP_KEY`, a variable of the `web`
+  environment that only `.github/workflows/web.yml` passes, and every deployment but a
+  release's marks its events `isDebug` (`__USAGE_DEBUG__` in `vite.config.ts`). Its address
+  is in the page's Content Security Policy, the only one statistics can go to. e2e
+  receives events with `window.__strandivoTrack`.
 - **The welcome window** (`src/welcome.ts`) opens on first launch as a dialog over the
   main window, not a window of its own, since what it asks acts on the main window (Home's
   folders, holding back the update check, which waits for it). A choice users must make,
   such as usage statistics, is added to `WELCOME_PARTS` in `src/lib/welcome.ts` with the
   next version: that raises `WELCOME_VERSION`, and people who saw the older window are
   asked only the new part. Closing it any way keeps the choices as shown; "Reset all
-  settings" leaves it seen. The e2e run starts as a fresh install, so it closes the window
+  settings" leaves it seen, and never turns statistics on. A browser's window has no
+  Updates part (`welcomeParts`). The e2e run starts as a fresh install, so it closes the window
   first.

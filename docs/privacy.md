@@ -1,11 +1,46 @@
 # Privacy
 
-Strandivo is a desktop app, and your work stays on your computer. Your sequences, files,
-file names, folders, features, primers and notes are never sent anywhere by the app.
+Strandivo runs on your computer, as a desktop app or in your web browser, and your work
+stays there. Your sequences, files, file names, folders, features, primers and notes are
+never sent anywhere by the app.
 
 This page lists everything the app does send, and when. It is the one list:
 strandivo.com/privacy is made from it, so the two can't disagree. Strandivo is maintained by
 Mateusz Jaskolowski; questions about this page go to hello@strandivo.com.
+
+## The browser version
+
+Strandivo also runs in a web browser. It is the same app, served as plain files with
+nothing of ours behind them that could receive anything, and your files stay on your
+computer:
+
+- A file you open is read by your browser, on your computer, and never uploaded. Saving
+  writes it back where it came from (in Chrome and Edge) or saves a copy to your
+  Downloads folder (in other browsers).
+- Aligning reads and finding features run in your browser too, in the page itself.
+- The folders you add to Home, recent files, remembered reads, notes and settings are kept
+  by your browser, for this site only, on this computer. Clearing the site's data in your
+  browser removes them.
+
+It sends what the app sends, as listed on this page, with three differences:
+
+- **Usage statistics are on unless you turn them off.** The welcome window says so on your
+  first visit and has Turn off, and "Share anonymous usage statistics" in Settings →
+  Privacy turns them off or on at any time. They are off whenever your browser asks sites
+  not to track you (Global Privacy Control). What they hold is under Usage statistics.
+- There is nothing to update: each visit loads the latest release.
+- A bug report names the browser and its major version, such as Chrome 142, and the
+  operating system, in place of the system's version and the processor.
+
+The page is served by Cloudflare, which sees each visit as any website's host does: that
+the page was loaded, from which address and browser. It never sees a file.
+
+You can check all this. The page's Content Security Policy, a rule your browser enforces
+whatever the page's code tries, lets it connect to its own site, UniProt
+(`rest.uniprot.org`), the feedback service (`feedback.strandivo.com`) and Aptabase
+(`eu.aptabase.com`), and nothing else. The policy is in the page's headers for anyone to
+read, and your browser's developer tools list every request the page makes: none carries
+a file.
 
 ## Checking for updates
 
@@ -87,11 +122,12 @@ and you can untick it first. Recent errors stay off unless you tick them.
 ## Usage statistics
 
 From Strandivo 0.3.0 the app can count which of its features are used, and on which
-systems, so that work goes where it helps most. It is **off unless you turn it on**: the
-welcome window asks, and "Share anonymous usage statistics" in Settings → Updates and
-privacy turns it on or off at any time. Until you turn it on, nothing is sent, and
-turning it off sends nothing either, not even that you turned it off; anything waiting to
-be sent is dropped at once.
+systems, so that work goes where it helps most. In the desktop app it is **off unless you
+turn it on**: the welcome window asks, and "Share anonymous usage statistics" in Settings →
+Updates and privacy turns it on or off at any time. Until you turn it on, nothing is sent.
+In the browser version it is on unless you turn it off (see The browser version). Turning
+it off sends nothing, not even that you turned it off; anything waiting to be sent is
+dropped at once.
 
 When it is on, the app sends these events, and nothing else. Every detail an event carries
 is one of a few fixed words or a number put in a range, so none can hold a name, a
@@ -149,6 +185,14 @@ everyone else's. A copy built by the project's checks sends none, and neither do
 built from the source, unless whoever builds it adds the project's key, which only its
 maintainers have; theirs are marked as tests too.
 
+In the browser version the page sends each event itself, with the app's version, the time
+and the session number, which is kept only while the page is open: closing or reloading it
+starts a new one. Aptabase reads the browser and the operating system from the request, as
+any website can. Nothing is stored for statistics, so `app_started` has no `installed`
+there, and its processor is always "other". Events also go as the page closes, so the last
+ones aren't lost. Only the browser version the project publishes sends; a preview of a
+version still being tried marks its events as tests.
+
 They go to [Aptabase](https://aptabase.com), an open-source service for app statistics,
 in its EU region. Like any server, it sees the address the events come from: it uses it
 to tell the country and region, and to count visitors a day with a code that changes
@@ -169,7 +213,8 @@ handles each visit to deliver the page.
 
 ## What the app doesn't do
 
-- No usage statistics unless you turn them on, and then only the events listed above.
+- No usage statistics in the desktop app unless you turn them on, none in the browser
+  version once you turn them off, and only ever the events listed above.
 - No account, no sign-in, no identifier for your copy of the app.
 - No crash reports and no error messages are sent on their own: they go only in a bug
   report you send, and only as shown in it. With usage statistics on, an error or a crash

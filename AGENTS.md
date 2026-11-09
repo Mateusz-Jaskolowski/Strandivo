@@ -64,7 +64,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (`src/core/worker.ts`). Only `src/web.ts` imports it, so `npm run build`, which Tauri
   runs, never needs Rust's WebAssembly target or holds the worker; keep it that way.
   There is no menu bar there, so the app bar gets a menu button (`src/views/appMenu.ts`)
-  with the native menu's items, listed again in `src/lib/appMenu.ts`.
+  with the native menu's items, listed again in `src/lib/appMenu.ts`. It goes on
+  Cloudflare Pages only when a release is published (`.github/workflows/web.yml`; a
+  release candidate goes to a preview address), so it and the installers are always the
+  same version, and its headers, the Content Security Policy among them, are
+  `public-web/_headers`, which only that build copies. A page left open across a
+  deployment asks for files the new one doesn't have, which the strip under the app bar
+  turns into "Reload" (`offerReload` in `src/updates.ts`).
 - `src-tauri/src/lib.rs`: windows, native menus, file associations, file commands, listing
   the library's folders. Its alignment and detection commands hand typed requests to
   `crates/seqcore-json/`.
@@ -230,7 +236,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   without a file dialog). Then `e2e/web.mjs` clicks through the browser version in
   headless Chrome with no hooks, so alignment and detection run in the worker, and checks
   the worker answers after a panic (`trapCore`), then its menu, keys, opening, saving
-  and dropping files, Home's folders, and reads and checks remembered across a reload. Its file pickers are stood in for with files in the page's private
+  and dropping files, Home's folders, and reads and checks remembered across a reload. It
+  serves the build with the headers it is deployed with, and fails if the Content
+  Security Policy blocked anything along the way. Its file pickers are stood in for with files in the page's private
   file system, whose handles are real, and then taken away to check Safari's and
   Firefox's way (a file input, downloads); its screenshots and report go in a `web`
   folder beside the app's.
@@ -298,7 +306,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   links or `eval`. Inline styles are allowed, as `style` attributes are used throughout;
   Tauri is told not to add nonces to `style-src` (`dangerousDisableAssetCspModification`),
   as a nonce there turns `'unsafe-inline'` off. An address the app talks to goes into
-  `connect-src` in both policies, or the shell blocks it. Text from files reaches the page
+  `connect-src` in both policies, or the shell blocks it, and into the browser version's
+  (`public-web/_headers`), which is its privacy promise, and `docs/privacy.md`, in the
+  same pull request; `src/lib/csp.test.ts` holds the two builds' policies to each other,
+  where they differ only as the builds do. Text from files reaches the page
   only as text: `h()` in `src/ui/dom.ts` can't set HTML, and `innerHTML` is for constant
   markup only. Code scanning (CodeQL) looks for this on every pull request.
 - **Undo can arrive twice**: the page sees ⌘Z/Ctrl+Z and so does the native menu item,

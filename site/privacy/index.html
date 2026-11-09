@@ -47,8 +47,23 @@
 
 <main class="prose">
     <h1 id="privacy">Privacy</h1>
-    <p>Strandivo is a desktop app, and your work stays on your computer. Your sequences, files, file names, folders, features, primers and notes are never sent anywhere by the app.</p>
+    <p>Strandivo runs on your computer, as a desktop app or in your web browser, and your work stays there. Your sequences, files, file names, folders, features, primers and notes are never sent anywhere by the app.</p>
     <p>This page lists everything the app does send, and when. It is the one list: strandivo.com/privacy is made from it, so the two can't disagree. Strandivo is maintained by Mateusz Jaskolowski; questions about this page go to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
+    <h2 id="the-browser-version">The browser version</h2>
+    <p>Strandivo also runs in a web browser. It is the same app, served as plain files with nothing of ours behind them that could receive anything, and your files stay on your computer:</p>
+    <ul>
+      <li>A file you open is read by your browser, on your computer, and never uploaded. Saving writes it back where it came from (in Chrome and Edge) or saves a copy to your Downloads folder (in other browsers).</li>
+      <li>Aligning reads and finding features run in your browser too, in the page itself.</li>
+      <li>The folders you add to Home, recent files, remembered reads, notes and settings are kept by your browser, for this site only, on this computer. Clearing the site's data in your browser removes them.</li>
+    </ul>
+    <p>It sends what the app sends, as listed on this page, with three differences:</p>
+    <ul>
+      <li><strong>Usage statistics are on unless you turn them off.</strong> The welcome window says so on your first visit and has Turn off, and &quot;Share anonymous usage statistics&quot; in Settings → Privacy turns them off or on at any time. They are off whenever your browser asks sites not to track you (Global Privacy Control). What they hold is under Usage statistics.</li>
+      <li>There is nothing to update: each visit loads the latest release.</li>
+      <li>A bug report names the browser and its major version, such as Chrome 142, and the operating system, in place of the system's version and the processor.</li>
+    </ul>
+    <p>The page is served by Cloudflare, which sees each visit as any website's host does: that the page was loaded, from which address and browser. It never sees a file.</p>
+    <p>You can check all this. The page's Content Security Policy, a rule your browser enforces whatever the page's code tries, lets it connect to its own site, UniProt (<code>rest.uniprot.org</code>), the feedback service (<code>feedback.strandivo.com</code>) and Aptabase (<code>eu.aptabase.com</code>), and nothing else. The policy is in the page's headers for anyone to read, and your browser's developer tools list every request the page makes: none carries a file.</p>
     <h2 id="checking-for-updates">Checking for updates</h2>
     <p>Once a day, while &quot;Check for updates automatically&quot; is on, and whenever you choose Check for Updates…, the app asks <code>updates.strandivo.com</code> whether there is a newer version. The question carries:</p>
     <ul>
@@ -80,7 +95,7 @@
     <p>If Strandivo quits unexpectedly, it writes down why, in a small file in the app's own folder on your computer: the error's message, where in Strandivo's code it happened, which part of the app was running (its thread), the app's version, the operating system and the processor, and the time. Nothing is sent then.</p>
     <p>The next time it opens, the app reads that file once and deletes it, and a strip under the app bar says &quot;Strandivo quit unexpectedly last time.&quot; Dismiss forgets it. Report it… opens Report a Bug with <strong>Why it quit</strong> ticked and shown in full, as it will be sent: the message with file paths removed, where in the code, the thread, the version that quit and the time. It goes only if you click Send, as part of a bug report (see Sending feedback), and you can untick it first. Recent errors stay off unless you tick them.</p>
     <h2 id="usage-statistics">Usage statistics</h2>
-    <p>From Strandivo 0.3.0 the app can count which of its features are used, and on which systems, so that work goes where it helps most. It is <strong>off unless you turn it on</strong>: the welcome window asks, and &quot;Share anonymous usage statistics&quot; in Settings → Updates and privacy turns it on or off at any time. Until you turn it on, nothing is sent, and turning it off sends nothing either, not even that you turned it off; anything waiting to be sent is dropped at once.</p>
+    <p>From Strandivo 0.3.0 the app can count which of its features are used, and on which systems, so that work goes where it helps most. In the desktop app it is <strong>off unless you turn it on</strong>: the welcome window asks, and &quot;Share anonymous usage statistics&quot; in Settings → Updates and privacy turns it on or off at any time. Until you turn it on, nothing is sent. In the browser version it is on unless you turn it off (see The browser version). Turning it off sends nothing, not even that you turned it off; anything waiting to be sent is dropped at once.</p>
     <p>When it is on, the app sends these events, and nothing else. Every detail an event carries is one of a few fixed words or a number put in a range, so none can hold a name, a sequence or anything you typed. A count's ranges are 0, 1, 2–5, 6–20 and more than 20; other numbers have their own few ranges, given below.</p>
     <ul>
       <li><code>app_started</code>: the app was opened, with <code>arch</code>, the processor (Apple silicon or ARM, Intel or AMD); <code>installed</code>, how long ago this copy was first opened (its first day, first week, first month or longer: the date itself stays on your computer); and <code>folders</code>, how many folders Home lists, as a range.</li>
@@ -102,6 +117,7 @@
       <li><code>error_caught</code>: something went wrong in the app's window, with <code>kind</code> (a script error, a promise nobody caught, a command that failed, or a crash, counted when the app next opens); never the message, which could name a file.</li>
     </ul>
     <p>Every event also carries the app's version, the operating system and its version, the time, and a session number: a random number the app makes when it starts and drops after four hours without events. It is never stored, so it can't link one day's use to the next. Events are sent every 30 seconds while the app is open. A test version (a release candidate, such as 0.4.0-rc.1) marks its events as tests, which Aptabase keeps apart from everyone else's. A copy built by the project's checks sends none, and neither does one built from the source, unless whoever builds it adds the project's key, which only its maintainers have; theirs are marked as tests too.</p>
+    <p>In the browser version the page sends each event itself, with the app's version, the time and the session number, which is kept only while the page is open: closing or reloading it starts a new one. Aptabase reads the browser and the operating system from the request, as any website can. Nothing is stored for statistics, so <code>app_started</code> has no <code>installed</code> there, and its processor is always &quot;other&quot;. Events also go as the page closes, so the last ones aren't lost. Only the browser version the project publishes sends; a preview of a version still being tried marks its events as tests.</p>
     <p>They go to <a href="https://aptabase.com">Aptabase</a>, an open-source service for app statistics, in its EU region. Like any server, it sees the address the events come from: it uses it to tell the country and region, and to count visitors a day with a code that changes every day, and it doesn't keep the address. Aptabase's own <a href="https://aptabase.com/legal/privacy">privacy policy</a> covers what it keeps.</p>
     <h2 id="opening-the-website">Opening the website</h2>
     <p>What's new… and some help items open strandivo.com or GitHub in your web browser. The app sends nothing itself; your browser visits the page as it would any other.</p>
@@ -109,7 +125,7 @@
     <p>strandivo.com has no cookies and no tracking. Its one script, on the home and Download pages, asks your browser which system it runs on, so that the right download comes first; it sends nothing and stores nothing. The site is served by Cloudflare, which handles each visit to deliver the page.</p>
     <h2 id="what-the-app-doesn-t-do">What the app doesn't do</h2>
     <ul>
-      <li>No usage statistics unless you turn them on, and then only the events listed above.</li>
+      <li>No usage statistics in the desktop app unless you turn them on, none in the browser version once you turn them off, and only ever the events listed above.</li>
       <li>No account, no sign-in, no identifier for your copy of the app.</li>
       <li>No crash reports and no error messages are sent on their own: they go only in a bug report you send, and only as shown in it. With usage statistics on, an error or a crash is counted by its kind alone.</li>
     </ul>

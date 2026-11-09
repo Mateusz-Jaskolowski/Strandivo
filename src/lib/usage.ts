@@ -90,6 +90,37 @@ export interface UsageEvent {
   at: string;
 }
 
+/**
+ * Where the browser version posts each event: Aptabase's EU region, one event a request,
+ * as Aptabase's own web SDK does, so Aptabase reads the browser and system from the
+ * request's user agent as it does for any web page. In the page's Content Security Policy
+ * (`public-web/_headers`), so it is the one address statistics can go to.
+ */
+export const WEB_USAGE_ENDPOINT = "https://eu.aptabase.com/api/v0/event";
+
+/** Only EU keys are used, as in the shell (src-tauri/src/usage.rs). */
+export const validUsageKey = (key: string) => /^A-EU-[A-Za-z0-9]+$/.test(key);
+
+/** A session number as Aptabase checks it: seconds since 1970, then 8 random digits. Never stored. */
+export function usageSession(now: number, random: number): string {
+  return `${Math.floor(now / 1000)}${String(Math.floor(random * 1e8)).padStart(8, "0")}`;
+}
+
+/**
+ * One event as the browser version posts it: the app's version and whether it is a Debug
+ * event, and nothing about the browser or the computer, not even the language, which the
+ * shell doesn't send either.
+ */
+export function webUsageBody(e: UsageEvent, session: string, version: string, debug: boolean) {
+  return {
+    timestamp: e.at,
+    sessionId: session,
+    eventName: e.name,
+    systemProps: { isDebug: debug, appVersion: version, sdkVersion: `strandivo-web@${version}` },
+    props: e.props
+  };
+}
+
 /** A count, as one of five words: an exact number of reads or parts could tell people apart. */
 export function bucket(n: number): string {
   if (n <= 0) return "0";

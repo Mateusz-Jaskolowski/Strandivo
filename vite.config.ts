@@ -16,8 +16,15 @@ export default defineConfig(({ mode }) => {
     base: "./",
     clearScreen: false,
     plugins: web ? [webEntry()] : [],
+    // Cloudflare Pages' headers and 404 page, for the browser version only.
+    publicDir: web ? "public-web" : false,
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
+      // The browser version's usage statistics (src/platform.ts): the key, given only by the
+      // workflow that deploys it (.github/workflows/web.yml), so every other build sends
+      // nothing; and whether its events are Debug ones, as everything but a release's are.
+      __USAGE_KEY__: JSON.stringify(web ? (process.env.APTABASE_APP_KEY ?? "") : ""),
+      __USAGE_DEBUG__: JSON.stringify(process.env.STRANDIVO_RELEASE !== "1" || pkg.version.includes("-")),
       // A few file-parsing dependencies were written for Node and expect `global`.
       global: "globalThis"
     },

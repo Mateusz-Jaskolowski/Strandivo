@@ -7,7 +7,7 @@ import { h } from "./ui/dom.ts";
 import { DEFAULT_LAB_FIELDS, DEFAULT_SETTINGS, loadSettings, onSettingsChanged, saveSettings, type Settings } from "./settings.ts";
 import { DEFAULT_SIDEBAR_ORDER, moveSection, SIDEBAR_SECTIONS } from "./lib/sidebar.ts";
 import { iconSvg } from "./ui/icons.ts";
-import { isDesktop, openUsagePage, setWindowTitle } from "./platform.ts";
+import { browserAsksNotToTrack, isDesktop, openUsagePage, setWindowTitle } from "./platform.ts";
 import { DEFAULT_CONDITIONS, TM_METHODS, usesConditions, type TmConditions, type TmMethod } from "./lib/primers.ts";
 
 const TRIM_LEVELS: [string, number][] = [
@@ -74,11 +74,11 @@ export function mountSettings(root: HTMLElement, embedded = false) {
     return wrap;
   };
 
-  const check = (label: string, value: boolean, onChange: (v: boolean) => void) =>
+  const check = (label: string, value: boolean, onChange: (v: boolean) => void, disabled = false) =>
     h(
       "label",
       { class: "ps-check" },
-      h("input", { type: "checkbox", checked: value, onchange: (e: Event) => onChange((e.target as HTMLInputElement).checked) }),
+      h("input", { type: "checkbox", checked: value, disabled, onchange: (e: Event) => onChange((e.target as HTMLInputElement).checked) }),
       label
     );
 
@@ -339,19 +339,26 @@ export function mountSettings(root: HTMLElement, embedded = false) {
     h(
       "section",
       { class: "ps-set-section" },
-      h("h2", null, "Updates and privacy"),
-      row(
-        "Updates",
-        "Once a day, Strandivo asks updates.strandivo.com for the latest version, telling it your version and system; it keeps no record of who asked. An update installs only when you choose.",
-        check("Check for updates automatically", s.checkForUpdates !== false, v => commit({ ...s, checkForUpdates: v }))
-      ),
+      h("h2", null, isDesktop ? "Updates and privacy" : "Privacy"),
+      // A browser has nothing to install: a reload is the latest release.
+      isDesktop
+        ? row(
+            "Updates",
+            "Once a day, Strandivo asks updates.strandivo.com for the latest version, telling it your version and system; it keeps no record of who asked. An update installs only when you choose.",
+            check("Check for updates automatically", s.checkForUpdates !== false, v => commit({ ...s, checkForUpdates: v }))
+          )
+        : "",
       row(
         "Usage statistics",
-        "Which features are used, and on which systems: never your files, sequences or names, and nothing that tells you apart. Turning it off stops it at once.",
+        isDesktop
+          ? "Which features are used, and on which systems: never your files, sequences or names, and nothing that tells you apart. Turning it off stops it at once."
+          : browserAsksNotToTrack()
+            ? "Off, as your browser asks sites not to track you."
+            : "Which features are used, and in which browsers: never your files, file names or sequences, and nothing that tells you apart. On unless you turn it off; turning it off stops it at once.",
         h(
           "div",
           null,
-          check("Share anonymous usage statistics", s.shareUsage === true, v => commit({ ...s, shareUsage: v })),
+          check("Share anonymous usage statistics", s.shareUsage === true && !browserAsksNotToTrack(), v => commit({ ...s, shareUsage: v }), browserAsksNotToTrack()),
           h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void openUsagePage() }, "What is sent")
         )
       )
@@ -374,8 +381,9 @@ export function mountSettings(root: HTMLElement, embedded = false) {
           {
             class: "ps-btn ps-btn-quiet",
             onclick: () => {
-              // Resetting isn't a first launch: the welcome window stays seen.
-              commit({ ...DEFAULT_SETTINGS, welcomeSeen: s.welcomeSeen });
+              // Resetting isn't a first launch: the welcome window stays seen, and statistics
+              // never turn on (in a browser, where they are on by default, they stay as chosen).
+              commit({ ...DEFAULT_SETTINGS, welcomeSeen: s.welcomeSeen, shareUsage: s.shareUsage && DEFAULT_SETTINGS.shareUsage });
               root.replaceChildren();
               mountSettings(root, embedded);
             }

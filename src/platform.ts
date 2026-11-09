@@ -9,7 +9,8 @@ import type { DetectRequest, DetectResponse } from "./lib/detect.ts";
 import { changesUrl } from "./lib/changelog.ts";
 import type { FeedbackReport, SystemInfo } from "./lib/feedback.ts";
 import { recordError } from "./feedback.ts";
-import type { UsageEvent } from "./lib/usage.ts";
+import { usageSession, validUsageKey, WEB_USAGE_ENDPOINT, webUsageBody, type UsageEvent } from "./lib/usage.ts";
+import { browserInfo } from "./lib/browser.ts";
 import { basename, OPEN_EXTENSIONS } from "./lib/files.ts";
 import {
   allowFolder as allowFolderKey,
@@ -435,9 +436,15 @@ export async function systemInfo(): Promise<SystemInfo> {
       // Falls through to the browser's guess.
     }
   }
-  const ua = navigator.userAgent;
-  const os = /Mac/.test(ua) ? "macos" : /Windows/.test(ua) ? "windows" : /Linux/.test(ua) ? "linux" : "unknown";
-  return { version: "development", os, osVersion: "unknown", arch: "unknown" };
+  // Said so a report reads "Strandivo 0.4.0 · Chrome 142 on macOS · web" through the
+  // feedback service as it is (`describeSystem` in src/lib/feedback.ts).
+  const b = browserInfo(navigator.userAgent);
+  return {
+    version: import.meta.env.MODE === "web" ? __APP_VERSION__ : "development",
+    os: `${b.name} ${b.version}`.trim(),
+    osVersion: b.system ? `on ${b.system}` : "on another system",
+    arch: "web"
+  };
 }
 
 /** Opens a report's issue on GitHub; the shell builds the address from the number. */
@@ -451,6 +458,9 @@ export async function openIssue(number: number): Promise<void> {
 /** The usage statistics' list on the website's Privacy page (Settings' "What is sent"). */
 export const USAGE_PAGE = "https://strandivo.com/privacy#usage-statistics";
 
+/** What the browser version does with files, on the website's Privacy page (Home's "How?"). */
+export const BROWSER_PRIVACY_PAGE = "https://strandivo.com/privacy#the-browser-version";
+
 export async function openUsagePage(): Promise<void> {
   if (isDesktop) return invoke<void>("open_project_page", { which: "privacy-usage" });
   window.open(USAGE_PAGE, "_blank", "noopener");
@@ -461,20 +471,56 @@ type UsageHook = (events: UsageEvent[]) => void;
 const usageHook = () => (window as unknown as { __strandivoTrack?: UsageHook }).__strandivoTrack;
 
 /**
+ * Whether the browser asks sites not to track its user (Global Privacy Control, which
+ * Firefox, Brave and DuckDuckGo can send): the browser version then sends no statistics,
+ * whatever Settings say.
+ */
+export const browserAsksNotToTrack = () => !isDesktop && (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
+
+/** The browser version's session: in memory only, so a reload starts a new one. */
+let webSession: { id: string; last: number } | null = null;
+
+/**
  * Hands queued events (src/usage.ts) to the shell, which sends them to Aptabase if this
  * copy is a release build with the key built in. Not through `invoke`, whose failures are
- * kept as recent errors: a failed send must not become an error event of its own.
+ * kept as recent errors: a failed send must not become an error event of its own. The
+ * browser version posts them itself, if the deployment was built with the key.
  */
 export async function sendUsage(events: UsageEvent[]): Promise<void> {
   const hook = usageHook();
   if (hook) return hook(events);
-  if (!isDesktop) return;
+  if (!isDesktop) return sendUsageFromPage(events);
   try {
     const { invoke: raw } = await import("@tauri-apps/api/core");
     await raw("send_usage", { events });
   } catch {
     // Statistics are dropped rather than retried.
   }
+}
+
+/**
+ * The browser version's events, to Aptabase as its web SDK sends them, a request each: no
+ * cookies, nothing stored, and the session forgotten with the page. A new session after
+ * four hours without events too, as the shell does. `keepalive` lets the last ones go as
+ * the page closes. Failures are dropped, as on the desktop.
+ */
+async function sendUsageFromPage(events: UsageEvent[]): Promise<void> {
+  if (!validUsageKey(__USAGE_KEY__)) return;
+  const now = Date.now();
+  if (!webSession || now - webSession.last > 4 * 60 * 60 * 1000) webSession = { id: usageSession(now, Math.random()), last: now };
+  webSession.last = now;
+  const session = webSession.id;
+  await Promise.all(
+    events.map(e =>
+      fetch(WEB_USAGE_ENDPOINT, {
+        method: "POST",
+        headers: { "content-type": "application/json", "App-Key": __USAGE_KEY__ },
+        body: JSON.stringify(webUsageBody(e, session, __APP_VERSION__, __USAGE_DEBUG__)),
+        credentials: "omit",
+        keepalive: true
+      }).catch(() => undefined)
+    )
+  );
 }
 
 /** Starts an email to feedback@strandivo.com in the user's mail app, with the report in it. */

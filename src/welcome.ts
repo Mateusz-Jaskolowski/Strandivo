@@ -9,7 +9,7 @@
 
 import { h, toast } from "./ui/dom.ts";
 import { openDialog } from "./ui/modal.ts";
-import { canKeepFolders, openUsagePage, pickFiles } from "./platform.ts";
+import { browserAsksNotToTrack, canKeepFolders, isDesktop, openUsagePage, pickFiles } from "./platform.ts";
 import { shownPath } from "./webFiles.ts";
 import { basename } from "./lib/files.ts";
 import { WELCOME_VERSION, welcomeParts, type WelcomePart } from "./lib/welcome.ts";
@@ -25,11 +25,12 @@ export interface WelcomeHost {
  * user hasn't been asked. Resolves when it closes; at once if there is nothing to ask.
  */
 export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> {
-  const parts = welcomeParts(loadSettings().welcomeSeen, reopened);
+  const parts = welcomeParts(loadSettings().welcomeSeen, reopened, isDesktop);
   if (!parts.length) return Promise.resolve();
   return new Promise(resolve => {
     const updates = h("input", { type: "checkbox", checked: loadSettings().checkForUpdates !== false }) as HTMLInputElement;
-    // Off unless chosen: nothing is sent without a yes.
+    // In the app, off unless chosen: nothing is sent without a yes. In a browser, on until
+    // turned off here or in Settings (docs/privacy.md says why).
     const usage = h("input", { type: "checkbox", checked: loadSettings().shareUsage === true }) as HTMLInputElement;
     // Someone who saw an older window is only asked what is new.
     const upgrade = !reopened && loadSettings().welcomeSeen > 0;
@@ -57,7 +58,9 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
       title: upgrade ? "Something new to choose" : "Welcome to Strandivo",
       note: upgrade
         ? "This version of Strandivo asks about something it didn't before. Nothing changes until you choose."
-        : "Plan, build and check your plasmids. Everything runs on your computer: your files and sequences never leave it.",
+        : isDesktop
+          ? "Plan, build and check your plasmids. Everything runs on your computer: your files and sequences never leave it."
+          : "Plan, build and check your plasmids. Strandivo runs in your browser, and your files never leave this computer.",
       width: 560,
       onClose: () => void finish()
     });
@@ -79,6 +82,34 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
       if (r.ok) primerNote.textContent = r.message;
     };
 
+    const desktopUsage = () =>
+      section(
+        "Usage statistics",
+        option(
+          usage,
+          "Share anonymous usage statistics",
+          "Which features are used, and on which systems, so work goes where it helps most. Never your files, sequences or names, and nothing that tells you apart."
+        ),
+        h("div", { class: "sv-welcome-actions" }, h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void openUsagePage() }, "What is sent"))
+      );
+    /** In a browser statistics are on until turned off, so the window says so and offers that. */
+    const webUsage = (): HTMLElement[] => {
+      const whatIsSent = h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void openUsagePage() }, "What is sent");
+      if (browserAsksNotToTrack()) return [h("p", { class: "sv-small sv-dim" }, "Off, as your browser asks sites not to track you."), h("div", { class: "sv-welcome-actions" }, whatIsSent)];
+      const state = h("p", { class: "sv-small sv-dim sv-welcome-done" });
+      const toggle = h("button", { type: "button", class: "sv-btn sv-btn-small" }) as HTMLButtonElement;
+      const show = () => {
+        toggle.textContent = usage.checked ? "Turn off" : "Turn on";
+        state.textContent = usage.checked ? "" : "Turned off: nothing is sent.";
+      };
+      toggle.onclick = () => {
+        usage.checked = !usage.checked;
+        show();
+      };
+      show();
+      return [h("div", { class: "sv-welcome-actions" }, toggle, whatIsSent), state];
+    };
+
     const build: Record<WelcomePart, () => HTMLElement> = {
       updates: () =>
         section(
@@ -86,15 +117,13 @@ export function openWelcome(host: WelcomeHost, reopened = false): Promise<void> 
           option(updates, "Check for updates automatically", "Once a day, Strandivo asks its server for the latest version. An update installs only when you choose.")
         ),
       usage: () =>
-        section(
-          "Usage statistics",
-          option(
-            usage,
-            "Share anonymous usage statistics",
-            "Which features are used, and on which systems, so work goes where it helps most. Never your files, sequences or names, and nothing that tells you apart."
-          ),
-          h("div", { class: "sv-welcome-actions" }, h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void openUsagePage() }, "What is sent"))
-        ),
+        isDesktop
+          ? desktopUsage()
+          : section(
+              "Usage statistics",
+              h("p", { class: "sv-small" }, "Strandivo counts which features are used, and in which browsers, so work goes where it helps most. Never your files, file names or sequences, and nothing that tells you apart."),
+              ...webUsage()
+            ),
       constructs: () =>
         section(
           "Your constructs",

@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Usage statistics, in the main window: `track` queues an event from the list in
-// src/lib/usage.ts if the user chose to share, and the queue goes to the shell every 30
-// seconds (src-tauri/src/usage.rs sends it on to Aptabase). Nothing is queued before the
-// welcome window has closed, and turning sharing off empties the queue at once, so what
-// was queued is never sent. Turning it off sends nothing either, not even that.
+// src/lib/usage.ts if the user shares, and the queue goes to the shell every 30 seconds
+// (src-tauri/src/usage.rs sends it on to Aptabase), or in the browser version straight to
+// Aptabase (`sendUsage` in src/platform.ts). Nothing is queued before the welcome window
+// has closed, and turning sharing off empties the queue at once, so what was queued is
+// never sent. Turning it off sends nothing either, not even that. In the app sharing is
+// off until chosen; in a browser it is on until turned off, and off whenever the browser
+// asks sites not to track (Global Privacy Control).
 
 import { countErrors } from "./feedback.ts";
-import { sendUsage, systemInfo } from "./platform.ts";
+import { browserAsksNotToTrack, isDesktop, sendUsage, systemInfo } from "./platform.ts";
 import { libraryFolders } from "./constructLibrary.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
 import { usageEvent, type UsageEvent, type UsageEventName, type UsageProps } from "./lib/usage.ts";
@@ -29,7 +32,7 @@ const once = new Set<string>();
 /** When this copy first counted a start; kept on this computer, only its bucket is sent. */
 const FIRST_START_KEY = "strandivo.firstStart";
 
-const sharing = () => loadSettings().shareUsage === true;
+const sharing = () => loadSettings().shareUsage === true && !browserAsksNotToTrack();
 
 function forget() {
   queue = [];
@@ -83,7 +86,9 @@ async function announce() {
   if (announced || !sharing()) return;
   announced = true;
   const { arch } = await systemInfo();
-  track("app_started", { arch: arch === "aarch64" || arch === "x86_64" ? arch : "other", installed: daysInstalled(), folders: libraryFolders().length });
+  // A browser stores nothing for statistics, so it has no first start to count from.
+  const installed = isDesktop ? daysInstalled() : undefined;
+  track("app_started", { arch: arch === "aarch64" || arch === "x86_64" ? arch : "other", installed, folders: libraryFolders().length });
   const st = loadSettings();
   track("settings_chosen", {
     tm: st.tm.method,
@@ -99,6 +104,6 @@ export function startUsage(until: Promise<unknown>) {
     void announce();
   });
   // Turned on in Settings: this launch counts from then. Turned off: nothing more goes.
-  onSettingsChanged(s => (s.shareUsage ? started && void announce() : forget()));
+  onSettingsChanged(() => (sharing() ? started && void announce() : forget()));
   countErrors(kind => track("error_caught", { kind }));
 }

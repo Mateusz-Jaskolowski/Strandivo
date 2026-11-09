@@ -190,8 +190,7 @@ export function changesBody(changelog) {
   });
   return `  <main class="prose">
     <h1>What's new in Strandivo</h1>
-    <p class="lede">Every version, newest first. Strandivo shows the short notes of each when
-    it offers the update; this page has the rest.</p>
+    <p class="lede">Release notes for every version of Strandivo, newest first.</p>
 ${sections.join("\n")}
   </main>`;
 }
@@ -217,22 +216,21 @@ export function suggestedBlock() {
   return `      <div class="suggested" id="suggested" hidden>
         <div data-os="mac" hidden>
           <a class="button primary big" href="${download(fileFor("mac", "Apple-silicon"))}">Download for Mac</a>
-          <p class="note">For Macs with Apple silicon (M1 or later), which is nearly every Mac
-          since 2020. Choose Apple menu → About This Mac: a “Processor” line instead of
-          “Chip” means Intel. <a href="${download(fileFor("mac", "Intel"))}">Download for a Mac with Intel</a></p>
+          <p class="note">For Macs with Apple silicon (M1 or later). In Apple menu → About This
+          Mac, “Chip” means Apple silicon and “Processor” means Intel. <a href="${download(fileFor("mac", "Intel"))}">Download for Intel Mac</a></p>
         </div>
         <div data-os="windows" hidden>
           <a class="button primary big" href="${download(fileFor("windows", "Windows"))}">Download for Windows</a>
-          <p class="note">For 64-bit Windows 10 and 11. It installs for you alone, without an
-          administrator.</p>
+          <p class="note">For 64-bit Windows 10 and 11. Installs for your user account without
+          administrator rights.</p>
         </div>
         <div data-os="linux" hidden>
           <div class="actions">
             <a class="button primary big" href="${download(fileFor("linux", ".deb"))}">Download the .deb</a>
             <a class="button primary big" href="${download(fileFor("linux", "AppImage"))}">Download the AppImage</a>
           </div>
-          <p class="note">The .deb is for Debian, Ubuntu and their relatives; the AppImage runs
-          on other systems.</p>
+          <p class="note">The .deb is for Debian, Ubuntu and derivatives; the AppImage runs on
+          other Linux distributions.</p>
         </div>
       </div>`;
 }
@@ -291,7 +289,7 @@ export function build(root) {
     "privacy/index.html": page({
       path: "privacy/",
       title: "Privacy · Strandivo",
-      description: "What the Strandivo app sends, and when: everything, listed in one place. Your files never leave your computer.",
+      description: "What Strandivo sends over the network and when. Your files and sequences never leave your computer.",
       body: privacyBody(read("docs/privacy.md")),
       source: "docs/privacy.md"
     }),

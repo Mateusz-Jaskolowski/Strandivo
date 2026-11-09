@@ -31,8 +31,8 @@ const memory = { layout: "back-to-back" as SdmLayout, tm: { "back-to-back": DEFA
 
 const AMINO_ACIDS = "ARNDCQEGHILKMFPSTWYV*";
 const LAYOUTS: { id: SdmLayout; label: string; about: string }[] = [
-  { id: "back-to-back", label: "Back to back", about: "As Q5 site-directed mutagenesis: the primers' 5′ ends meet at the change, which the forward primer carries. The product is the whole plasmid; a kinase-ligase-DpnI step closes it." },
-  { id: "overlapping", label: "Overlapping", about: "As QuikChange: two complementary primers with the change in the middle copy the whole plasmid; DpnI then removes the template." }
+  { id: "back-to-back", label: "Back to back", about: "Q5-style (inverse PCR): 5′ ends meet at the mutation on the forward primer, followed by KLD (kinase-ligase-DpnI) circularization." },
+  { id: "overlapping", label: "Overlapping", about: "QuikChange-style: complementary primers carry the mutation in the middle; DpnI digests the parental template." }
 ];
 
 /** A codon or less inside a CDS is that residue; a CDS itself is the CDS; other bases are bases. */
@@ -54,7 +54,7 @@ export function mutagenesisTarget(ctx: DocContext): MutagenesisTarget {
 }
 
 export function openMutagenesisDialog(ctx: DocContext, initial: MutagenesisTarget = mutagenesisTarget(ctx)) {
-  const dlg = openDialog({ title: "Mutagenesis primers", note: "A primer pair that makes a change in the plasmid as it copies the whole of it.", width: 760 });
+  const dlg = openDialog({ title: "Mutagenesis primers", note: "Design whole-plasmid site-directed mutagenesis primers.", width: 760 });
   const d0 = ctx.store.data;
   const n = d0.sequence.length;
   const coding = d0.features.filter(isCoding);
@@ -225,7 +225,7 @@ export function openMutagenesisDialog(ctx: DocContext, initial: MutagenesisTarge
     label = c.label;
     name = c.name;
     if (!design) {
-      result.replaceChildren(h("p", { class: "sv-small sv-text-warn sv-sdm-status" }, iconSvg("warn", 13), " There's no room for the primers here: the change is too near an end of this linear sequence."));
+      result.replaceChildren(h("p", { class: "sv-small sv-text-warn sv-sdm-status" }, iconSvg("warn", 13), " The mutation is too close to the end of this linear sequence to place primers."));
       dlg.footer.replaceChildren(...footer);
       return;
     }
@@ -239,7 +239,7 @@ export function openMutagenesisDialog(ctx: DocContext, initial: MutagenesisTarge
     const warnings = rows.flatMap(r => primerReport(r.p.bases, alignPrimer(r.p, d.sequence), d.sequence, d.circular, r.partner.tm3, r.p).checks.filter(x => x.level === "warn").map(x => `${r.name}: ${x.text}`));
     const product = pair.layout === "back-to-back" ? pcrProduct(d.sequence, d.circular, { name: "F", ...pair.forward }, { name: "R", ...pair.reverse }) : null;
     const notes: Node[] = [];
-    if (!d.circular) notes.push(h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " Both layouts copy a whole plasmid, and this sequence is linear."));
+    if (!d.circular) notes.push(h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " Both layouts are designed for circular plasmids, and this sequence is linear."));
     notes.push(
       warnings.length
         ? h("ul", { class: "sv-checks sv-sdm-checks" }, ...warnings.map(w => h("li", { class: "sv-check-warn" }, iconSvg("warn", 15), h("span", null, w))))

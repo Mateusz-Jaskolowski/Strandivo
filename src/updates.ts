@@ -57,7 +57,7 @@ export interface Updates {
  */
 export function showWhatsNew(version: string, lines: string[]) {
   const dlg = openDialog({ title: `What's new in Strandivo ${version}`, width: 480 });
-  dlg.body.replaceChildren(...(lines.length ? lines : ["The notes for this version are on strandivo.com."]).map(l => h("p", { class: "sv-whats-new" }, l)));
+  dlg.body.replaceChildren(...(lines.length ? lines : ["Release notes for this version are on strandivo.com."]).map(l => h("p", { class: "sv-whats-new" }, l)));
   dlg.footer.replaceChildren(
     h("button", { type: "button", class: "sv-btn", onclick: () => void openWhatsNew(version).catch(e => toast(errorText(e), "error", 6000)) }, "More on strandivo.com"),
     h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => dlg.close() }, "Close")
@@ -139,7 +139,7 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
   async function check(asked: boolean) {
     if (checking || downloading) return;
     if (!canUpdate()) {
-      if (asked) toast("Updates come with the desktop app.", "info", 5000);
+      if (asked) toast("Automatic updates are only in the desktop app.", "info", 5000);
       return;
     }
     checking = true;

@@ -44,7 +44,7 @@ type Method = "restriction" | "gibson" | "infusion" | "goldengate";
 
 const METHODS: { id: Method; label: string; note: string }[] = [
   { id: "restriction", label: "Restriction & ligation", note: "Cut the vector and the insert, then ligate the matching ends." },
-  { id: "gibson", label: "Gibson", note: "Pieces join on 20 bp overlaps; primers add any that are missing, half on each side." },
+  { id: "gibson", label: "Gibson", note: "Fragments join across 20 bp overlaps; PCR primers add any missing overlap, half on each side." },
   { id: "infusion", label: "In-Fusion", note: "The insert's primers carry 15 bases of each vector end." },
   { id: "goldengate", label: "Golden Gate", note: "A Type IIS enzyme cuts every part; their overhangs set the order." }
 ];
@@ -120,7 +120,7 @@ export function openCloningDialog(ctx: DocContext) {
   const vectorSel = ctx.store.selection;
   const nV = vector.sequence.length;
   const sources: Source[] = ctx.otherSequences().map(s => ({ title: s.data.name || s.title, data: s.data, selection: s.selection }));
-  const dlg = openDialog({ title: "Simulate cloning", note: `${vector.name || "This sequence"} is the vector. Inserts come from your other open files, or choose one here.`, width: 820 });
+  const dlg = openDialog({ title: "Simulate cloning", note: `Assemble inserts into ${vector.name || "this vector"}.`, width: 820 });
 
   let method: Method = memory.method;
   let vectorEnzymes: [string, string] = ["", ""];
@@ -483,9 +483,9 @@ export function openCloningDialog(ctx: DocContext) {
           update();
         })
       );
-      out.notes.push("The insert's ends fit either way round, so colonies will have both directions: check them by sequencing or a digest.");
+      out.notes.push("The insert can ligate in either orientation — screen colonies by digest or sequencing.");
     }
-    if (selfLigates(bb)) out.notes.push("The opened vector's ends match each other, so it can close without an insert. Dephosphorylating it helps.");
+    if (selfLigates(bb)) out.notes.push("The vector ends are compatible and may self-ligate; consider dephosphorylating the vector.");
     out.product = { ...r.product, name: productName([vector.name, s.title]), description: `${vector.name} cut with ${vectorEnzymes.filter(Boolean).join(" and ")}, ligated with ${s.title} cut with ${enzymes.join(" and ")}${r.flipped ? " (reversed)" : ""}.` };
     out.layout = r.layout;
     return out;

@@ -6,120 +6,75 @@ A free, open-source plasmid editor for Mac, Windows and Linux: maps and sequence
 primers and cloning, and sequence verification with Sanger and whole-plasmid reads. [strandivo.com](https://strandivo.com)
 
 - **Open your files**: SnapGene `.dna`, GenBank, FASTA, SBOL, GFF, Geneious and `.ab1` traces
-- **Construct library**: Home lists every construct in your folders (and their subfolders)
-  with its size, what it carries (read off its features, e.g. `EGFP · KanR · pBR322 ori`, or
-  detected for a file with none) and a short note you can add; search by name, contents or note
-- **Maps and editing**: each open file is a tab next to Home, with Map, Sequence, Primers,
-  Reads and Info views (or map and sequence side by side). Circular and linear maps, an editable sequence view with
-  both strands, features, primers, restriction sites and translations, an outline of
-  everything in the file and an inspector for whatever is selected. Translations can be
-  coloured by amino acid chemistry (Clustal X colours). Open reading frames show on the map
-  and in the sequence (from ATG to a stop, 75 codons or longer by default; GTG/TTG starts
-  in Settings) and one click adds one as a CDS. Right-click selected bases, a
-  feature, a primer, an ORF or a cut site for what you can do with it, such as adding a forward or
-  reverse primer over the selection or changing a feature's colour
-- **Feature detection**: Tools → Detect Features… finds common parts in a sequence
-  (resistance genes, origins, promoters, tags, recombination sites, fluorescent proteins,
-  Cas9 and more) and lists them for you to review; the ones you tick are added in one undo
-  step. Codon-optimized genes are found by the protein they encode. A file with few features
-  offers it in a strip under the toolbar (Settings can turn that off). The catalog ships with
-  the app, and every entry comes from a source whose terms allow it
-- **Virtual digests**: choose enzymes and see the fragments (size, position, ends) and a
-  simulated agarose gel next to a ladder, with other open files as more lanes; any fragment
-  opens in a new tab
-- **Lab enzymes**: keep your enzyme products, freezer locations and notes in the Enzyme
-  library (the scissors button in the app bar, or Window → Enzyme Library), including
-  isoschizomers such as Acc65I or Esp3I. Choose a *Lab enzymes* set in the map controls or
-  outline to show where enzymes you have cut: once, at most twice, or everywhere. The stock
-  list is saved locally for all plasmids; import a spreadsheet (tab-separated or CSV), and
-  export or import to back it up or share it with colleagues. Product names are your
-  records; reaction conditions aren't fetched from manufacturers
-- **Protein regions**: give a CDS its UniProt accession and its transmembrane helices,
-  topological domains and signal peptides are marked inside it, still as one feature. The
-  CDS's protein is aligned to the entry first, so tags, fusions and truncations land right.
-  The entry is fetched only when you ask; apart from the daily update check, it is the
-  only time the app goes online.
-- **Primers**: Tm (SantaLucia with primer3's conditions by default; Breslauer, Wallace or a
-  basic formula, and your reaction conditions, in Settings), GC, 3′ clamp, runs and self-dimer checks,
-  where each primer binds (tails allowed, with a warning when a tail binds elsewhere too), add one by pasting its sequence, or design a pair
-  to amplify a feature, with restriction sites added at its ends (NdeI at a start codon
-  reuses the ATG). The selected primer is shown among the bases it pairs with (tail and
-  mismatches marked), and its ends can be dragged to extend or trim it; primers can be given a colour. Your lab's primer library has its own window (import a list, or start
-  from common sequencing primers); each plasmid shows which of its primers bind and adds them
-  in one click. Any two primers give a PCR product preview: size, Tm difference, side
-  products, and the product as a new file. Mutagenesis primers change an amino acid of a CDS
-  (with the codon that needs the fewest base changes) or substitute, insert or delete bases,
-  as a back-to-back pair (Q5 SDM) or an overlapping one (QuikChange), each 3′ arm sized to
-  your Tm and checked like any primer
-- **Primer list**: the Primers tab lists a file's primers in sortable columns, with their
-  notes, and a filter by name, note or sequence. Pick several to copy them for ordering,
-  save them to the library or delete them. *Pairs* shows every forward and reverse primer
-  that amplify something together, with the product's size, how far apart their Tms are and
-  any cross-dimer, and opens one as a PCR product. *Export list…* saves the list as a
-  tab-separated file
-- **Cloning simulation**: restriction and ligation, Gibson, In-Fusion and Golden Gate, with
-  the open file as the vector and inserts from other open files. The product is shown as you
-  choose enzymes and pieces (its size, where the pieces join, which way an insert can go,
-  and what could go wrong) and opens in a new tab with every piece's features. For Gibson
-  and In-Fusion, primers with the overlap tails are designed for each insert you amplify
-- **Sanger verification**: drop `.ab1` files on a construct and get, for every read, where it
-  aligns (either strand, across the origin), every difference with its base quality, and what
-  it does to your features — e.g. `W163R in AmpR`, `frameshift at codon 40`, or fully covered
-  with no differences. Each read's trace is shown under the reference, and one click
-  corrects the sequence to match a read
-- **Library clones**: reads of one clone are combined into a consensus, and a plate becomes a
-  table of each clone's mutations, stops and frameshifts, with identical clones together.
-  Mark CDRs, NNK sites or a part with a few known versions as variable, and each clone's
-  contents there get a column of their own instead of a row of mutations. Double peaks in
-  the traces tell a colony with two plasmids ("Mixed, about 30%") from a clean one, and
-  calls made among them, such as a read's noisy end, are left out. A summary shows how
-  many clones are different or broken, mutations per kb, mutations that recur along the
-  sequence or a protein, and the codons seen at NNK sites against what chance would show
-- **Plasmid info**: size, GC content and markers read off the features, plus lab fields
-  (sequence verified, stored at, resistance, host, backbone, insert, codon optimization,
-  source, notes, and your own) saved inside the GenBank file so they travel with it
-- **Settings** in their own window (⌘,): map display, Tm method, read quality thresholds,
-  lab fields
-- **Updates** from inside the app: it checks once a day (a setting) and installs a new
-  version only when you choose. A welcome window on first launch asks about it and helps
-  you add your construct folders and a primer library
-- **Feedback** from inside the app: Help → Send Feedback… sends a bug, an idea or a
-  question, with no GitHub account needed, and shows everything that goes with it first
-- **Private**: everything runs on your computer and your files never leave it. The app
-  goes online only to check for updates, to look up a UniProt entry you ask for and to
-  send feedback you write;
-  [strandivo.com/privacy](https://strandivo.com/privacy/) lists exactly what each sends
+- **Construct library**: Home lists every construct in your folders and subfolders with its
+  size, key features (e.g. `EGFP · KanR · pBR322 ori`, detected automatically for
+  unannotated files) and notes; search by name, feature or note
+- **Maps and editing**: circular and linear plasmid maps alongside an editable two-strand
+  sequence view, feature/primer/cut-site outline and selection inspector. Colour translations
+  by amino-acid chemistry (Clustal X), detect open reading frames on both strands, and
+  convert any ORF into a CDS feature in one click
+- **Feature detection**: Tools → Detect Features… scans unannotated sequences against a
+  built-in catalog of common plasmid parts (resistance markers, origins, promoters, tags,
+  recombination sites, fluorescent proteins, Cas9 and more), including codon-optimized
+  variants matched at the protein level
+- **Virtual digests**: simulate single or multi-enzyme digests across one or more constructs
+  on an agarose gel next to a molecular weight ladder, and open any fragment as a new tab
+- **Lab enzymes**: track your lab's restriction enzyme stock, suppliers and freezer locations
+  (including specific isoschizomers such as Acc65I vs. KpnI or Esp3I vs. BsmBI), and filter
+  maps to show only stocked enzymes
+- **Protein regions**: map transmembrane helices, topological domains and signal peptides
+  from UniProt onto a CDS feature via protein alignment, handling tags, fusions and
+  truncations automatically
+- **Primers & mutagenesis**: Primer3-compatible Tm calculations (SantaLucia 1998, Breslauer
+  1986, Wallace rule or basic GC, with adjustable salt/Mg²⁺/dNTP/oligo concentrations),
+  GC/3′-clamp/homopolymer/dimer checks, primer design with optional 5′ restriction tails,
+  PCR product previews, and whole-plasmid site-directed mutagenesis primer design (Q5
+  back-to-back or QuikChange overlapping)
+- **Primer library & ordering**: maintain a lab primer library (or start with standard
+  core-facility sequencing primers) to automatically see which primers bind any construct you
+  open; filter, sort, export TSV lists or copy primers formatted for vendor order forms
+- **Cloning simulation**: simulate restriction/ligation, Gibson, In-Fusion and Golden Gate
+  assemblies from open constructs, automatically designing overlap primers for PCR-amplified
+  fragments and opening assembled products in a new tab
+- **Sanger & whole-plasmid verification**: drop `.ab1`, `.seq` or FASTQ reads onto a
+  construct to quality-trim and align them on both strands (including across the origin),
+  inspect chromatograms beneath the reference, and see every substitution, indel or
+  frameshift with its amino-acid effect (e.g. `W163R in AmpR`)
+- **Clone & library analysis**: group reads by clone into a consensus table, flag mixed
+  colonies from double trace peaks, and mark CDRs or NNK libraries as variable regions so
+  each clone's variant sequence is tabulated in its own column
+- **Plasmid info**: length, GC content, molecular weight and detected markers, plus
+  customizable lab record fields saved inside the GenBank file
+- **Private & local**: your sequences and files never leave your computer. Network requests
+  are limited to update checks, on-demand UniProt lookups, optional anonymous usage
+  statistics and feedback you choose to send — see
+  [strandivo.com/privacy](https://strandivo.com/privacy/) for the complete list
 
 ## Download
 
-Download Strandivo for Mac (Apple Silicon and Intel), Windows and Linux from
-[strandivo.com/download](https://strandivo.com/download/); every version is also on the
-[Releases page](https://github.com/Mateusz-Jaskolowski/Strandivo/releases). Each release's
-notes are in [`CHANGELOG.md`](CHANGELOG.md), and
-[strandivo.com/privacy](https://strandivo.com/privacy/) lists everything the app sends. A maintainer makes one by writing its
-notes there and pushing a version tag such as `v0.2.0`, which builds every platform and
-drafts a release; *Actions* → *Build installers* → *Run workflow* builds one platform for
-testing.
-
-Every push runs the *Checks* workflow on Linux: all tests, plus a build of the Linux app that
-is clicked through automatically on a virtual display (screenshots go to the `e2e-results`
-branch).
+Download Strandivo for Mac (Apple silicon and Intel), Windows and Linux from
+[strandivo.com/download](https://strandivo.com/download/) or
+[GitHub Releases](https://github.com/Mateusz-Jaskolowski/Strandivo/releases). Release notes
+are in [`CHANGELOG.md`](CHANGELOG.md) and on
+[strandivo.com/changes](https://strandivo.com/changes/).
 
 ### First launch on a Mac
 
-The app isn't notarized by Apple yet, so macOS blocks it the first time. Open it once, click
-**Done**, then go to **System Settings → Privacy & Security**, scroll down and click
-**Open Anyway**. If macOS instead says the app "is damaged", run this in Terminal once:
+Strandivo isn't notarized by Apple yet, so macOS shows a security prompt the first time you
+open it. Open the app once, click **Done**, then open **System Settings → Privacy &
+Security**, scroll down and click **Open Anyway**. If macOS instead says the app "is
+damaged", run this in Terminal once:
 
 ```sh
 xattr -dr com.apple.quarantine "/Applications/Strandivo.app"
 ```
 
-On Windows, SmartScreen may show "Windows protected your PC" → **More info → Run anyway**.
+On Windows, if SmartScreen shows "Windows protected your PC", click **More info → Run
+anyway**.
 
-On Linux, install the `.deb` (Debian, Ubuntu and their relatives), or make the AppImage
-executable (`chmod +x Strandivo_*.AppImage`) and run it. Strandivo needs WebKitGTK 4.1, which
-current Ubuntu, Debian and Fedora releases include.
+On Linux, install the `.deb` on Debian, Ubuntu and derivatives, or make the AppImage
+executable (`chmod +x Strandivo_*.AppImage`) and run it. Strandivo requires WebKitGTK 4.1
+(included in current Ubuntu, Debian and Fedora releases).
 
 ## Using it
 
@@ -213,7 +168,6 @@ says how to take part.
 
 ## Roadmap
 
-- Anonymous usage statistics, with a choice at first launch and a setting
 - Golden Gate primer design (adding sites and overhangs to PCR inserts)
 - Export maps and sequences as PDF, SVG or PNG
 - Signed and notarized installers

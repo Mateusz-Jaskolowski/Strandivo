@@ -5,8 +5,8 @@
      are the README's ("First launch on a Mac"): change both together. -->
   <main class="prose">
     <h1>Download Strandivo</h1>
-    <p class="lede">Free, for Mac, Windows and Linux. These are the newest version; once it is
-    installed, Strandivo offers each new one and installs it when you say so. See
+    <p class="lede">Free for Mac, Windows and Linux. Once installed, Strandivo checks for
+    updates and installs them only when you choose. See
     <a href="/changes/">what's new</a>.</p>
 
 {{suggested}}
@@ -16,40 +16,38 @@
 {{downloads}}
     </div>
 
-    <p class="note">Not sure which Mac you have? Choose Apple menu → About This Mac: a
-    “Chip” line means Apple silicon (M1 or later), a “Processor” line means Intel.</p>
+    <p class="note">Not sure which Mac you have? Choose Apple menu → About This Mac:
+    “Chip” means Apple silicon (M1 or later), and “Processor” means Intel.</p>
 
-    <h2 id="first-launch">The first time you open it</h2>
-    <p>Strandivo isn't signed by Apple or Microsoft yet, so each warns you the first time
-    you open it.</p>
+    <h2 id="first-launch">First launch</h2>
+    <p>Strandivo isn't code-signed by Apple or Microsoft yet, so macOS and Windows show a
+    security prompt the first time you open it.</p>
 
     <h3 id="first-launch-mac">Mac</h3>
-    <p>Open the downloaded file and drag Strandivo into Applications. Open it once; when
-    macOS says it can't check the app, click <strong>Done</strong>. Then go to
+    <p>Open the downloaded disk image and drag Strandivo into Applications. Open it once;
+    when macOS says it can't verify the app, click <strong>Done</strong>. Then open
     <strong>System Settings → Privacy &amp; Security</strong>, scroll down and click
-    <strong>Open Anyway</strong>. If macOS says instead that the app “is damaged”, run this
-    in Terminal once:</p>
+    <strong>Open Anyway</strong>. If macOS instead says the app “is damaged”, run this in
+    Terminal once:</p>
     <pre><code>xattr -dr com.apple.quarantine "/Applications/Strandivo.app"</code></pre>
 
     <h3 id="first-launch-windows">Windows</h3>
     <p>If SmartScreen shows “Windows protected your PC”, click <strong>More info</strong>,
-    then <strong>Run anyway</strong>. Strandivo installs for you alone, without asking for an
-    administrator.</p>
+    then <strong>Run anyway</strong>. Strandivo installs for your user account without
+    needing administrator rights.</p>
 
     <h3 id="first-launch-linux">Linux</h3>
-    <p>Install the <code>.deb</code> on Debian, Ubuntu and their relatives. Elsewhere, make
-    the AppImage executable (<code>chmod +x Strandivo_Linux.AppImage</code>) and run it.
-    Strandivo needs WebKitGTK 4.1, which current Ubuntu, Debian and Fedora releases
-    include.</p>
+    <p>Install the <code>.deb</code> on Debian, Ubuntu and derivatives, or make the AppImage
+    executable (<code>chmod +x Strandivo_Linux.AppImage</code>) and run it. Strandivo needs
+    WebKitGTK 4.1, which current Ubuntu, Debian and Fedora releases include.</p>
 
-    <h2 id="requirements">What it needs</h2>
+    <h2 id="requirements">System requirements</h2>
     <ul>
       <li>macOS 11 (Big Sur) or later, on Apple silicon or Intel.</li>
       <li>64-bit Windows 10 or 11.</li>
       <li>64-bit Linux with WebKitGTK 4.1.</li>
     </ul>
 
-    <p>Older versions and the source code are on
-    <a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases">GitHub's releases
-    page</a>.</p>
+    <p>Older versions and source code are on
+    <a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases">GitHub Releases</a>.</p>
   </main>

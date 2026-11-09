@@ -27,7 +27,7 @@ export function openDetectDialog(ctx: DocContext) {
   const start = ctx.store.data;
   const dlg = openDialog({
     title: "Detect features",
-    note: `Common parts found in ${start.name || "this sequence"}. Nothing is added until you choose it.`,
+    note: `Common plasmid parts found in ${start.name || "this sequence"}.`,
     width: 820
   });
 
@@ -73,7 +73,7 @@ export function openDetectDialog(ctx: DocContext) {
           "div",
           { class: "sv-empty sv-detect-empty" },
           h("p", null, "No known parts found that aren't already annotated."),
-          h("p", { class: "sv-small sv-dim" }, "The catalog holds the parts most plasmids carry. A part that was codon-optimized is only found once protein matching lands.")
+          h("p", { class: "sv-small sv-dim" }, "The catalog holds the parts most plasmids carry; genes are also matched by the protein they encode.")
         )
       );
       return;
@@ -100,14 +100,14 @@ export function openDetectDialog(ctx: DocContext) {
     );
     dlg.close();
     track("features_detected", { found: features.length });
-    toast(`Added ${plural(features.length, "feature")}. Undo takes them all back.`, "success", 4000);
+    toast(`Added ${plural(features.length, "feature")}.`, "success", 4000);
   });
 
   dlg.footer.replaceChildren(cancelBtn, addBtn);
 
   void (async () => {
     if (!canDetectFeatures()) {
-      list.replaceChildren(h("div", { class: "sv-empty sv-detect-empty" }, h("p", null, "Feature detection needs the desktop app, where the sequence is searched on your computer.")));
+      list.replaceChildren(h("div", { class: "sv-empty sv-detect-empty" }, h("p", null, "Feature detection is only available in the desktop app.")));
       return;
     }
     const d = ctx.store.data;

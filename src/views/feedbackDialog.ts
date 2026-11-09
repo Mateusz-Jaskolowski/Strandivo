@@ -29,7 +29,7 @@ export interface CrashToReport {
 }
 
 const PLACEHOLDERS: Record<FeedbackKind, string> = {
-  bug: "What went wrong, in a line",
+  bug: "Brief summary of what went wrong",
   idea: "What you'd like Strandivo to do",
   question: "What you'd like to know"
 };
@@ -39,7 +39,7 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
   const errors = recentErrors();
   let chosen: FeedbackKind = crashed ? "bug" : kind;
 
-  const dlg = openDialog({ title: "Send feedback", note: "It goes to Strandivo's maintainer as an issue on GitHub, which anyone can read. You don't need a GitHub account.", width: 580 });
+  const dlg = openDialog({ title: "Send feedback", note: "Posts a public issue on Strandivo's GitHub. No GitHub account needed.", width: 580 });
 
   const kindButtons = FEEDBACK_KINDS.map(k =>
     h("button", { type: "button", "aria-pressed": String(k.id === chosen), onclick: () => setKind(k.id) }, k.label)
@@ -129,10 +129,10 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
 
   function sentView(number: number, notEmailed: boolean) {
     dlg.body.replaceChildren(
-      h("p", { class: "sv-feedback-thanks" }, `Thanks: sent as #${number}.`),
-      h("p", { class: "sv-small" }, "You can follow it on GitHub, where the maintainer answers."),
+      h("p", { class: "sv-feedback-thanks" }, `Thanks — sent as #${number}.`),
+      h("p", { class: "sv-small" }, "You can follow replies on GitHub."),
       notEmailed
-        ? h("p", { class: "sv-small sv-text-warn" }, "Your email address or file couldn't be passed on to the maintainer. If you'd like an answer, write to feedback@strandivo.com and mention the issue's number.")
+        ? h("p", { class: "sv-small sv-text-warn" }, "Your email address or attached file couldn't be delivered. To get a reply, email feedback@strandivo.com with the issue number.")
         : ""
     );
     dlg.footer.replaceChildren(
@@ -151,16 +151,16 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
     h("div", { class: "sv-segmented sv-segmented-small", role: "group", "aria-label": "Kind" }, ...kindButtons),
     field("Summary", summary),
     field("Details", details),
-    field("Your email", email, "Only if you'd like an answer. It goes to the maintainer alone, never in the issue."),
+    field("Your email", email, "Optional, if you'd like a reply. Shared only with the maintainer, never in the public issue."),
     h(
       "section",
       { class: "sv-feedback-sent" },
-      h("h3", { class: "sv-section-title" }, "Sent with it"),
+      h("h3", { class: "sv-section-title" }, "Included with the report"),
       h("ul", { class: "sv-small" }, h("li", null, describeSystem(app)), h("li", null, `Open view: ${context.view}`)),
-      crash ? option(withCrash, "Why it quit", "What Strandivo noted as it quit, with file paths removed. It is sent as shown below.", crashText) : "",
-      option(withErrors, errors.length ? `Recent errors (${errors.length})` : "Recent errors (none)", "What went wrong in the app this past week, with file paths removed. Shown below when ticked.", errorList),
+      crash ? option(withCrash, "Crash details", "The crash log with file paths removed, shown below.", crashText) : "",
+      option(withErrors, errors.length ? `Recent errors (${errors.length})` : "Recent errors (none)", "App errors from the past week, with file paths removed.", errorList),
       context.file
-        ? option(withFile, `Attach the open file (${context.file.name})`, "As GenBank, to the maintainer alone by email, not in the issue. Sequences can be confidential: attach only what you may share.")
+        ? option(withFile, `Attach the open file (${context.file.name})`, "Sent privately to the maintainer as GenBank, never in the public issue. Attach only sequences you're allowed to share.")
         : ""
     )
   );

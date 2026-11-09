@@ -334,7 +334,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
         h(
           "div",
           { class: "sv-digest-main" },
-          h("div", { class: "sv-digest-gel" }, gel(), h("div", { class: "sv-digest-gel-side" }, h("label", { class: "sv-small sv-dim" }, "Ladder"), ladderSelect, h("p", { class: "sv-small sv-dim" }, "Band brightness follows the amount of DNA. Fragments within about 2% of each other's size run as one band."))),
+          h("div", { class: "sv-digest-gel" }, gel(), h("div", { class: "sv-digest-gel-side" }, h("label", { class: "sv-small sv-dim" }, "Ladder"), ladderSelect, h("p", { class: "sv-small sv-dim" }, "Band brightness is proportional to fragment mass. Fragments within ~2% in size co-migrate as a single band."))),
           h("div", { class: "sv-clone-result-head" }, h("strong", null, `Lane ${current + 1}: ${lane.title}`), h("span", { class: "sv-dim sv-small" }, summary)),
           table()
         )

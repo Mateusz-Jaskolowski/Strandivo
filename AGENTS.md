@@ -172,8 +172,17 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   setting turns them on yet.
 - **Interface text** is plain and short, sentence case, says what happens ("Add reads…",
   "Use read base"), with ranges as 1,700–2,400 and an ellipsis on commands that open a
-  dialog. New screens follow the ones there are: their spacing, `sv-*` components and the
-  design tokens in `src/styles.css`.
+  dialog. Write like a colleague in the lab, using standard everyday and wet-lab words
+  ("identifies you", not "tells you apart"; "Crash details", not "Why it quit"; "5′
+  overhang", "co-migrate"). Keep dialog subtitles, Settings hints and empty states to one
+  sentence (about 15–20 words); if a control's label already says what it does, leave the
+  hint out. Don't add reassurances the UI already shows ("Nothing is added until you choose
+  it" when there is a Cancel button, "Undo to bring it back" on routine delete toasts, or
+  "Shown below when ticked" next to a checkbox), don't explain how to use nearby controls
+  or what to do with a standard exported file (like a TSV), and state privacy or local
+  processing as plain fact once where relevant rather than repeating it across screens. New
+  screens follow the ones there are: their spacing, `sv-*` components and the design tokens
+  in `src/styles.css`.
 - **Commits**: Conventional Commits (`feat(scope): summary` and a short body saying what
   and why), one logical change each, under your own name. Never rewrite pushed commits.
 - **What's new**: a pull request that changes something users notice adds a bullet under

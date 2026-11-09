@@ -1,7 +1,8 @@
 # Strandivo in a browser: plan
 
-Status: in progress (November 2026). Parts 1 (#4), 2 (#48), 3 (#49) and 4 are built; 0.2.0 and
-the website, which the rest waited for, are out. Each part below is one branch and one PR. It came after the first public release (0.2.0) and the website (part 6 of
+Status: in progress (November 2026). Parts 1 (#4), 2 (#48), 3 (#49), 4 (#51) and 5 are
+built; part 6, the launch, is left. 0.2.0 and the website, which the rest waited for, are
+out. Each part below is one branch and one PR. It came after the first public release (0.2.0) and the website (part 6 of
 `docs/updates-feedback-usage-plan.md`). What is said here about browsers was read on
 5 November 2026; check it again before each part is built.
 
@@ -272,6 +273,31 @@ file system's handles never ask.
 
 Needs parts 2 and 3: a web version that can't open a file isn't worth publishing.
 
+As built, where it differs from what follows (8 November 2026): publishing a pre-release
+deploys to the preview address `next`, as GitHub's "published" event fires for those too
+and a release candidate must never reach `app.strandivo.com`; a run by hand on main goes
+to `main-preview`, as `main` is the production branch. The token is a secret of a `web`
+environment, beside the account's id and the statistics key as variables, rather than a
+repository secret, so no other workflow can read it. `connect-src` has
+`https://feedback.strandivo.com` and `https://eu.aptabase.com` from the start, and
+`src/lib/csp.test.ts` holds it to the desktop's policy. Files with a hash in their names
+are not cached for a year: Pages' default (ask again each load) stays, as a year-long
+header would also keep a 404 for a file that is gone, and break a later deployment that
+brings the name back; a `404.html` makes an address with no file a 404, not the app. The
+browser check reads each download from its Blob, as the policy rightly lets nothing fetch
+a `blob:` address. Usage statistics are **on by default in a browser** (decided on 8
+November 2026, in place of the same opt-in as the desktop): the welcome window says so
+with Turn off, Settings has the switch, and Global Privacy Control turns them off; the page
+stores nothing for them (no `installed`) and keeps its session in memory. They are posted
+by the page itself to Aptabase's single-event address, as its web SDK does but without the
+language, not through the SDK. The feedback Worker already allowed any origin, so it is
+unchanged; a report's system reads "Chrome 142 on macOS · web" through its existing
+fields. Home says "Runs in your browser. Your files never leave this computer. How?", the
+link to the privacy page's new section "The browser version", which doesn't name the
+address yet. The website, the README and the changelog moved to part 6, as did the check
+by hand, since the site goes live on every merge and must not link to a page still behind
+a sign-in.
+
 - **Hosting**: a Cloudflare Pages project, `strandivo-app`, with `app.strandivo.com` as its
   domain, free, beside the website's project. Cloudflare's own analytics script stays off.
 - **The workflow** (`.github/workflows/web.yml`): on a published release (not the tag
@@ -341,12 +367,35 @@ Needs parts 2 and 3: a web version that can't open a file isn't worth publishing
   in Chrome, Safari and Firefox on a Mac and in Edge on Windows, with a plate of real
   .ab1 reads from `testdata/library/`.
 
+### 6. Launch
+`site/web-version`: `tools/site/`, `site/`, `README.md`, `CHANGELOG.md`, `docs/privacy.md`
+
+- **Until launch, behind a sign-in**: Cloudflare Access (Zero Trust's free plan) covers
+  `app.strandivo.com`, `strandivo-app.pages.dev` and `*.strandivo-app.pages.dev`, letting
+  in only the maintainer's email address, with a one-time code. Deployments happen as
+  part 5 says, so a release candidate and then a release can be tried at their real
+  addresses by nobody else.
+- **The check by hand** (moved here from part 5): the desktop e2e's file journey in Chrome,
+  Safari and Firefox on a Mac and in Edge on Windows, with a plate of real .ab1 reads from
+  `testdata/library/`, and the permission prompts CI can't answer (Allow on every visit,
+  a folder asked about again, a refusal).
+- **The website**: "Use it in your browser" beside the download on Home and the Download
+  page, with a short "Desktop or browser?": the desktop does everything and updates
+  itself; the browser needs nothing installed and works on lab computers and Chromebooks,
+  with folders and saving in place in Chrome and Edge, and opening files and downloads in
+  Safari and Firefox; statistics are off unless chosen in the app, on unless turned off in
+  a browser. The README gains the address beside its "Private" line, the privacy page
+  names it, and `CHANGELOG.md` gets the bullet.
+- **Launching** is removing the Access application, then merging the website's pull
+  request, in that order, so no link ever leads to a sign-in.
+
 ## Order
 
 After 0.2.0 and the website, because the website is where the web
 version is offered and its privacy page is what the web version links to. Then parts 1,
 2 and 3 in order, each needing the one before; part 5 once 2 and 3 are in, deployed with
-the next release; part 4 before or after 5. Part 1 is worth doing early on its own, as it
+the next release; part 4 before or after 5; part 6 once the deployed page passes the check
+by hand. Part 1 is worth doing early on its own, as it
 tidies the shell whether or not the rest follows.
 
 ## Checking work
@@ -356,8 +405,9 @@ tidies the shell whether or not the rest follows.
   (part 2) proves alignment and detection work through WebAssembly in a real browser, with
   no hooks, and `e2e/run.mjs` keeps proving the desktop. CI runs both.
 - The `.wasm` size is checked in CI against 512 KB; the measured 259 KB is the baseline.
-- What CI can't check is checked by hand before the first deployment (part 5): Safari and
-  Firefox, where the fallbacks run, and permission prompts, which WebDriver can't answer.
+- What CI can't check is checked by hand before launch (part 6), on the deployed page
+  behind its sign-in: Safari and Firefox, where the fallbacks run, and permission prompts,
+  which WebDriver can't answer.
 - `AGENTS.md` gains what the code can't say: that `crates/seqcore/` stays dependency-free
   and JSON lives in `crates/seqcore-json/`, shared by both builds; the order
   `src/platform.ts` tries things in (hook, shell, worker); that `npm run build` must never

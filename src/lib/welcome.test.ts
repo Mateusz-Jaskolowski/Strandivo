@@ -30,3 +30,8 @@ test("people who installed before usage statistics are asked about them alone", 
   assert.deepEqual(welcomeParts(1, false), ["usage"]);
   assert.equal(needsWelcome(1), true);
 });
+
+test("a browser has no updates to ask about", () => {
+  assert.deepEqual(welcomeParts(0, false, false), ["usage", "constructs", "primers"]);
+  assert.deepEqual(welcomeParts(WELCOME_VERSION, true, false), ["usage", "constructs", "primers"]);
+});

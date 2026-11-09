@@ -29,6 +29,14 @@ and CI checks that they exist.
   rebuilds the site, commits on `chore/release-<x.y.z>` and opens the pull request. Once
   that is merged, `npm run release:tag` checks main as the release build will and pushes
   the `v<x.y.z>` tag on it; then a maintainer approves the run and publishes the draft.
+  Publishing also deploys the browser version (`.github/workflows/web.yml`) to
+  Cloudflare Pages, in the project `strandivo-app`: a release to `app.strandivo.com`, a
+  pre-release to the preview address `next.strandivo-app.pages.dev`, never a merge to
+  main. Its token, account id and statistics key are in the `web` environment; never give
+  them to another workflow. Re-running a release's run of it deploys that release again,
+  and running it by hand on a branch deploys a preview of that branch (main's is
+  `main-preview`). Until the browser version is announced, Cloudflare Access keeps every
+  address of the project behind a sign-in (`docs/web-version-plan.md`, part 6).
   A minor release is first tried as a **release candidate** (`npm run release 0.4.0-rc.1`):
   the same steps, but Unreleased stays as it is and gives the candidate its notes
   (`releaseNotesFor` in `src/lib/changelog.ts`), and its build drafts a pre-release. GitHub

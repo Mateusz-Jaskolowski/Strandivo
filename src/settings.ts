@@ -49,7 +49,10 @@ export interface Settings {
   sidebar: { order: SidebarSection[]; folded: SidebarSection[] };
   /** Ask updates.strandivo.com for a new version once a day (src/updates.ts). */
   checkForUpdates: boolean;
-  /** Send anonymous usage statistics (src/usage.ts). Off until the user turns it on. */
+  /**
+   * Send anonymous usage statistics (src/usage.ts). In the app, off until the user turns it
+   * on; in a browser, on until they turn it off, as the welcome window says.
+   */
   shareUsage: boolean;
   /** The version of the welcome window last seen; 0 = never (src/lib/welcome.ts). */
   welcomeSeen: number;
@@ -104,7 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   offerDetection: true,
   sidebar: { order: DEFAULT_SIDEBAR_ORDER, folded: [] },
   checkForUpdates: true,
-  shareUsage: false,
+  shareUsage: !isDesktop,
   welcomeSeen: 0
 };
 

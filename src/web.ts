@@ -10,4 +10,9 @@ import { useWebCore } from "./platform.ts";
 import { webCore } from "./core/client.ts";
 
 useWebCore(webCore);
-void import("./main.ts");
+void import("./main.ts").then(() =>
+  // The worker and the core are fetched now, not when first used: a page left open across
+  // a deployment would otherwise ask for files the new one no longer has. Once compiled,
+  // the core is kept, even when it traps and starts again.
+  webCore.catalogVersion().catch(() => undefined)
+);

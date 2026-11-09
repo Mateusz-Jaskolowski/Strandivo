@@ -47,8 +47,23 @@
 
 <main class="prose">
     <h1 id="privacy">Privacy</h1>
-    <p>Strandivo is a desktop app, and your work stays on your computer. Your sequences, files, file names, folders, features, primers and notes are never sent anywhere by the app.</p>
+    <p>Strandivo runs on your computer, as a desktop app or in your web browser, and your work stays there. Your sequences, files, file names, folders, features, primers and notes are never sent anywhere by the app.</p>
     <p>This page lists everything the app sends over the network and when. Strandivo is maintained by Mateusz Jaskolowski; questions about this page go to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
+    <h2 id="the-browser-version">The browser version</h2>
+    <p>Strandivo also runs in a web browser. It is the same app, served as plain files with nothing of ours behind them that could receive anything, and your files stay on your computer:</p>
+    <ul>
+      <li>A file you open is read by your browser, on your computer, and never uploaded. Saving writes it back where it came from (in Chrome and Edge) or saves a copy to your Downloads folder (in other browsers).</li>
+      <li>Aligning reads and finding features run in your browser too, in the page itself.</li>
+      <li>The folders you add to Home, recent files, remembered reads, notes and settings are kept by your browser, for this site only, on this computer. Clearing the site's data in your browser removes them.</li>
+    </ul>
+    <p>It sends what the app sends, as listed on this page, with three differences:</p>
+    <ul>
+      <li><strong>Usage statistics are on unless you turn them off.</strong> The welcome window says so on your first visit and has Turn off, and &quot;Share anonymous usage statistics&quot; in Settings → Privacy turns them off or on at any time. They are off whenever your browser asks sites not to track you (Global Privacy Control). What they hold is under Usage statistics.</li>
+      <li>There is nothing to update: each visit loads the latest release.</li>
+      <li>A bug report names the browser and its major version, such as Chrome 142, and the operating system, in place of the system's version and the processor.</li>
+    </ul>
+    <p>The page is served by Cloudflare, which sees each visit as any website's host does: that the page was loaded, from which address and browser. It never sees a file.</p>
+    <p>You can check all this. The page's Content Security Policy, a rule your browser enforces whatever the page's code tries, lets it connect to its own site, UniProt (<code>rest.uniprot.org</code>), the feedback service (<code>feedback.strandivo.com</code>) and Aptabase (<code>eu.aptabase.com</code>), and nothing else. The policy is in the page's headers for anyone to read, and your browser's developer tools list every request the page makes: none carries a file.</p>
     <h2 id="checking-for-updates">Checking for updates</h2>
     <p>Once a day, while &quot;Check for updates automatically&quot; is on, and whenever you choose Check for Updates…, the app asks <code>updates.strandivo.com</code> whether there is a newer version. The request carries:</p>
     <ul>
@@ -80,7 +95,7 @@
     <p>If Strandivo quits unexpectedly, it writes a local crash log in its app data folder with the error message, code location, thread, app version, operating system, processor and timestamp. Nothing is sent automatically.</p>
     <p>On the next launch, Strandivo reads that file once, deletes it, and shows a banner: &quot;Strandivo quit unexpectedly last time.&quot; Clicking Dismiss clears it. Clicking Report it… opens the bug report dialog with <strong>Crash details</strong> ticked and previewed in full (with file paths removed). It is sent only if you click Send, and you can untick it first. Recent errors remain unticked unless you opt in.</p>
     <h2 id="usage-statistics">Usage statistics</h2>
-    <p>Strandivo can share anonymous counts of which features are used and on which operating systems. This is <strong>off by default</strong>: you can turn it on or off on first launch or at any time in Settings → Updates and privacy. When it is off, nothing is sent; turning it off takes effect immediately and discards any queued events.</p>
+    <p>Strandivo can share anonymous counts of which features are used and on which operating systems. In the desktop app this is <strong>off by default</strong>: you can turn it on or off on first launch or at any time in Settings → Updates and privacy. In the browser version it is on by default (see The browser version). When it is off, nothing is sent; turning it off takes effect immediately and discards any queued events.</p>
     <p>When enabled, the app sends only the events listed below. Event properties use fixed categories or coarse numeric buckets (0, 1, 2–5, 6–20 and &gt;20 unless noted below), never file names, sequences or user text.</p>
     <ul>
       <li><code>app_started</code>: the app was opened, with <code>arch</code>, the processor (Apple silicon or ARM, Intel or AMD); <code>installed</code>, how long ago this copy was first opened (its first day, first week, first month or longer: the date itself stays on your computer); and <code>folders</code>, how many folders Home lists, as a range.</li>
@@ -102,6 +117,7 @@
       <li><code>error_caught</code>: something went wrong in the app's window, with <code>kind</code> (a script error, a promise nobody caught, a command that failed, or a crash, counted when the app next opens); never the message, which could name a file.</li>
     </ul>
     <p>Every event also carries the app's version, the operating system and its version, the time, and a session number: a random number the app makes when it starts and drops after four hours without events. It is never stored, so it can't link one day's use to the next. Events are sent every 30 seconds while the app is open. A test version (a release candidate, such as 0.4.0-rc.1) marks its events as tests, which Aptabase keeps apart from everyone else's. A copy built by the project's checks sends none, and neither does one built from the source, unless whoever builds it adds the project's key, which only its maintainers have; theirs are marked as tests too.</p>
+    <p>In the browser version the page sends each event itself, with the app's version, the time and the session number, which is kept only while the page is open: closing or reloading it starts a new one. Aptabase reads the browser and the operating system from the request, as any website can. Nothing is stored for statistics, so <code>app_started</code> has no <code>installed</code> there, and its processor is always &quot;other&quot;. Events also go as the page closes, so the last ones aren't lost. Only the browser version the project publishes sends; a preview of a version still being tried marks its events as tests.</p>
     <p>They go to <a href="https://aptabase.com">Aptabase</a>, an open-source service for app statistics, in its EU region. Like any server, it sees the address the events come from: it uses it to tell the country and region, and to count visitors a day with a code that changes every day, and it doesn't keep the address. Aptabase's own <a href="https://aptabase.com/legal/privacy">privacy policy</a> covers what it keeps.</p>
     <h2 id="opening-the-website">Opening the website</h2>
     <p>What's new… and some help items open strandivo.com or GitHub in your web browser. The app sends nothing itself; your browser visits the page as it would any other.</p>
@@ -109,7 +125,7 @@
     <p>strandivo.com uses no cookies and no tracking. Its single script (on the home and Download pages) checks which operating system your browser runs on so the matching installer is shown first; it sends and stores nothing. The site is hosted on Cloudflare Pages.</p>
     <h2 id="what-the-app-doesn-t-do">What the app doesn't do</h2>
     <ul>
-      <li>No usage statistics unless you opt in, and then only the events listed above.</li>
+      <li>No usage statistics in the desktop app unless you opt in, none in the browser version once you turn them off, and only ever the events listed above.</li>
       <li>No user accounts, sign-in or persistent device identifiers.</li>
       <li>No automatic crash or error reporting: logs are sent only when you submit a bug report, and only as shown in the dialog. With usage statistics enabled, errors and crashes are counted by category alone.</li>
     </ul>

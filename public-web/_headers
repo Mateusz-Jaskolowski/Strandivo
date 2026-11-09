@@ -1,0 +1,16 @@
+# Headers for every file of the browser version, read by Cloudflare Pages (copied into
+# dist-web by `npm run build:web` only). e2e/web.mjs serves the build with these too, and
+# fails on anything the policy blocks.
+#
+# The Content Security Policy is the browser version's privacy promise: connect-src names
+# every address the page may talk to, so the browser itself refuses anything else, whatever
+# a future change or a dependency tries. An address the app talks to goes here, in
+# src-tauri/tauri.conf.json and in docs/privacy.md in the same pull request
+# (src/lib/csp.test.ts compares the two policies). script-src has no 'unsafe-inline': a
+# file's text that reached the page as HTML still couldn't run, which matters here, as a
+# script on the page could write through every file the user let it. 'wasm-unsafe-eval'
+# lets the worker compile the core and allows no JavaScript eval.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' https://rest.uniprot.org https://feedback.strandivo.com https://eu.aptabase.com; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff

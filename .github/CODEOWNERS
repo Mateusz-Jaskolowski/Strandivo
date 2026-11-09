@@ -15,6 +15,9 @@
 /src-tauri/tauri.conf.json            @Mateusz-Jaskolowski
 /src-tauri/tauri.unsigned.conf.json   @Mateusz-Jaskolowski
 /src-tauri/capabilities/              @Mateusz-Jaskolowski
+# The browser version's headers: its Content Security Policy is what keeps its page from
+# sending anything anywhere else.
+/public-web/                          @Mateusz-Jaskolowski
 
 # Live without a release: the Workers behind updates.strandivo.com, which every installed
 # copy asks, and feedback.strandivo.com (with the rules it bundles), and the website, which goes live on every push to main, with what it is

@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { BUCKETS, bucket, fileFormat, inBucket, propWords, readFormat, USAGE_EVENTS, usageEvent, type PropSpec } from "./usage.ts";
+import { BUCKETS, bucket, fileFormat, inBucket, propWords, readFormat, USAGE_EVENTS, usageEvent, randomDigits, usageSession, validUsageKey, webUsageBody, type PropSpec } from "./usage.ts";
 
 const events = Object.entries(USAGE_EVENTS) as [string, { why: string; props: Record<string, PropSpec> }][];
 
@@ -82,4 +82,36 @@ test("the privacy page names every event and property", () => {
     assert.ok(privacy.includes(`\`${name}\``), `docs/privacy.md lists ${name}`);
     for (const key of Object.keys(spec.props)) assert.ok(privacy.includes(`\`${key}\``), `docs/privacy.md names ${name}.${key}`);
   }
+});
+
+test("the browser version sends the event, its version and Debug, and nothing about the computer", () => {
+  const e = usageEvent("view_used", { view: "map" }, new Date(Date.UTC(2026, 10, 9, 9, 30)))!;
+  assert.deepEqual(webUsageBody(e, "176268060012345678", "0.4.0", false), {
+    timestamp: "2026-11-09T09:30:00.000Z",
+    sessionId: "176268060012345678",
+    eventName: "view_used",
+    systemProps: { isDebug: false, appVersion: "0.4.0", sdkVersion: "strandivo-web@0.4.0" },
+    props: { view: "map" }
+  });
+});
+
+test("a session is seconds and eight random digits, as Aptabase checks", () => {
+  assert.equal(usageSession(1_762_646_400_999, "00123000"), "176264640000123000");
+  const digits = randomDigits(8, n => crypto.getRandomValues(new Uint8Array(n)));
+  assert.match(usageSession(Date.now(), digits), /^\d{10}\d{8}$/);
+});
+
+test("random digits are a byte's low four bits, drawn again for 10 to 15", () => {
+  // 0x1a and 0xff give 10 and 15, so they are skipped; 0x23 gives 3.
+  const draws = [Uint8Array.of(0x1a, 0x23, 0xff), Uint8Array.of(0x47, 0x09)];
+  assert.equal(randomDigits(3, () => draws.shift()!), "379");
+  // Every digit comes up, about equally often.
+  const counts = Array<number>(10).fill(0);
+  for (const d of randomDigits(100_000, n => crypto.getRandomValues(new Uint8Array(Math.min(n, 65536))))) counts[Number(d)]++;
+  assert.ok(counts.every(c => c > 9_000 && c < 11_000), counts.join());
+});
+
+test("only EU keys are used, as in the shell", () => {
+  assert.equal(validUsageKey("A-EU-1234567890"), true);
+  for (const k of ["", "A-US-1234567890", "A-EU-", "A-EU-12 34", "A-SH-1234"]) assert.equal(validUsageKey(k), false, k);
 });

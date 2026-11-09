@@ -118,6 +118,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   // Counting starts once the welcome window, which asks about it, has closed.
   startUsage(welcome);
   const updates = startUpdates(welcome);
+  // A page left open across a deployment of the browser version asks for files the new one
+  // doesn't have (each name carries its contents' hash); Vite says so with this event.
+  if (!isDesktop) window.addEventListener("vite:preloadError", () => updates.offerReload());
   // If the app crashed last time, a strip offers to report it (src/crash.ts).
   const crashes = startCrashOffer((crash, sent) => void feedback("bug", { crash, sent }), welcome);
   void crashes.check();
@@ -484,6 +487,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     await Promise.race([flushUsage(), new Promise(r => setTimeout(r, 1000))]);
     return true;
   }, () => tabs.some(t => t.doc?.isDirty()));
+  // A page can't wait as it closes: what is queued is posted with `keepalive`, which outlives it.
+  if (!isDesktop) window.addEventListener("pagehide", () => void flushUsage());
 
   /** Help → Send Feedback… (an idea, unless chosen) and Report a Bug…, about what is open. */
   async function feedback(kind: FeedbackKind, crashed?: { crash: CrashReport; sent(): void }) {

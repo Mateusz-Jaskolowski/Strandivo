@@ -28,9 +28,9 @@ export const needsWelcome = (seen: number) => seen < WELCOME_VERSION;
 
 /**
  * The parts to show: all of them the first time or when reopened from the menu, else only
- * those added since the window was last seen.
+ * those added since the window was last seen. A browser has no updates to ask about.
  */
-export function welcomeParts(seen: number, reopened: boolean): WelcomePart[] {
+export function welcomeParts(seen: number, reopened: boolean, desktop = true): WelcomePart[] {
   const fresh = reopened || seen <= 0;
-  return WELCOME_PARTS.filter(p => fresh || p.since > seen).map(p => p.part);
+  return WELCOME_PARTS.filter(p => (fresh || p.since > seen) && (desktop || p.part !== "updates")).map(p => p.part);
 }

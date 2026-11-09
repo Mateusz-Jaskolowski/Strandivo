@@ -8,8 +8,11 @@
 // the browser gives handles.
 //
 // Serves dist-web (`npm run build:web`) and testdata/ (under /testdata/) with Node's
-// http, and drives headless Chrome through ChromeDriver over plain WebDriver, as
-// e2e/run.mjs drives the desktop app. Screenshots and a report go to the output folder.
+// http, with the headers Cloudflare Pages sends (dist-web/_headers, from public-web/), and
+// drives headless Chrome through ChromeDriver over plain WebDriver, as e2e/run.mjs drives
+// the desktop app. Anything the Content Security Policy blocks fails the run, so a change
+// that would break in the deployed page breaks here first. Screenshots and a report go to
+// the output folder.
 //
 //   node e2e/web.mjs [output folder]     (default e2e-out/web)
 //   node e2e/web.mjs --serve [port]      (only serves it, to try by hand; default 4173)
@@ -17,7 +20,7 @@
 // ChromeDriver is found through CHROMEWEBDRIVER, which GitHub's runners set, or on the PATH.
 
 import { spawn } from "node:child_process";
-import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 
@@ -36,10 +39,58 @@ const TYPES = {
   ".json": "application/json"
 };
 
+/**
+ * `_headers` as Cloudflare Pages reads it: a path (`*` for anything) on a line of its own,
+ * then its headers, indented. Read when the server starts, so it is the build's own.
+ */
+function readHeaders() {
+  const file = path.join(dist, "_headers");
+  const rules = [];
+  if (!existsSync(file)) return rules;
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+    if (!/^\s/.test(line)) {
+      const pattern = line.trim().replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+      rules.push({ path: new RegExp(`^${pattern}$`), headers: {} });
+    } else if (rules.length) {
+      const i = line.indexOf(":");
+      rules.at(-1).headers[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
+    }
+  }
+  return rules;
+}
+
+/** What the page's Content Security Policy blocked, as Chrome reported it to the server. */
+const violations = [];
+const REPORTS = "/__csp-report";
+
 /** The web build at /, test files at /testdata/; anything else is a 404. */
 function serve(port) {
+  const rules = readHeaders();
+  const headersFor = pathname => {
+    const out = {};
+    for (const r of rules) if (r.path.test(pathname)) Object.assign(out, r.headers);
+    // Chrome posts what the policy blocks here; the policy itself is the deployed one.
+    if (out["content-security-policy"]) out["content-security-policy"] += `; report-uri ${REPORTS}`;
+    return out;
+  };
   const server = createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname);
+    if (req.method === "POST" && pathname === REPORTS) {
+      let body = "";
+      req.on("data", chunk => (body += chunk));
+      req.on("end", () => {
+        try {
+          const r = JSON.parse(body)["csp-report"];
+          violations.push(`${r["effective-directive"] ?? r["violated-directive"]} blocked ${r["blocked-uri"] || "inline code"}${r["source-file"] ? ` in ${r["source-file"]}` : ""}`);
+        } catch {
+          violations.push(body.slice(0, 200));
+        }
+        res.writeHead(204);
+        res.end();
+      });
+      return;
+    }
     const [base, rel] = pathname.startsWith("/testdata/") ? [testdata, pathname.slice(10)] : [dist, pathname === "/" ? "index.html" : pathname.slice(1)];
     const file = path.resolve(base, rel);
     if (!file.startsWith(base + path.sep) || !existsSync(file) || statSync(file).isDirectory()) {
@@ -47,7 +98,7 @@ function serve(port) {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" });
+    res.writeHead(200, { ...headersFor(pathname), "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" });
     createReadStream(file).pipe(res);
   });
   return new Promise((resolve, reject) => {
@@ -171,11 +222,27 @@ async function main(outDir) {
       "Nothing stands in for the core: no shell and no test hooks",
       await s.exec("return !('__TAURI_INTERNALS__' in window) && !window.__strandivoAlign && !window.__strandivoDetect")
     );
-    // A first visit shows the welcome window over the file.
-    if (await s.waitFor("/Welcome to Strandivo/.test(document.querySelector('.sv-dialog-title')?.textContent)", 5000)) {
+    const policy = (await fetch(`${base}/`)).headers.get("content-security-policy") ?? "";
+    check(
+      "The page comes with the Content Security Policy it is deployed with",
+      /script-src 'self' 'wasm-unsafe-eval';/.test(policy) && /connect-src 'self' https:\/\/rest\.uniprot\.org/.test(policy) && /frame-ancestors 'none'/.test(policy),
+      policy.slice(0, 160)
+    );
+    // A first visit shows the welcome window over the file: nothing about updates, which a
+    // browser doesn't install, and statistics on, with a way to turn them off.
+    const welcomed = await s.waitFor("/Welcome to Strandivo/.test(document.querySelector('.sv-dialog-title')?.textContent)", 5000);
+    const parts = welcomed ? await s.exec("return Array.from(document.querySelectorAll('.sv-welcome-part h3')).map(e => e.textContent)") : [];
+    check("A first visit's welcome window asks nothing about updates", welcomed && !parts.includes("Updates") && parts.includes("Usage statistics"), parts.join(", "));
+    const turnOff = "//*[contains(@class,'sv-welcome-part')]//button[normalize-space()='Turn off']";
+    check("It says statistics are on in a browser, and offers to turn them off", welcomed && (await s.exec("return Array.from(document.querySelectorAll('.sv-welcome-part button')).some(b => b.textContent === 'Turn off')")));
+    if (welcomed) {
+      await s.click(turnOff);
+      check("Turn off says nothing is sent", await s.waitFor("/Turned off: nothing is sent/.test(document.querySelector('.sv-welcome')?.textContent)", 2000));
+      await s.shot("00-welcome");
       await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Start using Strandivo']");
       await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     }
+    check("Closing the window keeps them off", await s.exec("return JSON.parse(localStorage.getItem('strandivo.settings') || '{}').shareUsage === false"));
 
     // --- detection, in the worker ---
     await s.exec("window.__strandivo.command('detect-features')");
@@ -216,6 +283,24 @@ async function main(outDir) {
     check("No alignment failed along the way", !(await s.exec("return Array.from(document.querySelectorAll('.ps-toast')).some(t => /failed/i.test(t.textContent))")));
     await s.shot("03-after-panic");
 
+    // --- what Home and Settings say in a browser ---
+    await s.exec("window.__strandivo.showHome()");
+    const homeLine = await s.exec("const p = document.querySelector('.sv-home-web'); return p ? { text: p.textContent, href: p.querySelector('a')?.href ?? '' } : null");
+    check(
+      "Home says the files never leave the computer, and links to how",
+      /^Runs in your browser\. Your files never leave this computer\./.test(homeLine?.text ?? "") && /\/privacy#the-browser-version$/.test(homeLine?.href ?? ""),
+      JSON.stringify(homeLine)
+    );
+    await s.exec("window.__strandivo.menu('settings')");
+    await s.waitFor("document.querySelector('.sv-panel-settings .ps-settings')", 5000);
+    const settings = await s.exec(
+      "const p = document.querySelector('.sv-panel-settings'); const box = Array.from(p?.querySelectorAll('label') ?? []).find(l => /Share anonymous usage statistics/.test(l.textContent))?.querySelector('input'); return { updates: /Check for updates/.test(p?.textContent ?? ''), shared: box ? box.checked : null }"
+    );
+    check("Settings offers no update checks in a browser, and statistics stay as turned off", settings.updates === false && settings.shared === false, JSON.stringify(settings));
+    await s.shot("04-settings");
+    await s.exec("window.__strandivo.menu('settings')");
+    await s.waitFor("!document.querySelector('.sv-panel')", 3000);
+
     // --- the menu, in place of a menu bar ---
     await s.exec("window.__strandivo.showHome()");
     await s.click("//button[@aria-label='Menu']");
@@ -229,7 +314,7 @@ async function main(outDir) {
       item("New Sequence").key === "Ctrl+Alt+N" && item("Open…").key === "Ctrl+O" && item("Close Tab").key === "" && item("Open…").on && !item("Save").on,
       JSON.stringify(fileItems)
     );
-    await s.shot("04-menu");
+    await s.shot("05-menu");
     await s.press("\uE00C"); // Escape
     const CTRL = "\uE009";
     const ALT = "\uE00A";
@@ -348,7 +433,11 @@ async function main(outDir) {
       window.showSaveFilePicker = undefined;
       window.showDirectoryPicker = undefined;
       window.__e2eDownloads = [];
-      HTMLAnchorElement.prototype.click = function () { if (this.download) window.__e2eDownloads.push({ name: this.download, href: this.href }); };
+      // Each download's own contents: the page's policy lets nothing fetch a blob: address.
+      const made = new Map();
+      const create = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = blob => { const url = create(blob); made.set(url, blob); return url; };
+      HTMLAnchorElement.prototype.click = function () { if (this.download) window.__e2eDownloads.push({ name: this.download, blob: made.get(this.href) }); };
       // Headless Chrome can't show a file dialog and cancels it at once, which the app takes
       // for Cancel: the dialog is stood in for by WebDriver handing the input a file.
       const click = HTMLInputElement.prototype.click;
@@ -362,7 +451,7 @@ async function main(outDir) {
     check("The SnapGene file's primers come with it", (await s.exec("return window.__strandivo.store?.data.primers.map(p => p.name) ?? []")).includes("A206K.REV"));
     await s.exec("window.__strandivo.command('save')");
     const downloaded = (await s.waitFor("window.__e2eDownloads.length === 1", 5000))
-      ? await s.execAsync("const d = window.__e2eDownloads[0]; fetch(d.href).then(r => r.text()).then(t => done({ name: d.name, text: t.slice(0, 12) }), e => done(String(e)));")
+      ? await s.execAsync("const d = window.__e2eDownloads[0]; d.blob.text().then(t => done({ name: d.name, text: t.slice(0, 12) }), e => done(String(e)));")
       : null;
     check("Save, which can't write over it, downloads a GenBank copy", downloaded?.name === "pIB2-SEC13-mEGFP.gb" && downloaded.text.startsWith("LOCUS"), JSON.stringify(downloaded));
     const told = "return Array.from(document.querySelectorAll('.ps-toast')).filter(t => /each save is a new download/.test(t.textContent)).length";
@@ -399,7 +488,7 @@ async function main(outDir) {
     const downloads = await s.exec("return window.__e2eDownloads.length");
     await s.click("//button[normalize-space()='Save check…']");
     const checkText = (await s.waitFor(`window.__e2eDownloads.length === ${downloads + 1}`, 5000))
-      ? await s.execAsync("fetch(window.__e2eDownloads.at(-1).href).then(r => r.text()).then(done, e => done(String(e)));")
+      ? await s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));")
       : "";
     const downloadedCheck = (() => {
       try {
@@ -425,6 +514,10 @@ async function main(outDir) {
     await s.click("//*[contains(@class,'ps-modal-buttons')]//button[normalize-space()='Choose files…']");
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
+
+    // Reports arrive a moment after what they report.
+    await sleep(1000);
+    check("Nothing the page did broke its Content Security Policy", violations.length === 0, violations.slice(0, 5).join("; "));
   } catch (e) {
     check("The browser check ran to the end", false, e?.stack || e);
     await s?.shot("99-crash").catch(() => {});

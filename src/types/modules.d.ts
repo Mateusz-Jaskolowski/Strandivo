@@ -4,6 +4,10 @@
 // The TeselaGen packages ship plain JavaScript; these declarations cover what we use.
 
 declare const __APP_VERSION__: string;
+/** The browser version's Aptabase key, or "" (vite.config.ts). */
+declare const __USAGE_KEY__: string;
+/** Whether the browser version's events are Debug ones (vite.config.ts). */
+declare const __USAGE_DEBUG__: boolean;
 
 declare module "@teselagen/bio-parsers" {
   export interface ParseResult {

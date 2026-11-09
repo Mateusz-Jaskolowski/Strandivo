@@ -15,10 +15,12 @@ import { iconSvg } from "./ui/icons.ts";
 import { fmt } from "./ui/format.ts";
 import {
   allowFolder,
+  BROWSER_PRIVACY_PAGE,
   canKeepFolders,
   catalogVersion,
   detectFeatures,
   folderAccess,
+  isDesktop,
   listOpened,
   listSequenceFiles,
   pickFolder,
@@ -158,6 +160,15 @@ export class Home {
         h("div", { class: "sv-outline-filter sv-home-search" }, iconSvg("search", 14), this.search),
         h("button", { type: "button", class: "sv-icon-btn", "aria-label": "Read the folders again", title: "Read the folders again", onclick: () => void this.scan() }, iconSvg("rotate", 16))
       ),
+      // In a browser, what happens to the files, always in view (part 5 of docs/web-version-plan.md).
+      isDesktop
+        ? ""
+        : h(
+            "p",
+            { class: "sv-small sv-dim sv-home-web" },
+            "Runs in your browser. Your files never leave this computer. ",
+            h("a", { href: BROWSER_PRIVACY_PAGE, target: "_blank", rel: "noopener" }, "How?")
+          ),
       this.list
     );
     this.el = h("div", { class: "sv-home" }, side, main);

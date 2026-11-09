@@ -49,6 +49,11 @@ export interface Updates {
   check(asked: boolean): Promise<void>;
   /** Says "Strandivo was updated to …" if this start follows an update (run once at start). */
   announce(): Promise<void>;
+  /**
+   * In a browser: a file this page needs is gone, as the page was left open across a new
+   * deployment, whose files have other names. Offers the reload that fixes it.
+   */
+  offerReload(): void;
 }
 
 /**
@@ -198,5 +203,9 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
   // Turning checks back on in Settings checks then, if a day has passed.
   onSettingsChanged(s => s.checkForUpdates && checkIfDue());
 
-  return { el, check, announce };
+  function offerReload() {
+    show("download", "Strandivo has been updated. Reload the page to continue.", button("Reload", () => location.reload(), true));
+  }
+
+  return { el, check, announce, offerReload };
 }

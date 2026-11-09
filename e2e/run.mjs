@@ -747,6 +747,116 @@ async function main() {
     check("The entry goes in the file's cross-references", await s.exec(`${doc} return s.data.features.find(f => f.id === window.__strandivoCds).notes.db_xref.includes("UniProtKB/Swiss-Prot:P62593");`));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
+
+    // A protein remains one CDS while its domains and CDRs are authored and selected.
+    const fillProteinRegion = async (name, kind, start, end, parent = "") => {
+      await s.exec(`
+        for (const [label, value] of Object.entries(arguments[0])) {
+          const input = document.querySelector('.sv-dialog [aria-label="' + label + '"]');
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      `, { "Region name": name, "Region kind": kind, "First residue": String(start), "Last residue": String(end), "Parent region": parent });
+    };
+    await s.click("//button[normalize-space(.)='Add region…']", "xpath");
+    const firstRegionColour = await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;");
+    await fillProteinRegion("Test domain", "Domain", 1, 80);
+    await s.click("//button[normalize-space(.)='Add region']", "xpath");
+    check("A manually added domain has a protein diagram", await s.waitFor("document.querySelectorAll('.sv-protein-region').length === 1", 5000));
+    const domainId = await s.exec(`${doc} return JSON.parse(decodeURIComponent(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions[0].split('|')[5])).id;`);
+    await s.click("//button[normalize-space(.)='Add region…']", "xpath");
+    const secondRegionColour = await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;");
+    check("New regions in one CDS start with different coordinated colours", firstRegionColour !== secondRegionColour, `${firstRegionColour}, ${secondRegionColour}`);
+    await fillProteinRegion("CDR1", "CDR", 10, 18, domainId);
+    await s.click("//button[normalize-space(.)='Add region']", "xpath");
+    check("Nested regions stay within one document feature", (await s.exec(`${doc} return s.data.features.length;`)) === featuresForRegions);
+    check("The outline shows both regions", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 2", 5000));
+    await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true }));");
+    check("All map detail draws a domain and its CDR", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
+    await s.click("//div[contains(@class,'sv-map')]//button[normalize-space(.)='Regions']", "xpath");
+    check("The map's Regions button hides regions while keeping CDS features", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0 && document.querySelectorAll('.sv-map-feature').length > 0", 5000));
+    check("Hiding map regions keeps the chosen detail level", await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); return select.value === 'all' && select.disabled;"));
+    await s.click("//div[contains(@class,'sv-map')]//button[normalize-space(.)='Regions']", "xpath");
+    check("Showing map regions restores the previous detail level", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2 && !document.querySelector('[aria-label=\"Protein region detail\"]').disabled", 5000));
+    await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
+    check("Top-level map detail keeps only the domain", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 1", 5000));
+    await s.click(".sv-outline [data-region='1']");
+    await s.click("//button[normalize-space(.)='Edit…']", "xpath");
+    check("Editing a region keeps its colour", (await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;")) === secondRegionColour);
+    await fillProteinRegion("CDR1 edited", "CDR", 9, 19, domainId);
+    await s.click("//button[normalize-space(.)='Save region']", "xpath");
+    check("A region's bounds and name can be edited", await s.waitFor("Array.from(document.querySelectorAll('.sv-outline [data-region]')).some(r => r.textContent.includes('CDR1 edited') && r.textContent.includes('9–19'))", 5000));
+    await s.shot("11-protein-regions");
+
+    await s.exec("window.__strandivo.command('show-sequence')");
+    await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds);
+      const range = f.strand === -1 ? { start: f.end - 59, end: f.end - 42 } : { start: f.start + 42, end: f.start + 59 };
+      s.selectRange(range, null, "e2e");`);
+    check("Protein regions have labelled tracks in Sequence", await s.waitFor("document.querySelectorAll('.sv-seq-region-bar').length > 0 && Array.from(document.querySelectorAll('.sv-region-caption')).some(e => e.textContent === 'CDR1 edited')", 5000));
+    const firstSequenceBase = await s.exec("return document.querySelector('.sv-seq .sv-pane-note').textContent.split('–')[0];");
+    await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
+    check("Regions can be hidden without hiding the CDS", await s.waitFor("document.querySelectorAll('.sv-seq-region-bar').length === 0 && document.querySelectorAll('.sv-feature-bar').length > 0", 5000));
+    check("The Sequence region toggle is separate from the map's", await s.exec("return Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'Regions').getAttribute('aria-pressed') === 'true';"));
+    check("The Regions toggle keeps the same sequence row in view", (await s.exec("return document.querySelector('.sv-seq .sv-pane-note').textContent.split('–')[0];")) === firstSequenceBase);
+    await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Regions']", "xpath");
+    await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Translation']", "xpath");
+    check("Region names remain visible without translation", await s.waitFor("document.querySelectorAll('.sv-aa').length === 0 && document.querySelectorAll('.sv-region-caption').length > 0", 5000));
+    await s.click("//div[contains(@class,'sv-seq')]//button[normalize-space(.)='Translation']", "xpath");
+
+    const selectionMenu = await s.exec(`${doc}
+      window.__strandivoMenu = items => { window.__e2eMenu = items; };
+      const probe = s.selection.range.start + 1;
+      const row = Array.from(document.querySelectorAll('.sv-row')).find(row => {
+        const start = Number(row.querySelector('.sv-row-number').textContent.replace(/,/g, '')) - 1;
+        return start <= probe && probe < start + row.querySelector('.sv-bases').textContent.length;
+      });
+      const start = Number(row.querySelector('.sv-row-number').textContent.replace(/,/g, '')) - 1;
+      const bases = row.querySelector('.sv-bases');
+      const cw = bases.getBoundingClientRect().width / bases.textContent.length;
+      const bar = Array.from(row.querySelectorAll('.sv-feature-bar')).find(el => el.dataset.id === window.__strandivoCds);
+      const box = bar.getBoundingClientRect();
+      bar.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: row.querySelector('.sv-row-track').getBoundingClientRect().left + (probe - start) * cw, clientY: box.top + box.height / 2 }));
+      return { entries: window.__e2eMenu.map(e => e.label), focus: s.selection.focus };
+    `);
+    check("Right-clicking inside a CDS keeps the smaller selection and offers Add as region", selectionMenu.entries.includes("Add as region…") && selectionMenu.focus === null, JSON.stringify(selectionMenu));
+    await s.exec("window.__e2eMenu.find(e => e.label === 'Add as region…').run(); delete window.__strandivoMenu;");
+    check("Selected bases fill the region's residue bounds in the CDS frame", await s.waitFor("document.querySelector('[aria-label=\"First residue\"]')?.value === '15' && document.querySelector('[aria-label=\"Last residue\"]')?.value === '20'", 5000));
+    await s.click("//button[normalize-space(.)='Cancel']", "xpath");
+    await s.click("//button[normalize-space(.)='Add as region…']", "xpath");
+    await s.exec("document.querySelector('[aria-label=\"Region name\"]').value = 'Selected region';");
+    await s.click("//button[normalize-space(.)='Add region']", "xpath");
+    check("The selection inspector adds a region without entering positions", await s.waitFor("Array.from(document.querySelectorAll('.sv-region-caption')).some(e => e.textContent === 'Selected region')", 5000));
+    await s.shot("11-protein-regions-sequence");
+
+    // A primer's context includes both overlapping regions and nearby template boundaries.
+    await s.exec(`${doc} const d = s.data;
+      const f = d.features.find(f => f.id === window.__strandivoCds);
+      const range = f.strand === -1 ? { start: f.end - 59, end: f.end - 42 } : { start: f.start + 42, end: f.start + 59 };
+      const site = d.sequence.slice(range.start, range.end + 1).toUpperCase();
+      const bases = f.strand === -1 ? [...site].reverse().map(b => ({ A: 'T', C: 'G', G: 'C', T: 'A' })[b] || 'N').join('') : site;
+      const p = { id: 'e2e-protein-region-primer', name: 'Region context test', ...range, strand: f.strand === -1 ? -1 : 1, bases, notes: {}, raw: {} };
+      const notes = { ...f.notes, strandivo_regions: [...f.notes.strandivo_regions, 'Nearby region|Domain|22-25|:22-25'] };
+      s.apply({ ...d, features: d.features.map(x => x.id === f.id ? { ...x, notes } : x), primers: [...d.primers, p] }, 'Test primer context', { range, focus: { kind: 'primer', id: p.id } });
+      window.__strandivo.command('show-primers');`);
+    check("Primer context shows the overlapping CDR and a neighbouring region", await s.waitFor("document.querySelector('.sv-ctx-primer') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'CDR1 edited') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'Nearby region')", 5000));
+    const primerWindowBeforeToggle = await s.exec("return document.querySelector('.sv-ctx-readout .sv-mono').textContent;");
+    await s.click("//section[contains(@class,'sv-ctx')]//button[normalize-space(.)='Regions']", "xpath");
+    check("Primer regions can be hidden without hiding the primer or its handles", await s.waitFor("document.querySelectorAll('.sv-ctx .sv-seq-region-bar').length === 0 && document.querySelector('.sv-ctx-primer') && document.querySelectorAll('.sv-ctx-handle').length === 2", 5000));
+    await s.exec("window.__strandivo.command('show-sequence')");
+    check("Primer and Sequence region toggles share one setting", await s.waitFor("Array.from(document.querySelectorAll('.sv-seq .sv-chip')).find(b => b.textContent.trim() === 'Regions')?.getAttribute('aria-pressed') === 'false' && document.querySelectorAll('.sv-seq .sv-seq-region-bar').length === 0", 5000));
+    await s.exec("window.__strandivo.command('show-primers')");
+    await s.click("//section[contains(@class,'sv-ctx')]//button[normalize-space(.)='Regions']", "xpath");
+    check("Restoring regions keeps the primer's sequence window", await s.waitFor("document.querySelectorAll('.sv-ctx .sv-seq-region-bar').length > 0", 5000) && (await s.exec("return document.querySelector('.sv-ctx-readout .sv-mono').textContent;")) === primerWindowBeforeToggle);
+    await s.click(".sv-ctx .sv-seq-region-bar[data-region='1']");
+    check("A primer-context region selects its own bases and keeps the primer in view", await s.waitFor("window.__strandivo.store.selection.focus?.region === 1 && document.querySelector('.sv-ctx-primer')", 5000) && (await s.exec(`${doc} return s.selection.range.end - s.selection.range.start + 1;`)) === 33);
+    await s.shot("11-protein-regions-primer-context");
+    await s.exec(`${doc} s.undo(); window.__strandivo.command('show-sequence');`);
+
+    await s.exec(`${doc} s.undo(); s.selectRange({ start: s.data.features.find(f => f.id === window.__strandivoCds).start, end: s.data.features.find(f => f.id === window.__strandivoCds).end }, { kind: "feature", id: window.__strandivoCds, region: 1 }, "e2e"); window.__strandivo.command('show-map');`);
+    await s.click("//button[normalize-space(.)='Remove']", "xpath");
+    check("Removing a region keeps its CDS", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 1", 5000));
+    await s.exec(`${doc} s.undo(); s.undo(); s.undo(); s.undo();`);
+    check("Region authoring can be undone completely", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 0", 5000));
     await s.exec("window.__strandivo.command('show-sequence')");
 
     // --- map and sequence side by side ---

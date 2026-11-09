@@ -10,6 +10,7 @@ included under their original licences, all compatible with this project's GPL-3
 | `sanger/teselagen-example1.ab1` | [TeselaGen tg-oss](https://github.com/TeselaGen/tg-oss) bio-parsers test data | MIT |
 | `sanger/pUC19.gb` | GenBank L09137 (public record), via [pydna](https://github.com/pydna-group/pydna) tests | Public sequence record |
 | `library/*.ab1`, `library/library-parent.gb` | Mateusz Jaskolowski's lab, contributed for Strandivo (October 2026) | GPL-3.0-or-later, like Strandivo |
+| `library/protein-regions.gb` | Derived from the library parent, with one nanobody CDS and nested framework/CDR regions | GPL-3.0-or-later |
 | `snapgene/pFA-KanMX4.dna`, `snapgene/sample-d.dna`, `snapgene/sample-e.dna` | Biopython `Tests/SnapGene` | Biopython License / BSD-3-Clause |
 | `snapgene/pIB2-SEC13-mEGFP.dna` | TeselaGen tg-oss bio-parsers test data | MIT |
 

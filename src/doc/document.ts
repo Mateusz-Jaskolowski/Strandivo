@@ -59,7 +59,7 @@ import { PrimersView } from "../views/primersView.ts";
 import { openDesignDialog } from "../views/primerDialogs.ts";
 import { openCloningDialog } from "../views/cloningDialog.ts";
 import { openDetectDialog } from "../views/detectDialog.ts";
-import { regionsOf } from "../lib/regions.ts";
+import { proteinRegionFeatures, regionsOf, variableProteinFeatures } from "../lib/regions.ts";
 import { dismissOffer, offerDismissed } from "../detectOffer.ts";
 import { looksUnannotated } from "../lib/detect.ts";
 import { describeLost, lostWith } from "../lib/deletion.ts";
@@ -88,12 +88,14 @@ const orfOptions = (s: Settings): OrfOptions => ({ minCodons: s.orfs.minCodons, 
 function loadViewOptions(settings: Settings): ViewOptions {
   let saved: Partial<ViewOptions> = {};
   try {
-    saved = JSON.parse(localStorage.getItem(VIEW_KEY) || "{}");
+    const value = JSON.parse(localStorage.getItem(VIEW_KEY) || "{}");
+    if (value && typeof value === "object") saved = value;
   } catch {
     /* ignore */
   }
   return {
     features: settings.show.features,
+    sequenceRegions: true,
     primers: settings.show.primers,
     cutsites: settings.show.cutsites,
     ruler: settings.show.ruler,
@@ -107,6 +109,9 @@ function loadViewOptions(settings: Settings): ViewOptions {
     labelSize: settings.labelSize,
     linearMap: false,
     ...saved,
+    // Older previews used "none" as the map's detail choice instead of a visibility toggle.
+    mapRegions: saved.mapRegions ?? (saved.proteinDetail !== "none"),
+    proteinDetail: saved.proteinDetail === "all" ? "all" : "domains",
     labEnzymes: enzymeLibrary.names,
     orfOptions: orfOptions(settings),
     caseMode: settings.sequenceCase
@@ -197,7 +202,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // The map's rotation is the file's own (label size is a setting, and every map opens unzoomed).
   const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0 }, o => {
     try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSet: o.enzymeSet, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap }));
+      localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSet: o.enzymeSet, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap, mapRegions: o.mapRegions, proteinDetail: o.proteinDetail, sequenceRegions: o.sequenceRegions }));
     } catch {
       /* ignore */
     }
@@ -208,7 +213,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   let inspectorOpen = true;
   // Sequencing reads align against the current sequence; edits make the results stale.
   const legacyFeatures = (d: SeqData): Feature[] =>
-    d.features.map(f => ({ id: f.id, name: f.name, type: f.type, start: f.start, end: f.end, forward: f.strand !== -1, strand: f.strand === -1 ? -1 : 1, locations: f.locations, variable: designOf(f.notes) ?? undefined }));
+    d.features.flatMap(f => [{ id: f.id, name: f.name, type: f.type, start: f.start, end: f.end, forward: f.strand !== -1, strand: f.strand === -1 ? -1 : 1, locations: f.locations, variable: designOf(f.notes) ?? undefined }, ...variableProteinFeatures(f, d.sequence.length)]);
   let dataVersion = 0;
   store.subscribe(c => c.data && dataVersion++);
 
@@ -631,8 +636,9 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   }
 
   // ---------- saving ----------
-  function fileJson(): Record<string, unknown> {
-    const json = toParsed(loaded, store.data);
+  function fileJson(includeRegions = false): Record<string, unknown> {
+    const d = store.data;
+    const json = toParsed(loaded, includeRegions ? { ...d, features: [...d.features, ...d.features.flatMap(f => proteinRegionFeatures(f, d.sequence.length))] } : d);
     json.comments = formatComments(infoPanel.getFields(), otherComments);
     return json;
   }
@@ -686,12 +692,12 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     toast(`Saved ${basename(target)}`, "success", 1800);
   }
 
-  async function exportAs(fmtOut: SaveFormat) {
-    const suggestion = joinPath(path ? dirname(path) : "", suggestedSaveName(path, store.data.name, fmtOut));
+  async function exportAs(fmtOut: SaveFormat, includeRegions = false) {
+    const suggestion = joinPath(path ? dirname(path) : "", includeRegions ? `${store.data.name}-regions.gb` : suggestedSaveName(path, store.data.name, fmtOut));
     const chosen = await chooseSavePath(suggestion, [fmtOut === "fasta" ? { name: "FASTA", extensions: ["fasta", "fa"] } : { name: "GenBank", extensions: ["gb", "gbk"] }]);
     if (!chosen) return;
     try {
-      await saveText(chosen, serialize(fileJson(), fmtOut));
+      await saveText(chosen, serialize(fileJson(includeRegions), fmtOut));
       track("file_saved", { format: fmtOut, how: "export" });
       toast(`Exported ${basename(chosen)}`, "success");
     } catch (e) {
@@ -703,9 +709,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const choice = await choose("Export", "Save a copy of this sequence in another format.", [
       { label: "Cancel", value: "cancel" as const },
       { label: "FASTA…", value: "fasta" as const },
+      { label: "GenBank with protein regions…", value: "regions" as const },
       { label: "GenBank…", value: "genbank" as const, primary: true }
     ], "cancel" as const);
-    if (choice !== "cancel") await exportAs(choice);
+    if (choice !== "cancel") await exportAs(choice === "regions" ? "genbank" : choice, choice === "regions");
   }
 
   // ---------- reads ----------

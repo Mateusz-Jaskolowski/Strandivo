@@ -23,6 +23,41 @@ and CI checks that they exist.
   edge can still move that edge, as it clips a feature's own end. Each also keeps the
   entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
   makes a real one for files going to other software.
+- **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
+  after the original qualifier fields holds stable ids, colour, a parent id and a library
+  design; keep reading the original four/five-field form. Parent links describe nesting,
+  never reading order or splicing. The region dialog requires a parent to contain its
+  children; overlapping annotations can also be independent. Removing a parent promotes
+  its children. Plain manual regions show the CDS's own residue numbers.
+- **New region colours** follow a coordinated palette within each CDS, starting with the
+  colour nearest its displayed feature colour (`nextRegionColor`). Assign and save the
+  colour when a region is added, including a UniProt batch; editing or renaming must not
+  pick a new one. Skip colours already in use before repeating the palette. Reimporting
+  keeps existing colours, and old annotations without a saved colour keep their original
+  name-based fallback (`regionColor`), so opening a file never recolours it.
+- **Protein display**: the inspector's diagram and the outline show all regions; the map's
+  Regions toggle hides or shows them without changing its top-level/all detail choice.
+  Visibility and detail are remembered separately. Nested
+  or overlapping regions occupy separate lanes. Region actions act on the region, not the
+  whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
+  Sequence and the Primers tab's local sequence panel share a Regions toggle: solid bars
+  and captions sit below their CDS, in separate tracks for overlaps, whether or not
+  translation is shown. They use `src/views/regionTracks.ts` to pack and draw both the
+  bars and captions, so names do not collide or widen the scroller. The primer's panel
+  shows all regions in its visible template window, including neighbouring boundaries.
+- **Regions from a selection** use `selectedProteinResidues` for both the inspector and
+  right-click menu: coordinates follow the CDS's direction and splicing, partial codons
+  expand to whole residues, and a terminal stop is excluded. When several CDSs contain
+  the selection, ask which protein owns the region rather than silently choosing one.
+  Right-clicking a drawn feature within a plain selection keeps that selection.
+- **Library designs on regions** are optional and separate from their kind: a CDR or a
+  variable domain does not automatically vary between clones. `variableProteinFeatures`
+  projects only marked regions into the existing read-analysis model, as noncoding
+  features inside the real CDS, so its frame and translation are counted once. It never
+  adds document features. Ordinary feature-based library designs continue to work.
+- **Portable export**: normal Save keeps regions attached. The Export dialog can include
+  them as ordinary annotations in a GenBank copy (`proteinRegionFeatures`); this leaves
+  the open document alone. Importing that copy also imports those ordinary annotations.
 - **UniProt** (`src/lib/uniprot.ts`) is one of the two things the page fetches from the
   internet, and only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's
   own `fetch`; the API allows any origin); the other is a feedback report the user sends
@@ -33,3 +68,5 @@ and CI checks that they exist.
   `MIN_IDENTITY` nothing is placed, since a wrong accession would otherwise mark the wrong
   bases. The entry goes in `/db_xref` as `UniProtKB/Swiss-Prot:…`, as ENA's records have it,
   so those files fill the field in themselves.
+  Domains, repeats, motifs and other bounded regions are offered too. Locally edited
+  imported regions keep their source key and survive another import of that entry.

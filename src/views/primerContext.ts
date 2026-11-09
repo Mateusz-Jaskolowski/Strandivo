@@ -9,6 +9,7 @@
 
 import { h } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
+import { checkIcon } from "../ui/icons.ts";
 import { codons, featureStyles, isCds, primerAlignment, primerColors, primerTitle, primerTm } from "../doc/analysis.ts";
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { boxTop, drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
@@ -19,6 +20,8 @@ import { aminoGroup } from "../lib/aminoAcids.ts";
 import { complement, inRange, rangeLength, type Range, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import type { Focus } from "../doc/store.ts";
+import { layoutRegions, regionRange, regionSpans, regionsOf } from "../lib/regions.ts";
+import { drawRegionTracks, layoutRegionTracks, markRegionSelection, REGION_TRACK_HEIGHT, type RegionTrack, type RegionTrackPiece } from "./regionTracks.ts";
 
 const GUTTER = 64;
 const SOURCE = "primer-context";
@@ -70,6 +73,7 @@ export class PrimerContextView {
   private readout = h("span", { class: "sv-ctx-readout" });
   private controls = h("span", { class: "sv-ctx-controls" });
   private body = h("div", { class: "sv-ctx-body" });
+  private regionsToggle: HTMLButtonElement;
   private chPx = 7.8;
   /** The primer shown, and the first position of the window it is shown in. */
   private primerId: string | null = null;
@@ -84,10 +88,11 @@ export class PrimerContextView {
   constructor(ctx: DocContext, opts: { rows: number }) {
     this.ctx = ctx;
     this.rowCount = opts.rows;
+    this.regionsToggle = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ sequenceRegions: !ctx.options.sequenceRegions }) }, checkIcon(), "Regions");
     this.el = h(
       "section",
       { class: "sv-ctx", "aria-label": "Sequence around the selected primer" },
-      h("div", { class: "sv-ctx-head" }, h("h3", { class: "sv-section-title" }, "Sequence"), this.title, this.readout, this.controls),
+      h("div", { class: "sv-ctx-head" }, h("h3", { class: "sv-section-title" }, "Sequence"), this.title, this.regionsToggle, this.readout, this.controls),
       this.body,
       h("p", { class: "sv-small sv-dim sv-ctx-hint" }, "Drag an end of the primer, or use the arrow keys on it, to extend or trim it. Tm and checks update as you go; the tail stays as it is.")
     );
@@ -132,6 +137,9 @@ export class PrimerContextView {
 
   render() {
     this.stale = false;
+    const showRegions = this.ctx.options.sequenceRegions;
+    this.regionsToggle.setAttribute("aria-pressed", String(showRegions));
+    this.regionsToggle.classList.toggle("sv-chip-off", !showRegions);
     const d = this.ctx.store.data;
     const n = d.sequence.length;
     const p = this.primer();
@@ -245,6 +253,7 @@ export class PrimerContextView {
       }
       row.sel.replaceChildren(...parts);
     }
+    markRegionSelection(this.body, this.ctx.store.selection.focus);
   }
 
   private installMouse() {
@@ -255,7 +264,7 @@ export class PrimerContextView {
     const index = (e: MouseEvent) => Math.max(0, Math.min(this.total, this.boundaryAt(e) ?? 0));
     const hitOf = (e: Event): Focus | null => {
       const el = (e.target as Element).closest<HTMLElement>("[data-kind]");
-      return el ? { kind: el.dataset.kind as Focus["kind"], id: el.dataset.id || "" } : null;
+      return el ? { kind: el.dataset.kind as Focus["kind"], id: el.dataset.id || "", ...(el.dataset.region === undefined ? {} : { region: Number(el.dataset.region) }) } : null;
     };
     this.body.addEventListener("pointerdown", e => {
       // Control-click is a right-click on a Mac; the primer's handles and buttons do their own thing.
@@ -303,7 +312,7 @@ export class PrimerContextView {
       if (!this.rowParts.length) return;
       e.preventDefault();
       const hit = hitOf(e);
-      const t = menuTargetAt(this.ctx, hit, hit ? null : this.boundaryOf(index(e)), f => this.selectAnnotation(f), SOURCE);
+      const t = menuTargetAt(this.ctx, hit, this.boundaryOf(index(e)), f => this.selectAnnotation(f), SOURCE);
       if (t) this.ctx.contextMenu(t, { x: e.clientX, y: e.clientY });
     });
   }
@@ -311,7 +320,9 @@ export class PrimerContextView {
   private selectAnnotation(f: Focus) {
     const d = this.ctx.store.data;
     const r = f.kind === "feature" ? d.features.find(x => x.id === f.id) : f.kind === "primer" ? d.primers.find(x => x.id === f.id) : undefined;
-    if (r) this.ctx.store.selectRange({ start: r.start, end: r.end }, f, "primers");
+    const region = r && f.kind === "feature" && f.region !== undefined ? regionsOf(r)[f.region] : undefined;
+    const range = r && region ? regionRange(r, region, d.sequence.length) : r;
+    if (range) this.ctx.store.selectRange({ start: range.start, end: range.end }, f, SOURCE);
   }
 
   /** One row: `positions` are its bases, `offset` its first index in the window, `index` maps a position to its window index. */
@@ -360,13 +371,22 @@ export class PrimerContextView {
       }
       return out;
     };
-    const feats = o.features
+    const feats = o.features || o.sequenceRegions
       ? lanes(
-          d.features.flatMap(f =>
+          d.features.filter(f => o.features || (isCds(f) && regionsOf(f).length > 0)).flatMap(f =>
             runsIn(pos => (f.locations ?? [f]).some(part => inRange(part, pos)), positions).map(([a, b]) => ({ item: f, a, b, w: b - a + 1 }))
           )
         )
       : [];
+    // Show every region in the visible template window, including nearby boundaries.
+    const regionPieces: RegionTrackPiece[] = o.sequenceRegions ? d.features.flatMap(f => {
+      if (!isCds(f)) return [];
+      return layoutRegions(regionsOf(f)).flatMap(({ region, index }) => {
+        const spans = regionSpans(f, region, n);
+        const columns = runsIn(pos => spans.some(span => inRange(span, pos)), positions);
+        return columns.length ? [{ f, region, index, spans: columns }] : [];
+      });
+    }) : [];
 
     // Vertical layout, as in the Sequence tab: forward primers above the top strand, the
     // first lane nearest it; the ruler between the strands; reverse primers below.
@@ -395,9 +415,21 @@ export class PrimerContextView {
     const fitsInside = (r: Run<SeqFeature>) => (r.b - r.a + 1) * this.chPx > r.item.name.length * 7 + 10;
     const captioned = (r: Run<SeqFeature>) => (isCds(r.item) && o.translations) || !fitsInside(r);
     const laneY: number[] = [];
+    const regionTracks: (RegionTrack & { y: number })[] = [];
     for (let l = 0; l < featLanes; l++) {
       laneY.push(y);
-      y += 22 + (feats.some(r => r.lane === l && captioned(r)) ? 13 : 0);
+      y += o.features ? 22 + (feats.some(r => r.lane === l && captioned(r)) ? 13 : 0) : 0;
+      const inLane = feats.filter(r => r.lane === l);
+      const bars = layoutRegionTracks(regionPieces.flatMap(piece => {
+        const spans = piece.spans.flatMap(([a, b]) => inLane.filter(run => run.item === piece.f)
+          .flatMap(run => Math.max(a, run.a) <= Math.min(b, run.b) ? [[Math.max(a, run.a), Math.min(b, run.b)] as [number, number]] : []));
+        return spans.length ? [{ ...piece, spans }] : [];
+      }), bpr, this.chPx);
+      if (bars.length) {
+        y += 4;
+        regionTracks.push(...bars.map(bar => ({ ...bar, y: y + bar.lane * REGION_TRACK_HEIGHT })));
+        y += (Math.max(...bars.map(bar => bar.lane)) + 1) * REGION_TRACK_HEIGHT;
+      }
     }
     y += 6;
 
@@ -471,7 +503,7 @@ export class PrimerContextView {
     }
 
     // Features, with amino acids on coding ones.
-    for (const r of feats) {
+    for (const r of o.features ? feats : []) {
       const f: SeqFeature = r.item;
       const st = styles.get(f.id);
       const coding = isCds(f) && o.translations;
@@ -524,6 +556,7 @@ export class PrimerContextView {
         track.appendChild(cap);
       }
     }
+    track.append(...drawRegionTracks(regionTracks, this.chPx));
 
     gutter.appendChild(abs(`right:0;top:${yTop}px;line-height:18px`, "sv-row-number", fmt(positions[0] + 1)));
     const row = h("div", { class: "sv-ctx-row" }, gutter, track);

@@ -1,0 +1,233 @@
+LOCUS       Protein_regions_demo        4345 bp    ds-DNA  circular SYN 09-NOV-2026
+DEFINITION  Nanobody with one CDS and nested framework and CDR annotations; derived from the library parent.
+KEYWORDS    "creator:Mateusz Jaskolowski" "marker:AmpR"
+COMMENT             ##Strandivo-Data-START##
+COMMENT             Sequence verified     :: Differences found
+COMMENT             Verified on           :: 2026-10-25
+COMMENT             Verified with         :: 2026-10-19_E02_MJ3LACOP
+COMMENT             Antibiotic resistance :: Ampicillin
+COMMENT             ##Strandivo-Data-END##
+FEATURES             Location/Qualifiers
+     promoter        21..125
+                     /label="AmpR promoter"
+                     /ApEinfo_revcolor="#b7e6d7"
+                     /ApEinfo_fwdcolor="#b7e6d7"
+                     /note="gene: bla"
+     CDS             126..986
+                     /label="AmpR"
+                     /ApEinfo_revcolor="#b7e6d7"
+                     /ApEinfo_fwdcolor="#b7e6d7"
+                     /note="codon_start: 1 gene: bla note: confers resistance t
+                     o ampicillin, carbenicillin, and related antibiotics produ
+                     ct: β-lactamase transl_table: 1 translation: MSIQHFRVALIPF
+                     FAAFCLPVFA,HPETLVKVKDAEDQLGARVGYIELDLNSGKILESFRPEERFPMMSTF
+                     KVLLCGAVLSRIDAGQEQLGRRIHYSQNDLVEYSPVTEKHLTDGMTVRELCSAAITMS
+                     DNTAANLLLTTIGGPKELTAFLHNMGDHVTRLDRWEPELNEAIPNDERDTTMPVAMAT
+                     TLRKLLTGELLTLASRQQLIDWMEADKVAGPLLRSALPAGWFIADKSGAGERGSRGII
+                     AALGPDGKPSRIVVIYTTGSQATMDERNRQIAEIGASLIKHW*"
+     rep_origin      1157..1745
+                     /label="ori"
+                     /ApEinfo_revcolor="#ffff00"
+                     /ApEinfo_fwdcolor="#ffff00"
+                     /note="direction: RIGHT note: high-copy-number ColE1/pMB1/
+                     pBR322/pUC origin of replication"
+     protein_bind    1910..1931
+                     /label="CAP binding site"
+                     /ApEinfo_revcolor="#75c6a9"
+                     /ApEinfo_fwdcolor="#75c6a9"
+                     /note="bound_moiety: E. coli catabolite activator protein
+                     note: CAP binding activates transcription in the presence
+                     of cAMP."
+                     /benchling_strand="none"
+     misc_feature    1946..1976
+                     /label="lac promoter"
+                     /ApEinfo_revcolor="#b7e6d7"
+                     /ApEinfo_fwdcolor="#b7e6d7"
+                     /note="includes -10 and -35 box"
+                     /benchling_strand="none"
+     protein_bind    1984..2000
+                     /label="lac operator"
+                     /ApEinfo_revcolor="#75c6a9"
+                     /ApEinfo_fwdcolor="#75c6a9"
+                     /note="bound_moiety: lac repressor encoded by lacI note: T
+                     he lac repressor binds to the lac operator to inhibit tran
+                     scription in E. coli. This inhibition can be relieved by a
+                     dding lactose or isopropyl-β-D-thiogalactopyranoside (IPTG
+                     )."
+                     /benchling_strand="none"
+     RBS             2011..2016
+                     /label="RBS"
+                     /ApEinfo_revcolor="#c6c9d1"
+                     /ApEinfo_fwdcolor="#c6c9d1"
+                     /benchling_strand="none"
+                     /direction="NONE"
+     sig_peptide     2025..2090
+                     /label="pelB signal sequence"
+                     /ApEinfo_revcolor="#993366"
+                     /ApEinfo_fwdcolor="#993366"
+                     /note="codon_start: 1 gene: pelB (fragment) product: leade
+                     r peptide for secretion transl_table: 1 translation: MKYLL
+                     PTAAAGLLLLAAQPAMA"
+     misc_feature    2463..2483
+                     /label="TEV"
+                     /ApEinfo_revcolor="#c7b0e3"
+                     /ApEinfo_fwdcolor="#c7b0e3"
+                     /benchling_strand="none"
+     misc_feature    2496..2513
+                     /label="6xHis"
+                     /ApEinfo_revcolor="#9eafd2"
+                     /ApEinfo_fwdcolor="#9eafd2"
+                     /benchling_strand="none"
+     misc_feature    2520..2543
+                     /label="HA"
+                     /ApEinfo_revcolor="#84b0dc"
+                     /ApEinfo_fwdcolor="#84b0dc"
+                     /benchling_strand="none"
+     variation       2550..2552
+                     /label="Amber STOP"
+                     /ApEinfo_revcolor="#f58a5e"
+                     /ApEinfo_fwdcolor="#f58a5e"
+                     /note="in TG1 encodes for Q"
+                     /direction="NONE"
+     CDS             2553..3773
+                     /label="pIII"
+                     /ApEinfo_revcolor="#993366"
+                     /ApEinfo_fwdcolor="#993366"
+                     /note="codon_start: 1 transl_table: 1 translation: AETVESC
+                     LAKPHTENSFTNVWKDDKTLDRYANYEGCLWNATGVVVCTGDETQCYGTWVPIGLAIP
+                     ENEGGGSEGGGSEGGGSEGGGTKPPEYGDTPIPGYTYINPLDGTYPPGTEQNPANPNP
+                     SLEESQPLNTFMFQNNRFRNRQGALTVYTGTVTQGTDPVKTYYQYTPVSSKAMYDAYW
+                     NGKFRDCAFHSGFNEDPFVCEYQGQSSDLPQPPVNAGGGSGGGSGGGSEGGGSEGGGS
+                     EGGGSEGGGSGGGSGSGDFDYEKMANANKGAMTENADENALQSDAKGKLDSVATDYGA
+                     AIDGFIGDVSGLANGNGATGDFAGSNSQMAQVGDGDNSPLMNNFRQYLPSLPQSVECR
+                     PYVFGAGKPYEFSIDCDKINLFRGVFAFLLYVATFMYVFSTFANILRNKES*"
+     rep_origin      complement(3911..4339)
+                     /label="f1 ori"
+                     /ApEinfo_revcolor="#ffff00"
+                     /ApEinfo_fwdcolor="#ffff00"
+                     /note="direction: LEFT note: f1 bacteriophage origin of re
+                     plication; arrow indicates direction of (+) strand synthes
+                     is"
+     CDS             2097..2450
+                     /label="Nanobody"
+                     /strandivo_regions="Variable domain|Domain|1-118|:1-118||%
+                     7B%22id%22%3A%22vhh%22%2C%22color%22%3A%22%234F8FBA%22%7D"
+                     /strandivo_regions="CDR1|CDR|26-35|:26-35||%7B%22id%22%3A%
+                     22cdr1%22%2C%22color%22%3A%22%23CB6478%22%2C%22parentId%22
+                     %3A%22vhh%22%7D"
+                     /strandivo_regions="CDR2|CDR|50-59|:50-59||%7B%22id%22%3A%
+                     22cdr2%22%2C%22color%22%3A%22%23CB6478%22%2C%22parentId%22
+                     %3A%22vhh%22%7D"
+                     /strandivo_regions="CDR3|CDR|97-107|:97-107||%7B%22id%22%3
+                     A%22cdr3%22%2C%22color%22%3A%22%23CB6478%22%2C%22parentId%
+                     22%3A%22vhh%22%7D"
+                     /strandivo_regions="FR1|Framework|1-25|:1-25||%7B%22id%22%
+                     3A%22FR1%22%2C%22color%22%3A%22%2361A58F%22%2C%22parentId%
+                     22%3A%22vhh%22%7D"
+                     /strandivo_regions="FR2|Framework|36-49|:36-49||%7B%22id%2
+                     2%3A%22FR2%22%2C%22color%22%3A%22%2361A58F%22%2C%22parentI
+                     d%22%3A%22vhh%22%7D"
+                     /strandivo_regions="FR3|Framework|60-96|:60-96||%7B%22id%2
+                     2%3A%22FR3%22%2C%22color%22%3A%22%2361A58F%22%2C%22parentI
+                     d%22%3A%22vhh%22%7D"
+                     /strandivo_regions="FR4|Framework|108-118|:108-118||%7B%22
+                     id%22%3A%22FR4%22%2C%22color%22%3A%22%2361A58F%22%2C%22par
+                     entId%22%3A%22vhh%22%7D"
+     primer_bind     1920..1961
+                     /label="Vector fw"
+                     /ApEinfo_revcolor="#85dae9"
+                     /ApEinfo_fwdcolor="#85dae9"
+                     /note="sequence: AAAAATAGCTCACTCATTAGGCACCCCAGGCTTTACACTTT
+                     ATGCTT"
+                     /primerBindsOn="3prime"
+     primer_bind     3429..3450
+                     /label="pIII_CT_fw"
+                     /ApEinfo_revcolor="#b4abac"
+                     /ApEinfo_fwdcolor="#b4abac"
+                     /note="sequence: ACTGATTACGGTGCTGCTATCG"
+                     /primerBindsOn="3prime"
+     primer_bind     complement(3531..3552)
+                     /label="pIII_CT_rev"
+                     /ApEinfo_revcolor="#85dae9"
+                     /ApEinfo_fwdcolor="#85dae9"
+                     /note="sequence: TATCACCGTCACCGACTTGAGC"
+                     /primerBindsOn="3prime"
+     primer_bind     2385..2417
+                     /label="Primer 4"
+                     /note="sequence: GGAGGTGGAGGTGGAGGTGGAGGTGGAGGTGGA"
+                     /primerBindsOn="3prime"
+ORIGIN
+        1 GCACTTTTCG GGGAAATGTG CGCGGAACCC CTATTTGTTT ATTTTTCTAA ATACATTCAA
+       61 ATATGTATCC GCTCATGAGA CAATAACCCT GATAAATGCT TCAATAATAT TGAAAAAGGA
+      121 AGAGTATGAG TATTCAACAT TTCCGTGTCG CCCTTATTCC CTTTTTTGCG GCATTTTGCC
+      181 TTCCTGTTTT TGCTCACCCA GAAACGCTGG TGAAAGTAAA AGATGCTGAA GATCAGTTGG
+      241 GTGCACGAGT GGGTTACATC GAACTGGATC TCAACAGCGG TAAGATCCTT GAGAGTTTTC
+      301 GCCCCGAAGA ACGTTTTCCA ATGATGAGCA CTTTTAAAGT TCTGCTATGT GGCGCGGTAT
+      361 TATCCCGTAT TGACGCCGGG CAAGAGCAAC TCGGTCGCCG CATACACTAT TCTCAGAATG
+      421 ACTTGGTTGA GTACTCACCA GTCACAGAAA AGCATCTTAC GGATGGCATG ACAGTAAGAG
+      481 AATTATGCAG TGCTGCCATA ACCATGAGTG ATAACACTGC GGCCAACTTA CTTCTGACAA
+      541 CGATCGGAGG ACCGAAGGAG CTAACCGCTT TTTTGCACAA CATGGGGGAT CATGTAACTC
+      601 GCCTTGATCG TTGGGAACCG GAGCTGAATG AAGCCATACC AAACGACGAG CGTGACACCA
+      661 CGATGCCTGT AGCAATGGCA ACAACGTTGC GCAAACTATT AACTGGCGAA CTACTTACTC
+      721 TAGCTTCCCG GCAACAATTA ATAGACTGGA TGGAGGCGGA TAAAGTTGCA GGACCACTTC
+      781 TGCGCTCGGC GCTTCCGGCT GGCTGGTTTA TTGCTGATAA ATCTGGAGCC GGTGAGCGTG
+      841 GGTCTCGCGG TATCATTGCA GCACTGGGGC CAGATGGTAA GCCCTCCCGT ATCGTAGTTA
+      901 TCTACACGAC GGGGAGTCAG GCAACTATGG ATGAACGAAA TAGACAGATC GCTGAGATAG
+      961 GTGCCTCACT GATTAAGCAT TGGTAACTGT CAGACCAAGT TTACTCATAT ATACTTTAGA
+     1021 TTGATTTAAA ACTTCATTTT TAATTTAAAA GGATCTAGGT GAAGATCCTT TTTGATAATC
+     1081 TCATGACCAA AATCCCTTAA CGTGAGTTTT CGTTCCACTG AGCGTCAGAC CCCGTAGAAA
+     1141 AGATCAAAGG ATCTTCTTGA GATCCTTTTT TTCTGCGCGT AATCTGCTGC TTGCAAACAA
+     1201 AAAAACCACC GCTACCAGCG GTGGTTTGTT TGCCGGATCA AGAGCTACCA ACTCTTTTTC
+     1261 CGAAGGTAAC TGGCTTCAGC AGAGCGCAGA TACCAAATAC TGTTCTTCTA GTGTAGCCGT
+     1321 AGTTAGGCCA CCACTTCAAG AACTCTGTAG CACCGCCTAC ATACCTCGCT CTGCTAATCC
+     1381 TGTTACCAGT GGCTGCTGCC AGTGGCGATA AGTCGTGTCT TACCGGGTTG GACTCAAGAC
+     1441 GATAGTTACC GGATAAGGCG CAGCGGTCGG GCTGAACGGG GGGTTCGTGC ACACAGCCCA
+     1501 GCTTGGAGCG AACGACCTAC ACCGAACTGA GATACCTACA GCGTGAGCTA TGAGAAAGCG
+     1561 CCACGCTTCC CGAAGGGAGA AAGGCGGACA GGTATCCGGT AAGCGGCAGG GTCGGAACAG
+     1621 GAGAGCGCAC GAGGGAGCTT CCAGGGGGAA ACGCCTGGTA TCTTTATAGT CCTGTCGGGT
+     1681 TTCGCCACCT CTGACTTGAG CGTCGATTTT TGTGATGCTC GTCAGGGGGG CGGAGCCTAT
+     1741 GGAAAAACGC CAGCAACGCG GCCTTTTTAC GGTTCCTGGC CTTTTGCTGG CCTTTTGCTC
+     1801 ACATGCGCCC AATACGCAAA CCGCCTCTCC CCGCGCGTTG GCCGATTCAT TAATGCAGCT
+     1861 GGCACGACAG GTTTCCCGAC TGGAAAGCGG GCAGTGAGCG CAACGCAATT AATGTGAGTT
+     1921 AGCTCACTCA TTAGGCACCC CAGGCTTTAC ACTTTATGCT TCCGGCTCGT ATGTTGTGTG
+     1981 GAATTGTGAG CGGATAACAA TTTGAATTCA AGGAGACAGT CATAATGAAA TACCTATTGC
+     2041 CTACGGCGGC CGCTGGATTG TTATTACTCG CGGCCCAGCC GGCCATGGCC accggtgagg
+     2101 ttcaactggt agaatcaggt ggagggttag tgcagccagg cggatccctg cgtctgtctt
+     2161 gtgcggcaag cGGAGGTGGA GGTGGAGGTG GAGGTGGAGG Ttggtttcgt caggccccgg
+     2221 gcaaagagcg ggagttcgtg gccGGAGGTG GAGGTGGAGG TGGAGGTGGA GGAtacgcag
+     2281 attctgttaa aggtcgtttt accattagcc gtgacaacgc gaagaacacc gtttacctgc
+     2341 agatgaatag cctgaaaccg gaagatactg ccgtgtacta ctgcGGAGGT GGAGGTGGAG
+     2401 GTGGAGGTGG AGGTGGAtgg ggccagggta cgcaggtcac cgtgtcgagc ggtaccggaa
+     2461 gtgaaaatct atattttcaa tcagggaccg gcagccacca tcaccaccat catggcgcat
+     2521 atccgtatga tgtgccggac tatgcttctT AGGCCGAAAC TGTTGAAAGT TGTTTAGCAA
+     2581 AACCTCATAC AGAAAATTCA TTTACTAACG TCTGGAAAGA CGACAAAACT TTAGATCGTT
+     2641 ACGCTAACTA TGAGGGCTGT CTGTGGAATG CTACAGGCGT TGTGGTTTGT ACTGGTGACG
+     2701 AAACTCAGTG TTACGGTACA TGGGTTCCTA TTGGGCTTGC TATCCCTGAA AATGAGGGTG
+     2761 GTGGCTCTGA GGGTGGCGGT TCTGAGGGTG GCGGTTCTGA GGGTGGCGGT ACTAAACCTC
+     2821 CTGAGTACGG TGATACACCT ATTCCGGGCT ATACTTATAT CAACCCTCTC GACGGCACTT
+     2881 ATCCGCCTGG TACTGAGCAA AACCCCGCTA ATCCTAATCC TTCTCTTGAG GAGTCTCAGC
+     2941 CTCTTAATAC TTTCATGTTT CAGAATAATA GGTTCCGAAA TAGGCAGGGT GCATTAACTG
+     3001 TTTATACGGG CACTGTTACT CAAGGCACTG ACCCCGTTAA AACTTATTAC CAGTACACTC
+     3061 CTGTATCATC AAAAGCCATG TATGACGCTT ACTGGAACGG TAAATTCAGA GACTGCGCTT
+     3121 TCCATTCTGG CTTTAATGAA GACCCATTCG TTTGTGAATA TCAAGGCCAA TCGTCTGACC
+     3181 TGCCTCAACC TCCTGTCAAT GCTGGCGGCG GCTCTGGTGG TGGTTCTGGT GGCGGCTCTG
+     3241 AGGGTGGCGG CTCTGAGGGT GGCGGTTCTG AGGGTGGCGG CTCTGAGGGT GGCGGTTCCG
+     3301 GTGGCGGCTC CGGTTCCGGT GATTTTGATT ATGAAAAAAT GGCAAACGCT AATAAGGGGG
+     3361 CTATGACCGA AAATGCCGAT GAAAACGCGC TACAGTCTGA CGCTAAAGGC AAACTTGATT
+     3421 CTGTCGCTAC TGATTACGGT GCTGCTATCG ATGGTTTCAT TGGTGACGTT TCCGGCCTTG
+     3481 CTAATGGTAA TGGTGCTACT GGTGATTTTG CTGGCTCTAA TTCCCAAATG GCTCAAGTCG
+     3541 GTGACGGTGA TAATTCACCT TTAATGAATA ATTTCCGTCA ATATTTACCT TCTTTGCCTC
+     3601 AGTCGGTTGA ATGTCGCCCT TATGTCTTTG GCGCTGGTAA ACCATATGAA TTTTCTATTG
+     3661 ATTGTGACAA AATAAACTTA TTCCGTGGTG TCTTTGCGTT TCTTTTATAT GTTGCCACCT
+     3721 TTATGTATGT ATTTTCGACG TTTGCTAACA TACTGCGTAA TAAGGAGTCT TAAGCTAGCT
+     3781 AACAGTCCTA TGAATCAACT ACTTAGATGG TATTAGTGAC CTGTAACAGA GCATTAGCGC
+     3841 AAGGTGATTT TTGTCTTCTT GCGCTAATTT TTTGTCATCA AACCTGTCGC ACTCCTTAAT
+     3901 ATTTTGTTAA AATTCGCGTT AAATTTTTGT TAAATCAGCT CATTTTTTAA CCAATAGGCC
+     3961 GAAATCGGCA AAATCCCTTA TAAATCAAAA GAATAGACCG AGATAGGGTT GAGTGTTGTT
+     4021 CCAGTTTGGA ACAAGAGTCC ACTATTAAAG AACGTGGACT CCAACGTCAA AGGGCGAAAA
+     4081 ACCGTCTATC AGGGCGATGG CCCACTACGT GAACCATCAC CCTAATCAAG TTTTTTGGGG
+     4141 TCGAGGTGCC GTAAAGCACT AAATCGGAAC CCTAAAGGGA GCCCCCGATT TAGAGCTTGA
+     4201 CGGGGAAAGC CGGCGAACGT GGCGAGAAAG GAAGGGAAGA AAGCGAAAGG AGCGGGCGCT
+     4261 AGGGCGCTGG CAAGTGTAGC GGTCACGCTG CGCGTAACCA CCACACCCGC CGCGCTTAAT
+     4321 GCGCCGCTAC AGGGCGCGTC AGGTG
+//

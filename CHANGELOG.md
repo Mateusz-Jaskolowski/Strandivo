@@ -20,6 +20,20 @@ If Strandivo quits unexpectedly, it now offers to report the crash the next time
 and shows everything it would send before anything goes. Usage statistics, if you share
 them, count a little more, still only as fixed words and ranges.
 
+- **Protein regions**: add and edit domains, helices, linkers, CDRs and frameworks within
+  one CDS, with colours and nested regions. A protein diagram and expandable outline
+  show them, and the map can show all regions, just the top level or none. UniProt now
+  offers domains, repeats and other regions too. Regions can vary between clones, and
+  Export can include them as ordinary annotations in a GenBank copy for other software.
+  Select bases within a CDS and choose Add as region… in the inspector or right-click
+  menu; the residue positions are filled in. The Sequence view's Regions button shows
+  coloured bars with their names underneath, separately from the CDS's translation.
+  The Map view has a Regions button too, which remembers the chosen level of detail.
+  Regions also appear around the selected primer in the Primers tab, sharing the
+  Sequence view's Regions setting.
+  New regions get different, coordinated colours automatically, starting near their
+  CDS's colour; colours you choose yourself are kept.
+
 - **Crash reports**: if Strandivo quits unexpectedly, it notes why on your computer, and
   the next time it opens a strip under the app bar offers to report it. Report it… opens
   Report a Bug with what it noted, shown in full and with file paths removed; nothing is

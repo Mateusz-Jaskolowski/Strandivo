@@ -17,7 +17,7 @@ import { frameLabel, type Orf } from "../lib/orfs.ts";
 import { gcPercent } from "../lib/labinfo.ts";
 import { changesText, findBindingSites, placeEdited, primerReport, selectionTmText, tmLabel, type Placement } from "../lib/primers.ts";
 import { translateCodon } from "../lib/genetics.ts";
-import { carryRegions, isClipped, regionLabel, regionRange, regionSpans, regionsOf, regionTitle, withRegions, type ProteinRegion } from "../lib/regions.ts";
+import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionLabel, regionRange, regionSpans, regionsOf, regionTitle, regionTree, withRegions, type ProteinRegion } from "../lib/regions.ts";
 import type { VariableDesign } from "../lib/types.ts";
 import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER } from "../lib/variable.ts";
 import {
@@ -38,6 +38,8 @@ import {
 } from "../lib/seqdata.ts";
 import { fmt } from "../ui/format.ts";
 import { openUniprotDialog } from "./uniprotDialog.ts";
+import { openProteinRegionDialog, openProteinRegionFromSelection } from "./proteinRegionDialog.ts";
+import { openProteinDiagram, proteinDiagram } from "./proteinDiagram.ts";
 import { openDigestDialog } from "./digestDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
 
@@ -306,6 +308,7 @@ export class Inspector {
         this.viewOther({ start: f.start, end: f.end })
       )
     );
+    if (isCds(f)) out.push(this.regionsSection(f));
     if (isCds(f)) {
       const prot = protein(f, d.sequence);
       out.push(
@@ -323,8 +326,7 @@ export class Inspector {
         )
       );
     }
-    if (isCds(f)) out.push(this.regionsSection(f));
-    out.push(this.variableSection(f, bases));
+    if (this.ctx.store.selection.focus?.region === undefined) out.push(this.variableSection(f, bases));
     // What lies inside this feature.
     const inside: Node[] = [];
     const styles = featureStyles(d);
@@ -389,19 +391,24 @@ export class Inspector {
     const focus = store.selection.focus;
     const picked = focus?.kind === "feature" && focus.id === f.id && focus.region !== undefined ? regions[focus.region] : undefined;
     const accessions = [...new Set(regions.map(r => r.accession).filter(Boolean))];
-    const rows = regions.map((r, index) =>
+    const pick = (index: number) => {
+      const range = regionRange(f, regions[index], n);
+      if (range) store.selectRange(range, { kind: "feature", id: f.id, region: index }, "inspector");
+    };
+    const rows = regionTree(regions).map(({ region: r, index, depth }) =>
       h(
         "button",
         {
           type: "button",
           class: `sv-list-row${r === picked ? " sv-selected" : ""}`,
+          style: { paddingLeft: `${8 + depth * 14}px` },
           title: regionTitle(r),
-          onclick: () => {
-            const range = regionRange(f, r, n);
-            if (range) store.selectRange(range, { kind: "feature", id: f.id, region: index }, "inspector");
-          }
+          onclick: () => pick(index),
+          ondblclick: () => openProteinRegionDialog(this.ctx, f, index)
         },
+        h("span", { class: "sv-swatch", style: { background: regionColor(r) } }),
         h("span", { class: "sv-list-name" }, r.name),
+        r.variable ? h("span", { class: "sv-region-tag" }, "varies") : null,
         r.predicted ? h("span", { class: "sv-region-tag" }, "predicted") : null,
         h("span", { class: "sv-list-meta sv-mono" }, regionLabel(r))
       )
@@ -411,11 +418,14 @@ export class Inspector {
       h(
         "div",
         { class: "sv-section-head" },
-        h("h3", { class: "sv-section-title" }, "Regions"),
-        h("button", { type: "button", class: "sv-link", onclick: () => openUniprotDialog(this.ctx, f) }, "Get from UniProt…")
+        h("h3", { class: "sv-section-title" }, "Protein regions"),
+        regions.length ? h("button", { type: "button", class: "sv-link", onclick: () => openProteinDiagram(this.ctx, f) }, "Expand…") : null,
+        h("button", { type: "button", class: "sv-link", onclick: () => openProteinRegionDialog(this.ctx, f) }, "Add region…")
       ),
+      regions.length ? proteinDiagram(regions, protein(f, store.data.sequence).replace(/\*$/, "").length || 1, focus?.region, pick) : h("p", { class: "sv-small sv-dim" }, "Mark domains, helices, linkers or CDRs within this protein."),
       regions.length ? h("div", { class: "sv-list sv-list-flush" }, rows) : null,
       picked ? this.regionDetail(f, picked) : null,
+      h("button", { type: "button", class: "sv-link", onclick: () => openUniprotDialog(this.ctx, f) }, "Get from UniProt…"),
       accessions.length ? h("p", { class: "sv-small sv-dim" }, `From UniProtKB ${accessions.join(", ")}.`) : null
     );
   }
@@ -425,10 +435,13 @@ export class Inspector {
     return h(
       "div",
       { class: "sv-region-detail" },
-      h("p", { class: "sv-small sv-dim" }, `${r.kind}${r.accession ? ` · ${here}` : ""}${isClipped(r) ? ` · only part of it, ${fmt(r.sourceStart)}–${fmt(r.sourceEnd)} in UniProt's numbers` : ""}`),
+      h("p", { class: "sv-small sv-dim" }, `${r.kind} · ${here}${r.accession && isClipped(r) ? ` · length differs from UniProt ${fmt(r.sourceStart)}–${fmt(r.sourceEnd)}` : ""}`),
+      r.variable ? h("p", { class: "sv-small sv-dim" }, `Varies between clones · ${r.variable.kind === "any" ? "any sequence" : r.variable.kind === "pattern" ? r.variable.pattern : "named versions"}`) : null,
       h(
         "div",
         { class: "sv-region-actions" },
+        this.button("Edit…", () => openProteinRegionDialog(this.ctx, f, regionsOf(f).indexOf(r))),
+        this.button("Copy protein", () => this.actions.copy(protein(f, this.ctx.store.data.sequence).slice(r.start - 1, r.end), r.name), { icon: "copy" }),
         this.button("Add as feature", () => this.addRegionAsFeature(f, r), { icon: "featureAdd" }),
         this.button("Remove", () => this.removeRegion(f, r), { icon: "trash", danger: true })
       )
@@ -449,6 +462,7 @@ export class Inspector {
       start: spans[0].start,
       end: spans[spans.length - 1].end,
       strand: f.strand,
+      color: regionColor(r),
       ...(spans.length > 1 ? { locations: spans } : {}),
       notes: { note: [r.accession ? `${r.kind}; UniProtKB ${r.accession} ${r.sourceStart}-${r.sourceEnd}` : r.kind] },
       raw: {}
@@ -458,7 +472,7 @@ export class Inspector {
   }
 
   private removeRegion(f: SeqFeature, r: ProteinRegion) {
-    const notes = withRegions(f.notes, regionsOf(f).filter(x => x !== r));
+    const notes = withRegions(f.notes, regionsOf(f).filter(x => x !== r).map(x => x.parentId && x.parentId === r.id ? { ...x, parentId: r.parentId } : x));
     this.updateFeature(f.id, { notes }, "Remove region");
   }
 
@@ -472,7 +486,10 @@ export class Inspector {
       this.updateFeature(f.id, { notes }, label);
     };
     const on = h("input", { type: "checkbox", checked: !!design, "aria-label": "Varies between clones" }) as HTMLInputElement;
-    on.addEventListener("change", () => set(on.checked ? { kind: "any" } : null, on.checked ? "Mark as variable" : "Unmark as variable"));
+    on.addEventListener("change", () => {
+      if (on.checked && regionsOf(f).some(r => r.variable)) { on.checked = false; toast("This CDS has variable protein regions. Edit those regions to change what varies.", "info"); return; }
+      set(on.checked ? { kind: "any" } : null, on.checked ? "Mark as variable" : "Unmark as variable");
+    });
     const body: Node[] = [h("label", { class: "sv-check-row" }, on, "Varies between clones")];
     if (design) {
       // The parent's own bases, read in the feature's direction, as a first version.
@@ -787,6 +804,11 @@ export class Inspector {
     const out: Node[] = [
       h("div", { class: "sv-insp-head" }, h("h2", { class: "sv-insp-heading" }, "Selection"), this.facts(rows), this.viewOther(r))
     ];
+    const targets = proteinRegionTargets(d, r);
+    if (targets.length) out.push(this.section(null,
+      this.button("Add as region…", () => openProteinRegionFromSelection(this.ctx, r), { icon: "featureAdd", primary: true, wide: true }),
+      targets.length === 1 ? h("p", { class: "sv-small sv-dim" }, `${targets[0].feature.name} · residues ${fmt(targets[0].start)}–${fmt(targets[0].end)}`) : null
+    ));
     if (len >= 3 && len <= 3000) {
       let prot = "";
       for (let i = 0; i + 2 < bases.length; i += 3) prot += translateCodon(bases.slice(i, i + 3));

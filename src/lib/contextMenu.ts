@@ -7,6 +7,7 @@
 
 import { alignPrimer } from "./primerAlign.ts";
 import { rangeLength, type Range, type SeqData } from "./seqdata.ts";
+import { proteinRegionTargets, regionsOf } from "./regions.ts";
 import { enzymeOf, enzymesText } from "./enzymePick.ts";
 
 /**
@@ -20,7 +21,7 @@ export function digestEnzymes(siteId: string, picked: string[] = []): string[] {
 
 /** What a menu is for: an annotation, the selected bases, or the cursor between bases. */
 export type MenuTarget =
-  | { kind: "feature" | "primer" | "cutsite" | "orf"; id: string }
+  | { kind: "feature" | "primer" | "cutsite" | "orf"; id: string; region?: number }
   | { kind: "selection"; range: Range }
   | { kind: "cursor"; at: number };
 
@@ -33,6 +34,9 @@ export type MenuAction =
   | "design-primers"
   | "mutagenesis"
   | "add-feature"
+  | "add-protein-region"
+  | "edit-protein-region"
+  | "remove-protein-region"
   | "reverse-complement"
   | "delete-bases"
   // Features, primers and cut sites.
@@ -125,6 +129,7 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
         ...when(len > PRIMER_BASES.max, item("design-primers", "Design primers to amplify…")),
         item("mutagenesis", "Mutagenesis primers…"),
         item("add-feature", "Add feature"),
+        ...when(proteinRegionTargets(d, target.range).length > 0, item("add-protein-region", "Add as region…")),
         "separator",
         // Reverse-complementing a stretch across the origin isn't supported.
         ...when(target.range.start <= target.range.end, item("reverse-complement", "Reverse-complement selection")),
@@ -135,12 +140,17 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
     case "feature": {
       const f = d.features.find(x => x.id === target.id);
       if (!f) return [];
+      if (target.region !== undefined) {
+        if (!regionsOf(f)[target.region]) return [];
+        return [item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), "separator", item("edit-protein-region", "Edit region…"), show, "separator", item("remove-protein-region", "Remove region")];
+      }
       return tidy([
         item("copy-dna", "Copy DNA"),
         ...when(f.type.toUpperCase() === "CDS", item("copy-protein", "Copy protein")),
         "separator",
         item("design-primers", "Design primers to amplify…"),
         ...when(f.type.toUpperCase() === "CDS", item("mutagenesis", "Mutagenesis primers…")),
+        ...when(f.type.toUpperCase() === "CDS", item("add-protein-region", "Add protein region…")),
         "separator",
         show,
         item("rename", "Rename…"),

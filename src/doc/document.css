@@ -1563,6 +1563,18 @@
   text-overflow: ellipsis;
   cursor: pointer;
 }
+.sv-seq-region { cursor: pointer; }
+.sv-seq-region-bar { border-radius: 2px; }
+.sv-seq-region-bar:hover { filter: brightness(0.9); }
+.sv-region-caption {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 10px/12px var(--sans);
+}
+.sv-seq-region-bar.sv-region-selected { outline: 1px solid var(--accent); outline-offset: 2px; }
+.sv-region-selected .sv-region-caption { font-weight: 700; }
 /* Between two features whose flat ends touch. */
 .sv-feature-join {
   background: var(--feature-edge);
@@ -3519,12 +3531,34 @@
   color: var(--text-3);
 }
 .sv-map-region {
-  opacity: 0.3;
+  opacity: 0.85;
   cursor: pointer;
 }
 .sv-map-region:hover {
-  opacity: 0.5;
+  opacity: 1;
 }
+.sv-map-region-label { cursor: pointer; font-weight: 600; }
+.sv-map-region.sv-focused { stroke: var(--text); stroke-width: 1.5px; opacity: 1; }
+.sv-outline-protein-head { display: flex; align-items: center; }
+.sv-outline-protein-head > .sv-list-row { flex: 1; min-width: 0; }
+.sv-outline-protein-head > .sv-icon-btn { flex: none; margin-left: 2px; }
+.sv-outline-regions .sv-list-row { font-size: 11px; }
+.sv-protein-diagram { margin: 8px 0 10px; }
+.sv-protein-ruler { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3); margin-bottom: 5px; }
+.sv-protein-tracks { position: relative; border-top: 2px solid var(--line); margin: 0 2px; }
+.sv-protein-region {
+  position: absolute; height: 22px; min-width: 3px; padding: 0 4px;
+  border: 1px solid var(--region-color); border-radius: 4px; background: var(--region-color);
+  color: #fff; font: 600 10px var(--sans); overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; cursor: pointer;
+}
+.sv-protein-region:hover { filter: brightness(1.1); }
+.sv-protein-region.sv-selected { outline: 2px solid var(--text); outline-offset: 2px; z-index: 1; }
+.sv-region-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+.sv-region-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sv-region-field .sv-input { width: 100%; min-width: 0; }
+.sv-region-field input[type=color] { height: 34px; padding: 3px; cursor: pointer; }
+.sv-region-design:not([hidden]) { display: grid; gap: 8px; margin-top: 10px; }
 .sv-region {
   opacity: 0.55;
   cursor: pointer;

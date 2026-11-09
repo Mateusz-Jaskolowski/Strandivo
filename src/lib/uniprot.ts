@@ -71,7 +71,16 @@ const KINDS: Record<string, string> = {
   Intramembrane: "Intramembrane",
   "Topological domain": "Topological domain",
   Signal: "Signal peptide",
-  "Transit peptide": "Transit peptide"
+  "Transit peptide": "Transit peptide",
+  Domain: "Domain",
+  Region: "Region",
+  Repeat: "Repeat",
+  Motif: "Motif",
+  "Coiled coil": "Coiled coil",
+  "Compositional bias": "Compositional bias",
+  Propeptide: "Propeptide",
+  Peptide: "Peptide",
+  Chain: "Chain"
 };
 
 /** Evidence codes for "inferred from the sequence", as against shown by experiment. */
@@ -224,6 +233,7 @@ export function placeFeatures(entry: UniprotEntry, alignment: ProteinAlignment):
     const region: ProteinRegion = {
       name: feature.name,
       kind: feature.kind,
+      sourceKey: `${feature.kind}:${feature.start}-${feature.end}`,
       start: alignment.map[first] + 1,
       end: alignment.map[last] + 1,
       accession: entry.accession,

@@ -35,6 +35,9 @@ and CI checks that they exist.
   clones alike, so whatever counts changes leaves them out. `cloneVariants` reads each
   region's contents from the consensus, and still uses `variable` for proteins, the clone's
   key and "Open clone as file". Code that uses differences must decide which list it means.
+  A protein region attached to a CDS can also carry a library design. The document projects
+  it with `variableProteinFeatures` in `src/lib/regions.ts` into the same feature list,
+  as a noncoding annotation in the parent's frame; never make it a second CDS.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
   the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
   start and strand don't matter; it starts at the first in-frame codon of 10 good matching

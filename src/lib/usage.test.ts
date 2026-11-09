@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { BUCKETS, bucket, fileFormat, inBucket, propWords, readFormat, USAGE_EVENTS, usageEvent, usageSession, validUsageKey, webUsageBody, type PropSpec } from "./usage.ts";
+import { BUCKETS, bucket, fileFormat, inBucket, propWords, readFormat, USAGE_EVENTS, usageEvent, randomDigits, usageSession, validUsageKey, webUsageBody, type PropSpec } from "./usage.ts";
 
 const events = Object.entries(USAGE_EVENTS) as [string, { why: string; props: Record<string, PropSpec> }][];
 
@@ -96,9 +96,19 @@ test("the browser version sends the event, its version and Debug, and nothing ab
 });
 
 test("a session is seconds and eight random digits, as Aptabase checks", () => {
-  assert.equal(usageSession(1_762_646_400_000, 0.0123), "176264640001230000");
-  assert.equal(usageSession(1000, 0), "100000000");
-  assert.match(usageSession(Date.now(), 0.999999999), /^\d{10}\d{8}$/);
+  assert.equal(usageSession(1_762_646_400_999, "00123000"), "176264640000123000");
+  const digits = randomDigits(8, n => crypto.getRandomValues(new Uint8Array(n)));
+  assert.match(usageSession(Date.now(), digits), /^\d{10}\d{8}$/);
+});
+
+test("random digits are a byte's low four bits, drawn again for 10 to 15", () => {
+  // 0x1a and 0xff give 10 and 15, so they are skipped; 0x23 gives 3.
+  const draws = [Uint8Array.of(0x1a, 0x23, 0xff), Uint8Array.of(0x47, 0x09)];
+  assert.equal(randomDigits(3, () => draws.shift()!), "379");
+  // Every digit comes up, about equally often.
+  const counts = Array<number>(10).fill(0);
+  for (const d of randomDigits(100_000, n => crypto.getRandomValues(new Uint8Array(Math.min(n, 65536))))) counts[Number(d)]++;
+  assert.ok(counts.every(c => c > 9_000 && c < 11_000), counts.join());
 });
 
 test("only EU keys are used, as in the shell", () => {

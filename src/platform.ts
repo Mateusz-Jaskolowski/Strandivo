@@ -9,7 +9,7 @@ import type { DetectRequest, DetectResponse } from "./lib/detect.ts";
 import { changesUrl } from "./lib/changelog.ts";
 import type { FeedbackReport, SystemInfo } from "./lib/feedback.ts";
 import { recordError } from "./feedback.ts";
-import { usageSession, validUsageKey, WEB_USAGE_ENDPOINT, webUsageBody, type UsageEvent } from "./lib/usage.ts";
+import { randomDigits, usageSession, validUsageKey, WEB_USAGE_ENDPOINT, webUsageBody, type UsageEvent } from "./lib/usage.ts";
 import { browserInfo } from "./lib/browser.ts";
 import { basename, OPEN_EXTENSIONS } from "./lib/files.ts";
 import {
@@ -510,8 +510,8 @@ async function sendUsageFromPage(events: UsageEvent[]): Promise<void> {
   if (!webSession || now - webSession.last > 4 * 60 * 60 * 1000) {
     // Not a secret, but taken from the browser's cryptographic source so no one could
     // guess another visitor's session from their own.
-    const random = crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
-    webSession = { id: usageSession(now, random), last: now };
+    const digits = randomDigits(8, n => crypto.getRandomValues(new Uint8Array(n)));
+    webSession = { id: usageSession(now, digits), last: now };
   }
   webSession.last = now;
   const session = webSession.id;

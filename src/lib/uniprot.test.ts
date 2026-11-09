@@ -65,6 +65,13 @@ test("unknown ends are skipped, and an entry with no sequence is no entry", () =
   assert.equal(e.features.length, 0);
 });
 
+test("domains and other protein regions are offered alongside membrane annotations", () => {
+  const e = parseEntry({ primaryAccession: "P12345", sequence: { value: "M".repeat(100) }, features: ["Domain", "Region", "Repeat", "Motif", "Coiled coil", "Signal", "Binding site"].map(type => ({ type, description: `${type} annotation`, location: { start: { value: 10 }, end: { value: 30 } } })) })!;
+  assert.deepEqual(e.features.map(f => f.kind), ["Domain", "Region", "Repeat", "Motif", "Coiled coil", "Signal peptide"]);
+  const mapped = placeFeatures(e, alignProteins(e.sequence, e.sequence)!);
+  assert.equal(mapped[0].region!.sourceKey, "Domain:10-30");
+});
+
 test("the entry's own protein puts every helix where UniProt says", () => {
   const { placed, match } = place(protein);
   assert.equal(match.identity, 1);

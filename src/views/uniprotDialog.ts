@@ -9,10 +9,11 @@ import { h } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
 import { openDialog } from "../ui/modal.ts";
 import { fetchUniprotEntry } from "../platform.ts";
-import { protein } from "../doc/analysis.ts";
+import { featureStyles, protein } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
-import { regionsOf, withRegions, type ProteinRegion } from "../lib/regions.ts";
+import { nextRegionColor, regionColor, regionsOf, withRegions, type ProteinRegion } from "../lib/regions.ts";
 import type { SeqFeature } from "../lib/seqdata.ts";
+import { newId } from "../lib/seqdata.ts";
 import {
   accessionOf,
   alignProteins,
@@ -35,7 +36,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
   let closed = false;
   const dlg = openDialog({
     title: "Get regions from UniProt",
-    note: `Transmembrane helices, topological domains and signal peptides for ${f.name}.`,
+    note: `Domains, membrane regions, signal peptides and other protein annotations for ${f.name}.`,
     width: 640,
     onClose: () => (closed = true)
   });
@@ -113,7 +114,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
               placed.filter(p => p.feature.kind === kind).map(row)
             )
           ])
-        : [h("p", { class: "sv-uniprot-message sv-dim" }, "UniProt lists no membrane regions or signal peptides for this entry.")]),
+        : [h("p", { class: "sv-uniprot-message sv-dim" }, "UniProt lists no protein regions supported here for this entry.")]),
       missed ? h("p", { class: "sv-small sv-dim" }, `${plural(missed, "region")} of the entry ${missed === 1 ? "isn't" : "aren't"} in this CDS.`) : "",
       h("p", { class: "sv-small sv-dim" }, "Residue numbers are from UniProtKB (CC BY 4.0).")
     );
@@ -152,9 +153,18 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
     const d = ctx.store.data;
     const cds = d.features.find(x => x.id === f.id);
     if (!cds) return dlg.close();
-    const added = found.placed.filter(p => chosen.has(p)).map(p => p.region as ProteinRegion);
-    // Looking up an entry again replaces what came from it; anything else stays.
-    const kept = regionsOf(cds).filter(r => r.accession !== entry.accession);
+    const previous = regionsOf(cds);
+    const key = (r: ProteinRegion) => r.sourceKey ?? `${r.kind}:${r.sourceStart}-${r.sourceEnd}`;
+    const kept = previous.filter(r => r.accession !== entry.accession || r.edited);
+    const added: ProteinRegion[] = [];
+    const cdsColor = featureStyles(d).get(cds.id)?.fill;
+    for (const p of found.placed) {
+      if (!chosen.has(p) || !p.region) continue;
+      const r = p.region;
+      if (kept.some(k => k.accession === r.accession && key(k) === key(r))) continue;
+      const before = previous.find(p => p.accession === r.accession && key(p) === key(r));
+      added.push({ ...r, id: before?.id ?? newId("r"), color: before ? regionColor(before) : nextRegionColor([...previous, ...added], cdsColor) });
+    }
     const notes = withRegions(withAccession(cds.notes, entry.accession, entry.reviewed), [...kept, ...added]);
     ctx.store.apply({ ...d, features: d.features.map(x => (x.id === cds.id ? { ...x, notes } : x)) }, "Add UniProt regions", { range: { start: cds.start, end: cds.end }, focus: { kind: "feature", id: cds.id } });
     dlg.close();

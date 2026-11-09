@@ -12,7 +12,8 @@ import { codons, cutSites, featureStyles, isCds, orfs, orfTitle, primerAlignment
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
 import { aminoGroup } from "../lib/aminoAcids.ts";
-import { regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions.ts";
+import { layoutRegions, regionRange, regionSpans, regionsOf } from "../lib/regions.ts";
+import { drawRegionTracks, layoutRegionTracks, markRegionSelection, REGION_TRACK_HEIGHT, type RegionTrack, type RegionTrackPiece } from "./regionTracks.ts";
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
@@ -44,9 +45,7 @@ const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
 const GUTTER = 64;
 /** Height of a feature's bar, coding or not, so amino acids fit in it. */
 const FEATURE_H = 19;
-/** Height of a region's strip along the bottom of a coding feature's bar. */
-const REGION_STRIP = 4;
-/** What a clicked element stands for; a region's strip also says which region. */
+/** What a clicked element stands for; a region's bar and caption also say which region. */
 function hitOf(el: HTMLElement): Focus {
   const region = el.dataset.region;
   return { kind: el.dataset.kind as Focus["kind"], id: el.dataset.id || "", ...(region === undefined ? {} : { region: Number(region) }) };
@@ -95,6 +94,7 @@ interface RowLayout {
   orfs: Bar<Orf>[];
   features: Bar<SeqFeature>[];
   laneY: number[];
+  regions: (RegionTrack & { y: number })[];
 }
 
 interface PrimerLane {
@@ -160,7 +160,7 @@ export class SequenceView {
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
-    const chip = (key: "complement" | "translations" | "aaColors" | "orfs" | "cutsites" | "primers", label: string) => {
+    const chip = (key: "complement" | "translations" | "aaColors" | "sequenceRegions" | "orfs" | "cutsites" | "primers", label: string) => {
       const b = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ [key]: !ctx.options[key] }) }, checkIcon(), label);
       this.chips[key] = b;
       return b;
@@ -172,6 +172,7 @@ export class SequenceView {
       chip("complement", "Both strands"),
       chip("translations", "Translation"),
       chip("aaColors", "Colour amino acids"),
+      chip("sequenceRegions", "Regions"),
       chip("orfs", "ORFs"),
       chip("cutsites", "Cut sites"),
       chip("primers", "Primers"),
@@ -323,8 +324,9 @@ export class SequenceView {
       }
     }
     const featPieces: { f: SeqFeature; a: number; b: number }[][] = Array.from({ length: rowCount }, () => []);
-    if (o.features) {
+    if (o.features || o.sequenceRegions) {
       for (const f of d.features) {
+        if (!o.features && (!isCds(f) || !regionsOf(f).length)) continue;
         for (const [a, b] of clip(f.start, f.end, 0, n - 1, n)) {
           for (let r = Math.floor(a / W); r <= Math.floor(b / W); r++) {
             const r0 = r * W;
@@ -333,6 +335,24 @@ export class SequenceView {
             if (s0 <= e0) featPieces[r].push({ f, a: s0, b: e0 });
           }
         }
+      }
+    }
+    const regionPieces: RegionTrackPiece[][] = Array.from({ length: rowCount }, () => []);
+    if (o.sequenceRegions) for (const f of d.features) {
+      if (!isCds(f)) continue;
+      for (const { region, index } of layoutRegions(regionsOf(f))) {
+        const byRow = new Map<number, [number, number][]>();
+        for (const span of regionSpans(f, region, n)) {
+          for (const [a, b] of clip(span.start, span.end, 0, n - 1, n)) {
+            for (let r = Math.floor(a / W); r <= Math.floor(b / W); r++) {
+              const r0 = r * W;
+              const spans = byRow.get(r) ?? [];
+              spans.push([Math.max(a, r0) - r0, Math.min(b, r0 + W - 1) - r0]);
+              byRow.set(r, spans);
+            }
+          }
+        }
+        for (const [r, spans] of byRow) regionPieces[r].push({ f, region, index, spans });
       }
     }
     const orfPieces: { o: Orf; a: number; b: number }[][] = Array.from({ length: rowCount }, () => []);
@@ -422,13 +442,28 @@ export class SequenceView {
       if (orfBars.length) y += (Math.max(...orfBars.map(b => b.lane)) + 1) * ORF_LANE + 2;
       const laneCount = features.length ? Math.max(...features.map(b => b.lane)) + 1 : 0;
       const laneY: number[] = [];
+      const regions: RowLayout["regions"] = [];
       for (let l = 0; l < laneCount; l++) {
         const coding = o.translations && features.some(b => b.lane === l && isCds(b.item));
         laneY.push(y);
-        y += FEATURE_H + (coding ? CAPTION : 0) + 3;
+        y += o.features ? FEATURE_H + (coding ? CAPTION : 0) + 3 : 0;
+        // Reserve space for both the bar and its label before packing tracks. Labels near
+        // a row's right edge move left, so neither they nor a long name widen the scroller.
+        const inLane = features.filter(b => b.lane === l);
+        const bars = layoutRegionTracks(regionPieces[r].flatMap(piece => {
+          const spans = piece.spans.flatMap(([a, b]) => inLane.filter(bar => bar.item === piece.f)
+            .flatMap(bar => Math.max(a, bar.a) <= Math.min(b, bar.b) ? [[Math.max(a, bar.a), Math.min(b, bar.b)] as [number, number]] : []));
+          if (!spans.length) return [];
+          return [{ ...piece, spans }];
+        }), W, this.chPx);
+        if (bars.length) {
+          y += 4;
+          regions.push(...bars.map(bar => ({ ...bar, y: y + bar.lane * REGION_TRACK_HEIGHT })));
+          y += (Math.max(...bars.map(b => b.lane)) + 1) * REGION_TRACK_HEIGHT;
+        }
       }
       y += 12;
-      this.rows.push({ start: r0, end: r1, height: y, yEnz, enzymes, cutTails: cutTails[r], enzLevels, fwd, yTop, yBot, yRuler, rev, yOrf, orfs: orfBars, features, laneY });
+      this.rows.push({ start: r0, end: r1, height: y, yEnz, enzymes, cutTails: cutTails[r], enzLevels, fwd, yTop, yBot, yRuler, rev, yOrf, orfs: orfBars, features, laneY, regions });
       this.offsets.push(this.offsets[r] + y);
     }
   }
@@ -588,11 +623,11 @@ export class SequenceView {
     // points into, and flat ends that touch get a hairline between them.
     const inLane = (bar: Bar<SeqFeature>) => row.features.filter(x => x !== bar && x.lane === bar.lane);
     const shapes = new Map<Bar<SeqFeature>, { headLeft: boolean; headRight: boolean }>();
-    for (const bar of row.features) {
+    for (const bar of o.features ? row.features : []) {
       const f = bar.item;
       shapes.set(bar, { headLeft: f.strand === -1 && row.start + bar.a === f.start, headRight: f.strand === 1 && row.start + bar.b === f.end });
     }
-    for (const bar of row.features) {
+    for (const bar of o.features ? row.features : []) {
       const f = bar.item;
       const st = styles.get(f.id)!;
       const ly = row.laneY[bar.lane];
@@ -637,23 +672,6 @@ export class SequenceView {
           track.appendChild(mask);
         }
       }
-      // Regions of the protein: a strip along the bar, which leaves the amino acids readable.
-      regionsOf(f).forEach((region, index) => {
-        for (const span of regionSpans(f, region, d.sequence.length)) {
-          for (const g of pieces(span, d.sequence.length)) {
-            const a = Math.max(g.start, absStart) - row.start;
-            const b = Math.min(g.end, absEnd) - row.start;
-            if (a > b) continue;
-            const strip = abs(`left:${ch(a)};width:${ch(b - a + 1)};top:${ly + lh - REGION_STRIP}px;height:${REGION_STRIP}px;background:${st.text}`);
-            strip.className = "sv-region sv-hit";
-            strip.dataset.kind = "feature";
-            strip.dataset.id = f.id;
-            strip.dataset.region = String(index);
-            strip.title = regionTitle(region);
-            track.appendChild(strip);
-          }
-        }
-      });
       if (coding) {
         const cs = codons(f, d.sequence).filter(c => c.mid >= absStart && c.mid <= absEnd);
         if (o.aaColors) {
@@ -728,6 +746,8 @@ export class SequenceView {
       }
     }
 
+    track.append(...drawRegionTracks(row.regions, this.chPx));
+
     gutter.appendChild(abs(`right:0;top:${row.yTop}px;line-height:18px`, span("sv-row-number", fmt(row.start + 1))));
     const el = h("div", { class: "sv-row", style: { top: `${this.offsets[i]}px`, height: `${row.height}px` } }, gutter, track);
     el.dataset.row = String(i);
@@ -771,6 +791,7 @@ export class SequenceView {
     r.sel.replaceChildren(...parts);
     // The selected cut site, and the other sites of its enzyme or of the picked ones.
     const { focus } = this.ctx.store.selection;
+    markRegionSelection(r.el, focus);
     const picked = pickedEnzymes(this.ctx.store.selection);
     for (const el of Array.from(r.el.querySelectorAll<HTMLElement>('[data-kind="cutsite"]'))) {
       const id = el.dataset.id ?? "";
@@ -931,7 +952,7 @@ export class SequenceView {
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       const hit = el?.dataset.kind ? hitOf(el) : null;
       this.focus();
-      const t = menuTargetAt(this.ctx, hit, hit ? null : this.boundaryAt(e.clientX, e.clientY), f => this.selectAnnotation(f), "sequence");
+      const t = menuTargetAt(this.ctx, hit, this.boundaryAt(e.clientX, e.clientY), f => this.selectAnnotation(f), "sequence");
       if (t) this.ctx.contextMenu(t, { x: e.clientX, y: e.clientY });
     });
     this.canvas.addEventListener("dblclick", e => {

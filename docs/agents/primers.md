@@ -64,6 +64,12 @@ and CI checks that they exist.
   as `findBindingSites` needs 15 at the 3′ end or the checks would say "No site". A codon is
   chosen by fewest changes, then not rare in E. coli, which is only a tie-break; TAG counts
   as a stop even with amber suppression on, as a plasmid made that way works in one strain.
+- **Protein regions around a primer** are template annotations: show every region in the
+  visible sequence window, including nearby boundaries, using `regionSpans` and the shared
+  renderer in `src/views/regionTracks.ts`. The panel's Regions button shares the Sequence
+  view's visibility setting; the map stays independent. A region click selects that
+  region's bases while keeping the same primer in view. Neither region tracks nor a
+  primer's non-annealing tail imply that the tail binds the template there.
 
 ## Decisions (and why)
 

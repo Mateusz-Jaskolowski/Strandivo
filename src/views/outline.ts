@@ -5,7 +5,7 @@
 // Its sections fold when their heading is clicked and move when it is dragged; both are
 // kept in Settings (`sidebar`), so every file and window shows them the same way.
 
-import { regionsOf } from "../lib/regions.ts";
+import { regionColor, regionRange, regionsOf, regionTitle, regionTree } from "../lib/regions.ts";
 import { h } from "../ui/dom.ts";
 import { iconSvg, primerIcon, strandIcon } from "../ui/icons.ts";
 import { cutSites, featureStyles, primerColors, primerTm } from "../doc/analysis.ts";
@@ -35,6 +35,7 @@ export class Outline {
   readonly el: HTMLElement;
   private body: HTMLElement;
   private filter = "";
+  private collapsedFeatures = new Set<string>();
   private ctx: DocContext;
   private pending = false;
   private order: SidebarSection[];
@@ -67,10 +68,15 @@ export class Outline {
       if (!row) return;
       e.preventDefault();
       row.click();
-      this.ctx.contextMenu({ kind: row.dataset.kind as Focus["kind"], id: row.dataset.id || "" }, { x: e.clientX, y: e.clientY }, this.ctx.tab === "map");
+      this.ctx.contextMenu({ kind: row.dataset.kind as Focus["kind"], id: row.dataset.id || "", ...(row.dataset.region !== undefined ? { region: Number(row.dataset.region) } : {}) }, { x: e.clientX, y: e.clientY }, this.ctx.tab === "map");
     });
     this.el = h("aside", { class: "sv-outline", "aria-label": "Outline" }, h("div", { class: "sv-outline-filter" }, iconSvg("filter", 14), input), this.body);
-    ctx.store.subscribe(c => (c.data ? this.schedule() : c.selection && this.updateSelected()));
+    ctx.store.subscribe(c => {
+      const focus = ctx.store.selection.focus;
+      const reveal = focus?.kind === "feature" && focus.region !== undefined && this.collapsedFeatures.delete(focus.id);
+      if (c.data || reveal) this.schedule();
+      else if (c.selection) this.updateSelected();
+    });
     ctx.onOptions(() => this.schedule());
     this.render();
   }
@@ -222,8 +228,10 @@ export class Outline {
       h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": label, title: label, onclick: fn }, iconSvg("plus", 14));
 
     const features = [...d.features].sort((a, b) => a.start - b.start).filter(f => this.matches(f.name) || this.matches(f.type) || regionsOf(f).some(r => this.matches(r.name) || this.matches(r.kind)));
-    const featureRows = features.map(f =>
-      h(
+    const featureRows = features.map(f => {
+      const regions = regionsOf(f);
+      const expanded = !!this.filter || !this.collapsedFeatures.has(f.id);
+      const row = h(
         "button",
         {
           type: "button",
@@ -237,8 +245,18 @@ export class Outline {
         h("span", { class: "sv-list-name" }, f.name),
         f.strand ? strandIcon(f.strand) : null,
         h("span", { class: "sv-list-meta sv-mono" }, `${fmt(f.start + 1)}–${fmt(f.end + 1)}`)
-      )
-    );
+      );
+      if (!regions.length) return row;
+      return h("div", { class: "sv-outline-protein" },
+        h("div", { class: "sv-outline-protein-head" }, h("button", {
+          type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": `${expanded ? "Collapse" : "Expand"} ${f.name} regions`, "aria-expanded": String(expanded),
+          onclick: () => { if (expanded) this.collapsedFeatures.add(f.id); else this.collapsedFeatures.delete(f.id); this.render(); }
+        }, iconSvg(expanded ? "chevronDown" : "chevronRight", 12)), row),
+        expanded ? h("div", { class: "sv-outline-regions" }, regionTree(regions).map(({ region, index, depth }) => h("button", {
+          type: "button", class: "sv-list-row", "data-kind": "feature", "data-id": f.id, "data-region": index, title: regionTitle(region), style: { paddingLeft: `${24 + depth * 12}px` },
+          onclick: () => { const range = regionRange(f, region, d.sequence.length); if (range) this.select({ kind: "feature", id: f.id, region: index }, range.start, range.end); }
+        }, h("span", { class: "sv-swatch", style: { background: regionColor(region) } }), h("span", { class: "sv-list-name" }, region.name), h("span", { class: "sv-list-meta sv-mono" }, `${region.start}–${region.end} aa`)))) : null);
+    });
 
     const primers = [...d.primers].sort((a, b) => a.start - b.start).filter(p => this.matches(p.name));
     const primerRows = primers.map(p => {
@@ -327,7 +345,7 @@ export class Outline {
     // The other sites of the selected or picked enzymes.
     const picked = pickedEnzymes(this.ctx.store.selection);
     for (const el of Array.from(this.body.querySelectorAll<HTMLElement>("[data-kind]"))) {
-      const on = !!f && el.dataset.kind === f.kind && el.dataset.id === f.id;
+      const on = !!f && el.dataset.kind === f.kind && el.dataset.id === f.id && el.dataset.region === (f.region === undefined ? undefined : String(f.region));
       el.classList.toggle("sv-selected", on);
       el.classList.toggle("sv-related", !on && el.dataset.kind === "cutsite" && picked.includes(enzymeOf(el.dataset.id ?? "")));
       if (on) el.setAttribute("aria-current", "true");

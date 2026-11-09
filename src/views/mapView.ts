@@ -14,7 +14,7 @@ import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
-import { regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions.ts";
+import { layoutRegions, regionColor, regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions.ts";
 import { featureGaps, pieces as rangePieces, rangeLength, type Range, type SeqData, type SeqFeature } from "../lib/seqdata.ts";
 import { checkIcon, iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
@@ -27,6 +27,7 @@ interface LabelItem {
   text: string;
   kind: "feature" | "primer" | "cutsite";
   id: string;
+  region?: number;
   /** The feature's or primer's own colour, for its mark, text and leader. */
   color?: string;
   /** Which way a primer points, for its mark. */
@@ -53,7 +54,7 @@ const CUT_SCALE = 0.92;
  * a map is read for, so they get the strongest mark. It starts at `x` and grows towards
  * `dir` over `textW` and its padding, centred on `y`.
  */
-function labelChip(l: Pick<LabelItem, "id" | "color">, x: number, y: number, textW: number, px: number, dir: 1 | -1): SVGElement {
+function labelChip(l: Pick<LabelItem, "id" | "color" | "region">, x: number, y: number, textW: number, px: number, dir: 1 | -1): SVGElement {
   const w = textW + 2 * chipPad(px);
   const hgt = px * 1.12;
   return s("rect", {
@@ -65,7 +66,8 @@ function labelChip(l: Pick<LabelItem, "id" | "color">, x: number, y: number, tex
     class: "sv-map-chip",
     style: l.color ? `--lc:${l.color}` : undefined,
     "data-kind": "feature",
-    "data-id": l.id
+    "data-id": l.id,
+    "data-region": l.region
   });
 }
 
@@ -271,13 +273,14 @@ export class MapView {
   private sliders: { rotate: HTMLInputElement; zoom: HTMLInputElement; label: HTMLInputElement };
   private rotateWrap: HTMLElement;
   private enzymeSelect: HTMLSelectElement;
+  private proteinSelect: HTMLSelectElement;
   private visible = false;
   private stale = true;
   private ctx: DocContext;
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
-    const chip = (key: "features" | "primers" | "orfs" | "cutsites" | "ruler", label: string) => {
+    const chip = (key: "features" | "mapRegions" | "primers" | "orfs" | "cutsites" | "ruler", label: string) => {
       const b = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ [key]: !ctx.options[key] }) }, checkIcon(), label);
       this.chips[key] = b;
       return b;
@@ -290,6 +293,7 @@ export class MapView {
       "div",
       { class: "sv-pane-head" },
       chip("features", "Features"),
+      chip("mapRegions", "Regions"),
       chip("primers", "Primers"),
       chip("orfs", "ORFs"),
       chip("cutsites", "Cut sites"),
@@ -313,7 +317,9 @@ export class MapView {
       const enzymeSet = this.enzymeSelect.value as EnzymeSet;
       ctx.setOptions({ enzymeSet, cutsites: enzymeSet !== "none" });
     } }, ENZYME_SETS.map(set => h("option", { value: set.id }, set.label))) as HTMLSelectElement;
-    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, zoom.wrap, lab.wrap, h("label", { class: "sv-map-slider", title: "Enzymes to show" }, iconSvg("scissors"), this.enzymeSelect));
+    this.proteinSelect = h("select", { class: "sv-select-quiet", "aria-label": "Protein region detail", onchange: () => ctx.setOptions({ proteinDetail: this.proteinSelect.value as "domains" | "all" }) },
+      h("option", { value: "domains" }, "Regions: top level"), h("option", { value: "all" }, "Regions: all")) as HTMLSelectElement;
+    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, zoom.wrap, lab.wrap, this.proteinSelect, h("label", { class: "sv-map-slider", title: "Enzymes to show" }, iconSvg("scissors"), this.enzymeSelect));
     this.el = h("div", { class: "sv-map" }, header, this.area, controls);
 
     this.installPointer();
@@ -368,6 +374,8 @@ export class MapView {
     this.sliders.zoom.value = String(zoomToSlider(o.mapZoom));
     this.sliders.label.value = String(o.labelSize);
     this.enzymeSelect.value = o.enzymeSet;
+    this.proteinSelect.value = o.proteinDetail;
+    this.proteinSelect.disabled = !o.mapRegions;
 
     const d = this.ctx.store.data;
     this.shapes.clear();
@@ -496,12 +504,18 @@ export class MapView {
         featureLayer.appendChild(s("path", { d: arcPath(g0, g1, (r1 + r2) / 2, false), fill: "none", stroke: st.fill, "stroke-width": 2, "pointer-events": "none" }));
       }
       // Regions of the protein: bands inside the feature, not features of their own.
-      regionsOf(f).forEach((region, index) => {
+      const regionRows = layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none");
+      const regionLanes = Math.max(1, ...regionRows.map(r => r.lane + 1));
+      regionRows.forEach(({ region, index, lane }) => {
+        const bottom = r1 + lane * BAND / regionLanes;
+        const top = bottom + BAND / regionLanes - 0.6;
         for (const span of regionSpans(f, region, n)) {
-          featureLayer.appendChild(
-            s("path", { d: arcShape(ang(span.start), ang(span.end + 1), r1, r2, 0), fill: st.text, class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, regionTitle(region)))
-          );
+          const path = s("path", { d: arcShape(ang(span.start), ang(span.end + 1), bottom, top, 0), fill: regionColor(region), class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, regionTitle(region)));
+          featureLayer.appendChild(path);
+          this.addShape(`feature:${f.id}:region:${index}`, path);
         }
+        const range = regionRange(f, region, n);
+        if (range) labels.push({ angle: ang(range.start) + rangeLength(range, n) / n * 180, r: top, text: region.name, kind: "feature", id: f.id, region: index, color: regionColor(region), title: regionTitle(region), width: textWidth(region.name, labelFont(600)), y: 0, ly: 0 });
       });
       const arcLen = (span / 360) * 2 * Math.PI * (r1 + BAND / 2);
       const tw = textWidth(f.name, labelFont(600));
@@ -634,16 +648,17 @@ export class MapView {
         const chip = l.kind === "feature" ? labelChip(l, gx, dy, l.width, labelPx, sgn) : null;
         const mark = chip ?? labelGlyph(l, gx, dy, gs, sgn);
         if (mark) texts.appendChild(mark);
-        if (chip) this.addShape(`${l.kind}:${l.id}`, chip);
+        const shapeKey = `${l.kind}:${l.id}${l.region === undefined ? "" : `:region:${l.region}`}`;
+        if (chip) this.addShape(shapeKey, chip);
         const tx = chip ? gx + sgn * cp : mark ? gx + sgn * (gs + gg) : gx;
         const t = s(
           "text",
-          { x: f1(tx), y: f1(dy), "text-anchor": sgn > 0 ? "start" : "end", class: labelClass(l), style: colour, "data-kind": l.kind, "data-id": l.id },
+          { x: f1(tx), y: f1(dy), "text-anchor": sgn > 0 ? "start" : "end", class: labelClass(l), style: colour, "data-kind": l.kind, "data-id": l.id, "data-region": l.region },
           l.text,
           l.title ? s("title", null, l.title) : null
         );
         texts.appendChild(t);
-        this.addShape(`${l.kind}:${l.id}`, t);
+        this.addShape(shapeKey, t);
         const end = tx + sgn * (l.width + (chip ? cp : 0));
         minX = Math.min(minX, gx, end);
         maxX = Math.max(maxX, gx, end);
@@ -739,9 +754,26 @@ export class MapView {
       nameRow.set(f.id, row);
     }
     const nameStep = Math.max(14, labelPx + 4);
+    // Region bars and their labels have their own rows below the complete CDS.
+    const regionRows = new Map(feats.map(f => {
+      const ends: number[] = [];
+      const rows = layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none").flatMap(row => {
+        const range = regionRange(f, row.region, n);
+        if (!range) return [];
+        const x = Math.max(2, Math.min(X(range.start), width - textWidth(row.region.name, labelFont(500)) - 8));
+        let lane = row.lane;
+        while (ends[lane] !== undefined && ends[lane] > x) lane++;
+        ends[lane] = Math.max(X(range.end + 1), x + textWidth(row.region.name, labelFont(500))) + 8;
+        return [{ ...row, lane, x }];
+      });
+      return [f.id, rows] as const;
+    }));
     // The ruler's numbers sit between the backbone and the features.
     const laneY: number[] = [baseY + (o.ruler ? 22 : 8)];
-    for (let l = 0; l < laneCount; l++) laneY.push(laneY[l] + 16 + Math.max(1, nameRowEnds[l].length) * nameStep);
+    for (let l = 0; l < laneCount; l++) {
+      const regionHeight = Math.max(0, ...feats.filter(f => (lanes.get(f.id) ?? 0) === l).map(f => Math.max(0, ...(regionRows.get(f.id) ?? []).map(r => r.lane + 1)) * (nameStep + 5)));
+      laneY.push(laneY[l] + 16 + Math.max(1, nameRowEnds[l].length) * nameStep + regionHeight);
+    }
     // ORFs in thin lanes under the features.
     const orfList = o.orfs ? orfs(d, o.orfOptions) : [];
     const oLanes = assignLanes(
@@ -811,16 +843,20 @@ export class MapView {
           featureLayer.appendChild(s("line", { x1: f1(gx1), x2: f1(gx2), y1: y + 8, y2: y + 8, stroke: st.fill, "stroke-width": 2, "pointer-events": "none" }));
         }
       }
-      regionsOf(f).forEach((region, index) => {
+      (regionRows.get(f.id) ?? []).forEach(({ region, index, lane: regionLane, x }) => {
+        const ry = y + 16 + Math.max(1, nameRowEnds[lane].length) * nameStep + regionLane * (nameStep + 5);
         for (const span of regionSpans(f, region, n)) {
           for (const g of rangePieces(span, n)) {
             const gx1 = X(g.start);
             const gx2 = X(g.end + 1);
-            featureLayer.appendChild(
-              s("rect", { x: f1(gx1), y, width: f1(gx2 - gx1), height: 16, fill: st.text, class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, regionTitle(region)))
-            );
+            const rect = s("rect", { x: f1(gx1), y: ry, width: f1(gx2 - gx1), height: 5, rx: 1, fill: regionColor(region), class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, regionTitle(region)));
+            featureLayer.appendChild(rect);
+            this.addShape(`feature:${f.id}:region:${index}`, rect);
           }
         }
+        const label = s("text", { x, y: ry + 5 + nameStep / 2, "font-size": labelPx, fill: regionColor(region), class: "sv-map-region-label", "data-kind": "feature", "data-id": f.id, "data-region": index }, region.name, s("title", null, regionTitle(region)));
+        featureLayer.appendChild(label);
+        this.addShape(`feature:${f.id}:region:${index}`, label);
       });
       const x1 = X(f.start);
       const x2 = X((f.end >= f.start ? f.end : n - 1) + 1);
@@ -906,7 +942,7 @@ export class MapView {
     const sel = this.ctx.store.selection;
     const focus = sel.focus;
     if (focus) {
-      for (const el of this.shapes.get(`${focus.kind}:${focus.id}`) || []) {
+      for (const el of this.shapes.get(`${focus.kind}:${focus.id}${focus.region === undefined ? "" : `:region:${focus.region}`}`) || []) {
         el.classList.add("sv-focused");
         this.focused.push(el);
       }
@@ -1032,7 +1068,7 @@ export class MapView {
       e.preventDefault();
       const el = (e.target as Element).closest("[data-kind]");
       const hit = el ? hitOf(el) : null;
-      const t = menuTargetAt(this.ctx, hit, hit ? null : this.boundaryAt(e.clientX, e.clientY), f => this.selectAnnotation(f), "map");
+      const t = menuTargetAt(this.ctx, hit, this.boundaryAt(e.clientX, e.clientY), f => this.selectAnnotation(f), "map");
       if (t) this.ctx.contextMenu(t, { x: e.clientX, y: e.clientY }, true);
     });
   }

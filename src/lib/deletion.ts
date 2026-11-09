@@ -43,7 +43,7 @@ export function firstDelete(d: SeqData, sel: PickedSelection): FirstDelete | nul
         const regions = regionsOf(f);
         const r = regions[focus.region];
         if (!r) return null;
-        const notes = withRegions(f.notes, regions.filter(x => x !== r));
+        const notes = withRegions(f.notes, regions.filter(x => x !== r).map(x => x.parentId && x.parentId === r.id ? { ...x, parentId: r.parentId } : x));
         return {
           data: { ...d, features: d.features.map(x => (x.id === f.id ? { ...x, notes } : x)) },
           label: "Remove region",

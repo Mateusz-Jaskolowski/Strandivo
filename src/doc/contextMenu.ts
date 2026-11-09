@@ -11,6 +11,8 @@ import { primerLibrary } from "../primerLibrary.ts";
 import { enzymeOf } from "../lib/enzymePick.ts";
 import { digestEnzymes, menuFor, type MenuEntry, type MenuItem, type MenuTarget } from "../lib/contextMenu.ts";
 import { basesIn, deleteRange, featureBases, inRange, rangeLength, reverseComplement, type Range } from "../lib/seqdata.ts";
+import { proteinRegionTargets, regionSpans, regionsOf, withRegions } from "../lib/regions.ts";
+import { openProteinRegionDialog, openProteinRegionFromSelection } from "../views/proteinRegionDialog.ts";
 import { cutSites, orfFeature, orfs, protein } from "./analysis.ts";
 import type { DocContext, Tab } from "./context.ts";
 import type { Focus } from "./store.ts";
@@ -50,11 +52,16 @@ export function openContextMenu(host: ContextMenuHost, target: MenuTarget, at: {
  */
 export function menuTargetAt(ctx: DocContext, annotation: Focus | null, b: number | null, selectAnnotation: (f: Focus) => void, source: string): MenuTarget | null {
   const store = ctx.store;
+  const { range, focus } = store.selection;
+  // A deliberately selected stretch inside a CDS takes precedence over its drawn bar.
+  if (annotation?.kind === "feature" && !focus && range && b !== null &&
+    (inRange(range, b % store.length) || inRange(range, (b - 1 + store.length) % store.length)) &&
+    proteinRegionTargets(store.data, range).length) return { kind: "selection", range };
   if (annotation) {
     const f = store.selection.focus;
     // A site of a picked enzyme keeps the pick, so its menu can digest with them all.
     const picked = annotation.kind === "cutsite" && !!store.selection.enzymes?.includes(enzymeOf(annotation.id));
-    if (!picked && (f?.kind !== annotation.kind || f.id !== annotation.id)) selectAnnotation(annotation);
+    if (!picked && (f?.kind !== annotation.kind || f.id !== annotation.id || f.region !== annotation.region)) selectAnnotation(annotation);
     return annotation;
   }
   if (b === null) return null;
@@ -73,6 +80,7 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
   const d = store.data;
   const n = d.sequence.length;
   const annotation = target.kind === "feature" ? d.features.find(f => f.id === target.id) : undefined;
+  const region = annotation && target.kind === "feature" && target.region !== undefined ? regionsOf(annotation)[target.region] : undefined;
   const primer = target.kind === "primer" ? d.primers.find(p => p.id === target.id) : undefined;
   // An ORF is read like a coding feature.
   const orf = target.kind === "orf" ? orfs(d, ctx.options.orfOptions).find(o => o.id === target.id) : undefined;
@@ -100,6 +108,20 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       return;
     case "add-feature":
       return ctx.addFeatureFromSelection();
+    case "add-protein-region": {
+      if (annotation) openProteinRegionDialog(ctx, annotation);
+      else if (range) openProteinRegionFromSelection(ctx, range);
+      return;
+    }
+    case "edit-protein-region":
+      if (annotation && target.kind === "feature") openProteinRegionDialog(ctx, annotation, target.region);
+      return;
+    case "remove-protein-region": {
+      if (!annotation || !region) return;
+      const notes = withRegions(annotation.notes, regionsOf(annotation).filter(r => r !== region).map(r => r.parentId && r.parentId === region.id ? { ...r, parentId: region.parentId } : r));
+      store.apply({ ...d, features: d.features.map(f => f === annotation ? { ...f, notes } : f) }, "Remove region", { range: store.selection.range, focus: null });
+      return;
+    }
     case "reverse-complement":
     case "reverse-complement-all":
       return ctx.command("reverse-complement");
@@ -108,12 +130,13 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       return;
     case "copy-dna":
       if (feature) {
-        const bases = featureBases(d.sequence, feature);
-        host.copy(feature.strand === -1 ? reverseComplement(bases) : bases, `${feature.name} (${fmt(rangeLength(feature, n))} bp)`);
+        const spans = region ? regionSpans(feature, region, n) : null;
+        const bases = featureBases(d.sequence, spans?.length ? { ...feature, start: spans[0].start, end: spans[spans.length - 1].end, locations: spans } : feature);
+        host.copy(feature.strand === -1 ? reverseComplement(bases) : bases, `${region?.name ?? feature.name} (${fmt(bases.length)} bp)`);
       }
       return;
     case "copy-protein":
-      if (feature) host.copy(protein(feature, d.sequence), "protein sequence");
+      if (feature) { const translated = protein(feature, d.sequence); host.copy(region ? translated.slice(region.start - 1, region.end) : translated, "protein sequence"); }
       return;
     case "copy-primer":
       if (primer) host.copy(primer.bases, primer.name);

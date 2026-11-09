@@ -77,6 +77,15 @@ test("features: protein only for coding ones, and the other view", () => {
   assert.deepEqual(labels({ kind: "feature", id: "gone" }), []);
 });
 
+test("protein regions have their own edit and removal actions", () => {
+  const withRegion = { ...data, features: data.features.map(f => f.id === "cds" ? { ...f, notes: { strandivo_regions: ["CDR1|CDR|2-5|:2-5"] } } : f) };
+  const entries = labels({ kind: "feature", id: "cds", region: 0 }, { data: withRegion });
+  assert.ok(entries.includes("Edit region…") && entries.includes("Remove region"));
+  assert.ok(!entries.includes("Delete feature"));
+  assert.ok(labels({ kind: "selection", range: { start: 13, end: 24 } }).includes("Add as region…"));
+  assert.ok(!labels({ kind: "selection", range: { start: 95, end: 105 } }).includes("Add as region…"));
+});
+
 test("primers: the other places they show, and a PCR product", () => {
   const inPrimers = labels({ kind: "primer", id: "plain" }, { tab: "primers" });
   assert.ok(inPrimers.includes("Show on map") && inPrimers.includes("Show in sequence") && !inPrimers.includes("Show in Primers tab"));

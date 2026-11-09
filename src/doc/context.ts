@@ -9,11 +9,17 @@ import type { EnzymeSet } from "../lib/enzymes.ts";
 import type { OrfOptions } from "../lib/orfs.ts";
 import type { Range, SeqData } from "../lib/seqdata.ts";
 import type { DocStore } from "./store.ts";
+import type { ProteinDetail } from "../lib/regions.ts";
 
 export type Tab = "map" | "sequence" | "primers" | "reads" | "info";
 
 export interface ViewOptions {
   features: boolean;
+  /** Map visibility is separate from the remembered top-level/all detail choice. */
+  mapRegions: boolean;
+  proteinDetail: ProteinDetail;
+  /** Labelled protein-region tracks in Sequence and the selected primer's context. */
+  sequenceRegions: boolean;
   primers: boolean;
   cutsites: boolean;
   /** Position marks and numbers on the map. */

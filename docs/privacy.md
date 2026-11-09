@@ -3,25 +3,23 @@
 Strandivo is a desktop app, and your work stays on your computer. Your sequences, files,
 file names, folders, features, primers and notes are never sent anywhere by the app.
 
-This page lists everything the app does send, and when. It is the one list:
-strandivo.com/privacy is made from it, so the two can't disagree. Strandivo is maintained by
-Mateusz Jaskolowski; questions about this page go to hello@strandivo.com.
+This page lists everything the app sends over the network and when. Strandivo is
+maintained by Mateusz Jaskolowski; questions about this page go to hello@strandivo.com.
 
 ## Checking for updates
 
 Once a day, while "Check for updates automatically" is on, and whenever you choose Check
 for Updates…, the app asks `updates.strandivo.com` whether there is a newer version. The
-question carries:
+request carries:
 
 - the app's version, such as 0.2.1;
 - the operating system, such as macOS or Windows;
 - the processor, such as Apple silicon or Intel.
 
-Like any connection on the internet, it also comes from your network's address. The
-service answers with the newest version's details. All it keeps is a count: one more
-check that day for that version, operating system and processor, which tells roughly how
-many copies are in use. It doesn't record the address or anything that tells one copy
-from another, and it has no logs. It runs on Cloudflare, which carries the connection.
+Like any internet connection, the request comes from your IP address. The service replies
+with the latest version's details and only increments a daily counter for that version,
+operating system and processor. It keeps no logs and never records your IP address or
+anything that identifies your copy of the app. It runs on Cloudflare.
 
 You can turn automatic checks off in the welcome window or in Settings → Updates and
 privacy. Check for Updates… still works when you ask.
@@ -34,69 +32,63 @@ releases are published. GitHub sees that download as it sees any other, under
 
 ## Looking up a protein in UniProt
 
-When you look up a UniProt entry for a protein's regions, the app asks UniProt
-(`rest.uniprot.org`, run by EMBL-EBI and its partners) for that one entry, by its
-accession, such as P42212. Nothing else goes with it: not the sequence, not the file. It
-happens only when you ask. UniProt's own
-[privacy notice](https://www.uniprot.org/help/privacy) covers what it keeps.
+When you look up a UniProt entry for a protein's regions, the app queries UniProt
+(`rest.uniprot.org`, run by EMBL-EBI and its partners) for that accession alone, such as
+P42212. Neither your sequence nor your file is sent, and the lookup happens only when you
+ask. UniProt's [privacy notice](https://www.uniprot.org/help/privacy) covers what it
+keeps.
 
 ## Sending feedback
 
-Help → Send Feedback… and Report a Bug… send what you write to `feedback.strandivo.com`,
-only when you click Send. The dialog shows everything that goes with it before you send:
+Help → Send Feedback… and Report a Bug… send your report to `feedback.strandivo.com` only
+when you click Send. The dialog shows everything included with the report before you send
+it:
 
-- what kind it is (a bug, an idea or a question), your summary and your details;
-- the app's version, the operating system and its version, and the processor;
-- which part of the app was open, such as Home or the Map.
+- the report type (bug, idea or question), summary and details;
+- the app's version, operating system and processor;
+- which view was open, such as Home or Map.
 
-Two more things go only if you tick them, and both are off each time the dialog opens:
+Two optional items are included only if you tick them (both are unticked by default):
 
-- **Recent errors**: what went wrong in the app's windows in the past week, at most the
-  last 20, with file paths removed. The dialog shows them as they will be sent. They are
-  kept on your computer, so a report after a crash still has them, and dropped after a
-  week.
-- **The open file**, as GenBank.
+- **Recent errors**: up to 20 app errors from the past week, with file paths removed and
+  previewed in the dialog. They are stored locally on your computer for up to a week so a
+  report after a crash can still include them.
+- **The open file**, formatted as GenBank.
 
-The service files your report as an issue in Strandivo's repository on GitHub, where
-anyone can read it, and tells you its number. Your email address, if you give one, and
-the open file, if you attach it, never go in the issue: they are emailed to the
-maintainer alone, with the issue's link, so the maintainer can answer you. The service
-keeps nothing itself and has no logs. To stop floods it lets each network send a few
-reports a minute, which Cloudflare counts for that minute and forgets. GitHub keeps the
-issue under [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement);
-the email stays in the maintainer's mailbox. To have an issue or an email removed, write
+The service posts your report as a public issue on Strandivo's GitHub repository and
+returns the issue number. Your email address and any attached file are never included in
+the public issue — they are emailed privately to the maintainer with a link to the issue.
+The service keeps no logs or copies of its own, aside from a per-minute rate limit in
+Cloudflare to prevent spam. GitHub stores the issue under
+[GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement),
+and any email stays in the maintainer's mailbox. To have an issue or email removed, write
 to hello@strandivo.com.
 
-If a report can't be sent, nothing leaves the app: you can copy it, or email it to
-feedback@strandivo.com from your own mail app instead.
+If a report can't be sent, nothing leaves the app: you can copy the report text or email
+it to feedback@strandivo.com from your mail app instead.
 
 ## Reporting a crash
 
-If Strandivo quits unexpectedly, it writes down why, in a small file in the app's own
-folder on your computer: the error's message, where in Strandivo's code it happened,
-which part of the app was running (its thread), the app's version, the operating system
-and the processor, and the time. Nothing is sent then.
+If Strandivo quits unexpectedly, it writes a local crash log in its app data folder with
+the error message, code location, thread, app version, operating system, processor and
+timestamp. Nothing is sent automatically.
 
-The next time it opens, the app reads that file once and deletes it, and a strip under
-the app bar says "Strandivo quit unexpectedly last time." Dismiss forgets it. Report it…
-opens Report a Bug with **Why it quit** ticked and shown in full, as it will be sent: the
-message with file paths removed, where in the code, the thread, the version that quit and
-the time. It goes only if you click Send, as part of a bug report (see Sending feedback),
-and you can untick it first. Recent errors stay off unless you tick them.
+On the next launch, Strandivo reads that file once, deletes it, and shows a banner:
+"Strandivo quit unexpectedly last time." Clicking Dismiss clears it. Clicking Report it…
+opens the bug report dialog with **Crash details** ticked and previewed in full (with file
+paths removed). It is sent only if you click Send, and you can untick it first. Recent
+errors remain unticked unless you opt in.
 
 ## Usage statistics
 
-From Strandivo 0.3.0 the app can count which of its features are used, and on which
-systems, so that work goes where it helps most. It is **off unless you turn it on**: the
-welcome window asks, and "Share anonymous usage statistics" in Settings → Updates and
-privacy turns it on or off at any time. Until you turn it on, nothing is sent, and
-turning it off sends nothing either, not even that you turned it off; anything waiting to
-be sent is dropped at once.
+Strandivo can share anonymous counts of which features are used and on which operating
+systems. This is **off by default**: you can turn it on or off on first launch or at any
+time in Settings → Updates and privacy. When it is off, nothing is sent; turning it off
+takes effect immediately and discards any queued events.
 
-When it is on, the app sends these events, and nothing else. Every detail an event carries
-is one of a few fixed words or a number put in a range, so none can hold a name, a
-sequence or anything you typed. A count's ranges are 0, 1, 2–5, 6–20 and more than 20;
-other numbers have their own few ranges, given below.
+When enabled, the app sends only the events listed below. Event properties use fixed
+categories or coarse numeric buckets (0, 1, 2–5, 6–20 and >20 unless noted below), never
+file names, sequences or user text.
 
 - `app_started`: the app was opened, with `arch`, the processor (Apple silicon or ARM,
   Intel or AMD); `installed`, how long ago this copy was first opened (its first day,
@@ -162,15 +154,14 @@ sends nothing itself; your browser visits the page as it would any other.
 
 ## This website
 
-strandivo.com has no cookies and no tracking. Its one script, on the home and Download
-pages, asks your browser which system it runs on, so that the right download comes
-first; it sends nothing and stores nothing. The site is served by Cloudflare, which
-handles each visit to deliver the page.
+strandivo.com uses no cookies and no tracking. Its single script (on the home and Download
+pages) checks which operating system your browser runs on so the matching installer is
+shown first; it sends and stores nothing. The site is hosted on Cloudflare Pages.
 
 ## What the app doesn't do
 
-- No usage statistics unless you turn them on, and then only the events listed above.
-- No account, no sign-in, no identifier for your copy of the app.
-- No crash reports and no error messages are sent on their own: they go only in a bug
-  report you send, and only as shown in it. With usage statistics on, an error or a crash
-  is counted by its kind alone.
+- No usage statistics unless you opt in, and then only the events listed above.
+- No user accounts, sign-in or persistent device identifiers.
+- No automatic crash or error reporting: logs are sent only when you submit a bug report,
+  and only as shown in the dialog. With usage statistics enabled, errors and crashes are
+  counted by category alone.

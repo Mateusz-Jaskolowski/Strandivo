@@ -157,10 +157,10 @@ assembled, with the line of the first part.
 | 497 | variable hint (pattern) | "IUPAC codes, repeated over the region (NNK: K is G or T). Bases the pattern doesn't allow are flagged." |
 | 505 | variable hint (alternatives) | "One per line, as name: bases. Each clone is matched to the closest; differences from it are mutations." |
 | 507 | variable hint (any) | "Clones can have any sequence or length here. Each clone's sequence is shown in its own column rather than called as mutations." |
-| 516 | toast (delete feature) | "Deleted … (sequence bases kept)." |
+| 516 | edit message (delete feature) | "Deleted … (sequence bases kept)." |
 | 566 | toast (site moved) | "This primer now binds … places; its site wasn't moved." / "This primer no longer binds the sequence; its site wasn't moved." |
 | 670 | toast (saved to library) | "Saved … to the lab library." |
-| 674 | toast (delete primer) | "Deleted …." |
+| 674 | edit message (delete primer) | "Deleted …." |
 | 725 | site note (1 cut) | "Cuts this sequence once" |
 | 725 | site note (n cuts) | "Cuts this sequence … times" |
 | 755 | orf note | "Detected from the sequence and not saved in the file. Add it as a feature to save it." |

@@ -179,7 +179,7 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
     case "delete-feature":
       if (feature) {
         store.apply({ ...d, features: d.features.filter(f => f.id !== feature.id) }, "Delete feature", { range: { start: feature.start, end: feature.end } });
-        ctx.noteEdit(`Deleted ${feature.name}; its bases are still there.`);
+        ctx.noteEdit(`Deleted ${feature.name} (sequence bases kept).`);
       }
       return;
     case "delete-primer":

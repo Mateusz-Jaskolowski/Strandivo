@@ -148,7 +148,12 @@ export const regionLabel = (r: ProteinRegion) => (r.accession ? `${r.sourceStart
 /** For a tooltip: "TM3 · Transmembrane, predicted · 77–97". */
 export const regionTitle = (r: ProteinRegion) => `${r.name} · ${r.kind}${r.predicted ? ", predicted" : ""} · ${regionLabel(r)}`;
 
-export const REGION_KINDS = ["Domain", "Linker", "Transmembrane", "Intramembrane", "Topological domain", "Signal peptide", "Transit peptide", "CDR", "Framework", "Tag", "Repeat", "Region", "Motif"];
+export const REGION_KINDS = [
+  "Domain", "Variable domain", "Constant domain", "CDR", "Framework", "Linker",
+  "Transmembrane", "Intramembrane", "Topological domain", "Signal peptide", "Transit peptide",
+  "Coiled coil", "Helix", "Beta strand", "Disordered region", "Compositional bias",
+  "Repeat", "Motif", "Binding region", "Cleavage site", "Propeptide", "Peptide", "Chain", "Tag", "Region"
+];
 const COLORS = ["#4F8FBA", "#B47EB3", "#D99049", "#58A68C", "#D57479", "#8F91C4", "#849B48"];
 /** Follow neighbouring hues around the palette; keep COLORS's legacy hash order intact. */
 const REGION_PALETTE = [0, 3, 6, 2, 4, 1, 5].map(i => COLORS[i]);

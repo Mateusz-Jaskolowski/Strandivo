@@ -34,6 +34,11 @@ them, count a little more, still only as fixed words and ranges.
   New regions get different, coordinated colours automatically, starting near their
   CDS's colour; colours you choose yourself are kept.
 
+- **Protein region controls**: a compact editor offers more kinds and custom categories,
+  and keeps names as typed. Clearer action buttons fill the inspector's width, feature
+  names stay aligned in the outline, and the map's top-level/all choice appears only for
+  nested regions.
+
 - **Crash reports**: if Strandivo quits unexpectedly, it notes why on your computer, and
   the next time it opens a strip under the app bar offers to report it. Report it… opens
   Report a Bug with what it noted, shown in full and with file paths removed; nothing is

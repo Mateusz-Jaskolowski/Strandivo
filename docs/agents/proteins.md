@@ -29,6 +29,10 @@ and CI checks that they exist.
   never reading order or splicing. The region dialog requires a parent to contain its
   children; overlapping annotations can also be independent. Removing a parent promotes
   its children. Plain manual regions show the CDS's own residue numbers.
+  Kind is descriptive, except signal/transit peptides keep their GenBank types on export;
+  it never changes translation or marks a region as varying. Its native dropdown offers
+  common categories and a custom value; preserve kinds imported from older files.
+  Region names and custom kinds turn off spelling correction and capitalisation.
 - **New region colours** follow a coordinated palette within each CDS, starting with the
   colour nearest its displayed feature colour (`nextRegionColor`). Assign and save the
   colour when a region is added, including a UniProt batch; editing or renaming must not
@@ -40,6 +44,10 @@ and CI checks that they exist.
   Visibility and detail are remembered separately. Nested
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
   whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
+  The detail choice follows enzymes in the map controls and only appears when regions
+  are visible and a valid parent link makes top-level/all show different annotations.
+  Independent overlaps alone do not need that choice. In the outline, all feature rows
+  share a disclosure gutter while any listed feature has regions, so names stay aligned.
   Sequence and the Primers tab's local sequence panel share a Regions toggle: solid bars
   and captions sit below their CDS, in separate tracks for overlaps, whether or not
   translation is shown. They use `src/views/regionTracks.ts` to pack and draw both the

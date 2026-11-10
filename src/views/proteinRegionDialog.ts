@@ -20,11 +20,18 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
   const start = old?.start ?? residues?.start ?? 1;
   const end = old?.end ?? residues?.end ?? length;
   const dlg = openDialog({ title: old ? "Edit protein region" : "Add protein region", note: `Amino-acid positions in ${f.name} (1–${length.toLocaleString()}), counted from the start of its CDS.`, width: 520 });
-  const input = (label: string, value: string, type = "text") => h("input", { class: "sv-input", type, value, "aria-label": label, ...(type === "number" ? { min: "1", max: String(length), step: "1" } : {}) }) as HTMLInputElement;
+  const input = (label: string, value: string, type = "text") => h("input", { class: "sv-input", type, value, "aria-label": label, ...(type === "text" ? { autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } : {}), ...(type === "number" ? { min: "1", max: String(length), step: "1" } : {}) }) as HTMLInputElement;
   const name = input("Region name", old?.name ?? "");
   name.placeholder = "Domain, linker, CDR1…";
-  const kind = input("Region kind", old?.kind ?? "Domain");
-  kind.setAttribute("list", "protein-region-kinds");
+  const initialKind = old?.kind ?? "Domain";
+  const customKind = input("Custom region kind", REGION_KINDS.includes(initialKind) ? "" : initialKind);
+  customKind.placeholder = "Custom kind";
+  const kind = h("select", { class: "sv-input", "aria-label": "Region kind" },
+    REGION_KINDS.map(k => h("option", { value: k, selected: k === initialKind }, k)),
+    h("option", { value: "custom", selected: !REGION_KINDS.includes(initialKind) }, "Custom…")) as HTMLSelectElement;
+  const refreshKind = () => { customKind.hidden = kind.value !== "custom"; };
+  kind.addEventListener("change", () => { refreshKind(); if (!customKind.hidden) customKind.focus(); });
+  refreshKind();
   const from = input("First residue", String(start), "number");
   const to = input("Last residue", String(end), "number");
   const color = input("Region colour", old ? regionColor(old) : nextRegionColor(regions, featureStyles(d).get(f.id)?.fill), "color");
@@ -37,7 +44,7 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
   const specification = h("textarea", { class: "sv-input sv-mono", rows: "3", "aria-label": "Variable pattern or versions", spellcheck: "false" }) as HTMLTextAreaElement;
   specification.value = old?.variable && old.variable.kind !== "any" ? formatDesign(old.variable).replace(/\|/g, "\n") : "NNK";
   const variableControls = h("div", { class: "sv-region-design" }, design, specification);
-  const hint = h("p", { class: "sv-small sv-dim" });
+  const hint = h("p", { class: "sv-small sv-dim sv-region-message" });
   const refresh = () => {
     variableControls.hidden = !variable.checked;
     specification.hidden = design.value === "any";
@@ -46,14 +53,16 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
   };
   variable.addEventListener("change", refresh);
   design.addEventListener("change", () => { specification.value = design.value === "pattern" ? "NNK" : ""; refresh(); });
-  const error = h("p", { class: "sv-small sv-text-warn", role: "alert" });
+  const error = h("p", { class: "sv-small sv-text-warn sv-region-message", role: "alert" });
   const row = (label: string, control: HTMLElement) => h("label", { class: "sv-region-field" }, h("span", { class: "sv-design-label" }, label), control);
-  dlg.body.replaceChildren(h("div", { class: "sv-region-form" }, row("Name", name), row("Kind", kind), h("datalist", { id: "protein-region-kinds" }, REGION_KINDS.map(k => h("option", { value: k }))), row("First residue", from), row("Last residue", to), row("Colour", color), row("Within", parent)),
+  dlg.body.replaceChildren(h("div", { class: "sv-region-form" }, row("Name", name), row("Kind", h("div", { class: "sv-region-kind" }, kind, customKind)), row("First residue", from), row("Last residue", to), row("Colour", color), row("Within", parent)),
     ...(!old && residues?.rounded ? [h("p", { class: "sv-small sv-dim" }, "The selection includes part of a codon, so the region includes the whole codon.")] : []),
     h("label", { class: "sv-check-row" }, variable, "Varies between clones"), variableControls, hint, error);
   const save = () => {
     const a = Number(from.value), b = Number(to.value);
     if (!name.value.trim()) { error.textContent = "Enter a name for this region."; name.focus(); return; }
+    const regionKind = kind.value === "custom" ? customKind.value.trim() : kind.value;
+    if (!regionKind) { error.textContent = "Enter a kind for this region."; customKind.focus(); return; }
     if (!Number.isInteger(a) || !Number.isInteger(b) || a < 1 || b < a || b > length) { error.textContent = `Enter a residue range from 1 to ${length.toLocaleString()}, with the first before the last.`; return; }
     const p = regions.find(r => r.id === parent.value);
     const ancestors = new Set<string>();
@@ -69,7 +78,7 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     }
     const current = ctx.store.data;
     if (current.features.find(x => x.id === f.id) !== f) { error.textContent = "The CDS changed while this dialog was open. Close it and open it again."; return; }
-    const region: ProteinRegion = { ...old, id: old?.id ?? newId("r"), name: name.value.trim(), kind: kind.value.trim() || "Region", start: a, end: b, color: color.value, parentId: parent.value || undefined, accession: old?.accession ?? "", sourceStart: old?.accession ? old.sourceStart : a, sourceEnd: old?.accession ? old.sourceEnd : b, predicted: old?.predicted ?? false, variable: variable.checked ? variableDesign : undefined, ...(old?.accession ? { edited: true, sourceKey: old.sourceKey ?? `${old.kind}:${old.sourceStart}-${old.sourceEnd}` } : {}) };
+    const region: ProteinRegion = { ...old, id: old?.id ?? newId("r"), name: name.value.trim(), kind: regionKind, start: a, end: b, color: color.value, parentId: parent.value || undefined, accession: old?.accession ?? "", sourceStart: old?.accession ? old.sourceStart : a, sourceEnd: old?.accession ? old.sourceEnd : b, predicted: old?.predicted ?? false, variable: variable.checked ? variableDesign : undefined, ...(old?.accession ? { edited: true, sourceKey: old.sourceKey ?? `${old.kind}:${old.sourceStart}-${old.sourceEnd}` } : {}) };
     const next = old ? regions.map(r => r === old ? region : r) : [...regions, region];
     const feature = { ...f, notes: withRegions(f.notes, next) };
     const sorted = regionsOf(feature);
@@ -77,7 +86,7 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     dlg.close();
   };
   dlg.footer.append(h("button", { class: "sv-btn", type: "button", onclick: () => dlg.close() }, "Cancel"), h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: save }, old ? "Save region" : "Add region"));
-  dlg.body.addEventListener("keydown", e => { if (e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); save(); } });
+  dlg.body.addEventListener("keydown", e => { if (e.key === "Enter" && e.target instanceof HTMLInputElement && e.target.type !== "checkbox") { e.preventDefault(); save(); } });
   refresh();
 }
 

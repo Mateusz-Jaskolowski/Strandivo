@@ -319,7 +319,7 @@ export class MapView {
     } }, ENZYME_SETS.map(set => h("option", { value: set.id }, set.label))) as HTMLSelectElement;
     this.proteinSelect = h("select", { class: "sv-select-quiet", "aria-label": "Protein region detail", onchange: () => ctx.setOptions({ proteinDetail: this.proteinSelect.value as "domains" | "all" }) },
       h("option", { value: "domains" }, "Regions: top level"), h("option", { value: "all" }, "Regions: all")) as HTMLSelectElement;
-    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, zoom.wrap, lab.wrap, this.proteinSelect, h("label", { class: "sv-map-slider", title: "Enzymes to show" }, iconSvg("scissors"), this.enzymeSelect));
+    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, zoom.wrap, lab.wrap, h("label", { class: "sv-map-slider", title: "Enzymes to show" }, iconSvg("scissors"), this.enzymeSelect), this.proteinSelect);
     this.el = h("div", { class: "sv-map" }, header, this.area, controls);
 
     this.installPointer();
@@ -378,6 +378,8 @@ export class MapView {
     this.proteinSelect.disabled = !o.mapRegions;
 
     const d = this.ctx.store.data;
+    // Top-level/all only changes nested regions; independent overlaps stay in both.
+    this.proteinSelect.hidden = !o.features || !o.mapRegions || !d.features.some(f => layoutRegions(regionsOf(f)).some(r => r.depth > 0));
     this.shapes.clear();
     this.focused = [];
     if (!d.sequence.length) {

@@ -744,6 +744,7 @@ async function main() {
     // The map only draws while it shows.
     await s.exec("window.__strandivo.command('show-map')");
     check("They are drawn inside the CDS", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
+    check("Independent regions need no top-level/all choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     check("The entry goes in the file's cross-references", await s.exec(`${doc} return s.data.features.find(f => f.id === window.__strandivoCds).notes.db_xref.includes("UniProtKB/Swiss-Prot:P62593");`));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
@@ -754,15 +755,26 @@ async function main() {
         for (const [label, value] of Object.entries(arguments[0])) {
           const input = document.querySelector('.sv-dialog [aria-label="' + label + '"]');
           input.value = value;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
         }
       `, { "Region name": name, "Region kind": kind, "First residue": String(start), "Last residue": String(end), "Parent region": parent });
     };
     await s.click("//button[normalize-space(.)='Add region…']", "xpath");
+    check("Region names leave spelling and capitalisation to the user", await s.exec("const name = document.querySelector('[aria-label=\"Region name\"]'); return name.getAttribute('autocorrect') === 'off' && name.getAttribute('autocapitalize') === 'off' && name.spellcheck === false;"));
+    check("Region kinds use a dropdown with antibody and structural categories", await s.exec("const kind = document.querySelector('[aria-label=\"Region kind\"]'); const values = Array.from(kind.options).map(o => o.value); return kind.tagName === 'SELECT' && ['Variable domain', 'Constant domain', 'Coiled coil', 'Disordered region', 'custom'].every(v => values.includes(v));"));
+    check("An ordinary region dialog leaves no blank area below its last control", await s.exec("const last = document.querySelector('[aria-label=\"Varies between clones\"]').closest('label'); return document.querySelector('.sv-dialog-foot').getBoundingClientRect().top - last.getBoundingClientRect().bottom <= 24;"));
     const firstRegionColour = await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;");
     await fillProteinRegion("Test domain", "Domain", 1, 80);
     await s.click("//button[normalize-space(.)='Add region']", "xpath");
     check("A manually added domain has a protein diagram", await s.waitFor("document.querySelectorAll('.sv-protein-region').length === 1", 5000));
+    check("One region needs no map detail selector", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
+    check("Region actions have clear labels and fill both rows", await s.exec(`
+      const actions = document.querySelector('.sv-region-actions');
+      const buttons = Array.from(actions.querySelectorAll('button'));
+      const bounds = actions.getBoundingClientRect();
+      return buttons.map(b => b.textContent.trim()).join('|') === 'Edit region…|Copy AA sequence|Add as feature|Remove' &&
+        buttons.every((button, i) => Math.abs(button.getBoundingClientRect()[i % 2 ? 'right' : 'left'] - bounds[i % 2 ? 'right' : 'left']) < 1);
+    `));
     const domainId = await s.exec(`${doc} return JSON.parse(decodeURIComponent(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions[0].split('|')[5])).id;`);
     await s.click("//button[normalize-space(.)='Add region…']", "xpath");
     const secondRegionColour = await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;");
@@ -771,17 +783,24 @@ async function main() {
     await s.click("//button[normalize-space(.)='Add region']", "xpath");
     check("Nested regions stay within one document feature", (await s.exec(`${doc} return s.data.features.length;`)) === featuresForRegions);
     check("The outline shows both regions", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 2", 5000));
+    check("Nested region detail follows the map's enzyme selector", await s.exec("const detail = document.querySelector('[aria-label=\"Protein region detail\"]'); const enzymes = document.querySelector('[aria-label=\"Which map enzymes to show\"]'); return !detail.hidden && !!(enzymes.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING);"));
+    const featureSwatchesAlign = () => s.exec("const swatches = Array.from(document.querySelectorAll('.sv-outline [data-kind=\"feature\"]:not([data-region]) .sv-swatch')); return swatches.length > 1 && swatches.every(el => Math.abs(el.getBoundingClientRect().left - swatches[0].getBoundingClientRect().left) < 1);");
+    check("Features with regions align with other features", await featureSwatchesAlign());
+    await s.click(".sv-outline-feature-head button[aria-expanded='true']");
+    check("Collapsing regions keeps the feature list aligned", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 0", 5000) && await featureSwatchesAlign());
+    await s.click(".sv-outline-feature-head button[aria-expanded='false']");
+    await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 2", 5000);
     await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     check("All map detail draws a domain and its CDR", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
     await s.click("//div[contains(@class,'sv-map')]//button[normalize-space(.)='Regions']", "xpath");
     check("The map's Regions button hides regions while keeping CDS features", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0 && document.querySelectorAll('.sv-map-feature').length > 0", 5000));
-    check("Hiding map regions keeps the chosen detail level", await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); return select.value === 'all' && select.disabled;"));
+    check("Hiding map regions hides its detail choice but keeps the level", await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); return select.value === 'all' && select.disabled && select.hidden;"));
     await s.click("//div[contains(@class,'sv-map')]//button[normalize-space(.)='Regions']", "xpath");
     check("Showing map regions restores the previous detail level", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2 && !document.querySelector('[aria-label=\"Protein region detail\"]').disabled", 5000));
     await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     check("Top-level map detail keeps only the domain", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 1", 5000));
     await s.click(".sv-outline [data-region='1']");
-    await s.click("//button[normalize-space(.)='Edit…']", "xpath");
+    await s.click("//button[normalize-space(.)='Edit region…']", "xpath");
     check("Editing a region keeps its colour", (await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;")) === secondRegionColour);
     await fillProteinRegion("CDR1 edited", "CDR", 9, 19, domainId);
     await s.click("//button[normalize-space(.)='Save region']", "xpath");
@@ -853,8 +872,12 @@ async function main() {
     await s.click("//button[normalize-space(.)='Cancel']", "xpath");
     await s.click("//button[normalize-space(.)='Add as region…']", "xpath");
     await s.exec("document.querySelector('[aria-label=\"Region name\"]').value = 'Selected region';");
+    await s.exec("const kind = document.querySelector('[aria-label=\"Region kind\"]'); kind.value = 'custom'; kind.dispatchEvent(new Event('change', { bubbles: true })); document.querySelector('[aria-label=\"Custom region kind\"]').value = 'Antigen-binding loop';");
     await s.click("//button[normalize-space(.)='Add region']", "xpath");
     check("The selection inspector adds a region without entering positions", await s.waitFor("Array.from(document.querySelectorAll('.sv-region-caption')).some(e => e.textContent === 'Selected region')", 5000));
+    await s.click("//button[normalize-space(.)='Edit region…']", "xpath");
+    check("A custom region kind is kept when reopened", await s.exec("return document.querySelector('[aria-label=\"Region kind\"]').value === 'custom' && document.querySelector('[aria-label=\"Custom region kind\"]').value === 'Antigen-binding loop';"));
+    await s.click("//button[normalize-space(.)='Cancel']", "xpath");
     await s.shot("11-protein-regions-sequence");
 
     // A primer's context includes both overlapping regions and nearby template boundaries.
@@ -884,6 +907,7 @@ async function main() {
     await s.exec(`${doc} s.undo(); s.selectRange({ start: s.data.features.find(f => f.id === window.__strandivoCds).start, end: s.data.features.find(f => f.id === window.__strandivoCds).end }, { kind: "feature", id: window.__strandivoCds, region: 1 }, "e2e"); window.__strandivo.command('show-map');`);
     await s.click("//button[normalize-space(.)='Remove']", "xpath");
     check("Removing a region keeps its CDS", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 1", 5000));
+    check("Removing the last nested region hides the map detail choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     await s.exec(`${doc} s.undo(); s.undo(); s.undo(); s.undo();`);
     check("Region authoring can be undone completely", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 0", 5000));
     await s.exec("window.__strandivo.command('show-sequence')");

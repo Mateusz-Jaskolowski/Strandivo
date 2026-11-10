@@ -440,8 +440,8 @@ export class Inspector {
       h(
         "div",
         { class: "sv-region-actions" },
-        this.button("Edit…", () => openProteinRegionDialog(this.ctx, f, regionsOf(f).indexOf(r))),
-        this.button("Copy protein", () => this.actions.copy(protein(f, this.ctx.store.data.sequence).slice(r.start - 1, r.end), r.name), { icon: "copy" }),
+        this.button("Edit region…", () => openProteinRegionDialog(this.ctx, f, regionsOf(f).indexOf(r))),
+        this.button("Copy AA sequence", () => this.actions.copy(protein(f, this.ctx.store.data.sequence).slice(r.start - 1, r.end), r.name), { icon: "copy" }),
         this.button("Add as feature", () => this.addRegionAsFeature(f, r), { icon: "featureAdd" }),
         this.button("Remove", () => this.removeRegion(f, r), { icon: "trash", danger: true })
       )

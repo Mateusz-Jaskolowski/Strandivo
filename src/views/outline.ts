@@ -228,6 +228,7 @@ export class Outline {
       h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": label, title: label, onclick: fn }, iconSvg("plus", 14));
 
     const features = [...d.features].sort((a, b) => a.start - b.start).filter(f => this.matches(f.name) || this.matches(f.type) || regionsOf(f).some(r => this.matches(r.name) || this.matches(r.kind)));
+    const hasRegions = features.some(f => regionsOf(f).length > 0);
     const featureRows = features.map(f => {
       const regions = regionsOf(f);
       const expanded = !!this.filter || !this.collapsedFeatures.has(f.id);
@@ -246,14 +247,14 @@ export class Outline {
         f.strand ? strandIcon(f.strand) : null,
         h("span", { class: "sv-list-meta sv-mono" }, `${fmt(f.start + 1)}–${fmt(f.end + 1)}`)
       );
-      if (!regions.length) return row;
+      if (!regions.length) return hasRegions ? h("div", { class: "sv-outline-feature-head" }, h("span", { "aria-hidden": "true" }), row) : row;
       return h("div", { class: "sv-outline-protein" },
-        h("div", { class: "sv-outline-protein-head" }, h("button", {
+        h("div", { class: "sv-outline-feature-head" }, h("button", {
           type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": `${expanded ? "Collapse" : "Expand"} ${f.name} regions`, "aria-expanded": String(expanded),
           onclick: () => { if (expanded) this.collapsedFeatures.add(f.id); else this.collapsedFeatures.delete(f.id); this.render(); }
         }, iconSvg(expanded ? "chevronDown" : "chevronRight", 12)), row),
         expanded ? h("div", { class: "sv-outline-regions" }, regionTree(regions).map(({ region, index, depth }) => h("button", {
-          type: "button", class: "sv-list-row", "data-kind": "feature", "data-id": f.id, "data-region": index, title: regionTitle(region), style: { paddingLeft: `${24 + depth * 12}px` },
+          type: "button", class: "sv-list-row", "data-kind": "feature", "data-id": f.id, "data-region": index, title: regionTitle(region), style: { paddingLeft: `${44 + depth * 12}px` },
           onclick: () => { const range = regionRange(f, region, d.sequence.length); if (range) this.select({ kind: "feature", id: f.id, region: index }, range.start, range.end); }
         }, h("span", { class: "sv-swatch", style: { background: regionColor(region) } }), h("span", { class: "sv-list-name" }, region.name), h("span", { class: "sv-list-meta sv-mono" }, `${region.start}–${region.end} aa`)))) : null);
     });

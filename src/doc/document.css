@@ -3539,9 +3539,9 @@
 }
 .sv-map-region-label { cursor: pointer; font-weight: 600; }
 .sv-map-region.sv-focused { stroke: var(--text); stroke-width: 1.5px; opacity: 1; }
-.sv-outline-protein-head { display: flex; align-items: center; }
-.sv-outline-protein-head > .sv-list-row { flex: 1; min-width: 0; }
-.sv-outline-protein-head > .sv-icon-btn { flex: none; margin-left: 2px; }
+.sv-outline-feature-head { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; }
+.sv-outline-feature-head > .sv-list-row { min-width: 0; }
+.sv-outline-feature-head > .sv-icon-btn { margin-left: 2px; }
 .sv-outline-regions .sv-list-row { font-size: 11px; }
 .sv-protein-diagram { margin: 8px 0 10px; }
 .sv-protein-ruler { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3); margin-bottom: 5px; }
@@ -3554,8 +3554,11 @@
 }
 .sv-protein-region:hover { filter: brightness(1.1); }
 .sv-protein-region.sv-selected { outline: 2px solid var(--text); outline-offset: 2px; z-index: 1; }
-.sv-region-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+.sv-region-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .sv-region-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sv-region-kind { display: flex; flex-direction: column; gap: 6px; }
+.sv-region-message { margin: 0; }
+.sv-region-message:empty { display: none; }
 .sv-region-field .sv-input { width: 100%; min-width: 0; }
 .sv-region-field input[type=color] { height: 34px; padding: 3px; cursor: pointer; }
 .sv-region-design:not([hidden]) { display: grid; gap: 8px; margin-top: 10px; }
@@ -3574,10 +3577,11 @@
   margin-top: 6px;
 }
 .sv-region-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
+.sv-region-actions .sv-btn { padding: 0 6px; gap: 4px; font-size: 12px; }
 .sv-uniprot-search {
   display: flex;
   gap: 8px;

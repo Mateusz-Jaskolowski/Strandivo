@@ -73,11 +73,11 @@ class Session {
   execAsync(script, ...args) {
     return wd("POST", `/session/${this.id}/execute/async`, { script, args });
   }
-  async waitFor(expr, timeout = 20000) {
+  async waitFor(expr, timeout = 20000, ...args) {
     const end = Date.now() + timeout;
     while (Date.now() < end) {
       try {
-        if (await this.exec(`return !!(${expr});`)) return true;
+        if (await this.exec(`return !!(${expr});`, ...args)) return true;
       } catch {
         /* page still loading */
       }
@@ -188,10 +188,10 @@ const addTouching = `${doc} const lac = s.data.features.find(f => f.name === "la
 /** Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS. */
 async function checkCodonClicks(s, root, label) {
   const c = await s.exec(`${doc}
-    const el = document.querySelector(${JSON.stringify(root + " .sv-codon")});
+    const el = document.querySelector(arguments[0] + ' .sv-codon');
     if (!el) return null;
     const f = s.data.features.find(f => f.id === el.dataset.id);
-    return { id: f.id, start: Number(el.dataset.codonStart), end: Number(el.dataset.codonEnd), featureStart: f.start, featureEnd: f.end, length: s.length };`);
+    return { id: f.id, start: Number(el.dataset.codonStart), end: Number(el.dataset.codonEnd), featureStart: f.start, featureEnd: f.end, length: s.length };`, root);
   check(`${label}: amino acids have codon hit areas`, !!c);
   if (!c) return;
   const hit = `${root} .sv-codon[data-id="${c.id}"][data-codon-start="${c.start}"]`;
@@ -222,9 +222,9 @@ async function checkCodonEdges(s) {
     s.apply({ ...s.data, features: [...s.data.features, ...features] }, 'Test codon edges');
     return cases;`);
   for (const c of cases) {
-    await s.exec(`${doc} s.select({ range: null, caret: ${c.mid} }, 'e2e');`);
+    await s.exec(`${doc} s.select({ range: null, caret: arguments[0] }, 'e2e');`, c.mid);
     const hit = `.sv-seq .sv-codon[data-id="${c.id}"][data-codon-start="${c.codon.start}"]`;
-    check(`${c.id}: the codon is drawn`, await s.waitFor(`document.querySelector(${JSON.stringify(hit)})`, 5000));
+    check(`${c.id}: the codon is drawn`, await s.waitFor("document.querySelector(arguments[0])", 5000, hit));
     await s.click(hit);
     const sel = await s.exec(`${doc} return s.selection;`);
     check(`${c.id}: selects all three bases across the row or origin`, sel.range?.start === c.codon.start && sel.range?.end === c.codon.end && !sel.focus, JSON.stringify(sel));
@@ -234,7 +234,7 @@ async function checkCodonEdges(s) {
 
 async function checkCodonGestures(s, root, label) {
   const refs = await s.exec(`
-    const els = Array.from(document.querySelectorAll(${JSON.stringify(root + " .sv-codon")}));
+    const els = Array.from(document.querySelectorAll(arguments[0] + ' .sv-codon'));
     const id = els[0]?.dataset.id;
     const groups = new Map();
     for (const el of els.filter(e => e.dataset.id === id)) {
@@ -243,14 +243,14 @@ async function checkCodonGestures(s, root, label) {
       group.push({ id, index: Number(el.dataset.codonIndex) }); groups.set(row, group);
     }
     const group = [...groups.values()].find(g => g.length >= 5);
-    return group?.sort((a, b) => a.index - b.index).slice(0, 5);`);
+    return group?.sort((a, b) => a.index - b.index).slice(0, 5);`, root);
   check(`${label}: a row has enough residues to check gestures`, !!refs);
   if (!refs) return;
   const hit = i => `${root} .sv-codon[data-id="${refs[i].id}"][data-codon-index="${refs[i].index}"]`;
-  const state = () => s.exec(`${doc} return { picks: s.selection.codons?.picks.map(p => p.index).sort((a,b) => a-b), range: s.selection.range, ranges: s.selection.ranges, marked: document.querySelectorAll(${JSON.stringify(root + " .sv-codon-selected")}).length };`);
+  const state = () => s.exec(`${doc} return { picks: s.selection.codons?.picks.map(p => p.index).sort((a,b) => a-b), range: s.selection.range, ranges: s.selection.ranges, marked: document.querySelectorAll(arguments[0] + ' .sv-codon-selected').length };`, root);
   const drag = async (from, to) => {
     await s.click(hit(from));
-    const points = await s.exec(`return [${JSON.stringify(hit(from))}, ${JSON.stringify(hit(to))}].map(css => { const r = document.querySelector(css).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });`);
+    const points = await s.exec("return arguments[0].map(css => { const r = document.querySelector(css).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });", [hit(from), hit(to)]);
     await s.drag(points[0], points[1]);
   };
   for (const [from, to] of [[0, 4], [4, 0]]) {

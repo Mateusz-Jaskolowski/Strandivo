@@ -104,6 +104,11 @@ class Session {
     await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions }] });
     await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
   }
+  async modifiedClick(css, keys) {
+    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "key", id: "keyboard", actions: keys.map(value => ({ type: "keyDown", value })) }] });
+    try { await this.click(css); }
+    finally { await wd("DELETE", `/session/${this.id}/actions`).catch(() => {}); }
+  }
   async keys(css, text) {
     const el = await this.find(css);
     await wd("POST", `/session/${this.id}/element/${el}/value`, { text });
@@ -227,6 +232,45 @@ async function checkCodonEdges(s) {
   await s.exec(`${doc} s.undo();`);
 }
 
+async function checkCodonGestures(s, root, label) {
+  const refs = await s.exec(`
+    const els = Array.from(document.querySelectorAll(${JSON.stringify(root + " .sv-codon")}));
+    const id = els[0]?.dataset.id;
+    const groups = new Map();
+    for (const el of els.filter(e => e.dataset.id === id)) {
+      const row = el.closest('.sv-row, .sv-ctx-row');
+      const group = groups.get(row) || [];
+      group.push({ id, index: Number(el.dataset.codonIndex) }); groups.set(row, group);
+    }
+    const group = [...groups.values()].find(g => g.length >= 5);
+    return group?.sort((a, b) => a.index - b.index).slice(0, 5);`);
+  check(`${label}: a row has enough residues to check gestures`, !!refs);
+  if (!refs) return;
+  const hit = i => `${root} .sv-codon[data-id="${refs[i].id}"][data-codon-index="${refs[i].index}"]`;
+  const state = () => s.exec(`${doc} return { picks: s.selection.codons?.picks.map(p => p.index).sort((a,b) => a-b), range: s.selection.range, ranges: s.selection.ranges, marked: document.querySelectorAll(${JSON.stringify(root + " .sv-codon-selected")}).length };`);
+  const drag = async (from, to) => {
+    await s.click(hit(from));
+    const points = await s.exec(`return [${JSON.stringify(hit(from))}, ${JSON.stringify(hit(to))}].map(css => { const r = document.querySelector(css).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });`);
+    await s.drag(points[0], points[1]);
+  };
+  for (const [from, to] of [[0, 4], [4, 0]]) {
+    await drag(from, to);
+    const selected = await state();
+    check(`${label}: dragging ${from < to ? 'forward' : 'backward'} selects complete codons`, JSON.stringify(selected.picks) === JSON.stringify(refs.map(p => p.index)) && selected.marked === 5, JSON.stringify(selected));
+  }
+  await s.click(hit(0));
+  await s.modifiedClick(hit(4), [CTRL]);
+  const separate = await state();
+  check(`${label}: Ctrl-click adds a separate codon without its neighbours`, separate.range === null && separate.ranges?.length === 2 && JSON.stringify(separate.picks) === JSON.stringify([refs[0].index, refs[4].index]), JSON.stringify(separate));
+  await s.modifiedClick(hit(2), [CTRL, SHIFT]);
+  const extended = await state();
+  check(`${label}: Ctrl-Shift-click fills from the last clicked codon and keeps other picks`, JSON.stringify(extended.picks) === JSON.stringify([refs[0].index, ...refs.slice(2).map(p => p.index)]), JSON.stringify(extended));
+  await s.modifiedClick(hit(3), [CTRL]);
+  const toggled = await state();
+  check(`${label}: Ctrl-click can remove a picked codon`, JSON.stringify(toggled.picks) === JSON.stringify([refs[0].index, refs[2].index, refs[4].index]), JSON.stringify(toggled));
+  await s.click(hit(0));
+}
+
 async function main() {
   const driver = await startDriver();
   const s = await Session.start([data("e2e", "pUC19-annotated.gb")]);
@@ -298,9 +342,11 @@ async function main() {
     const captions = await s.exec("return { captions: Array.from(document.querySelectorAll('.sv-seq .sv-feature-caption')).map(c => c.textContent), margin: document.querySelectorAll('.sv-seq .sv-gutter-label').length };");
     check("Coding features are named under their amino acids, not in the margin", captions.captions.some(c => /AmpR ←|lacZ/.test(c)) && captions.margin === 0, JSON.stringify(captions));
     await checkCodonClicks(s, ".sv-seq", "Sequence translation");
+    await checkCodonGestures(s, ".sv-seq", "Sequence translation");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
     check("Colour amino acids colours each residue by its chemistry", await s.waitFor("document.querySelector('.sv-seq .sv-aa-box.sv-aa-hydrophobic') && document.querySelector('.sv-seq .sv-aa-box.sv-aa-positive')", 3000));
     await checkCodonClicks(s, ".sv-seq", "Coloured sequence translation");
+    await checkCodonGestures(s, ".sv-seq", "Coloured sequence translation");
     await s.shot("03-amino-acid-colours");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
     await checkCodonEdges(s);
@@ -426,10 +472,12 @@ async function main() {
     const ctxSel = await s.exec(`${doc} return { range: s.selection.range, focus: s.selection.focus, bands: document.querySelectorAll('.sv-ctx .sv-sel-band').length, text: String(getSelection()), still: /AmpR-NdeI-F/.test(document.querySelector('.sv-ctx-name').textContent) };`);
     check("Dragging over the bases around a primer selects them on both strands", ctxSel.range && ctxSel.range.end - ctxSel.range.start >= 20 && !ctxSel.focus && ctxSel.bands >= 1 && !ctxSel.text && ctxSel.still, JSON.stringify(ctxSel));
     await checkCodonClicks(s, ".sv-ctx", "Primer translation");
+    await checkCodonGestures(s, ".sv-ctx", "Primer translation");
     await s.click("button[data-tab=sequence]");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
     await s.click("button[data-tab=primers]");
     await checkCodonClicks(s, ".sv-ctx", "Coloured primer translation");
+    await checkCodonGestures(s, ".sv-ctx", "Coloured primer translation");
     check("Selecting codons and their feature keeps the same primer in view", await s.exec("return /AmpR-NdeI-F/.test(document.querySelector('.sv-ctx-name').textContent) && !!document.querySelector('.sv-ctx-primer');"));
     await s.click("button[data-tab=sequence]");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");

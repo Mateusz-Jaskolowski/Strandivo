@@ -12,7 +12,8 @@ import { codons, cutSites, featureStyles, isCds, orfs, orfTitle, primerAlignment
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
 import { aminoGroup } from "../lib/aminoAcids.ts";
-import { codonHit, codonRange } from "./translationHit.ts";
+import { codonHit, markCodonSelection, TranslationDrag } from "./translationHit.ts";
+import { deleteSelected, selectedBases, selectedRanges } from "../lib/selection.ts";
 import { layoutRegions, regionRange, regionSpans, regionsOf } from "../lib/regions.ts";
 import { drawRegionTracks, layoutRegionTracks, markRegionSelection, REGION_TRACK_HEIGHT, type RegionTrack, type RegionTrackPiece } from "./regionTracks.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -24,7 +25,6 @@ import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import type { CutSite } from "../lib/enzymes.ts";
 import type { Orf } from "../lib/orfs.ts";
 import {
-  basesIn,
   cleanBases,
   complement,
   deleteRange,
@@ -773,13 +773,14 @@ export class SequenceView {
     const r = this.rendered.get(i);
     const row = this.rows[i];
     if (!r || !row) return;
-    const { range, caret } = this.ctx.store.selection;
+    const { caret } = this.ctx.store.selection;
+    const ranges = selectedRanges(this.ctx.store.selection);
     const n = this.ctx.store.length;
     const o = this.ctx.options;
     const strandsH = o.complement ? row.yBot + 18 - row.yTop : 18;
     const parts: HTMLElement[] = [];
     const ch = (v: number) => `${v}ch`;
-    if (range) {
+    for (const range of ranges) {
       for (const [a, b] of clip(range.start, range.end, row.start, row.end, n)) {
         const el = document.createElement("div");
         el.className = "sv-sel-band";
@@ -790,7 +791,7 @@ export class SequenceView {
     const caretRow = caret >= n ? this.rows.length - 1 : Math.floor(caret / this.bpr);
     if (caretRow === i) {
       const el = document.createElement("div");
-      el.className = range ? "sv-caret sv-caret-dim" : "sv-caret";
+      el.className = ranges.length ? "sv-caret sv-caret-dim" : "sv-caret";
       el.setAttribute("style", `left:${ch(caret - row.start)};top:${row.yTop - 3}px;height:${strandsH + 6}px`);
       parts.push(el);
     }
@@ -798,6 +799,7 @@ export class SequenceView {
     // The selected cut site, and the other sites of its enzyme or of the picked ones.
     const { focus } = this.ctx.store.selection;
     markRegionSelection(r.el, focus);
+    markCodonSelection(r.el, this.ctx.store.selection);
     const picked = pickedEnzymes(this.ctx.store.selection);
     for (const el of Array.from(r.el.querySelectorAll<HTMLElement>('[data-kind="cutsite"]'))) {
       const id = el.dataset.id ?? "";
@@ -865,17 +867,13 @@ export class SequenceView {
   }
 
   private updateStripSelection() {
-    const { range } = this.ctx.store.selection;
+    const ranges = selectedRanges(this.ctx.store.selection);
     const n = this.ctx.store.length || 1;
-    if (!range) {
-      this.stripSel.hidden = true;
-      return;
-    }
-    this.stripSel.hidden = false;
-    const start = range.start <= range.end ? range.start : 0;
-    const end = range.start <= range.end ? range.end : n - 1;
-    this.stripSel.style.left = `${(start / n) * 100}%`;
-    this.stripSel.style.width = `${Math.max(0.3, ((end - start + 1) / n) * 100)}%`;
+    this.stripSel.hidden = !ranges.length;
+    this.stripSel.style.left = "0";
+    this.stripSel.style.width = "100%";
+    this.stripSel.style.background = "none";
+    this.stripSel.replaceChildren(...ranges.flatMap(r => pieces(r, n)).map(r => h("div", { style: { position: "absolute", left: `${r.start / n * 100}%`, width: `${Math.max(0.3, (r.end - r.start + 1) / n * 100)}%`, height: "100%", background: "var(--accent)", borderRadius: "2px" } })));
   }
 
   private jumpFromStrip(e: PointerEvent) {
@@ -905,7 +903,7 @@ export class SequenceView {
     let anchor: number | null = null;
     let dragging = false;
     let target: Focus | null = null;
-    let codon: Range | null = null;
+    const translation = new TranslationDrag(this.ctx, "sequence");
     let startX = 0;
     let startY = 0;
     this.canvas.addEventListener("pointerdown", e => {
@@ -915,7 +913,7 @@ export class SequenceView {
       this.focus();
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       target = el?.dataset.kind ? hitOf(el) : null;
-      codon = codonRange(el);
+      const onCodon = translation.begin(el, e);
       if (target?.kind === "cutsite" && isPickClick(e)) {
         pickSite(this.ctx, target.id, "sequence");
         anchor = null;
@@ -923,7 +921,7 @@ export class SequenceView {
       }
       const b = this.boundaryAt(e.clientX, e.clientY);
       const sel = store.selection;
-      if (e.shiftKey) {
+      if (e.shiftKey && !onCodon) {
         const from = sel.anchor ?? (sel.range ? sel.range.start : sel.caret);
         this.selectBetween(from, b);
         anchor = from;
@@ -937,17 +935,18 @@ export class SequenceView {
       if (anchor === null) return;
       if (!dragging && Math.hypot(e.clientX - startX, e.clientY - startY) < 3) return;
       dragging = true;
-      this.selectBetween(anchor, this.boundaryAt(e.clientX, e.clientY));
+      const b = this.boundaryAt(e.clientX, e.clientY);
+      if (!translation.move(e.clientX, e.clientY, Math.max(0, b - 1))) this.selectBetween(anchor, b);
       this.autoScroll(e.clientY);
     });
     const end = (e: PointerEvent) => {
       if (anchor === null) return;
-      if (!dragging && !e.shiftKey) {
-        if (codon) store.selectRange(codon, null, "sequence");
-        else if (target) this.selectAnnotation(target);
+      if (!dragging && !e.shiftKey && !translation.active) {
+        if (target) this.selectAnnotation(target);
         else store.select({ range: null, caret: anchor, anchor }, "sequence");
       }
       anchor = null;
+      translation.end();
       try {
         this.canvas.releasePointerCapture(e.pointerId);
       } catch {
@@ -965,6 +964,7 @@ export class SequenceView {
       if (t) this.ctx.contextMenu(t, { x: e.clientX, y: e.clientY });
     });
     this.canvas.addEventListener("dblclick", e => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       // Pointer capture can send the double-click to the canvas instead of the hit area.
       const hit = el?.dataset.kind ? hitOf(el) : target;
@@ -1006,8 +1006,7 @@ export class SequenceView {
   /** Keeps the hidden text field holding the selected bases, so the Edit menu's Copy works. */
   private syncClipboard() {
     if (document.activeElement !== this.clipboard) return;
-    const { range } = this.ctx.store.selection;
-    const text = range ? basesIn(this.ctx.store.data.sequence, range) : "";
+    const text = selectedBases(this.ctx.store.data.sequence, this.ctx.store.selection);
     if (this.clipboard.value !== text) this.clipboard.value = text;
     this.clipboard.select();
   }
@@ -1084,7 +1083,7 @@ export class SequenceView {
             }
             return;
           }
-          if (sel.range) this.deleteSelection();
+          if (selectedRanges(sel).length) this.deleteSelection();
           else if (e.key === "Backspace" && caret > 0) {
             store.apply(deleteRange(store.data, { start: caret - 1, end: caret - 1 }), "Delete", { caret: caret - 1 }, "delete");
           } else if (e.key === "Delete" && caret < n) {
@@ -1121,16 +1120,14 @@ export class SequenceView {
     area.addEventListener("focus", () => this.el.classList.add("sv-seq-focused"));
     area.addEventListener("blur", () => this.el.classList.remove("sv-seq-focused"));
     area.addEventListener("copy", e => {
-      const { range } = store.selection;
-      if (!range) return;
+      if (!selectedRanges(store.selection).length) return;
       e.preventDefault();
-      e.clipboardData?.setData("text/plain", basesIn(store.data.sequence, range));
+      e.clipboardData?.setData("text/plain", selectedBases(store.data.sequence, store.selection));
     });
     area.addEventListener("cut", e => {
-      const { range } = store.selection;
-      if (!range) return;
+      if (!selectedRanges(store.selection).length) return;
       e.preventDefault();
-      e.clipboardData?.setData("text/plain", basesIn(store.data.sequence, range));
+      e.clipboardData?.setData("text/plain", selectedBases(store.data.sequence, store.selection));
       this.deleteSelection("Cut");
     });
     area.addEventListener("paste", e => {
@@ -1154,6 +1151,10 @@ export class SequenceView {
   private typeBases(bases: string, label = "Typing") {
     const store = this.ctx.store;
     const { range, caret } = store.selection;
+    if (store.selection.ranges) {
+      toast("Select one continuous stretch to replace bases.", "info");
+      return;
+    }
     if (range) {
       const r = replaceRange(store.data, range, bases);
       store.apply(r.data, label, { caret: r.caret }, label === "Typing" ? "typing" : undefined);
@@ -1165,6 +1166,11 @@ export class SequenceView {
 
   deleteSelection(label = "Delete") {
     const store = this.ctx.store;
+    if (store.selection.ranges) {
+      const next = deleteSelected(store.data, store.selection);
+      store.apply(next.data, label, { caret: next.caret });
+      return;
+    }
     const { range } = store.selection;
     if (!range) return;
     const n = store.length;

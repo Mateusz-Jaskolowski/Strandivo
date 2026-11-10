@@ -23,6 +23,7 @@ export function digestEnzymes(siteId: string, picked: string[] = []): string[] {
 export type MenuTarget =
   | { kind: "feature" | "primer" | "cutsite" | "orf"; id: string; region?: number }
   | { kind: "selection"; range: Range }
+  | { kind: "selections"; ranges: Range[] }
   | { kind: "cursor"; at: number };
 
 export type MenuAction =
@@ -119,6 +120,8 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
   const n = d.sequence.length;
   const show = item("show-other", c.onMap ? "Show in sequence" : "Show on map");
   switch (target.kind) {
+    case "selections":
+      return [item("copy", "Copy"), item("copy-revcomp", "Copy reverse complement"), "separator", item("delete-bases", "Delete bases")];
     case "selection": {
       const len = rangeLength(target.range, n);
       return tidy([

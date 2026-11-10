@@ -21,8 +21,10 @@ and shows everything it would send before anything goes. Usage statistics, if yo
 them, count a little more, still only as fixed words and ranges.
 
 - **Select codons from translation**: click an amino acid in the Sequence view or around
-  a primer to select its DNA bases. Double-click it or click the feature name to select
-  the whole feature.
+  a primer to select its DNA bases, or drag to select whole codons. Hold ⌘ on Mac or Ctrl
+  elsewhere to pick separate amino acids, and Shift to select through the intervening
+  residues. Double-click an amino acid or click the feature name to select the whole
+  feature. Copying or deleting separate codons leaves the bases between them alone.
 
 - **Protein regions**: add and edit domains, helices, linkers, CDRs and frameworks within
   one CDS, with colours and nested regions. A protein diagram and expandable outline

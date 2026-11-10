@@ -70,10 +70,13 @@ and CI checks that they exist.
   view's visibility setting; the map stays independent. A region click selects that
   region's bases while keeping the same primer in view. Neither region tracks nor a
   primer's non-annealing tail imply that the tail binds the template there.
-- **Translation clicks** in both sequence panels select the codon's DNA span as plain
-  bases, using the shared hit areas in `src/views/translationHit.ts`. A double-click or
-  the feature name selects the whole feature. Keep the primer's window in place when
-  selecting a codon in its panel.
+- **Translation selection** in both sequence panels uses `src/views/translationHit.ts`:
+  click for one codon, drag for whole codons in the starting CDS, ⌘/Ctrl-click to toggle
+  separate codons, and Shift to extend from the last clicked residue (with ⌘/Ctrl to keep
+  other picks). A double-click or the feature name selects the whole feature. A gesture
+  remembers its original picks so dragging back shrinks the span; pointer capture means
+  the codon under a moving pointer comes from `elementFromPoint`, not the event's target.
+  The bases of a split codon exclude introns. Keep the primer's window in place throughout.
 
 ## Decisions (and why)
 

@@ -5,6 +5,8 @@
 // subscribe to changes and redraw what they need.
 
 import type { Range, SeqData } from "../lib/seqdata.ts";
+import { mergeRanges } from "../lib/selection.ts";
+import type { CodonSelection } from "../lib/codonSelection.ts";
 
 export type FocusKind = "feature" | "primer" | "cutsite" | "orf";
 
@@ -17,8 +19,12 @@ export interface Focus {
 }
 
 export interface Selection {
-  /** Selected bases, or null for just a caret. */
+  /** One continuous stretch, or null for a caret or separate stretches. */
   range: Range | null;
+  /** Non-contiguous selected bases. `range` is null while more than one stretch is picked. */
+  ranges?: Range[];
+  /** Whole amino acids picked in either sequence panel, with a shared Shift anchor. */
+  codons?: CodonSelection;
   /** Insertion point between bases (0…n). With a range, it sits after the range's end. */
   caret: number;
   /** Fixed end of a mouse or shift selection (a boundary 0…n). */
@@ -99,16 +105,7 @@ export class DocStore {
 
   /** Changes the selection. Unspecified fields are reset (a new selection replaces the old). */
   select(sel: Partial<Selection>, source?: string) {
-    const n = this.length;
-    const range = sel.range ? clampRange(sel.range, n) : null;
-    const caret = Math.max(0, Math.min(n, sel.caret ?? (range ? (range.end + 1) % (n + 1) : this.selection.caret)));
-    this.selection = {
-      range,
-      caret,
-      anchor: sel.anchor ?? null,
-      focus: range ? sel.focus ?? null : null,
-      ...(range && sel.enzymes && sel.enzymes.length > 1 ? { enzymes: sel.enzymes } : {})
-    };
+    this.selection = fitSelection(sel, this.length, this.selection.caret, this.data.circular);
     this.emit({ data: false, selection: true, source });
   }
 
@@ -134,16 +131,10 @@ export class DocStore {
     const before = this.data;
     this.data = next;
     if (selection) {
-      const n = next.sequence.length;
-      const range = selection.range ? clampRange(selection.range, n) : null;
-      this.selection = {
-        range,
-        caret: Math.max(0, Math.min(n, selection.caret ?? (range ? range.end + 1 : 0))),
-        anchor: selection.anchor ?? null,
-        focus: range ? selection.focus ?? null : null
-      };
+      this.selection = fitSelection(selection, next.sequence.length, 0, next.circular);
     } else {
-      this.selection = fitSelection(this.selection, next.sequence.length);
+      const sel = before.sequence === next.sequence ? this.selection : { ...this.selection, ranges: undefined, codons: undefined };
+      this.selection = fitSelection(sel, next.sequence.length, 0, next.circular);
     }
     this.emit({ data: true, selection: true, before, ...(merge ? { merged: true } : {}) });
   }
@@ -184,18 +175,16 @@ export class DocStore {
   }
 }
 
-function clampRange(r: Range, n: number): Range | null {
-  if (n <= 0) return null;
-  const start = Math.max(0, Math.min(n - 1, r.start));
-  const end = Math.max(0, Math.min(n - 1, r.end));
-  return { start, end };
-}
-
-function fitSelection(s: Selection, n: number): Selection {
+function fitSelection(s: Partial<Selection>, n: number, fallbackCaret = 0, circular = true): Selection {
+  const ranges = mergeRanges(s.ranges ?? (s.range ? [s.range] : []), n, circular);
+  const range = ranges.length === 1 ? ranges[0] : null;
   return {
-    range: s.range ? clampRange(s.range, n) : null,
-    caret: Math.max(0, Math.min(n, s.caret)),
-    anchor: s.anchor === null ? null : Math.max(0, Math.min(n, s.anchor)),
-    focus: s.focus
+    range,
+    caret: Math.max(0, Math.min(n, s.caret ?? (range ? range.end + 1 : fallbackCaret))),
+    anchor: s.anchor == null ? null : Math.max(0, Math.min(n, s.anchor)),
+    focus: range ? s.focus ?? null : null,
+    ...(ranges.length > 1 ? { ranges } : {}),
+    ...(ranges.length && s.codons ? { codons: s.codons } : {}),
+    ...(range && s.enzymes && s.enzymes.length > 1 ? { enzymes: s.enzymes } : {})
   };
 }

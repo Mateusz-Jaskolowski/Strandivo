@@ -62,6 +62,10 @@ test("cut sites and ORFs", () => {
   assert.deepEqual(labels({ kind: "orf", id: "1:10" }, { onMap: true }), ["Copy DNA", "Copy protein", "—", "Add as feature", "Show in sequence"]);
 });
 
+test("separate stretches offer actions that leave their unselected gaps alone", () => {
+  assert.deepEqual(labels({ kind: "selections", ranges: [{ start: 10, end: 12 }, { start: 40, end: 42 }] }), ["Copy", "Copy reverse complement", "—", "Delete bases"]);
+});
+
 test("features: protein only for coding ones, and the other view", () => {
   assert.ok(labels({ kind: "feature", id: "cds" }).includes("Copy protein"));
   assert.ok(!labels({ kind: "feature", id: "pro" }).includes("Copy protein"));

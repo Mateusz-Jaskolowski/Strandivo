@@ -8,6 +8,7 @@
 import { h } from "../ui/dom.ts";
 import { codons, featureStyles, isCds, orfFeature, orfs } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
+import { selectedRanges } from "../lib/selection.ts";
 import { firstAtOrAfter, refPosAtColumn, stackInLanes, type AlignedTrack, type AlignmentLayout } from "../lib/alignLayout.ts";
 import { peakRatios } from "../lib/chromatogram.ts";
 import { continuesFrame, frameChains } from "../lib/genetics.ts";
@@ -517,8 +518,9 @@ export class TraceView {
     g.textBaseline = "middle";
 
     // Selection from the document (shared with the map and sequence).
-    const { range, caret } = this.ctx.store.selection;
-    if (range && n === L.columnOf.length - 1) {
+    const { caret } = this.ctx.store.selection;
+    const ranges = selectedRanges(this.ctx.store.selection);
+    for (const range of n === L.columnOf.length - 1 ? ranges : []) {
       const parts = range.start <= range.end ? [[range.start, range.end]] : [[range.start, n - 1], [0, range.end]];
       g.fillStyle = col.accentSoft;
       for (const [a, b] of parts) {
@@ -526,7 +528,8 @@ export class TraceView {
         const x1 = X(L.columnOf[b] + 1);
         if (x1 > 0 && x0 < w) g.fillRect(x0, 0, x1 - x0, H);
       }
-    } else if (!range && caret >= 0 && caret <= n && n === L.columnOf.length - 1) {
+    }
+    if (!ranges.length && caret >= 0 && caret <= n && n === L.columnOf.length - 1) {
       const x = Math.round(X(L.columnOf[caret])) + 0.5;
       g.strokeStyle = col.accent;
       g.lineWidth = 1.5;

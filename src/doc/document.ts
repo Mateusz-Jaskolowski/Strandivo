@@ -44,6 +44,7 @@ import { describeDifference } from "../lib/genetics.ts";
 import { selectionTmText } from "../lib/primers.ts";
 import { designOf } from "../lib/variable.ts";
 import { loadSettings, onSettingsChanged, saveSettings, type Settings } from "../settings.ts";
+import { selectedBases, selectedRanges } from "../lib/selection.ts";
 import { parseSequenceFile, serialize } from "./fileio.ts";
 import { fromParsed, toParsed, type LoadedDocument } from "./convert.ts";
 import { DocStore } from "./store.ts";
@@ -546,7 +547,11 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const n = d.sequence.length;
     const { range, focus, caret } = store.selection;
     const left: (Node | string)[] = [];
-    if (range) {
+    if (store.selection.ranges) {
+      const ranges = selectedRanges(store.selection);
+      const bases = selectedBases(d.sequence, store.selection);
+      left.push(h("span", { class: "sv-status-strong" }, `${ranges.length} stretches selected`), h("span", null, `${fmt(bases.length)} bp`), h("span", null, `GC ${gcPercent(bases).toFixed(1)}%`));
+    } else if (range) {
       let label = "Selection";
       if (focus?.kind === "feature") {
         const f = d.features.find(x => x.id === focus.id);
@@ -930,6 +935,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         openCloningDialog(ctx);
         return true;
       case "reverse-complement": {
+        if (store.selection.ranges) {
+          toast("Select one continuous stretch to reverse-complement bases.", "info", 4000);
+          return true;
+        }
         const { range } = store.selection;
         if (range && range.start > range.end) {
           toast("Selections that cross the origin can't be reverse-complemented.", "info", 4000);
@@ -940,6 +949,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         return true;
       }
       case "set-origin": {
+        if (store.selection.ranges) {
+          toast("Place the cursor where the sequence should start.", "info");
+          return true;
+        }
         const c = store.selection.range ? store.selection.range.start : store.selection.caret;
         if (!store.data.circular) toast("Only circular sequences have an origin.", "info");
         else if (c <= 0 || c >= store.length) toast("Place the cursor where the sequence should start.", "info");
@@ -995,8 +1008,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     } else if (!id && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s" && !isDesktop) {
       e.preventDefault();
       void save(e.shiftKey);
-    } else if (e.key === "Escape" && !e.defaultPrevented && store.selection.enzymes && !inField() && !seqField() && !document.querySelector(".sv-dialog-overlay, .ps-modal-overlay")) {
-      // Esc drops enzymes picked for a digest (the sequence handles its own Esc).
+    } else if (e.key === "Escape" && !e.defaultPrevented && (store.selection.enzymes || store.selection.codons) && !inField() && !seqField() && !document.querySelector(".sv-dialog-overlay, .ps-modal-overlay")) {
+      // Esc drops picked enzymes or codons (the sequence handles its own Esc).
       e.preventDefault();
       store.select({ range: null, caret: store.selection.caret }, "keys");
     }

@@ -13,6 +13,7 @@ import { digestEnzymes, menuFor, type MenuEntry, type MenuItem, type MenuTarget 
 import { basesIn, deleteRange, featureBases, inRange, rangeLength, reverseComplement, type Range } from "../lib/seqdata.ts";
 import { proteinRegionTargets, regionSpans, regionsOf, withRegions } from "../lib/regions.ts";
 import { openProteinRegionDialog, openProteinRegionFromSelection } from "../views/proteinRegionDialog.ts";
+import { deleteSelected, selectedBases } from "../lib/selection.ts";
 import { cutSites, orfFeature, orfs, protein } from "./analysis.ts";
 import type { DocContext, Tab } from "./context.ts";
 import type { Focus } from "./store.ts";
@@ -53,6 +54,8 @@ export function openContextMenu(host: ContextMenuHost, target: MenuTarget, at: {
 export function menuTargetAt(ctx: DocContext, annotation: Focus | null, b: number | null, selectAnnotation: (f: Focus) => void, source: string): MenuTarget | null {
   const store = ctx.store;
   const { range, focus } = store.selection;
+  const ranges = store.selection.ranges;
+  if (ranges && b !== null && ranges.some(r => inRange(r, b % store.length) || inRange(r, (b - 1 + store.length) % store.length))) return { kind: "selections", ranges };
   // A deliberately selected stretch inside a CDS takes precedence over its drawn bar.
   if (annotation?.kind === "feature" && !focus && range && b !== null &&
     (inRange(range, b % store.length) || inRange(range, (b - 1 + store.length) % store.length)) &&
@@ -89,9 +92,19 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
   const show = (tab: Tab) => ctx.showTab(tab);
   switch (action) {
     case "copy":
+      if (target.kind === "selections") {
+        const bases = selectedBases(d.sequence, { range: null, ranges: target.ranges });
+        host.copy(bases, `${fmt(bases.length)} bp`);
+        return;
+      }
       if (range) host.copy(basesIn(d.sequence, range), `${fmt(rangeLength(range, n))} bp`);
       return;
     case "copy-revcomp":
+      if (target.kind === "selections") {
+        const bases = selectedBases(d.sequence, { range: null, ranges: target.ranges });
+        host.copy(reverseComplement(bases), `reverse complement (${fmt(bases.length)} bp)`);
+        return;
+      }
       if (range) host.copy(reverseComplement(basesIn(d.sequence, range)), `reverse complement (${fmt(rangeLength(range, n))} bp)`);
       return;
     case "add-forward-primer":
@@ -126,6 +139,11 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
     case "reverse-complement-all":
       return ctx.command("reverse-complement");
     case "delete-bases":
+      if (target.kind === "selections") {
+        const next = deleteSelected(d, { range: null, ranges: target.ranges });
+        store.apply(next.data, "Delete", { caret: next.caret });
+        return;
+      }
       if (range) store.apply(deleteRange(d, range), "Delete", { caret: range.start <= range.end ? range.start : 0 });
       return;
     case "copy-dna":

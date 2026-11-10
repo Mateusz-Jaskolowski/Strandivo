@@ -42,6 +42,7 @@ import { openProteinRegionDialog, openProteinRegionFromSelection } from "./prote
 import { openProteinDiagram, proteinDiagram } from "./proteinDiagram.ts";
 import { openDigestDialog } from "./digestDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
+import { deleteSelected, selectedBases } from "../lib/selection.ts";
 
 /** The key held to pick enzymes, as the interface names it. */
 const pickKeyName = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "Hold ⌘" : "Hold Ctrl";
@@ -115,14 +116,15 @@ export class Inspector {
   }
 
   render() {
-    const { range, focus, caret, enzymes } = this.ctx.store.selection;
-    const key = `${focus?.kind}:${focus?.id}:${focus?.region}:${range?.start}:${range?.end}:${range ? "" : caret}:${this.ctx.tab}:${enzymes?.join(",") ?? ""}`;
+    const { range, ranges, focus, caret, enzymes } = this.ctx.store.selection;
+    const key = `${focus?.kind}:${focus?.id}:${focus?.region}:${range?.start}:${range?.end}:${range ? "" : caret}:${this.ctx.tab}:${enzymes?.join(",") ?? ""}:${ranges?.map(r => `${r.start}-${r.end}`).join(",") ?? ""}`;
     // Don't rebuild (and lose focus in a field) when nothing relevant changed.
     if (key === this.lastKey && this.el.childElementCount) return;
     this.lastKey = key;
     const d = this.ctx.store.data;
     let content: Node[];
-    if (focus?.kind === "feature") {
+    if (ranges) content = this.multipleRanges(ranges);
+    else if (focus?.kind === "feature") {
       const f = d.features.find(x => x.id === focus.id);
       content = f ? this.feature(f) : this.overview();
     } else if (focus?.kind === "primer") {
@@ -830,6 +832,25 @@ export class Inspector {
       )
     );
     return out;
+  }
+
+  private multipleRanges(ranges: Range[]): Node[] {
+    const bases = selectedBases(this.ctx.store.data.sequence, { range: null, ranges });
+    return [
+      h("div", { class: "sv-insp-head" }, h("h2", { class: "sv-insp-heading" }, "Selection"), this.facts([
+        ["Stretches", String(ranges.length)], ["Length", `${fmt(bases.length)} bp`], ["GC", `${gcPercent(bases).toFixed(1)}%`]
+      ])),
+      this.section("Locations", h("div", { class: "sv-code" }, ranges.map(loc).join(", "))),
+      h("div", { class: "sv-insp-actions" },
+        this.button("Copy", () => this.actions.copy(bases, `${fmt(bases.length)} bp`), { icon: "copy" }),
+        this.button("Copy rev-comp", () => this.actions.copy(reverseComplement(bases), `reverse complement (${fmt(bases.length)} bp)`), { icon: "copy" }),
+        this.button("Delete bases", () => {
+          const store = this.ctx.store;
+          const next = deleteSelected(store.data, store.selection);
+          store.apply(next.data, "Delete", { caret: next.caret });
+        }, { icon: "trash", danger: true, wide: true })
+      )
+    ];
   }
 
   // ---------- nothing selected ----------

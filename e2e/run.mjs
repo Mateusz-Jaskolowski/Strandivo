@@ -73,11 +73,11 @@ class Session {
   execAsync(script, ...args) {
     return wd("POST", `/session/${this.id}/execute/async`, { script, args });
   }
-  async waitFor(expr, timeout = 20000) {
+  async waitFor(expr, timeout = 20000, ...args) {
     const end = Date.now() + timeout;
     while (Date.now() < end) {
       try {
-        if (await this.exec(`return !!(${expr});`)) return true;
+        if (await this.exec(`return !!(${expr});`, ...args)) return true;
       } catch {
         /* page still loading */
       }
@@ -92,6 +92,22 @@ class Session {
   async click(css, using) {
     const el = await this.find(css, using);
     await wd("POST", `/session/${this.id}/element/${el}/click`, {});
+  }
+  async doubleClick(css) {
+    const el = await this.find(css);
+    const actions = [
+      { type: "pointerMove", origin: { "element-6066-11e4-a52e-4f735466cecf": el }, x: 0, y: 0 },
+      { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 },
+      { type: "pause", duration: 50 },
+      { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }
+    ];
+    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions }] });
+    await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
+  }
+  async modifiedClick(css, keys) {
+    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "key", id: "keyboard", actions: keys.map(value => ({ type: "keyDown", value })) }] });
+    try { await this.click(css); }
+    finally { await wd("DELETE", `/session/${this.id}/actions`).catch(() => {}); }
   }
   async keys(css, text) {
     const el = await this.find(css);
@@ -169,6 +185,92 @@ const addTouching = `${doc} const lac = s.data.features.find(f => f.name === "la
   s.apply({ ...s.data, features: [...s.data.features, { id: "e2e-touch", name: "lac promoter", type: "promoter", start: lac.end + 1, end: lac.end + 31, strand: -1, notes: {}, raw: {} }] }, "Add feature");
   return lac.id;`;
 
+/** Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS. */
+async function checkCodonClicks(s, root, label) {
+  const c = await s.exec(`${doc}
+    const el = document.querySelector(arguments[0] + ' .sv-codon');
+    if (!el) return null;
+    const f = s.data.features.find(f => f.id === el.dataset.id);
+    return { id: f.id, start: Number(el.dataset.codonStart), end: Number(el.dataset.codonEnd), featureStart: f.start, featureEnd: f.end, length: s.length };`, root);
+  check(`${label}: amino acids have codon hit areas`, !!c);
+  if (!c) return;
+  const hit = `${root} .sv-codon[data-id="${c.id}"][data-codon-start="${c.start}"]`;
+  const selected = () => s.exec(`${doc} return { range: s.selection.range, focus: s.selection.focus };`);
+  await s.click(hit);
+  const single = await selected();
+  check(`${label}: one click selects the codon's three bases without selecting the feature`, single.range?.start === c.start && single.range?.end === c.end && !single.focus && (c.end - c.start + c.length) % c.length === 2, JSON.stringify(single));
+  await s.doubleClick(hit);
+  const double = await selected();
+  check(`${label}: a double-click selects the whole feature`, double.range?.start === c.featureStart && double.range?.end === c.featureEnd && double.focus?.id === c.id, JSON.stringify(double));
+  await s.click(hit);
+  await s.click(`${root} [data-id="${c.id}"] .sv-feature-caption, ${root} .sv-feature-caption[data-id="${c.id}"]`);
+  const caption = await selected();
+  check(`${label}: clicking the feature name selects the whole feature`, caption.range?.start === c.featureStart && caption.range?.end === c.featureEnd && caption.focus?.id === c.id, JSON.stringify(caption));
+}
+
+async function checkCodonEdges(s) {
+  const cases = await s.exec(`${doc}
+    const row = document.querySelector('.sv-seq .sv-bases').textContent.length;
+    const n = s.length;
+    const cases = [
+      { id: 'e2e-codon-forward', start: row - 2, end: row + 9, strand: 1, mid: row - 1, codon: { start: row - 2, end: row } },
+      { id: 'e2e-codon-reverse', start: row * 2 - 10, end: row * 2 + 1, strand: -1, mid: row * 2, codon: { start: row * 2 - 1, end: row * 2 + 1 } },
+      { id: 'e2e-codon-origin-forward', start: n - 2, end: 6, strand: 1, mid: n - 1, codon: { start: n - 2, end: 0 } },
+      { id: 'e2e-codon-origin-reverse', start: n - 7, end: 1, strand: -1, mid: 0, codon: { start: n - 1, end: 1 } }
+    ];
+    const features = cases.map(({ codon, mid, ...f }) => ({ ...f, name: f.id, type: 'CDS', notes: {}, raw: {} }));
+    s.apply({ ...s.data, features: [...s.data.features, ...features] }, 'Test codon edges');
+    return cases;`);
+  for (const c of cases) {
+    await s.exec(`${doc} s.select({ range: null, caret: arguments[0] }, 'e2e');`, c.mid);
+    const hit = `.sv-seq .sv-codon[data-id="${c.id}"][data-codon-start="${c.codon.start}"]`;
+    check(`${c.id}: the codon is drawn`, await s.waitFor("document.querySelector(arguments[0])", 5000, hit));
+    await s.click(hit);
+    const sel = await s.exec(`${doc} return s.selection;`);
+    check(`${c.id}: selects all three bases across the row or origin`, sel.range?.start === c.codon.start && sel.range?.end === c.codon.end && !sel.focus, JSON.stringify(sel));
+  }
+  await s.exec(`${doc} s.undo();`);
+}
+
+async function checkCodonGestures(s, root, label) {
+  const refs = await s.exec(`
+    const els = Array.from(document.querySelectorAll(arguments[0] + ' .sv-codon'));
+    const id = els[0]?.dataset.id;
+    const groups = new Map();
+    for (const el of els.filter(e => e.dataset.id === id)) {
+      const row = el.closest('.sv-row, .sv-ctx-row');
+      const group = groups.get(row) || [];
+      group.push({ id, index: Number(el.dataset.codonIndex) }); groups.set(row, group);
+    }
+    const group = [...groups.values()].find(g => g.length >= 5);
+    return group?.sort((a, b) => a.index - b.index).slice(0, 5);`, root);
+  check(`${label}: a row has enough residues to check gestures`, !!refs);
+  if (!refs) return;
+  const hit = i => `${root} .sv-codon[data-id="${refs[i].id}"][data-codon-index="${refs[i].index}"]`;
+  const state = () => s.exec(`${doc} return { picks: s.selection.codons?.picks.map(p => p.index).sort((a,b) => a-b), range: s.selection.range, ranges: s.selection.ranges, marked: document.querySelectorAll(arguments[0] + ' .sv-codon-selected').length };`, root);
+  const drag = async (from, to) => {
+    await s.click(hit(from));
+    const points = await s.exec("return arguments[0].map(css => { const r = document.querySelector(css).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });", [hit(from), hit(to)]);
+    await s.drag(points[0], points[1]);
+  };
+  for (const [from, to] of [[0, 4], [4, 0]]) {
+    await drag(from, to);
+    const selected = await state();
+    check(`${label}: dragging ${from < to ? 'forward' : 'backward'} selects complete codons`, JSON.stringify(selected.picks) === JSON.stringify(refs.map(p => p.index)) && selected.marked === 5, JSON.stringify(selected));
+  }
+  await s.click(hit(0));
+  await s.modifiedClick(hit(4), [CTRL]);
+  const separate = await state();
+  check(`${label}: Ctrl-click adds a separate codon without its neighbours`, separate.range === null && separate.ranges?.length === 2 && JSON.stringify(separate.picks) === JSON.stringify([refs[0].index, refs[4].index]), JSON.stringify(separate));
+  await s.modifiedClick(hit(2), [CTRL, SHIFT]);
+  const extended = await state();
+  check(`${label}: Ctrl-Shift-click fills from the last clicked codon and keeps other picks`, JSON.stringify(extended.picks) === JSON.stringify([refs[0].index, ...refs.slice(2).map(p => p.index)]), JSON.stringify(extended));
+  await s.modifiedClick(hit(3), [CTRL]);
+  const toggled = await state();
+  check(`${label}: Ctrl-click can remove a picked codon`, JSON.stringify(toggled.picks) === JSON.stringify([refs[0].index, refs[2].index, refs[4].index]), JSON.stringify(toggled));
+  await s.click(hit(0));
+}
+
 async function main() {
   const driver = await startDriver();
   const s = await Session.start([data("e2e", "pUC19-annotated.gb")]);
@@ -239,10 +341,15 @@ async function main() {
     check("Protein translation is shown under coding features", await s.exec("return document.querySelectorAll('.sv-aa').length > 0"));
     const captions = await s.exec("return { captions: Array.from(document.querySelectorAll('.sv-seq .sv-feature-caption')).map(c => c.textContent), margin: document.querySelectorAll('.sv-seq .sv-gutter-label').length };");
     check("Coding features are named under their amino acids, not in the margin", captions.captions.some(c => /AmpR ←|lacZ/.test(c)) && captions.margin === 0, JSON.stringify(captions));
+    await checkCodonClicks(s, ".sv-seq", "Sequence translation");
+    await checkCodonGestures(s, ".sv-seq", "Sequence translation");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
     check("Colour amino acids colours each residue by its chemistry", await s.waitFor("document.querySelector('.sv-seq .sv-aa-box.sv-aa-hydrophobic') && document.querySelector('.sv-seq .sv-aa-box.sv-aa-positive')", 3000));
+    await checkCodonClicks(s, ".sv-seq", "Coloured sequence translation");
+    await checkCodonGestures(s, ".sv-seq", "Coloured sequence translation");
     await s.shot("03-amino-acid-colours");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
+    await checkCodonEdges(s);
     const lacIdSeq = await s.exec(addTouching);
     await sleep(400);
     const seqTops = await s.exec(`const bar = document.querySelector('.sv-feature-bar[data-id="e2e-touch"]'); const lac = bar && bar.parentElement.querySelector('.sv-feature-bar[data-id="' + ${JSON.stringify(lacIdSeq)} + '"]'); return [lac?.style.top, bar?.style.top];`);
@@ -364,6 +471,17 @@ async function main() {
     await s.drag([strands[0], strands[1]], [strands[2], strands[3]]);
     const ctxSel = await s.exec(`${doc} return { range: s.selection.range, focus: s.selection.focus, bands: document.querySelectorAll('.sv-ctx .sv-sel-band').length, text: String(getSelection()), still: /AmpR-NdeI-F/.test(document.querySelector('.sv-ctx-name').textContent) };`);
     check("Dragging over the bases around a primer selects them on both strands", ctxSel.range && ctxSel.range.end - ctxSel.range.start >= 20 && !ctxSel.focus && ctxSel.bands >= 1 && !ctxSel.text && ctxSel.still, JSON.stringify(ctxSel));
+    await checkCodonClicks(s, ".sv-ctx", "Primer translation");
+    await checkCodonGestures(s, ".sv-ctx", "Primer translation");
+    await s.click("button[data-tab=sequence]");
+    await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
+    await s.click("button[data-tab=primers]");
+    await checkCodonClicks(s, ".sv-ctx", "Coloured primer translation");
+    await checkCodonGestures(s, ".sv-ctx", "Coloured primer translation");
+    check("Selecting codons and their feature keeps the same primer in view", await s.exec("return /AmpR-NdeI-F/.test(document.querySelector('.sv-ctx-name').textContent) && !!document.querySelector('.sv-ctx-primer');"));
+    await s.click("button[data-tab=sequence]");
+    await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
+    await s.click("button[data-tab=primers]");
 
     // --- a mutagenic primer: its change raised in the Sequence tab, and a colour of its own ---
     await s.exec(`${doc} const site = s.data.sequence.slice(1000, 1033).toUpperCase();

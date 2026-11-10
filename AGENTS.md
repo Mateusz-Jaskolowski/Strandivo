@@ -118,6 +118,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   tabs (`DocContext.openNew`), which count as edited until saved.
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that
   made it, so that view can skip scrolling to itself.
+  Separate codons can be picked with ⌘/Ctrl in either sequence panel. A selection has
+  `ranges` and a null `range` while it covers separate stretches: use `selectedRanges`
+  and `selectedBases` in `src/lib/selection.ts`, never a span covering the gaps. Commands
+  that need one continuous stretch must require one. Codon picks and their Shift anchor
+  live in the store so both panels share them; ordinary selections clear them.
 - **Delete with something clicked** (a feature, primer, protein region, cut site or ORF)
   first deletes that thing, or for a cut site or ORF only drops it from the selection, and
   leaves its bases selected; the next press deletes the bases (`src/lib/deletion.ts`). A

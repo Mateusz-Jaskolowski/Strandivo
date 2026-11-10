@@ -18,6 +18,7 @@ import { layoutRegions, regionColor, regionRange, regionSpans, regionsOf, region
 import { featureGaps, pieces as rangePieces, rangeLength, type Range, type SeqData, type SeqFeature } from "../lib/seqdata.ts";
 import { checkIcon, iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
+import { selectedRanges } from "../lib/selection.ts";
 
 
 interface LabelItem {
@@ -961,13 +962,14 @@ export class MapView {
       }
     }
     const parts: SVGElement[] = [];
+    const ranges = selectedRanges(sel);
     const n = g.n;
     if (g.circular) {
       const ang = (b: number) => (b / n) * 360 + g.rotation;
-      if (sel.range) {
-        const a0 = ang(sel.range.start);
-        const a1 = ang(sel.range.end + 1);
-        const whole = rangeLength(sel.range, n) >= n;
+      for (const range of ranges) {
+        const a0 = ang(range.start);
+        const a1 = ang(range.end + 1);
+        const whole = rangeLength(range, n) >= n;
         parts.push(s("path", { d: whole ? arcShape(0, 359.9, 46, 176, 0) : arcShape(a0, a1, 46, 176, 0), class: "sv-map-wedge" }));
         if (!whole)
           for (const a of [a0, a1]) {
@@ -975,7 +977,8 @@ export class MapView {
             const [x2, y2] = pt(a, 176);
             parts.push(s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2), class: "sv-map-wedge-edge" }));
           }
-      } else {
+      }
+      if (!ranges.length) {
         const a = ang(sel.caret);
         const [x1, y1] = pt(a, 60);
         const [x2, y2] = pt(a, 170);
@@ -985,10 +988,11 @@ export class MapView {
       const X = (p: number) => g.x0! + p * g.scale!;
       const top = g.selTop ?? 0;
       const bottom = g.selBottom ?? 100;
-      if (sel.range) {
-        const pieces = sel.range.start <= sel.range.end ? [[sel.range.start, sel.range.end + 1]] : [[sel.range.start, n], [0, sel.range.end + 1]];
+      for (const range of ranges) {
+        const pieces = range.start <= range.end ? [[range.start, range.end + 1]] : [[range.start, n], [0, range.end + 1]];
         for (const [a, b] of pieces) parts.push(s("rect", { x: f1(X(a)), y: f1(top), width: f1(Math.max(1.5, X(b) - X(a))), height: f1(bottom - top), class: "sv-map-wedge" }));
-      } else {
+      }
+      if (!ranges.length) {
         parts.push(s("line", { x1: f1(X(sel.caret)), y1: top, x2: f1(X(sel.caret)), y2: bottom, class: "sv-map-caret" }));
       }
     }

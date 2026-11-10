@@ -17,6 +17,8 @@ import type { DocContext } from "../doc/context.ts";
 import { changesText, gcContent } from "../lib/primers.ts";
 import { resizePrimer } from "../lib/primerEdit.ts";
 import { aminoGroup } from "../lib/aminoAcids.ts";
+import { codonHit, markCodonSelection, TranslationDrag } from "./translationHit.ts";
+import { selectedRanges } from "../lib/selection.ts";
 import { complement, inRange, rangeLength, type Range, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import type { Focus } from "../doc/store.ts";
@@ -232,12 +234,13 @@ export class PrimerContextView {
   }
 
   private renderSelection() {
-    const { range, caret } = this.ctx.store.selection;
-    const caretAt = range ? -1 : this.windowIndex(caret);
+    const { caret } = this.ctx.store.selection;
+    const ranges = selectedRanges(this.ctx.store.selection);
+    const caretAt = ranges.length ? -1 : this.windowIndex(caret);
     for (const row of this.rowParts) {
       const parts: HTMLElement[] = [];
       const px = (v: number) => `${Math.round(v * this.chPx * 100) / 100}px`;
-      if (range) {
+      for (const range of ranges) {
         for (const [a, b] of runsIn(pos => inRange(range, pos), row.positions)) {
           const el = h("div", { class: "sv-sel-band" });
           el.setAttribute("style", `left:${px(a)};width:${px(b - a + 1)};top:${row.yTop - 1}px;height:${row.strandsH + 2}px`);
@@ -254,6 +257,7 @@ export class PrimerContextView {
       row.sel.replaceChildren(...parts);
     }
     markRegionSelection(this.body, this.ctx.store.selection.focus);
+    markCodonSelection(this.body, this.ctx.store.selection);
   }
 
   private installMouse() {
@@ -261,6 +265,7 @@ export class PrimerContextView {
     let anchor: number | null = null;
     let moved = false;
     let target: Focus | null = null;
+    const translation = new TranslationDrag(this.ctx, SOURCE);
     const index = (e: MouseEvent) => Math.max(0, Math.min(this.total, this.boundaryAt(e) ?? 0));
     const hitOf = (e: Event): Focus | null => {
       const el = (e.target as Element).closest<HTMLElement>("[data-kind]");
@@ -272,11 +277,12 @@ export class PrimerContextView {
       if (!this.rowParts.length) return;
       e.preventDefault();
       target = hitOf(e);
+      const onCodon = translation.begin((e.target as Element).closest<HTMLElement>("[data-kind]"), e);
       const i = index(e);
       const sel = store.selection;
       const from = sel.anchor ?? (sel.range ? sel.range.start : sel.caret);
       const fromIndex = this.windowIndex(from);
-      if (e.shiftKey && fromIndex >= 0 && fromIndex <= this.total) {
+      if (e.shiftKey && !onCodon && fromIndex >= 0 && fromIndex <= this.total) {
         this.selectBetween(fromIndex, i);
         anchor = fromIndex;
         moved = true;
@@ -291,15 +297,16 @@ export class PrimerContextView {
       const i = index(e);
       if (!moved && i === anchor) return;
       moved = true;
-      this.selectBetween(anchor, i);
+      if (!translation.move(e.clientX, e.clientY, this.boundaryOf(Math.max(0, i - 1)))) this.selectBetween(anchor, i);
     });
     const end = (e: PointerEvent) => {
       if (anchor === null) return;
-      if (!moved) {
+      if (!moved && !translation.active) {
         if (target) this.selectAnnotation(target);
         else this.selectBetween(anchor, anchor);
       }
       anchor = null;
+      translation.end();
       try {
         this.body.releasePointerCapture(e.pointerId);
       } catch {
@@ -308,6 +315,12 @@ export class PrimerContextView {
     };
     this.body.addEventListener("pointerup", end);
     this.body.addEventListener("pointercancel", end);
+    this.body.addEventListener("dblclick", e => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || (e.target as Element).closest("button")) return;
+      // Pointer capture can send the double-click to the body instead of the hit area.
+      const hit = hitOf(e) ?? target;
+      if (hit) this.selectAnnotation(hit);
+    });
     this.body.addEventListener("contextmenu", e => {
       if (!this.rowParts.length) return;
       e.preventDefault();
@@ -544,6 +557,13 @@ export class PrimerContextView {
         t.style.color = st?.text ?? "";
         bar.style.paddingLeft = "4px";
         bar.appendChild(t);
+      }
+      if (coding) for (const c of codons(f, d.sequence)) {
+        const i = index(c.mid) - offset;
+        if (i < r.a || i > r.b) continue;
+        const a = Math.max(r.a, i - 1);
+        const b = Math.min(r.b, i + 1);
+        track.appendChild(codonHit(f.id, c, a * this.chPx, (b - a + 1) * this.chPx, yy, 18));
       }
       if (captioned(r)) {
         // Under the bar, where it starts in this row, cut short before the next one.

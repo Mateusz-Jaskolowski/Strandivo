@@ -70,6 +70,10 @@ and CI checks that they exist.
   view's visibility setting; the map stays independent. A region click selects that
   region's bases while keeping the same primer in view. Neither region tracks nor a
   primer's non-annealing tail imply that the tail binds the template there.
+- **Translation clicks** in both sequence panels select the codon's DNA span as plain
+  bases, using the shared hit areas in `src/views/translationHit.ts`. A double-click or
+  the feature name selects the whole feature. Keep the primer's window in place when
+  selecting a codon in its panel.
 
 ## Decisions (and why)
 

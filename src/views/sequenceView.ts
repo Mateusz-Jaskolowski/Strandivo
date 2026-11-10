@@ -12,6 +12,7 @@ import { codons, cutSites, featureStyles, isCds, orfs, orfTitle, primerAlignment
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
 import { aminoGroup } from "../lib/aminoAcids.ts";
+import { codonHit, codonRange } from "./translationHit.ts";
 import { layoutRegions, regionRange, regionSpans, regionsOf } from "../lib/regions.ts";
 import { drawRegionTracks, layoutRegionTracks, markRegionSelection, REGION_TRACK_HEIGHT, type RegionTrack, type RegionTrackPiece } from "./regionTracks.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -706,6 +707,11 @@ export class SequenceView {
           letters.className = "sv-aa";
           track.appendChild(letters);
         }
+        for (const c of cs) {
+          const a = Math.max(bar.a, c.mid - 1 - row.start);
+          const b = Math.min(bar.b, c.mid + 1 - row.start);
+          track.appendChild(codonHit(f.id, c, a * this.chPx, (b - a + 1) * this.chPx, ly, lh));
+        }
         // The name under the amino acids, where the feature starts and again at the start of
         // every row it carries on into, so it's always in view; cut short before the next one.
         const next = Math.min(len, ...inLane(bar).filter(x => x.a > bar.b).map(x => x.a));
@@ -899,6 +905,7 @@ export class SequenceView {
     let anchor: number | null = null;
     let dragging = false;
     let target: Focus | null = null;
+    let codon: Range | null = null;
     let startX = 0;
     let startY = 0;
     this.canvas.addEventListener("pointerdown", e => {
@@ -908,6 +915,7 @@ export class SequenceView {
       this.focus();
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       target = el?.dataset.kind ? hitOf(el) : null;
+      codon = codonRange(el);
       if (target?.kind === "cutsite" && isPickClick(e)) {
         pickSite(this.ctx, target.id, "sequence");
         anchor = null;
@@ -935,7 +943,8 @@ export class SequenceView {
     const end = (e: PointerEvent) => {
       if (anchor === null) return;
       if (!dragging && !e.shiftKey) {
-        if (target) this.selectAnnotation(target);
+        if (codon) store.selectRange(codon, null, "sequence");
+        else if (target) this.selectAnnotation(target);
         else store.select({ range: null, caret: anchor, anchor }, "sequence");
       }
       anchor = null;
@@ -957,7 +966,9 @@ export class SequenceView {
     });
     this.canvas.addEventListener("dblclick", e => {
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
-      if (el?.dataset.kind) this.selectAnnotation(hitOf(el));
+      // Pointer capture can send the double-click to the canvas instead of the hit area.
+      const hit = el?.dataset.kind ? hitOf(el) : target;
+      if (hit) this.selectAnnotation(hit);
     });
   }
 

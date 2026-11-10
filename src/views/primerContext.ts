@@ -17,6 +17,7 @@ import type { DocContext } from "../doc/context.ts";
 import { changesText, gcContent } from "../lib/primers.ts";
 import { resizePrimer } from "../lib/primerEdit.ts";
 import { aminoGroup } from "../lib/aminoAcids.ts";
+import { codonHit, codonRange } from "./translationHit.ts";
 import { complement, inRange, rangeLength, type Range, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import type { Focus } from "../doc/store.ts";
@@ -261,6 +262,7 @@ export class PrimerContextView {
     let anchor: number | null = null;
     let moved = false;
     let target: Focus | null = null;
+    let codon: Range | null = null;
     const index = (e: MouseEvent) => Math.max(0, Math.min(this.total, this.boundaryAt(e) ?? 0));
     const hitOf = (e: Event): Focus | null => {
       const el = (e.target as Element).closest<HTMLElement>("[data-kind]");
@@ -272,6 +274,7 @@ export class PrimerContextView {
       if (!this.rowParts.length) return;
       e.preventDefault();
       target = hitOf(e);
+      codon = codonRange((e.target as Element).closest<HTMLElement>("[data-kind]"));
       const i = index(e);
       const sel = store.selection;
       const from = sel.anchor ?? (sel.range ? sel.range.start : sel.caret);
@@ -296,7 +299,8 @@ export class PrimerContextView {
     const end = (e: PointerEvent) => {
       if (anchor === null) return;
       if (!moved) {
-        if (target) this.selectAnnotation(target);
+        if (codon) store.selectRange(codon, null, SOURCE);
+        else if (target) this.selectAnnotation(target);
         else this.selectBetween(anchor, anchor);
       }
       anchor = null;
@@ -308,6 +312,12 @@ export class PrimerContextView {
     };
     this.body.addEventListener("pointerup", end);
     this.body.addEventListener("pointercancel", end);
+    this.body.addEventListener("dblclick", e => {
+      if ((e.target as Element).closest("button")) return;
+      // Pointer capture can send the double-click to the body instead of the hit area.
+      const hit = hitOf(e) ?? target;
+      if (hit) this.selectAnnotation(hit);
+    });
     this.body.addEventListener("contextmenu", e => {
       if (!this.rowParts.length) return;
       e.preventDefault();
@@ -544,6 +554,13 @@ export class PrimerContextView {
         t.style.color = st?.text ?? "";
         bar.style.paddingLeft = "4px";
         bar.appendChild(t);
+      }
+      if (coding) for (const c of codons(f, d.sequence)) {
+        const i = index(c.mid) - offset;
+        if (i < r.a || i > r.b) continue;
+        const a = Math.max(r.a, i - 1);
+        const b = Math.min(r.b, i + 1);
+        track.appendChild(codonHit(f.id, c, a * this.chPx, (b - a + 1) * this.chPx, yy, 18));
       }
       if (captioned(r)) {
         // Under the bar, where it starts in this row, cut short before the next one.

@@ -20,6 +20,10 @@ If Strandivo quits unexpectedly, it now offers to report the crash the next time
 and shows everything it would send before anything goes. Usage statistics, if you share
 them, count a little more, still only as fixed words and ranges.
 
+- **Select codons from translation**: click an amino acid in the Sequence view or around
+  a primer to select its DNA bases. Double-click it or click the feature name to select
+  the whole feature.
+
 - **Protein regions**: add and edit domains, helices, linkers, CDRs and frameworks within
   one CDS, with colours and nested regions. A protein diagram and expandable outline
   show them, and the map can show all regions, just the top level or none. UniProt now

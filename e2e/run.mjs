@@ -376,6 +376,18 @@ async function main() {
     await sleep(400);
     const redone = (await state()).len;
     check("Ctrl+Y redoes it", redone === n0 + 3, `${undone} → ${n0} → ${redone} bp`);
+    // --- Pasting what a database copies: a FASTA header, and text that isn't a sequence ---
+    const pasteLen = async (text) =>
+      s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');
+        const before = s.data.sequence.length;
+        window.__strandivo.paste(${JSON.stringify(text)});
+        return { grew: s.data.sequence.length - before, start: s.data.sequence.slice(0, 8) };`);
+    const fasta = await pasteLen(">pUC19 cloning vector, complete sequence\nacgtacgu\n");
+    check("Pasting a FASTA entry puts in its bases alone, U as T", fasta.grew === 8 && fasta.start === "ACGTACGT", JSON.stringify(fasta));
+    await s.exec(`${doc} s.undo();`);
+    const prose = await pasteLen("Please order this primer tomorrow");
+    check("Text that isn't a sequence is refused instead of pasted as bases", prose.grew === 0, JSON.stringify(prose));
+    check("It says why", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /isn't a DNA sequence/.test(t.textContent))", 2000));
     await s.press(ESCAPE);
     await s.press(ARROW_RIGHT + ARROW_RIGHT + ARROW_RIGHT, [SHIFT]);
     const shiftSel = (await state()).sel.range;

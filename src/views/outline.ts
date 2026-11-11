@@ -8,13 +8,13 @@
 import { regionColor, regionRange, regionsOf, regionTitle, regionTree } from "../lib/regions.ts";
 import { h } from "../ui/dom.ts";
 import { iconSvg, primerIcon, strandIcon } from "../ui/icons.ts";
-import { cutSites, featureStyles, primerColors, primerTm } from "../doc/analysis.ts";
+import { allCutSites, cutSites, featureStyles, primerColors, primerTm } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import { enzymeControls } from "./enzymeControls.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
 import { dropGap, moveSection, SIDEBAR_SECTIONS, type SidebarSection } from "../lib/sidebar.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
@@ -242,7 +242,7 @@ export class Outline {
           class: "sv-list-row",
           "data-kind": "feature",
           "data-id": f.id,
-          title: `${f.name} · ${f.type} · ${fmt(f.start + 1)}..${fmt(f.end + 1)}`,
+          title: `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`,
           onclick: () => this.select({ kind: "feature", id: f.id }, f.start, f.end)
         },
         h("span", { class: "sv-swatch", style: { background: styles.get(f.id)?.fill || "#999" } }),
@@ -285,7 +285,7 @@ export class Outline {
     const sites = cutSites(d, this.ctx.options).filter(c => this.matches(c.enzyme));
     const source = this.ctx.options.enzymeSource;
     const library = source === "lab" ? enzymeLibrary : source === "personal" ? personalEnzymes : null;
-    const unfiltered = sites.length ? sites : cutSites(d, { ...this.ctx.options, enzymeFilter: "all" });
+    const unfiltered = sites.length ? sites : allCutSites(d, this.ctx.options);
     const emptyEnzymes = this.filter ? "No matching enzymes." : library?.error ? (source === "lab" ? "The enzyme library couldn't be loaded." : "My enzymes couldn't be loaded.") : library && !library.loaded ? "Loading enzymes…" : source === "personal" && !personalEnzymes.all.length ? "My enzymes is empty." : source === "lab" && !enzymeLibrary.all.length ? "Your lab enzyme library is empty." : unfiltered.length ? "No enzymes match this cut-site filter." : "None of these enzymes cut.";
     const chips = sites.map(c =>
       h(

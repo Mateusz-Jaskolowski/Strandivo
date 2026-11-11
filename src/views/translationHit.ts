@@ -6,7 +6,7 @@ import type { DocContext } from "../doc/context.ts";
 import type { Selection } from "../doc/store.ts";
 import { codonRanges, pickCodons, type CodonRef, type CodonSelection } from "../lib/codonSelection.ts";
 import { h } from "../ui/dom.ts";
-import { fmt } from "../ui/format.ts";
+import { fmtRange } from "../ui/format.ts";
 
 /** A transparent hit area over a displayed amino acid, shared by both sequence panels. */
 export function codonHit(id: string, codon: Codon, left: number, width: number, top: number, height: number): HTMLElement {
@@ -17,7 +17,7 @@ export function codonHit(id: string, codon: Codon, left: number, width: number, 
     "data-codon-start": String(codon.lo),
     "data-codon-end": String(codon.hi),
     "data-codon-index": String(codon.index),
-    title: `${codon.aa}${codon.index} · ${fmt(codon.lo + 1)}..${fmt(codon.hi + 1)}`,
+    title: `${codon.aa}${codon.index} · ${fmtRange(codon.lo + 1, codon.hi + 1)}`,
     style: { position: "absolute", left: `${left}px`, width: `${width}px`, top: `${top}px`, height: `${height}px`, cursor: "pointer" }
   });
 }

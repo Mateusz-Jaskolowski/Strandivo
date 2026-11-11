@@ -11,7 +11,7 @@
 // rate and the share of broken clones count them all, or a plate of unchanged clones
 // would count as one clone and the rate would look high.
 
-import { featurePositions, translateCodon } from "./genetics.ts";
+import { codingPositions, featurePositions, translateCodon } from "./genetics.ts";
 import { degenerateCodons, type CloneVariants, type Mutation } from "./variants.ts";
 import type { Feature } from "./types.ts";
 import { variableFeatures } from "./variable.ts";
@@ -207,7 +207,7 @@ export const mutationRate = (s: CloneSummary): number | null => (s.bases ? (s.ch
  */
 export function sitesAlong(sites: RecurringSite[], feature: Feature | null, n: number): { length: number; points: { at: number; site: RecurringSite }[] } {
   if (!feature) return { length: n, points: sites.map(site => ({ at: site.refPos, site })) };
-  const positions = featurePositions(feature, n);
+  const positions = codingPositions(feature, n);
   const index = new Map(positions.map((p, i) => [p, i]));
   const points = sites.flatMap(site => {
     const i = index.get(site.refPos);

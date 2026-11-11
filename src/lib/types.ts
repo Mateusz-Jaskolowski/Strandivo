@@ -31,6 +31,8 @@ export interface Feature {
   forward?: boolean;
   strand?: number;
   locations?: { start: number; end: number }[];
+  /** GenBank's /codon_start: the first whole codon starts this many bases in (1 to 3). */
+  codonStart?: number;
   /** Set when the feature is a variable region (`src/lib/variable.ts`). */
   variable?: VariableDesign;
 }

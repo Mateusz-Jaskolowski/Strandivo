@@ -130,6 +130,42 @@ export function cleanBases(text: string): string {
   return text.replace(/[^ACGTURYSWKMBDHVN]/gi, "");
 }
 
+/** What pasted text holds as bases: the bases, or the letters that make it not DNA. */
+export interface PastedBases {
+  /** Upper case, U read as T; "" when the text isn't a sequence. */
+  bases: string;
+  /** Letters other than IUPAC codes, at most a few, when the text isn't a sequence. */
+  stray: string[];
+  /**
+   * Characters left out that a sequence listing wouldn't hold: not whitespace, not the
+   * position numbers of GenBank's ORIGIN lines, not a header line — a gap's dashes, say.
+   */
+  dropped: number;
+}
+
+/**
+ * The bases in text pasted from elsewhere. FASTA header (">") and comment (";") lines and a
+ * GenBank record's text before ORIGIN and after "//" are left out, as are numbers and
+ * punctuation. Any other letter that isn't an IUPAC code means the text is not a sequence,
+ * since keeping only the letters that are would put words in as bases ("ORIGIN" as RGN).
+ */
+export function basesFromText(text: string): PastedBases {
+  let lines = text.split(/\r?\n/);
+  const origin = lines.findIndex(l => /^\s*ORIGIN\b/.test(l));
+  if (origin >= 0) {
+    lines = lines.slice(origin + 1);
+    const end = lines.findIndex(l => l.trim() === "//");
+    if (end >= 0) lines = lines.slice(0, end);
+  }
+  const kept = lines.filter(l => !/^\s*[>;]/.test(l)).join("\n");
+  const stray = [...new Set((kept.match(/[^\WACGTURYSWKMBDHVN\d_]/gi) ?? []).map(c => c.toUpperCase()))].slice(0, 5);
+  const bases = stray.length ? "" : cleanBases(kept).toUpperCase().replace(/U/g, "T");
+  // Whitespace, position numbers and skipped header lines are how sequences are written,
+  // so only anything else is worth telling the user about.
+  const dropped = stray.length ? 0 : kept.replace(/[\s\d]/g, "").length - bases.length;
+  return { bases, stray, dropped };
+}
+
 // ---------- edits ----------
 
 type Positioned = { start: number; end: number };

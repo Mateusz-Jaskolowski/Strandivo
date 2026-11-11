@@ -7,7 +7,7 @@
 import { h, toast } from "../ui/dom.ts";
 import { track } from "../usage.ts";
 import { iconSvg, primerIcon } from "../ui/icons.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { featureStyles, primerAlignment, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { primerReport, tmLabel, type PrimerReport } from "../lib/primers.ts";
@@ -414,7 +414,7 @@ export class PrimersView {
           class: `sv-bind-primer sv-bind-${p.strand === 1 ? "up" : "down"}`,
           "data-id": p.id,
           style: leftwards ? { right: `${100 - xEnd}%` } : { left: pct(p.start) },
-          title: `${p.name} · ${fmt(p.start + 1)}..${fmt(p.end + 1)}`,
+          title: `${p.name} · ${fmtRange(p.start + 1, p.end + 1)}`,
           onclick: () => this.select(p)
         },
         primerIcon(p.strand, primerColors(p).color),

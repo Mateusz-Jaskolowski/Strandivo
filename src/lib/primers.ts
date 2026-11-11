@@ -506,6 +506,9 @@ export interface PrimerReport {
   checks: PrimerCheck[];
 }
 
+/** From this many paired bases at its 3′ end a primer counts as binding its own site. */
+const OWN_SITE_ARM = 5;
+
 /** Where a primer binds, so the tail check can tell its own 5′ arm from a second site. */
 export interface PrimerSite {
   start: number;
@@ -530,7 +533,13 @@ export function primerReport(bases: string, binds: number | PrimerAlignment, tem
   const tmFull = tail || changed ? meltingTemp(seq) : tm;
   const arms = a && changed ? { tm3: meltingTemp(a.arms[0]), tm5: a.arms.length > 1 ? meltingTemp(a.arms[a.arms.length - 1]) : null } : null;
   const gc = gcContent(binding);
-  const sites = template ? findBindingSites(seq, template, circular).length : 0;
+  const siteList = template ? findBindingSites(seq, template, circular) : [];
+  // The search needs 15 matching bases at the 3′ end, so a mutagenic primer whose change
+  // sits closer to it isn't found on its own site. That site still counts where its 3′ arm
+  // pairs; an arm shorter than that gets the 3′ change warning below instead.
+  const threePrime = (x: PrimerSite) => (x.strand === 1 ? x.end : x.start);
+  const ownMissed = !!site && !!a && (a.arms[0]?.length ?? 0) >= OWN_SITE_ARM && !siteList.some(s => s.strand === site.strand && threePrime(s) === threePrime(site));
+  const sites = siteList.length + (ownMissed ? 1 : 0);
   const checks: PrimerCheck[] = [];
   const ok = (text: string, short = "OK") => checks.push({ level: "ok", short, text });
   const warn = (short: string, text: string) => checks.push({ level: "warn", short, text });

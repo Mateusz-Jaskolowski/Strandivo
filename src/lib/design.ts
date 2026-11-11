@@ -4,7 +4,7 @@
 // Designing a PCR primer pair to amplify a region, optionally with 5′ additions such as
 // restriction sites.
 
-import { meltingTemp, hasGoodClamp, threePrimeComplementarity } from "./primers.ts";
+import { DIMER_BASES, findBindingSites, meltingTemp, hasGoodClamp, threePrimeComplementarity } from "./primers.ts";
 import { reverseComplement } from "./seqdata.ts";
 
 export interface DesignOptions {
@@ -33,6 +33,10 @@ export interface DesignedPrimer {
   strand: 1 | -1;
   /** Tm of the binding part. */
   tm: number;
+  /** Places the binding part primes on the template; more than one means mispriming. */
+  sites: number;
+  /** Bases at its own 3′ end that pair with itself (a self-dimer from `DIMER_BASES` up). */
+  selfDimer: number;
 }
 
 export interface DesignedPair {
@@ -67,7 +71,18 @@ interface Candidate {
   binding: string;
   tm: number;
   len: number;
+  /** Places it primes on the template, and bases its 3′ end pairs with itself. */
+  sites: number;
+  selfDimer: number;
 }
+
+/**
+ * A primer designed into a repeated stretch — a second terminator, a promoter the plasmid
+ * uses twice — amplifies more than the region asked for, and one whose 3′ end pairs with
+ * itself makes dimer instead of product. Both are weighed with Tm and the 3′ clamp, so a
+ * length that avoids them is preferred where one exists.
+ */
+const MISPRIMING_PENALTY = 12;
 
 function candidates(seq: string, circular: boolean, at: number, o: DesignOptions, reverse: boolean): Candidate[] {
   const out: Candidate[] = [];
@@ -76,10 +91,16 @@ function candidates(seq: string, circular: boolean, at: number, o: DesignOptions
     if (!raw) continue;
     const binding = (reverse ? reverseComplement(raw) : raw).toUpperCase();
     const tm = meltingTemp(binding);
-    if (tm !== null) out.push({ binding, tm, len });
+    if (tm === null) continue;
+    out.push({ binding, tm, len, sites: findBindingSites(binding, seq, circular).length, selfDimer: threePrimeComplementarity(binding, binding) });
   }
   const target = (o.tmMin + o.tmMax) / 2;
-  const own = (c: Candidate) => Math.abs(c.tm - target) + (c.tm < o.tmMin || c.tm > o.tmMax ? 10 : 0) + (hasGoodClamp(c.binding) ? 0 : 3);
+  const own = (c: Candidate) =>
+    Math.abs(c.tm - target) +
+    (c.tm < o.tmMin || c.tm > o.tmMax ? 10 : 0) +
+    (hasGoodClamp(c.binding) ? 0 : 3) +
+    Math.max(0, c.sites - 1) * MISPRIMING_PENALTY +
+    Math.max(0, c.selfDimer - (DIMER_BASES - 1)) * 2;
   return out.sort((a, b) => own(a) - own(b)).slice(0, 5);
 }
 
@@ -104,11 +125,21 @@ export function designPairs(seq: string, circular: boolean, start: number, end: 
       const rBases = rTail.toLowerCase() + r.binding;
       const window = (tm: number) => (tm < o.tmMin ? o.tmMin - tm : tm > o.tmMax ? tm - o.tmMax : 0);
       const dimer = Math.max(threePrimeComplementarity(fBases, rBases), threePrimeComplementarity(rBases, fBases));
+      const misprimes = Math.max(0, f.sites - 1) + Math.max(0, r.sites - 1);
+      const selfDimers = Math.max(0, f.selfDimer - (DIMER_BASES - 1)) + Math.max(0, r.selfDimer - (DIMER_BASES - 1));
       const score =
-        Math.abs(f.tm - target) + Math.abs(r.tm - target) + 2 * Math.abs(f.tm - r.tm) + 5 * (window(f.tm) + window(r.tm)) + (hasGoodClamp(f.binding) ? 0 : 3) + (hasGoodClamp(r.binding) ? 0 : 3) + Math.max(0, dimer - 3) * 2;
+        Math.abs(f.tm - target) +
+        Math.abs(r.tm - target) +
+        2 * Math.abs(f.tm - r.tm) +
+        5 * (window(f.tm) + window(r.tm)) +
+        (hasGoodClamp(f.binding) ? 0 : 3) +
+        (hasGoodClamp(r.binding) ? 0 : 3) +
+        Math.max(0, dimer - 3) * 2 +
+        misprimes * MISPRIMING_PENALTY +
+        selfDimers * 2;
       pairs.push({
-        forward: { bases: fBases, start, end: (start + f.len - 1) % n, strand: 1, tm: f.tm },
-        reverse: { bases: rBases, start: (((end - r.len + 1) % n) + n) % n, end, strand: -1, tm: r.tm },
+        forward: { bases: fBases, start, end: (start + f.len - 1) % n, strand: 1, tm: f.tm, sites: f.sites, selfDimer: f.selfDimer },
+        reverse: { bases: rBases, start: (((end - r.len + 1) % n) + n) % n, end, strand: -1, tm: r.tm, sites: r.sites, selfDimer: r.selfDimer },
         score
       });
     }

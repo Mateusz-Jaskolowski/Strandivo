@@ -157,3 +157,25 @@ test("a PCR product carries the primers' changes, not the template's bases", () 
   const p2 = pcrProduct(seq, true, { name: "F", bases: site, start: 1000, end: 1032, strand: 1 }, r2)!;
   assert.equal(p2.sequence, seq.slice(1000, 1200) + revChanged);
 });
+
+test("design avoids a primer that binds twice, and reports one when it can't", () => {
+  // A deterministic sequence with a 24 bp stretch repeated: a primer of up to 24 bases
+  // starting at the second copy binds both, a longer one reaches unique bases.
+  let a = 7;
+  const base = () => {
+    a = (a * 1103515245 + 12345) & 0x7fffffff;
+    return "ACGT"[(a >>> 16) % 4];
+  };
+  const run = (n: number) => Array.from({ length: n }, base).join("");
+  const repeat = run(24);
+  const seq = run(200) + repeat + run(200) + repeat + run(200);
+  const at = 200 + 24 + 200;
+  const pairs = designPairs(seq, false, at, at + 150, { ...DEFAULT_DESIGN, tmMin: 50, tmMax: 70, minLength: 18, maxLength: 30 });
+  assert.ok(pairs.length > 0);
+  assert.equal(pairs[0].forward.sites, 1);
+  assert.ok(pairs[0].forward.bases.length > repeat.length, pairs[0].forward.bases);
+  // Only lengths inside the repeat are allowed: the pair is still offered, saying it binds twice.
+  const stuck = designPairs(seq, false, at, at + 150, { ...DEFAULT_DESIGN, tmMin: 50, tmMax: 70, minLength: 18, maxLength: 24 });
+  assert.equal(stuck[0].forward.sites, 2);
+  assert.equal(stuck[0].reverse.sites, 1);
+});

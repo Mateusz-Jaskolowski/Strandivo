@@ -66,12 +66,14 @@ export function formatComments(fields: LabFields, otherComments: string[] = []):
 
 // ---------- reading information off the features ----------
 
+// A name may confer more than one: SnapGene's "NeoR/KanR" is both. "TetR" is left out, as
+// in Tet-On and T-REx plasmids it is the repressor; SnapGene calls the resistance "TcR".
 const RESISTANCE: [RegExp, string][] = [
   [/^(ampr|amp|bla|bla\s?tem-?1|beta[- ]?lactamase)$/i, "Ampicillin"],
-  [/^(kanr|kan|nptii|npt2|kanmx\d*|aph\(3'\)-?ii?a?|aph)$/i, "Kanamycin"],
-  [/^(neor|neo)$/i, "Neomycin/G418"],
+  [/^(kanr|kan|nptii|npt2|kanmx\d*|aph\(3'\)-?ii?a?|aph|neor\/kanr|kanr\/neor)$/i, "Kanamycin"],
+  [/^(neor|neo|neor\/kanr|kanr\/neor)$/i, "Neomycin/G418"],
   [/^(cmr|cm|cat|camr)$/i, "Chloramphenicol"],
-  [/^(tetr|tet|teta|tetc|tet\(a\)|tet\(c\))$/i, "Tetracycline"],
+  [/^(tcr|tet|teta|tetc|tet\(a\)|tet\(c\))$/i, "Tetracycline"],
   [/^(specr|smr|strr|aada|aad\(3''\)|spec\/strep)$/i, "Spectinomycin/Streptomycin"],
   [/^(gentr|gmr|aacc1|aac\(3\)-?i)$/i, "Gentamicin"],
   [/^(hygr|hph|hyg|hygromycin)$/i, "Hygromycin"],
@@ -101,12 +103,7 @@ export function detectFromFeatures(features: Feature[]): Detected {
     const name = (f.name || "").trim();
     const type = (f.type || "").toLowerCase();
     if (!name && !type) continue;
-    for (const [re, drug] of RESISTANCE) {
-      if (re.test(name)) {
-        resistance.push(drug);
-        break;
-      }
-    }
+    for (const [re, drug] of RESISTANCE) if (re.test(name)) resistance.push(drug);
     if (type === "rep_origin" || (name && ORIGIN.test(name))) origins.push(name || "origin");
     if (type === "promoter" || /promoter$/i.test(name)) promoters.push(name.replace(/\s*promoter$/i, "") || "promoter");
   }

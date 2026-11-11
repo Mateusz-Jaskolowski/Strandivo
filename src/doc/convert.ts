@@ -100,6 +100,20 @@ function clamp(p: number, n: number) {
 /** GenBank and FASTA keep the description on one line; a line break would corrupt them. */
 const oneLine = (s: string) => s.replace(/\s*[\r\n]+\s*/g, " ").trim();
 
+/**
+ * Qualifiers as the GenBank writer takes them: lists of strings. The parser reads numbers
+ * (/codon_start=2) as numbers, and the writer stops at the first one, losing it and every
+ * qualifier after it.
+ */
+function notesOut(notes: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(notes ?? {})) {
+    const values = Array.isArray(v) ? v : [v];
+    out[k] = values.filter(x => x !== null && x !== undefined).map(x => (typeof x === "string" ? x : typeof x === "object" ? JSON.stringify(x) : String(x)));
+  }
+  return out;
+}
+
 const partsOut = (locations: Range[] | undefined) => (locations && locations.length > 1 ? locations.map(l => ({ start: l.start, end: l.end })) : undefined);
 
 /** Sequence JSON for the file writers. */
@@ -115,7 +129,7 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
       end: f.end,
       forward: f.strand !== -1,
       strand: f.strand === -1 ? -1 : 1,
-      notes: f.notes
+      notes: notesOut(f.notes)
     };
     // No colour means the type's own one, also when the file had another.
     if (f.color) out.color = f.color;
@@ -130,6 +144,7 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
   const sources = data.sources.map(f => {
     const whole = doc.wholeSources.includes(f.id);
     const out: Record<string, unknown> = { ...f.raw, id: f.id, start: whole ? 0 : f.start, end: whole ? Math.max(0, n - 1) : f.end };
+    if (f.raw.notes && typeof f.raw.notes === "object") out.notes = notesOut(f.raw.notes as Record<string, unknown>);
     const parts = whole ? undefined : partsOut(f.locations);
     if (parts) out.locations = parts;
     else delete out.locations;
@@ -147,7 +162,7 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
       strand: p.strand,
       bases: p.bases,
       primerBindsOn: "3prime",
-      notes: p.notes
+      notes: notesOut(p.notes)
     };
     // No colour means the default one, also when the file had another.
     if (p.color) out.color = p.color;

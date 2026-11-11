@@ -83,8 +83,9 @@ export class DocStore {
     return this.data !== this.saved;
   }
 
-  markSaved() {
-    this.saved = this.data;
+  /** Marks `data` (by default the current data) as what the file holds. */
+  markSaved(data: SeqData = this.data) {
+    this.saved = data;
     this.emit({ data: false, selection: false });
   }
 

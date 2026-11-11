@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
+  basesFromText,
   basesIn,
   deleteRange,
   featureGaps,
@@ -25,6 +26,7 @@ import {
 import { changesText, crossDimer, DEFAULT_TM, findBindingSites, placeEdited, gcContent, hasGoodClamp, longestRun, meltingTemp, primerReport, selectionTmText, tailMatches, threePrimeComplementarity, tmLabel, useTmSettings } from "./primers.ts";
 import { findCutSites, overhangText } from "./enzymes.ts";
 import { alignPrimer } from "./primerAlign.ts";
+import { featureStyles } from "../doc/analysis.ts";
 
 const feat = (id: string, start: number, end: number): SeqFeature => ({ id, name: id, type: "misc_feature", start, end, strand: 1, notes: {}, raw: {} });
 const doc = (sequence: string, features: SeqFeature[], circular = true): SeqData => ({ name: "t", description: "", circular, sequence, features, primers: [], sources: [] });
@@ -417,4 +419,44 @@ test("gaps between the parts of a feature", () => {
   // Across the origin: 90…99 and 0…9 touch, 10…14 is skipped.
   assert.deepEqual(featureGaps({ start: 90, end: 20, locations: [{ start: 90, end: 99 }, { start: 0, end: 9 }, { start: 15, end: 20 }] }, 100), [{ start: 10, end: 14 }]);
   assert.deepEqual(featureGaps({ start: 0, end: 9 }, 100), []);
+});
+
+test("pasted text: FASTA headers and GenBank text are not bases", () => {
+  assert.deepEqual(basesFromText(">pUC19 cloning vector, complete sequence\nacgt\nACGU\n"), { bases: "ACGTACGT", stray: [], dropped: 0 });
+  const genbank = "LOCUS       x  8 bp  DNA\nFEATURES             Location/Qualifiers\nORIGIN\n        1 tcgcgcgt\n//\n";
+  assert.equal(basesFromText(genbank).bases, "TCGCGCGT");
+  assert.equal(basesFromText("1 gaattc 7 ggatcc\n").bases, "GAATTCGGATCC");
+  assert.equal(basesFromText("NNKGAATTC").bases, "NNKGAATTC");
+  // Anything a sequence listing wouldn't hold is still reported: an alignment's gaps.
+  assert.deepEqual(basesFromText("acgt---acgt"), { bases: "ACGTACGT", stray: [], dropped: 3 });
+  const prose = basesFromText("Please order this primer");
+  assert.equal(prose.bases, "");
+  assert.deepEqual(prose.stray, ["P", "L", "E", "O", "I"]);
+});
+
+test("a mutagenic primer whose change is near the 3′ end still binds its own site", () => {
+  const t = "GATCCTAGGCTAGCTAGGATCCGATCGATCGTACGATCGATCGGCTAGCTAGCTAGGCATCGATCGATCGTAGCTAGCTAGCTAGCATCGACTGACTAGCTAG";
+  const site = t.slice(20, 50);
+  const p = site.slice(0, 19) + (site[19] === "A" ? "C" : "A") + site.slice(20);
+  assert.equal(findBindingSites(p, t, false).length, 0);
+  const own = { start: 20, end: 49, strand: 1 as const };
+  const a = alignPrimer({ ...own, bases: p }, t);
+  const r = primerReport(p, a, t, false, null, own);
+  assert.equal(r.sites, 1);
+  assert.ok(!r.checks.some(c => c.short === "No site"));
+  // Without its site, as when it is only being looked for, it binds nowhere.
+  assert.equal(primerReport(p, a, t, false).sites, 0);
+});
+
+test("a CDS keeps its colour when another is added before it", () => {
+  const cds = (id: string, name: string, start: number): SeqFeature => ({ id, name, type: "CDS", start, end: start + 29, strand: 1, notes: {}, raw: {} });
+  const seq = "ACGT".repeat(100);
+  const before = featureStyles(doc(seq, [cds("a", "lacZ", 100), cds("b", "AmpR", 200)]));
+  const after = featureStyles(doc(seq, [cds("c", "GFP", 10), cds("a", "lacZ", 100), cds("b", "AmpR", 200)]));
+  assert.equal(after.get("a")!.fill, before.get("a")!.fill);
+  assert.equal(after.get("b")!.fill, before.get("b")!.fill);
+  // A file's own colour still wins, and an unnamed CDS gets one from its id.
+  const own = featureStyles(doc(seq, [{ ...cds("a", "lacZ", 100), color: "#123456" }, cds("d", "", 200)]));
+  assert.equal(own.get("a")!.fill, "#123456");
+  assert.ok(own.get("d")!.fill.startsWith("#"));
 });

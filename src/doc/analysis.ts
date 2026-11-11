@@ -5,11 +5,11 @@
 // Results are cached on the sequence so redraws stay cheap.
 
 import { extraKey, sourceEnzymes, rescanSites, scanSites, selectSites, type CutSite, type EnzymeOptions, type SiteHit } from "../lib/enzymes.ts";
-import { amberSuppressed, translateCodon } from "../lib/genetics.ts";
+import { amberSuppressed, codingPositions, translateCodon } from "../lib/genetics.ts";
 import { findOrfs, frameLabel, type Orf, type OrfOptions } from "../lib/orfs.ts";
 import { bindingTm, changesText } from "../lib/primers.ts";
 import { alignPrimer, type PrimerAlignment } from "../lib/primerAlign.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { type SeqData, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
 
 // Primers are replaced, never changed, so each keeps its alignment until the sequence changes.
@@ -34,7 +34,7 @@ export function primerColors(p: SeqPrimer): { color?: string; colorText?: string
 export function primerTitle(d: SeqData, p: SeqPrimer): string {
   const a = primerAlignment(d, p);
   const changes = changesText({ mismatches: a.substitutions, insertions: a.insertions, deletions: a.deletions });
-  return `${p.name} · ${p.bases.length} nt${a.tail ? `, ${a.tail.length} nt 5′ tail` : ""}${changes ? ` · ${changes}` : ""} · ${fmt(p.start + 1)}..${fmt(p.end + 1)}`;
+  return `${p.name} · ${p.bases.length} nt${a.tail ? `, ${a.tail.length} nt 5′ tail` : ""}${changes ? ` · ${changes}` : ""} · ${fmtRange(p.start + 1, p.end + 1)}`;
 }
 
 /**
@@ -69,8 +69,23 @@ const TYPE_COLORS: Record<string, string> = {
   exon: "#E8A83E"
 };
 
-/** Distinct colours for coding sequences, in order of appearance. */
+/** Distinct colours for coding sequences, chosen by name so each CDS keeps its own. */
 const CDS_COLORS = ["#E8A83E", "#E58063", "#6FAEE0", "#8CC46B", "#D98BC5", "#F2C14E", "#6CC2B0", "#B39DDB"];
+
+/**
+ * Which of them a CDS gets: from its name (its id while it has none), not its place in the
+ * sequence, or adding a CDS near the start would recolour every CDS after it and the map
+ * the user knows. Two names can land on the same colour, as nine CDSs did before.
+ */
+function cdsColor(f: SeqFeature): number {
+  const key = f.name.trim().toLowerCase() || f.id;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
 
 function luminance(hex: string): number {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -96,14 +111,12 @@ export function featureStyles(d: SeqData): Map<string, FeatureStyle> {
   const cached = styleCache.get(d);
   if (cached) return cached;
   const out = new Map<string, FeatureStyle>();
-  let cds = 0;
-  const sorted = [...d.features].sort((a, b) => a.start - b.start);
-  for (const f of sorted) {
+  for (const f of d.features) {
     let fill = f.color && /^#[0-9a-f]{6}$/i.test(f.color) ? f.color : "";
     // Files often use white or near-white, which disappears on the page.
     if (fill && luminance(fill) > 0.82) fill = "";
     if (!fill) {
-      if (f.type.toUpperCase() === "CDS") fill = CDS_COLORS[cds++ % CDS_COLORS.length];
+      if (f.type.toUpperCase() === "CDS") fill = CDS_COLORS[cdsColor(f) % CDS_COLORS.length];
       else fill = TYPE_COLORS[f.type] ?? TYPE_COLORS[f.type.toLowerCase()] ?? "#A3A9B4";
     }
     out.set(f.id, { fill, text: luminance(fill) < 0.28 ? "#FFFFFF" : "#1A1D23" });
@@ -116,7 +129,10 @@ export function featureStyles(d: SeqData): Map<string, FeatureStyle> {
 
 // Sites are rescanned only around an edit; changing the source scans its extra names once.
 let hitCache: { sequence: string; circular: boolean; extra: string; hits: SiteHit[] } | null = null;
-let cutCache: { hits: SiteHit[]; key: string; sites: CutSite[] } | null = null;
+// A few filters at once, so asking for every site (search, the outline's fallback) doesn't
+// make the views' own list again on the next draw.
+let cutCache: { hits: SiteHit[]; lists: Map<string, CutSite[]> } | null = null;
+const MAX_SITE_LISTS = 4;
 
 /** Shared display choices for Map, Sequence and the outline. */
 export function cutSites(d: SeqData, o: EnzymeOptions): CutSite[] {
@@ -127,9 +143,25 @@ export function cutSites(d: SeqData, o: EnzymeOptions): CutSite[] {
     hitCache = { sequence: d.sequence, circular: d.circular, extra, hits };
   }
   const key = JSON.stringify([o.enzymeSource, o.enzymeFilter, names]);
-  if (!cutCache || cutCache.hits !== hitCache.hits || cutCache.key !== key)
-    cutCache = { hits: hitCache.hits, key, sites: selectSites(hitCache.hits, o) };
-  return cutCache.sites;
+  if (!cutCache || cutCache.hits !== hitCache.hits) cutCache = { hits: hitCache.hits, lists: new Map() };
+  let sites = cutCache.lists.get(key);
+  if (!sites) {
+    sites = selectSites(hitCache.hits, o);
+    if (cutCache.lists.size >= MAX_SITE_LISTS) cutCache.lists.delete(cutCache.lists.keys().next().value!);
+    cutCache.lists.set(key, sites);
+  }
+  return sites;
+}
+
+/** Every site of the chosen source, whatever the filter shows (`findCutSites`' own order). */
+export const allCutSites = (d: SeqData, o: EnzymeOptions): CutSite[] => cutSites(d, { ...o, enzymeFilter: "all" });
+
+/**
+ * A site by its id: in what the views show, or, for one the filter hides, among all of
+ * them. Search offers every enzyme in the list, so a selected site may be either.
+ */
+export function cutSiteById(d: SeqData, o: EnzymeOptions, id: string): CutSite | undefined {
+  return cutSites(d, o).find(x => x.id === id) ?? allCutSites(d, o).find(x => x.id === id);
 }
 
 // ---------- open reading frames ----------
@@ -181,16 +213,9 @@ export function codons(f: SeqFeature, sequence: string): Codon[] {
   const hit = codonCache.get(f);
   if (hit && hit.seq === sequence && hit.amber === amberSuppressed()) return hit.codons;
   const n = sequence.length;
-  // A spliced CDS is read across its parts only, skipping the gaps between them.
-  const positions: number[] = [];
-  for (const part of f.locations ?? [f]) {
-    if (part.start <= part.end) for (let i = part.start; i <= part.end; i++) positions.push(i);
-    else {
-      for (let i = part.start; i < n; i++) positions.push(i);
-      for (let i = 0; i <= part.end; i++) positions.push(i);
-    }
-  }
-  if (f.strand === -1) positions.reverse();
+  // A spliced CDS is read across its parts only, skipping the gaps between them, and from
+  // its first whole codon (/codon_start).
+  const positions = codingPositions(f, n);
   const out: Codon[] = [];
   for (let k = 0; k + 2 < positions.length; k += 3) {
     // Positions are in reading order; on the reverse strand read the complement.

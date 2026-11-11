@@ -6,11 +6,11 @@
 
 import { h } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
-import { cutSites } from "../doc/analysis.ts";
+import { allCutSites, cutSites } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { reverseComplement, type Range } from "../lib/seqdata.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 
 const MAX_HITS = 200;
 
@@ -98,11 +98,23 @@ export class Search {
     const hits: Hit[] = [];
     const lower = q.toLowerCase();
     const named = (name: string) => name.toLowerCase().includes(lower);
-    for (const f of d.features) if (named(f.name) || f.type.toLowerCase() === lower) hits.push({ label: f.name, meta: `${f.type} · ${fmt(f.start + 1)}..${fmt(f.end + 1)}`, range: { start: f.start, end: f.end }, focus: { kind: "feature", id: f.id }, kind: "feature" });
-    for (const p of d.primers) if (named(p.name)) hits.push({ label: p.name, meta: `primer · ${fmt(p.start + 1)}..${fmt(p.end + 1)}`, range: { start: p.start, end: p.end }, focus: { kind: "primer", id: p.id }, kind: "primer" });
-    for (const c of cutSites(d, this.ctx.options)) if (named(c.enzyme)) hits.push({ label: c.enzyme, meta: `cut site · ${fmt(c.start + 1)}`, range: { start: c.start, end: c.end }, focus: { kind: "cutsite", id: c.id }, kind: "cutsite" });
-    const dna = q.replace(/\s+/g, "");
-    if (dna.length >= 3 && /^[ACGTURYSWKMBDHVN]+$/i.test(dna)) {
+    for (const f of d.features) if (named(f.name) || f.type.toLowerCase() === lower) hits.push({ label: f.name, meta: `${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`, range: { start: f.start, end: f.end }, focus: { kind: "feature", id: f.id }, kind: "feature" });
+    for (const p of d.primers) if (named(p.name)) hits.push({ label: p.name, meta: `primer · ${fmtRange(p.start + 1, p.end + 1)}`, range: { start: p.start, end: p.end }, focus: { kind: "primer", id: p.id }, kind: "primer" });
+    // Every site of the chosen enzymes, not only those the cut-site filter shows: looking
+    // for EcoRI should find it in a plasmid it cuts twice.
+    const shown = new Set(cutSites(d, this.ctx.options).map(c => c.id));
+    for (const c of allCutSites(d, this.ctx.options))
+      if (named(c.enzyme))
+        hits.push({
+          label: c.enzyme,
+          meta: `cut site · ${fmt(c.start + 1)}${shown.has(c.id) ? "" : c.cuts > 1 ? ` · ${c.cuts} cuts, not shown on the map` : " · not shown on the map"}`,
+          range: { start: c.start, end: c.end },
+          focus: { kind: "cutsite", id: c.id },
+          kind: "cutsite"
+        });
+    // U is typed for RNA and read as T, as the sequence is written in DNA.
+    const dna = q.replace(/\s+/g, "").replace(/U/gi, "T");
+    if (dna.length >= 3 && /^[ACGTRYSWKMBDHVN]+$/i.test(dna)) {
       const text = d.circular ? d.sequence + d.sequence.slice(0, dna.length - 1) : d.sequence;
       const upper = text.toUpperCase();
       const add = (re: RegExp, strand: string) => {
@@ -112,7 +124,7 @@ export class Search {
           const start = m.index;
           if (start >= n) break;
           const end = (start + dna.length - 1) % n;
-          hits.push({ label: `${fmt(start + 1)}..${fmt(end + 1)}`, meta: strand, range: { start, end }, focus: null, kind: "bases" });
+          hits.push({ label: fmtRange(start + 1, end + 1), meta: strand, range: { start, end }, focus: null, kind: "bases" });
           re.lastIndex = m.index + 1;
         }
       };

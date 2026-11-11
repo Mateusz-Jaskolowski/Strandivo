@@ -45,9 +45,8 @@ fluorescent proteins.
 
 **Traps, because the catalog's names and types decide what users see:**
 
-- `detectFromFeatures` matches names case-insensitively, so a *repressor* called "TetR"
-  would be counted as tetracycline resistance on Home and in Info. It has to be named
-  something else, such as "tetR repressor".
+- `detectFromFeatures` matches names case-insensitively. "TetR" is not counted as
+  tetracycline resistance, since it is the repressor in Tet-On plasmids; "TcR" and "TetA" are.
 - `describeContents` puts CDS features first, as "usually the insert", so a tag typed as
   CDS would push the real insert out of the five names shown. Tags are `misc_feature`,
   as `src/lib/constructs.test.ts` already assumes for 6xHis.

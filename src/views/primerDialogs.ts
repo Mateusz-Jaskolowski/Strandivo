@@ -7,7 +7,7 @@
 
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { openDialog, type Dialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -15,7 +15,7 @@ import { primerLibrary } from "../primerLibrary.ts";
 import { serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { chooseSavePath, openFiles, openLibrary, saveText } from "../platform.ts";
-import { bindingTm, changesText, crossDimer, DIMER_BASES, findBindingSites, meltingTemp } from "../lib/primers.ts";
+import { bindingTm, changesText, crossDimer, DIMER_BASES, findBindingSites } from "../lib/primers.ts";
 import { alignPrimer } from "../lib/primerAlign.ts";
 import { COMMON_SEQUENCING_PRIMERS, libraryHits, type LibraryHit } from "../lib/library.ts";
 import { allProducts, pcrProduct, productDocument, type PcrProduct, type PlacedPrimer } from "../lib/pcr.ts";
@@ -420,8 +420,9 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     } else if (!product) {
       result = [h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), d.circular ? " These primers don't make a product here." : " These primers point away from each other on this linear sequence, so they make no product.")];
     } else {
-      const tmF = meltingTemp(f.bases.slice(-rangeLength(f, n)));
-      const tmR = meltingTemp(r.bases.slice(-rangeLength(r, n)));
+      // As the Primers tab gives it: the part that pairs, or a mutagenic primer's 3′ arm.
+      const tmF = bindingTm(alignPrimer(f, d.sequence));
+      const tmR = bindingTm(alignPrimer(r, d.sequence));
       // Products are told apart by where the primers' 3′ ends sit.
       const others = allProducts(d.sequence, d.circular, f, r).filter(p => !(p.forward.end === product.forward.end && p.reverse.start === product.reverse.start));
       const inside = d.features.filter(x => rangeWithin(x, product.span, n));
@@ -499,8 +500,14 @@ export function selectionTarget(ctx: DocContext): DesignTarget | null {
   // A selected primer is something to look at, not a region to amplify.
   if (!range || focus?.kind === "primer") return null;
   const feature = focus?.kind === "feature" ? d.features.find(f => f.id === focus.id) : undefined;
-  return { range, label: feature?.name ?? `${fmt(range.start + 1)}-${fmt(range.end + 1)}`, strand: feature?.strand ?? 1 };
+  return { range, label: feature?.name ?? positionLabel(range), strand: feature?.strand ?? 1 };
 }
+
+/**
+ * A bare selection's name, which its primers are named after: plain digits, as a name with
+ * thousands separators ("1,700-2,400-F") splits a column in an order form.
+ */
+const positionLabel = (r: Range) => `${r.start + 1}-${r.end + 1}`;
 
 export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null = selectionTarget(ctx)) {
   const dlg = openDialog({ title: "Design primers", note: "Design a primer pair with matched Tms and optional 5′ restriction sites.", width: 760 });
@@ -539,7 +546,8 @@ export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null =
     const regionSelect = h(
       "select",
       { class: "sv-input", "aria-label": "Region to amplify" },
-      ...targets.map((t, i) => h("option", { value: String(i), selected: t === target }, `${t.label} · ${fmt(t.range.start + 1)}–${fmt(t.range.end + 1)} · ${fmt(rangeLength(t.range, n0))} bp`))
+      // A selected stretch is named by its own positions, which the range beside it repeats.
+      ...targets.map((t, i) => h("option", { value: String(i), selected: t === target }, `${t.label === positionLabel(t.range) ? "Selected bases" : t.label} · ${fmtRange(t.range.start + 1, t.range.end + 1)} · ${fmt(rangeLength(t.range, n0))} bp`))
     ) as HTMLSelectElement;
     regionSelect.addEventListener("change", () => {
       target = targets[Number(regionSelect.value)] ?? null;
@@ -601,6 +609,14 @@ export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null =
       };
       const product = pcrProduct(d.sequence, d.circular, { name: "F", ...pair.forward, bases: pair.forward.bases.toUpperCase() }, { name: "R", ...pair.reverse, bases: pair.reverse.bases.toUpperCase() });
       const notes: Node[] = [];
+      // A region inside a repeat may have no single-site primer, and the scoring then
+      // settles for one: say so, as it amplifies more than this region.
+      for (const x of [f, r]) {
+        if (x.primer.sites > 1) notes.push(h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), ` ${x.name} binds ${x.primer.sites} places in this sequence.`));
+        if (x.primer.selfDimer >= DIMER_BASES) notes.push(h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), ` ${x.name}'s 3′ end pairs with itself over ${x.primer.selfDimer} bases.`));
+      }
+      const crossed = crossDimer(pair.forward.bases, pair.reverse.bases);
+      if (crossed >= DIMER_BASES) notes.push(h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), ` The two primers' 3′ ends pair with each other over ${crossed} bases, so they may make primer dimer.`));
       const names = [sitesUsed.start, sitesUsed.end].filter(Boolean);
       if (product && names.length) {
         // Each added site should cut once (twice if both ends use the same enzyme).

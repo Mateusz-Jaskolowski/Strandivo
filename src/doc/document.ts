@@ -40,7 +40,7 @@ import { gcPercent } from "../lib/labinfo.ts";
 import { enzymePreferences } from "../lib/enzymes.ts";
 import { ALTERNATIVE_STARTS, type OrfOptions } from "../lib/orfs.ts";
 import type { Feature } from "../lib/types.ts";
-import { describeDifference } from "../lib/genetics.ts";
+import { codonOffset, describeDifference } from "../lib/genetics.ts";
 import { selectionTmText } from "../lib/primers.ts";
 import { designOf } from "../lib/variable.ts";
 import { loadSettings, onSettingsChanged, saveSettings, type Settings } from "../settings.ts";
@@ -71,7 +71,7 @@ import { personalEnzymes } from "../personalEnzymes.ts";
 import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
 
@@ -215,7 +215,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   let inspectorOpen = true;
   // Sequencing reads align against the current sequence; edits make the results stale.
   const legacyFeatures = (d: SeqData): Feature[] =>
-    d.features.flatMap(f => [{ id: f.id, name: f.name, type: f.type, start: f.start, end: f.end, forward: f.strand !== -1, strand: f.strand === -1 ? -1 : 1, locations: f.locations, variable: designOf(f.notes) ?? undefined }, ...variableProteinFeatures(f, d.sequence.length)]);
+    d.features.flatMap(f => [{ id: f.id, name: f.name, type: f.type, start: f.start, end: f.end, forward: f.strand !== -1, strand: f.strand === -1 ? -1 : 1, locations: f.locations, codonStart: codonOffset(f) + 1, variable: designOf(f.notes) ?? undefined }, ...variableProteinFeatures(f, d.sequence.length)]);
   let dataVersion = 0;
   store.subscribe(c => c.data && dataVersion++);
 
@@ -568,7 +568,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       const tm = selectionTmText(bases);
       left.push(
         h("span", { class: "sv-status-strong" }, label),
-        h("span", { class: "sv-mono" }, `${fmt(range.start + 1)}..${fmt(range.end + 1)}`),
+        h("span", { class: "sv-mono" }, fmtRange(range.start + 1, range.end + 1)),
         h("span", null, `${fmt(len)} bp`),
         h("span", null, `GC ${gcPercent(bases).toFixed(1)}%`)
       );
@@ -685,10 +685,20 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
 
   /** Writes the document to a file, which becomes the window's file. */
   async function saveTo(target: string, fmtOut: SaveFormat) {
-    await saveText(target, serialize(fileJson(), fmtOut));
-    track("file_saved", { format: fmtOut, how: "save" });
-    store.markSaved();
+    // What is written is what counts as saved: an edit made while the file is being written
+    // still needs saving afterwards.
+    const written = store.data;
+    const text = serialize(fileJson(), fmtOut);
+    const infoWas = infoDirty;
     infoDirty = false;
+    try {
+      await saveText(target, text);
+    } catch (e) {
+      infoDirty ||= infoWas;
+      throw e;
+    }
+    track("file_saved", { format: fmtOut, how: "save" });
+    store.markSaved(written);
     if (target !== path) {
       path = target;
       rememberRotation(target, opts.get().mapRotation);

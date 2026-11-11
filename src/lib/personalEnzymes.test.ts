@@ -58,7 +58,9 @@ test("legacy preferences migrate and explicit new choices keep visibility indepe
   ] as const;
   for (const [enzymeSet, enzymeSource, enzymeFilter, cutsites] of cases)
     assert.deepEqual(enzymePreferences({ enzymeSet }), { enzymeSource, enzymeFilter, cutsites });
-  assert.deepEqual(enzymePreferences({ enzymeSource: "personal", enzymeFilter: "all", cutsites: false }), { enzymeSource: "personal", enzymeFilter: "all", cutsites: false });
+  assert.deepEqual(enzymePreferences({ enzymeSource: "personal", enzymeFilter: "all" }), { enzymeSource: "personal", enzymeFilter: "all", cutsites: true });
+  // A visibility saved by an earlier build doesn't override the setting for new files.
+  assert.deepEqual(enzymePreferences({ enzymeSource: "lab", cutsites: false } as Parameters<typeof enzymePreferences>[0], true).cutsites, true);
   assert.deepEqual(enzymePreferences({ enzymeSource: "bad", enzymeFilter: "bad" }, false), { enzymeSource: "common", enzymeFilter: "unique6", cutsites: false });
 });
 

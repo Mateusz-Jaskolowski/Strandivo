@@ -26,15 +26,19 @@ export interface EnzymeOptions {
   personalEnzymes: readonly string[];
 }
 
-/** Read old combined choices once; new choices and visibility are independent. */
-export function enzymePreferences(saved: { enzymeSet?: unknown; enzymeSource?: unknown; enzymeFilter?: unknown; cutsites?: unknown }, visible = true): Pick<EnzymeOptions, "enzymeSource" | "enzymeFilter"> & { cutsites: boolean } {
+/**
+ * Read old combined choices once; new choices and visibility are independent. Whether cut
+ * sites show follows the "Restriction sites" setting for newly opened files, as features
+ * and primers do; only an old "None" choice still hides them.
+ */
+export function enzymePreferences(saved: { enzymeSet?: unknown; enzymeSource?: unknown; enzymeFilter?: unknown }, visible = true): Pick<EnzymeOptions, "enzymeSource" | "enzymeFilter"> & { cutsites: boolean } {
   const legacy = saved.enzymeSet;
   const source = legacy === "lab" || legacy === "lab1" || legacy === "lab2" ? "lab" : "common";
   const filter = legacy === "lab" ? "all" : legacy === "lab1" ? "unique" : legacy === "lab2" ? "unique2" : legacy === "unique" || legacy === "unique2" ? legacy : "unique6";
   return {
     enzymeSource: ENZYME_SOURCES.some(s => s.id === saved.enzymeSource) ? saved.enzymeSource as EnzymeSource : source,
     enzymeFilter: ENZYME_FILTERS.some(f => f.id === saved.enzymeFilter) ? saved.enzymeFilter as EnzymeFilter : filter,
-    cutsites: typeof saved.cutsites === "boolean" ? saved.cutsites : legacy === "none" ? false : visible
+    cutsites: legacy === "none" ? false : visible
   };
 }
 

@@ -4,8 +4,8 @@
 // The parts catalog is generated into crates/seqcore/data/parts.tsv and searched by the
 // Rust core, but what the user ends up seeing goes through this folder: `detectFromFeatures`
 // fills Home's contents column and the Info tab's markers, and it matches on a feature's
-// name. So a catalog entry named "TetR" would be read as tetracycline resistance even if
-// it were a repressor, and a marker named anything unexpected would show up nowhere.
+// name. So a catalog entry's name decides what it counts as, and a marker named anything
+// unexpected would show up nowhere.
 // These tests tie the catalog's names to that code. Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";

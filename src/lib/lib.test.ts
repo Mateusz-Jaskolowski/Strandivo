@@ -139,6 +139,19 @@ test("missense, silent and nonsense on the forward strand", () => {
   assert.equal(c.label, "W3* (stop)");
 });
 
+test("substitutions in one codon are read together", () => {
+  // AAA (K2) -> TGG (W): each change alone would read as a different amino acid.
+  const group = [sub(13, "A", "T"), sub(14, "A", "G"), sub(15, "A", "G")];
+  for (const d of group) assert.equal(consequenceIn(fwd, d, ref, group).label, "K2W");
+  // A change in the next codon doesn't join in.
+  assert.equal(consequenceIn(fwd, sub(14, "A", "G"), ref, [sub(17, "G", "A")]).label, "K2R");
+  // On the minus strand too: AAA on the coding strand is TTT at 16..18 on the top; GGA is G.
+  const r = "CCCCCCCCCC" + "TTACCATTTCAT" + "GGGGGGGGGG";
+  const rev: Feature = { name: "rev", type: "CDS", start: 10, end: 21, forward: false };
+  const both = [sub(18, "T", "C"), sub(17, "T", "C")];
+  assert.equal(consequenceIn(rev, both[0], r, both).label, "K2G");
+});
+
 test("reverse-strand CDS", () => {
   // Reverse complement of ATGAAATGGTAA is TTACCATTTCAT; put it at 10..21 and annotate on the minus strand.
   const r = "CCCCCCCCCC" + "TTACCATTTCAT" + "GGGGGGGGGG";
@@ -259,6 +272,14 @@ test("detects markers, origins and promoters from features", () => {
   assert.deepEqual(d.origins, ["ori", "f1 ori"]);
   assert.deepEqual(d.promoters, ["T7"]);
   assert.equal(Math.round(gcPercent("GGCCAATT")), 50);
+});
+
+test("SnapGene's marker names: NeoR/KanR is both, TcR is tetracycline, TetR the repressor", () => {
+  const drugs = (name: string) => detectFromFeatures([{ name, type: "CDS", start: 0, end: 1 }]).resistance;
+  assert.deepEqual(drugs("NeoR/KanR"), ["Kanamycin", "Neomycin/G418"]);
+  assert.deepEqual(drugs("TcR"), ["Tetracycline"]);
+  assert.deepEqual(drugs("TetR"), []);
+  assert.deepEqual(drugs("KanR"), ["Kanamycin"]);
 });
 
 test("reads primers from SnapGene files", async () => {

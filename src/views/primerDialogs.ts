@@ -15,7 +15,7 @@ import { primerLibrary } from "../primerLibrary.ts";
 import { serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { chooseSavePath, openFiles, openLibrary, saveText } from "../platform.ts";
-import { bindingTm, changesText, crossDimer, DIMER_BASES, findBindingSites, meltingTemp } from "../lib/primers.ts";
+import { bindingTm, changesText, crossDimer, DIMER_BASES, findBindingSites } from "../lib/primers.ts";
 import { alignPrimer } from "../lib/primerAlign.ts";
 import { COMMON_SEQUENCING_PRIMERS, libraryHits, type LibraryHit } from "../lib/library.ts";
 import { allProducts, pcrProduct, productDocument, type PcrProduct, type PlacedPrimer } from "../lib/pcr.ts";
@@ -420,8 +420,9 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     } else if (!product) {
       result = [h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), d.circular ? " These primers don't make a product here." : " These primers point away from each other on this linear sequence, so they make no product.")];
     } else {
-      const tmF = meltingTemp(f.bases.slice(-rangeLength(f, n)));
-      const tmR = meltingTemp(r.bases.slice(-rangeLength(r, n)));
+      // As the Primers tab gives it: the part that pairs, or a mutagenic primer's 3′ arm.
+      const tmF = bindingTm(alignPrimer(f, d.sequence));
+      const tmR = bindingTm(alignPrimer(r, d.sequence));
       // Products are told apart by where the primers' 3′ ends sit.
       const others = allProducts(d.sequence, d.circular, f, r).filter(p => !(p.forward.end === product.forward.end && p.reverse.start === product.reverse.start));
       const inside = d.features.filter(x => rangeWithin(x, product.span, n));

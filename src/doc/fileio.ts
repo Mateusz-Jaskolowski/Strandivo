@@ -83,7 +83,8 @@ export async function parseSequenceFile(bytes: Uint8Array, path: string): Promis
 }
 
 export function serialize(seq: any, format: SaveFormat): string {
-  return format === "fasta" ? jsonToFasta(seq) : jsonToGenbank(seq);
+  // By default the GenBank writer deletes web addresses from notes and the definition.
+  return format === "fasta" ? jsonToFasta(seq) : jsonToGenbank(seq, { doNotMangleOrStripUrls: true });
 }
 
 export interface ReadFileData {

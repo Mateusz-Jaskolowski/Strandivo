@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
+  basesFromText,
   basesIn,
   deleteRange,
   featureGaps,
@@ -418,3 +419,30 @@ test("gaps between the parts of a feature", () => {
   assert.deepEqual(featureGaps({ start: 90, end: 20, locations: [{ start: 90, end: 99 }, { start: 0, end: 9 }, { start: 15, end: 20 }] }, 100), [{ start: 10, end: 14 }]);
   assert.deepEqual(featureGaps({ start: 0, end: 9 }, 100), []);
 });
+test("pasted text: FASTA headers and GenBank text are not bases", () => {
+  assert.deepEqual(basesFromText(">pUC19 cloning vector, complete sequence\nacgt\nACGU\n"), { bases: "ACGTACGT", stray: [], dropped: 0 });
+  const genbank = "LOCUS       x  8 bp  DNA\nFEATURES             Location/Qualifiers\nORIGIN\n        1 tcgcgcgt\n//\n";
+  assert.equal(basesFromText(genbank).bases, "TCGCGCGT");
+  assert.equal(basesFromText("1 gaattc 7 ggatcc\n").bases, "GAATTCGGATCC");
+  assert.equal(basesFromText("NNKGAATTC").bases, "NNKGAATTC");
+  // Anything a sequence listing wouldn't hold is still reported: an alignment's gaps.
+  assert.deepEqual(basesFromText("acgt---acgt"), { bases: "ACGTACGT", stray: [], dropped: 3 });
+  const prose = basesFromText("Please order this primer");
+  assert.equal(prose.bases, "");
+  assert.deepEqual(prose.stray, ["P", "L", "E", "O", "I"]);
+});
+
+test("a mutagenic primer whose change is near the 3′ end still binds its own site", () => {
+  const t = "GATCCTAGGCTAGCTAGGATCCGATCGATCGTACGATCGATCGGCTAGCTAGCTAGGCATCGATCGATCGTAGCTAGCTAGCTAGCATCGACTGACTAGCTAG";
+  const site = t.slice(20, 50);
+  const p = site.slice(0, 19) + (site[19] === "A" ? "C" : "A") + site.slice(20);
+  assert.equal(findBindingSites(p, t, false).length, 0);
+  const own = { start: 20, end: 49, strand: 1 as const };
+  const a = alignPrimer({ ...own, bases: p }, t);
+  const r = primerReport(p, a, t, false, null, own);
+  assert.equal(r.sites, 1);
+  assert.ok(!r.checks.some(c => c.short === "No site"));
+  // Without its site, as when it is only being looked for, it binds nowhere.
+  assert.equal(primerReport(p, a, t, false).sites, 0);
+});
+

@@ -101,6 +101,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.
+- **Reading a CDS** starts at its first whole codon, not its first base: a partial one from a
+  database says so with GenBank's `/codon_start`, kept in the feature's notes. Anything that
+  translates, numbers residues or maps them back to bases walks `codingPositions`
+  (`src/lib/genetics.ts`), never `featurePositions`, which is every base the feature covers.
 - **Where things go**: the app bar holds what is about the app (Home, a tab per open file,
   the primer and enzyme libraries, Settings and, in a browser, the menu); the bar under it is the file's own (its five views,
   search, editing tools). Views show the document (Map, Sequence, Primers, Reads, Info), and

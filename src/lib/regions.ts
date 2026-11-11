@@ -9,7 +9,7 @@
 // base (turning its direction, cutting it short) has to carry them along (`carryRegions`).
 // Pure, so it is unit-tested.
 
-import { featurePositions, translateCodon } from "./genetics.ts";
+import { codingPositions, featurePositions, translateCodon } from "./genetics.ts";
 import { complement, inRange, rangeWithin, type Range, type SeqData, type SeqFeature } from "./seqdata.ts";
 import type { Feature, VariableDesign } from "./types.ts";
 import { formatDesign, parseDesign } from "./variable.ts";
@@ -20,7 +20,7 @@ export const REGIONS_QUALIFIER = "strandivo_regions";
 /** Map selected DNA into the CDS's frame, including whole codons at either edge. */
 export function selectedProteinResidues(f: SeqFeature, range: Range, sequence: string) {
   if (!rangeWithin(range, f, sequence.length)) return null;
-  const positions = featurePositions(f, sequence.length);
+  const positions = codingPositions(f, sequence.length);
   let length = Math.floor(positions.length / 3);
   const lastCodon = positions.slice((length - 1) * 3, length * 3)
     .map(p => f.strand === -1 ? complement(sequence[p]) : sequence[p]).join("");
@@ -284,7 +284,7 @@ export function regionSpans(f: Located & Noted, r: ProteinRegion, n: number): Ra
   const hit = cached.spans.get(r);
   if (hit) return hit;
   const forward = (f as { strand?: number }).strand !== -1;
-  const spans = runs(featurePositions(f, n).slice((r.start - 1) * 3, r.end * 3), n, forward);
+  const spans = runs(codingPositions(f, n).slice((r.start - 1) * 3, r.end * 3), n, forward);
   if (!forward) spans.reverse();
   cached.spans.set(r, spans);
   return spans;
@@ -309,8 +309,8 @@ const nearestResidue = (offset: number) => Math.round(offset / 3);
 export function carryRegions<T extends Located & Noted>(before: T, next: T, n: number, nextLength: number, move: (pos: number) => number | null): T {
   const regions = regionsOf(before);
   if (!regions.length) return next;
-  const old = featurePositions(before, n);
-  const now = featurePositions(next, nextLength);
+  const old = codingPositions(before, n);
+  const now = codingPositions(next, nextLength);
   // Same length from the same first base: every residue is where it was.
   if (old.length === now.length && move(old[0]) === now[0]) return next;
   const offsetAt = new Int32Array(nextLength).fill(-1);

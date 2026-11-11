@@ -386,10 +386,12 @@ export class ReadSet {
       this.alignedVersion = ref.version;
       this.consequences.clear();
       const annotated = ref.features.filter(f => !isSource(f));
-      const diffs = [...this.results.flatMap(r => r.differences), ...this.clones.flatMap(c => c.differences)];
-      for (const d of diffs) {
-        const feats = featuresAt(annotated, ref.sequence.length, d);
-        this.consequences.set(d, feats.map(f => consequenceIn(f, d, ref.sequence)));
+      // Each read's or clone's differences together, so changes in one codon are read as one.
+      for (const group of [...this.results, ...this.clones].map(x => x.differences)) {
+        for (const d of group) {
+          const feats = featuresAt(annotated, ref.sequence.length, d);
+          this.consequences.set(d, feats.map(f => consequenceIn(f, d, ref.sequence, group)));
+        }
       }
     } catch (e) {
       toast(`Alignment failed: ${e instanceof Error ? e.message : e}`, "error", 8000);

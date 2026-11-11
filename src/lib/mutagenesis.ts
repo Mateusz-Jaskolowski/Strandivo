@@ -10,7 +10,7 @@
 // Each 3′ arm (the bases that pair after the change) is sized to a target Tm with
 // `meltingTemp`, so it follows Settings. Pure functions.
 
-import { featurePositions, translateCodon } from "./genetics.ts";
+import { codingPositions, translateCodon } from "./genetics.ts";
 import { hasGoodClamp, meltingTemp } from "./primers.ts";
 import { complement, insertBases, replaceRange, reverseComplement, type SeqData, type SeqFeature } from "./seqdata.ts";
 
@@ -195,9 +195,9 @@ export interface CodonSite {
 }
 
 /** Residue `residue` of a CDS, or null past its end. */
-export function codonAt(seq: string, f: Pick<SeqFeature, "start" | "end" | "strand" | "locations">, residue: number): CodonSite | null {
+export function codonAt(seq: string, f: Pick<SeqFeature, "start" | "end" | "strand" | "locations"> & { notes?: SeqFeature["notes"] }, residue: number): CodonSite | null {
   const n = seq.length;
-  const all = featurePositions(f, n);
+  const all = codingPositions(f, n);
   const k = (residue - 1) * 3;
   if (residue < 1 || !Number.isInteger(residue) || k + 3 > all.length) return null;
   const positions = all.slice(k, k + 3);
@@ -207,8 +207,8 @@ export function codonAt(seq: string, f: Pick<SeqFeature, "start" | "end" | "stra
 }
 
 /** The residue a position falls in, 1-based, or null outside the CDS. */
-export function residueAt(seq: string, f: Pick<SeqFeature, "start" | "end" | "strand" | "locations">, pos: number): number | null {
-  const k = featurePositions(f, seq.length).indexOf(pos);
+export function residueAt(seq: string, f: Pick<SeqFeature, "start" | "end" | "strand" | "locations"> & { notes?: SeqFeature["notes"] }, pos: number): number | null {
+  const k = codingPositions(f, seq.length).indexOf(pos);
   return k < 0 ? null : Math.floor(k / 3) + 1;
 }
 

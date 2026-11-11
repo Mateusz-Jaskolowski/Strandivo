@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { featurePositions } from "./genetics.ts";
+import { codingPositions } from "./genetics.ts";
 import { mergeRanges } from "./selection.ts";
 import type { Range, SeqData } from "./seqdata.ts";
 
@@ -48,7 +48,7 @@ export function codonRanges(data: SeqData, selection: CodonSelection): Range[] {
     if (!ps) {
       const f = data.features.find(f => f.id === p.feature);
       if (!f) continue;
-      ps = featurePositions(f, data.sequence.length);
+      ps = codingPositions(f, data.sequence.length);
       positions.set(p.feature, ps);
     }
     if (p.index < 1 || p.index * 3 > ps.length) continue;

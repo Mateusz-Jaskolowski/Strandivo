@@ -66,6 +66,23 @@ export function featurePositions(f: Feature, seqLength: number): number[] {
   return isForward(f) ? pos : pos.reverse();
 }
 
+/**
+ * Bases before a coding feature's first whole codon: GenBank's /codon_start less one, as a
+ * partial CDS from a database may begin mid-codon. Read from `codonStart` or the qualifier.
+ */
+export function codonOffset(f: { codonStart?: number; notes?: Record<string, unknown> }): number {
+  const q = f.notes?.codon_start;
+  const v = Number(f.codonStart ?? (Array.isArray(q) ? q[0] : q));
+  return v === 2 || v === 3 ? v - 1 : 0;
+}
+
+/** A coding feature's positions in reading order from its first whole codon. */
+export function codingPositions(f: Feature & { notes?: Record<string, unknown> }, seqLength: number): number[] {
+  const all = featurePositions(f, seqLength);
+  const skip = codonOffset(f);
+  return skip ? all.slice(skip) : all;
+}
+
 export function featureLength(f: Feature, seqLength: number): number {
   return featurePositions(f, seqLength).length;
 }
@@ -144,12 +161,14 @@ export interface Consequence {
 
 /**
  * Effect of a difference on one feature it falls in.
- * `reference` is the full reference sequence (any case).
+ * `reference` is the full reference sequence (any case). `alongside` are the other
+ * differences of the same read or clone: substitutions in the same codon are read
+ * together, so GCT→TGG is A→W rather than three changes each against the reference.
  */
-export function consequenceIn(f: Feature, d: Difference, reference: string): Consequence {
+export function consequenceIn(f: Feature, d: Difference, reference: string, alongside: readonly Difference[] = []): Consequence {
   const n = reference.length;
   if (!isCoding(f)) return { feature: f, label: "in " + (f.name || f.type || "feature"), severity: "noncoding" };
-  const positions = featurePositions(f, n);
+  const positions = codingPositions(f, n);
   const forward = isForward(f);
   const baseAt = (p: number) => {
     const b = reference[p].toUpperCase();
@@ -164,9 +183,13 @@ export function consequenceIn(f: Feature, d: Difference, reference: string): Con
     if (codonStart + 3 > positions.length) return { feature: f, label: "in incomplete last codon", severity: "noncoding" };
     const codonPos = positions.slice(codonStart, codonStart + 3);
     const refCodon = codonPos.map(baseAt).join("");
-    const readBase = d.readBases.toUpperCase();
-    const altBase = forward ? readBase : complement(readBase);
-    const altCodon = codonPos.map((p, k) => (k === idx - codonStart ? altBase : baseAt(p))).join("");
+    const readAt = new Map<number, string>();
+    for (const o of alongside) if (o.kind === "substitution" && o.readBases.length === 1 && codonPos.includes(o.refPos)) readAt.set(o.refPos, o.readBases.toUpperCase());
+    readAt.set(d.refPos, d.readBases.toUpperCase());
+    const altCodon = codonPos.map(p => {
+      const b = readAt.get(p);
+      return b === undefined ? baseAt(p) : forward ? b : complement(b);
+    }).join("");
     const a = translateCodon(refCodon);
     const b = translateCodon(altCodon);
     const num = codonIndex + 1;

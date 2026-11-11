@@ -5,7 +5,7 @@
 // Results are cached on the sequence so redraws stay cheap.
 
 import { extraKey, sourceEnzymes, rescanSites, scanSites, selectSites, type CutSite, type EnzymeOptions, type SiteHit } from "../lib/enzymes.ts";
-import { amberSuppressed, translateCodon } from "../lib/genetics.ts";
+import { amberSuppressed, codingPositions, translateCodon } from "../lib/genetics.ts";
 import { findOrfs, frameLabel, type Orf, type OrfOptions } from "../lib/orfs.ts";
 import { bindingTm, changesText } from "../lib/primers.ts";
 import { alignPrimer, type PrimerAlignment } from "../lib/primerAlign.ts";
@@ -69,7 +69,7 @@ const TYPE_COLORS: Record<string, string> = {
   exon: "#E8A83E"
 };
 
-/** Distinct colours for coding sequences, in order of appearance. */
+/** Distinct colours for coding sequences, chosen by name so each CDS keeps its own. */
 const CDS_COLORS = ["#E8A83E", "#E58063", "#6FAEE0", "#8CC46B", "#D98BC5", "#F2C14E", "#6CC2B0", "#B39DDB"];
 
 function luminance(hex: string): number {
@@ -181,16 +181,9 @@ export function codons(f: SeqFeature, sequence: string): Codon[] {
   const hit = codonCache.get(f);
   if (hit && hit.seq === sequence && hit.amber === amberSuppressed()) return hit.codons;
   const n = sequence.length;
-  // A spliced CDS is read across its parts only, skipping the gaps between them.
-  const positions: number[] = [];
-  for (const part of f.locations ?? [f]) {
-    if (part.start <= part.end) for (let i = part.start; i <= part.end; i++) positions.push(i);
-    else {
-      for (let i = part.start; i < n; i++) positions.push(i);
-      for (let i = 0; i <= part.end; i++) positions.push(i);
-    }
-  }
-  if (f.strand === -1) positions.reverse();
+  // A spliced CDS is read across its parts only, skipping the gaps between them, and from
+  // its first whole codon (/codon_start).
+  const positions = codingPositions(f, n);
   const out: Codon[] = [];
   for (let k = 0; k + 2 < positions.length; k += 3) {
     // Positions are in reading order; on the reverse strand read the complement.

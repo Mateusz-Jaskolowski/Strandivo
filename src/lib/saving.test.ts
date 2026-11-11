@@ -185,3 +185,35 @@ test("a variable region's design is saved in its qualifier", async () => {
   // Other features stay unmarked.
   assert.equal(designOf(again.data.features.find(x => x.name === "cdr3")!.notes), null);
 });
+
+test("numeric qualifiers and web addresses survive saving, and /codon_start sets the frame", async () => {
+  const gb = `LOCUS       partial                   21 bp    DNA     linear   SYN 01-JAN-2026
+FEATURES             Location/Qualifiers
+     CDS             <1..21
+                     /codon_start=2
+                     /transl_table=11
+                     /product="part of a protein"
+                     /note="from https://www.addgene.org/12345/"
+     CDS             complement(1..>21)
+                     /codon_start=3
+                     /label="rev"
+ORIGIN
+        1 aatgaaatgg taaccccccc c
+//
+`;
+  const doc = await reopen(gb);
+  const [fwd, rev] = doc.data.features;
+  // Read from base 2: ATG AAA TGG TAA CCC CCC.
+  assert.equal(protein(fwd, doc.data.sequence), "MKW*PP");
+  // On the minus strand, from its third base.
+  const revFrom3 = reverseComplement(doc.data.sequence).slice(2);
+  assert.equal(protein(rev, doc.data.sequence).length, Math.floor(revFrom3.length / 3));
+  const again = await reopen(save(doc));
+  const [f2, r2] = again.data.features;
+  assert.equal(String((f2.notes.codon_start as unknown[])[0]), "2");
+  assert.equal(String((f2.notes.transl_table as unknown[])[0]), "11");
+  assert.deepEqual(f2.notes.product, ["part of a protein"]);
+  assert.deepEqual(f2.notes.note, ["from https://www.addgene.org/12345/"]);
+  assert.equal(String((r2.notes.codon_start as unknown[])[0]), "3");
+  assert.equal(protein(f2, again.data.sequence), protein(fwd, doc.data.sequence));
+});

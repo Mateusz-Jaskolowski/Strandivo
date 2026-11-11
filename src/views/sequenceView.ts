@@ -25,7 +25,7 @@ import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import type { CutSite } from "../lib/enzymes.ts";
 import type { Orf } from "../lib/orfs.ts";
 import {
-  cleanBases,
+  basesFromText,
   complement,
   deleteRange,
   DNA_CHARS,
@@ -1138,12 +1138,15 @@ export class SequenceView {
   }
 
   pasteText(text: string) {
-    const bases = cleanBases(text).toUpperCase();
+    const { bases, stray, dropped } = basesFromText(text);
+    if (stray.length) {
+      toast(`The clipboard isn't a DNA sequence: it has letters such as ${stray.map(c => `“${c}”`).join(", ")}, which aren't bases.`, "info", 5000);
+      return;
+    }
     if (!bases) {
       if (text.trim()) toast("The clipboard has no DNA bases to paste.", "info");
       return;
     }
-    const dropped = text.replace(/\s+/g, "").length - bases.length;
     this.typeBases(bases, "Paste");
     if (dropped > 0) toast(`Pasted ${fmt(bases.length)} bases (left out ${fmt(dropped)} other characters).`, "info", 3500);
   }

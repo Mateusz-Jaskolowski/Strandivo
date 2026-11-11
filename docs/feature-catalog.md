@@ -189,12 +189,11 @@ What the user sees goes through `detectFromFeatures` and `describeContents`
 group by its **type**. So:
 
 - **A name that reads as a marker will be counted as one.** `detectFromFeatures` matches
-  names exactly but case-insensitively, so an entry called `TetR` would be reported as
-  tetracycline resistance even if it were the repressor. The efflux protein is named
-  `TetA`; a repressor would have to be named something like `tetR repressor`.
+  names exactly but case-insensitively. `TetR` is not counted, since it is the repressor in
+  Tet-On plasmids (SnapGene names the resistance `TcR`); the efflux protein is named `TetA`.
 - **Markers have to use the names that table knows.** `aph(3')-IIa` is in the catalog as
-  `NeoR`, not `NeoR/KanR`, because the latter matches nothing in `RESISTANCE` and would
-  silently disappear from Home and the Info tab.
+  `NeoR`; a name `RESISTANCE` doesn't know would silently disappear from Home and the Info
+  tab.
 - **Tags are `misc_feature`, never CDS.** `describeContents` lists coding sequences first,
   as they are usually the insert, so a 6xHis typed as a CDS would take one of the five
   places Home shows.

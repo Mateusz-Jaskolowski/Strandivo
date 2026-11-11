@@ -9,7 +9,7 @@
 // and leaves out calls made among double peaks. Pure, so it is unit-tested.
 
 import { complementBase } from "./chromatogram.ts";
-import { continuesFrame, describeDifference, featureContains, featuresAt, featurePositions, frameChains, isCoding, isForward, translateCodon } from "./genetics.ts";
+import { codingPositions, continuesFrame, describeDifference, featureContains, featuresAt, featurePositions, frameChains, isCoding, isForward, translateCodon } from "./genetics.ts";
 import { deleteRange, insertBases, replaceRange, type Range, type SeqData } from "./seqdata.ts";
 import { regionKey, type ClonePeaks } from "./mixes.ts";
 import type { CloneDifference, CloneResult, Feature } from "./types.ts";
@@ -147,7 +147,7 @@ function cdsChanges(chain: Feature[], reference: string, covered: (p: number) =>
   const forward = isForward(chain[0]);
   let codon = 0;
   const parts = chain.map(f => {
-    const positions = featurePositions(f, n);
+    const positions = codingPositions(f, n);
     const from = codon;
     codon += Math.floor(positions.length / 3);
     return { f, name: f.name || "CDS", positions, from, to: codon };
@@ -387,7 +387,7 @@ function distance(a: string, b: string): number {
 function regionFrame(f: Feature, coding: Feature[], n: number): { positions: number[]; forward: boolean; cds: number[] | null; offset: number } {
   const own = featurePositions(f, n);
   for (const g of isCoding(f) ? [f] : coding) {
-    const cds = featurePositions(g, n);
+    const cds = codingPositions(g, n);
     const offset = cds.findIndex(p => featureContains(f, n, p));
     if (offset < 0 || offset + own.length > cds.length) continue;
     const positions = cds.slice(offset, offset + own.length);

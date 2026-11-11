@@ -16,6 +16,28 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Pasting a sequence**: text copied from a database or another program can be pasted
+  whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.
+  Letters that aren't bases used to be pasted as DNA; now Strandivo says the clipboard
+  isn't a sequence instead. U is read as T.
+
+- **Partial coding sequences**: a CDS that starts mid-codon (GenBank's codon_start, as in
+  many database records) is now translated in its own frame, in the Sequence view, Copy
+  protein, and the amino-acid changes reported for reads. Saving keeps qualifiers that hold
+  numbers, such as codon_start, and web addresses in notes, which were being dropped.
+
+- **Mutagenic primers**: a primer whose change sits close to its 3′ end is no longer
+  reported as not binding the sequence.
+
+- **Amino-acid changes from reads**: two or three changes in one codon are now read
+  together, so a codon swapped whole is reported as one change, such as A2W.
+
+- **Markers on Home and in Info**: NeoR/KanR counts as both kanamycin and neomycin, TcR as
+  tetracycline resistance, and TetR, the repressor in Tet-On plasmids, no longer does.
+
+- The PCR dialog gives the same Tm as the Primers tab, and saving while an edit is in
+  flight no longer loses it.
+
 - **My enzymes**: keep a personal restriction enzyme list alongside your lab stock, and
   choose the list separately from how often its enzymes cut. Use your list on maps, in
   Sequence, and when choosing enzymes for a digest or restriction cloning.

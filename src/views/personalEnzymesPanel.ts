@@ -40,6 +40,45 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
     rows.querySelector<HTMLInputElement>(`input[data-personal-enzyme="${CSS.escape(names[index])}"]`)?.focus();
   }
 
+  // Rows are kept by name and updated in place, so a redraw (a save finishing, the list
+  // loading, a scroll) never swaps out the box under a click that is under way.
+  const shown = new Map<string, { row: HTMLElement; checkbox: HTMLInputElement; lab: HTMLElement }>();
+
+  function makeRow(name: string) {
+    const checkbox = h("input", { type: "checkbox", "aria-label": name, "data-personal-enzyme": name }) as HTMLInputElement;
+    checkbox.addEventListener("change", () => {
+      if (busy.has(name) || personalEnzymes.error) { checkbox.checked = personalEnzymes.all.includes(name); return; }
+      busy.add(name);
+      failed = false;
+      status.textContent = "Saving…";
+      void personalEnzymes.set(name, checkbox.checked).catch(e => {
+        failed = true;
+        toast(explain(e), "error", 7000);
+      }).finally(() => {
+        busy.delete(name);
+        if (disposed) return;
+        status.textContent = busy.size ? "Saving…" : failed ? "Changes couldn't be saved" : "Saved";
+        render();
+      });
+    });
+    checkbox.addEventListener("focus", () => { current = name; });
+    checkbox.addEventListener("keydown", e => {
+      const index = names.indexOf(name);
+      const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+      const next = e.key === "Home" ? 0 : e.key === "End" ? names.length - 1 : index + step;
+      if ((step || e.key === "Home" || e.key === "End") && next >= 0 && next < names.length) {
+        e.preventDefault();
+        focusRow(next);
+      }
+    });
+    const lab = h("span", { class: "sv-small sv-dim" }, "In lab");
+    const row = h("label", { class: "sv-personal-enzyme-row" }, checkbox,
+      h("span", { class: "sv-personal-enzyme-name" }, name),
+      h("span", { class: "sv-mono sv-dim" }, enzymeSite(name) || "Unrecognised enzyme"),
+      lab);
+    return { row, checkbox, lab };
+  }
+
   function draw() {
     if (disposed || viewport.hidden || !viewport.clientHeight) return;
     const active = document.activeElement instanceof HTMLInputElement && rows.contains(document.activeElement) ? document.activeElement.dataset.personalEnzyme : undefined;
@@ -55,38 +94,27 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
     const stop = current === undefined ? -1 : names.indexOf(current);
     if (stop >= 0) indices.add(stop);
     rows.style.height = `${names.length * ROW_HEIGHT}px`;
-    rows.replaceChildren(...[...indices].sort((a, b) => a - b).map(index => {
+    const wanted = [...indices].sort((a, b) => a - b).map(index => {
       const name = names[index];
-      const checkbox = h("input", { type: "checkbox", checked: picked.has(name), "aria-label": name, "data-personal-enzyme": name, tabindex: name === current ? "0" : "-1", "aria-disabled": String(busy.has(name) || !personalEnzymes.loaded || !!personalEnzymes.error) });
-      checkbox.addEventListener("change", () => {
-        if (busy.has(name) || personalEnzymes.error) { checkbox.checked = picked.has(name); return; }
-        busy.add(name);
-        failed = false;
-        status.textContent = "Saving…";
-        void personalEnzymes.set(name, checkbox.checked).catch(e => {
-          failed = true;
-          toast(explain(e), "error", 7000);
-        }).finally(() => {
-          busy.delete(name);
-          if (disposed) return;
-          status.textContent = busy.size ? "Saving…" : failed ? "Changes couldn't be saved" : "Saved";
-          render();
-        });
-      });
-      checkbox.addEventListener("focus", () => { current = name; });
-      checkbox.addEventListener("keydown", e => {
-        const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
-        const next = e.key === "Home" ? 0 : e.key === "End" ? names.length - 1 : index + step;
-        if ((step || e.key === "Home" || e.key === "End") && next >= 0 && next < names.length) {
-          e.preventDefault();
-          focusRow(next);
-        }
-      });
-      return h("label", { class: "sv-personal-enzyme-row", style: { top: `${index * ROW_HEIGHT}px` } }, checkbox,
-        h("span", { class: "sv-personal-enzyme-name" }, name),
-        h("span", { class: "sv-mono sv-dim" }, enzymeSite(name) || "Unrecognised enzyme"),
-        stocked.has(name) ? h("span", { class: "sv-small sv-dim" }, "In lab") : null);
-    }));
+      const r = shown.get(name) ?? makeRow(name);
+      r.row.style.top = `${index * ROW_HEIGHT}px`;
+      // A row still saving keeps the tick the user gave it.
+      if (!busy.has(name)) r.checkbox.checked = picked.has(name);
+      r.checkbox.tabIndex = name === current ? 0 : -1;
+      r.checkbox.setAttribute("aria-disabled", String(busy.has(name) || !personalEnzymes.loaded || !!personalEnzymes.error));
+      r.lab.hidden = !stocked.has(name);
+      return [name, r] as const;
+    });
+    shown.clear();
+    for (const [name, r] of wanted) shown.set(name, r);
+    const keep = new Set(wanted.map(([, r]) => r.row));
+    for (const child of [...rows.children]) if (!keep.has(child as HTMLElement)) child.remove();
+    // Move only rows out of order, so a row that stays is never taken out of the page.
+    let at = rows.firstElementChild;
+    for (const [, r] of wanted) {
+      if (r.row === at) at = at.nextElementSibling;
+      else rows.insertBefore(r.row, at);
+    }
     if (active) rows.querySelector<HTMLInputElement>(`input[data-personal-enzyme="${CSS.escape(active)}"]`)?.focus({ preventScroll: true });
   }
 

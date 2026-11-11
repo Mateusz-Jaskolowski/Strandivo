@@ -13,6 +13,7 @@ import { layoutAlignment, type AlignmentLayout } from "../lib/alignLayout.ts";
 import { describeDifference, featureContains, featureCoverage, type Consequence } from "../lib/genetics.ts";
 import { deleteRange, insertBases, replaceRange, type SeqFeature } from "../lib/seqdata.ts";
 import { variableFeatures } from "../lib/variable.ts";
+import { regionOfFeatureId } from "../lib/regions.ts";
 import { cloneSequence, cloneVariants, consensusPieces, type CloneFlag, type CloneVariants, type RegionCall } from "../lib/variants.ts";
 import { cloneSummary, summaryText, type CloneSummary } from "../lib/cloneSummary.ts";
 import type { CloneResult, Conflict, Difference, Feature, ReadResult } from "../lib/types.ts";
@@ -1906,7 +1907,8 @@ export class ReadsView {
             this.openAlignment();
             const cols = this.trace.columnsOf(f.start, f.start <= f.end ? f.end : n - 1);
             if (cols) this.trace.showColumns(cols[0], cols[0]);
-            this.ctx.store.selectRange({ start: f.start, end: f.end }, f.id ? { kind: "feature", id: f.id } : null, "reads");
+            const region = f.id ? regionOfFeatureId(this.ctx.store.data.features, f.id) : null;
+            this.ctx.store.selectRange({ start: f.start, end: f.end }, region ? { kind: "feature", ...region } : f.id ? { kind: "feature", id: f.id } : null, "reads");
           }
         },
         h("span", { class: "sv-cov-line" }, h("span", null, f.name || f.type || "feature"), h("span", { class: "sv-dim" }, `${pct}%`)),

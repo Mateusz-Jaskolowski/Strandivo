@@ -71,7 +71,7 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
         focusRow(next);
       }
     });
-    const lab = h("span", { class: "sv-small sv-dim" }, "In lab");
+    const lab = h("span", { class: "sv-small sv-dim" });
     const row = h("label", { class: "sv-personal-enzyme-row" }, checkbox,
       h("span", { class: "sv-personal-enzyme-name" }, name),
       h("span", { class: "sv-mono sv-dim" }, enzymeSite(name) || "Unrecognised enzyme"),
@@ -102,7 +102,8 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
       if (!busy.has(name)) r.checkbox.checked = picked.has(name);
       r.checkbox.tabIndex = name === current ? 0 : -1;
       r.checkbox.setAttribute("aria-disabled", String(busy.has(name) || !personalEnzymes.loaded || !!personalEnzymes.error));
-      r.lab.hidden = !stocked.has(name);
+      // Emptied rather than hidden, so the row's text says only what it shows.
+      r.lab.textContent = stocked.has(name) ? "In lab" : "";
       return [name, r] as const;
     });
     shown.clear();

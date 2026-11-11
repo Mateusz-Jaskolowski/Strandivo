@@ -38,6 +38,15 @@ with Unreleased's notes and leaves them where they are.
 - The PCR dialog gives the same Tm as the Primers tab, and saving while an edit is in
   flight no longer loses it.
 
+- **Designing primers**: candidates that bind more than one place or whose 3′ end pairs
+  with itself are avoided, and the pair says so when nothing better fits the region.
+
+- **Find**: finds an enzyme from the chosen list even when the cut-site filter hides it,
+  and accepts U in a sequence.
+
+- A coding sequence keeps its colour on the map when another is added before it, and
+  positions are written as 1,700–2,400 throughout.
+
 - **My enzymes**: keep a personal restriction enzyme list alongside your lab stock, and
   choose the list separately from how often its enzymes cut. Use your list on maps, in
   Sequence, and when choosing enzymes for a digest or restriction cloning.

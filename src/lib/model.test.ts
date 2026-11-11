@@ -26,6 +26,7 @@ import {
 import { changesText, crossDimer, DEFAULT_TM, findBindingSites, placeEdited, gcContent, hasGoodClamp, longestRun, meltingTemp, primerReport, selectionTmText, tailMatches, threePrimeComplementarity, tmLabel, useTmSettings } from "./primers.ts";
 import { findCutSites, overhangText } from "./enzymes.ts";
 import { alignPrimer } from "./primerAlign.ts";
+import { featureStyles } from "../doc/analysis.ts";
 
 const feat = (id: string, start: number, end: number): SeqFeature => ({ id, name: id, type: "misc_feature", start, end, strand: 1, notes: {}, raw: {} });
 const doc = (sequence: string, features: SeqFeature[], circular = true): SeqData => ({ name: "t", description: "", circular, sequence, features, primers: [], sources: [] });
@@ -419,6 +420,7 @@ test("gaps between the parts of a feature", () => {
   assert.deepEqual(featureGaps({ start: 90, end: 20, locations: [{ start: 90, end: 99 }, { start: 0, end: 9 }, { start: 15, end: 20 }] }, 100), [{ start: 10, end: 14 }]);
   assert.deepEqual(featureGaps({ start: 0, end: 9 }, 100), []);
 });
+
 test("pasted text: FASTA headers and GenBank text are not bases", () => {
   assert.deepEqual(basesFromText(">pUC19 cloning vector, complete sequence\nacgt\nACGU\n"), { bases: "ACGTACGT", stray: [], dropped: 0 });
   const genbank = "LOCUS       x  8 bp  DNA\nFEATURES             Location/Qualifiers\nORIGIN\n        1 tcgcgcgt\n//\n";
@@ -446,3 +448,15 @@ test("a mutagenic primer whose change is near the 3′ end still binds its own s
   assert.equal(primerReport(p, a, t, false).sites, 0);
 });
 
+test("a CDS keeps its colour when another is added before it", () => {
+  const cds = (id: string, name: string, start: number): SeqFeature => ({ id, name, type: "CDS", start, end: start + 29, strand: 1, notes: {}, raw: {} });
+  const seq = "ACGT".repeat(100);
+  const before = featureStyles(doc(seq, [cds("a", "lacZ", 100), cds("b", "AmpR", 200)]));
+  const after = featureStyles(doc(seq, [cds("c", "GFP", 10), cds("a", "lacZ", 100), cds("b", "AmpR", 200)]));
+  assert.equal(after.get("a")!.fill, before.get("a")!.fill);
+  assert.equal(after.get("b")!.fill, before.get("b")!.fill);
+  // A file's own colour still wins, and an unnamed CDS gets one from its id.
+  const own = featureStyles(doc(seq, [{ ...cds("a", "lacZ", 100), color: "#123456" }, cds("d", "", 200)]));
+  assert.equal(own.get("a")!.fill, "#123456");
+  assert.ok(own.get("d")!.fill.startsWith("#"));
+});

@@ -8,7 +8,7 @@
 // selected as in the Sequence tab: drag across both strands, click for the cursor.
 
 import { h } from "../ui/dom.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { checkIcon } from "../ui/icons.ts";
 import { codons, featureStyles, isCds, primerAlignment, primerColors, primerTitle, primerTm } from "../doc/analysis.ts";
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
@@ -526,7 +526,7 @@ export class PrimerContextView {
       const headLeft = f.strand === -1 && positions[r.a] === f.start;
       const clip = headRight ? "clip-path:polygon(0 0,calc(100% - 6px) 0,100% 50%,calc(100% - 6px) 100%,0 100%);" : headLeft ? "clip-path:polygon(6px 0,100% 0,100% 100%,6px 100%,0 50%);" : "";
       const bar = abs(`left:${ch(r.a)};width:${ch(r.b - r.a + 1)};top:${yy}px;height:18px;background:${st?.fill ?? "#999"};${clip}`, "sv-feature-bar");
-      bar.title = `${f.name} · ${f.type} · ${fmt(f.start + 1)}..${fmt(f.end + 1)}`;
+      bar.title = `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`;
       bar.dataset.kind = "feature";
       bar.dataset.id = f.id;
       track.appendChild(bar);

@@ -8,9 +8,9 @@ import { track } from "../usage.ts";
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg, primerIcon } from "../ui/icons.ts";
 import { primerLibrary } from "../primerLibrary.ts";
-import { cutSites, featureStyles, isCds, orfFeature, orfs, primerAlignment, protein } from "../doc/analysis.ts";
+import { cutSiteById, cutSites, featureStyles, isCds, orfFeature, orfs, primerAlignment, protein } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
-import { overhangText } from "../lib/enzymes.ts";
+import { overhangText, type CutSite } from "../lib/enzymes.ts";
 import { PRIMER_COLOURS } from "../lib/contextMenu.ts";
 import { shortTail } from "../lib/primerTable.ts";
 import { frameLabel, type Orf } from "../lib/orfs.ts";
@@ -36,7 +36,7 @@ import {
   type SeqPrimer,
   type Strand
 } from "../lib/seqdata.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { openUniprotDialog } from "./uniprotDialog.ts";
 import { openProteinRegionDialog, openProteinRegionFromSelection } from "./proteinRegionDialog.ts";
 import { openProteinDiagram, proteinDiagram } from "./proteinDiagram.ts";
@@ -48,7 +48,7 @@ import { deleteSelected, selectedBases } from "../lib/selection.ts";
 const pickKeyName = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "Hold ⌘" : "Hold Ctrl";
 import { openMutagenesisDialog } from "./mutagenesisDialog.ts";
 
-const loc = (r: Range) => `${fmt(r.start + 1)}..${fmt(r.end + 1)}`;
+const loc = (r: Range) => fmtRange(r.start + 1, r.end + 1);
 
 export interface InspectorActions {
   /** `strand` is the region's direction, so F starts where a reverse-strand gene starts. */
@@ -133,8 +133,8 @@ export class Inspector {
     } else if (focus?.kind === "cutsite" && enzymes) {
       content = this.pickedEnzymes(enzymes);
     } else if (focus?.kind === "cutsite") {
-      const c = cutSites(d, this.ctx.options).find(x => x.id === focus.id);
-      content = c && range ? this.cutsite(c.id) : this.overview();
+      const c = cutSiteById(d, this.ctx.options, focus.id);
+      content = c && range ? this.cutsite(c) : this.overview();
     } else if (focus?.kind === "orf") {
       const o = orfs(d, this.ctx.options.orfOptions).find(x => x.id === focus.id);
       content = o ? this.orf(o) : range ? this.range(range) : this.overview();
@@ -733,9 +733,7 @@ export class Inspector {
     ];
   }
 
-  private cutsite(id: string): Node[] {
-    const d = this.ctx.store.data;
-    const c = cutSites(d, this.ctx.options).find(x => x.id === id)!;
+  private cutsite(c: CutSite): Node[] {
     return [
       h(
         "div",

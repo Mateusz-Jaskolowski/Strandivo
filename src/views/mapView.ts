@@ -8,7 +8,7 @@
 import { h } from "../ui/dom.ts";
 import { enzymeControls } from "./enzymeControls.ts";
 import { fontStack, s, textWidth } from "../ui/svg.ts";
-import { cutSites, featureStyles, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
+import { cutSiteById, cutSites, featureStyles, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { type CutSite } from "../lib/enzymes.ts";
 import type { Focus } from "../doc/store.ts";
@@ -18,7 +18,7 @@ import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
 import { layoutRegions, regionColor, regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions.ts";
 import { featureGaps, pieces as rangePieces, rangeLength, type Range, type SeqData, type SeqFeature } from "../lib/seqdata.ts";
 import { checkIcon, iconSvg } from "../ui/icons.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { selectedRanges } from "../lib/selection.ts";
 
 
@@ -493,7 +493,7 @@ export class MapView {
       const path = s(
         "path",
         { d: arcShape(a0, a1, r1, r2, f.strand, 9, notch), fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id },
-        s("title", null, `${f.name} · ${f.type} · ${fmt(f.start + 1)}..${fmt(f.end + 1)} (${fmt(rangeLength(f, n))} bp)`)
+        s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)} (${fmt(rangeLength(f, n))} bp)`)
       );
       featureLayer.appendChild(path);
       this.addShape(`feature:${f.id}`, path);
@@ -547,7 +547,7 @@ export class MapView {
       const path = s(
         "path",
         { d: arcShape(ang(x.start), ang(x.end + 1), r2 - ORF_BAND, r2, x.strand, 6), class: `sv-map-orf sv-orf-${x.strand === 1 ? "f" : "r"}${x.frame + 1}`, "data-kind": "orf", "data-id": x.id },
-        s("title", null, `${orfTitle(x)} · ${fmt(x.start + 1)}..${fmt(x.end + 1)}`)
+        s("title", null, `${orfTitle(x)} · ${fmtRange(x.start + 1, x.end + 1)}`)
       );
       orfLayer.appendChild(path);
       this.addShape(`orf:${x.id}`, path);
@@ -564,7 +564,7 @@ export class MapView {
       const path = s(
         "path",
         { d: arcShape(a0, a1, r - 2.5, r + 2.5, p.strand, 6), class: "sv-map-primer", "data-kind": "primer", "data-id": p.id },
-        s("title", null, `${p.name} · primer · ${fmt(p.start + 1)}..${fmt(p.end + 1)}`)
+        s("title", null, `${p.name} · primer · ${fmtRange(p.start + 1, p.end + 1)}`)
       );
       const own = primerColors(p).color;
       if (own) path.style.setProperty("--pc", own);
@@ -832,7 +832,7 @@ export class MapView {
           { left: f.strand === -1 && atStart ? head : 0, right: f.strand === 1 && atEnd ? head : 0 },
           { left: atStart && nb?.before ? headOf(nb.before) : 0, right: atEnd && nb?.after ? headOf(nb.after) : 0 }
         );
-        const path = s("path", { d: dpath, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id }, s("title", null, `${f.name} · ${f.type} · ${fmt(f.start + 1)}..${fmt(f.end + 1)}`));
+        const path = s("path", { d: dpath, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id }, s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`));
         featureLayer.appendChild(path);
         this.addShape(`feature:${f.id}`, path);
       }
@@ -884,7 +884,7 @@ export class MapView {
         const x2 = Math.max(X(b), x1 + 1.5);
         const head = Math.min(5, (x2 - x1) * 0.5);
         const dpath = barPath(x1, x2, y, ORF_BAND, { left: x.strand === -1 && a === x.start ? head : 0, right: x.strand === 1 && b === x.end + 1 ? head : 0 }, { left: 0, right: 0 });
-        const path = s("path", { d: dpath, class: `sv-map-orf sv-orf-${x.strand === 1 ? "f" : "r"}${x.frame + 1}`, "data-kind": "orf", "data-id": x.id }, s("title", null, `${orfTitle(x)} · ${fmt(x.start + 1)}..${fmt(x.end + 1)}`));
+        const path = s("path", { d: dpath, class: `sv-map-orf sv-orf-${x.strand === 1 ? "f" : "r"}${x.frame + 1}`, "data-kind": "orf", "data-id": x.id }, s("title", null, `${orfTitle(x)} · ${fmtRange(x.start + 1, x.end + 1)}`));
         orfLayer.appendChild(path);
         this.addShape(`orf:${x.id}`, path);
       }
@@ -1087,7 +1087,7 @@ export class MapView {
     } else if (f.kind === "primer") range = d.primers.find(x => x.id === f.id) ?? null;
     else if (f.kind === "orf") range = orfs(d, this.ctx.options.orfOptions).find(x => x.id === f.id) ?? null;
     else {
-      const c = cutSites(d, this.ctx.options).find(x => x.id === f.id);
+      const c = cutSiteById(d, this.ctx.options, f.id);
       if (c) range = { start: c.start, end: c.end };
     }
     if (range) this.ctx.store.selectRange({ start: range.start, end: range.end }, f, "map");

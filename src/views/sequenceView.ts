@@ -39,7 +39,7 @@ import {
   type SeqFeature,
   type SeqPrimer
 } from "../lib/seqdata.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 
 const FONT_PX = 13;
 const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
@@ -658,7 +658,7 @@ export class SequenceView {
       barEl.className = "sv-feature-bar sv-hit";
       barEl.dataset.kind = "feature";
       barEl.dataset.id = f.id;
-      barEl.title = `${f.name} · ${f.type} · ${fmt(f.start + 1)}..${fmt(f.end + 1)}`;
+      barEl.title = `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`;
       track.appendChild(barEl);
       if (after && !notchRight && !shapes.get(after)!.headLeft && !headRight) {
         track.appendChild(abs(`left:calc(${ch(bar.b + 1)} - 0.5px);width:1px;top:${ly}px;height:${lh}px;pointer-events:none`)).className = "sv-feature-join";

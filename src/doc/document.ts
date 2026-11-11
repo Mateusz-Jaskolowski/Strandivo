@@ -71,7 +71,7 @@ import { personalEnzymes } from "../personalEnzymes.ts";
 import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
-import { fmt } from "../ui/format.ts";
+import { fmt, fmtRange } from "../ui/format.ts";
 import { shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
 
@@ -568,7 +568,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       const tm = selectionTmText(bases);
       left.push(
         h("span", { class: "sv-status-strong" }, label),
-        h("span", { class: "sv-mono" }, `${fmt(range.start + 1)}..${fmt(range.end + 1)}`),
+        h("span", { class: "sv-mono" }, fmtRange(range.start + 1, range.end + 1)),
         h("span", null, `${fmt(len)} bp`),
         h("span", null, `GC ${gcPercent(bases).toFixed(1)}%`)
       );

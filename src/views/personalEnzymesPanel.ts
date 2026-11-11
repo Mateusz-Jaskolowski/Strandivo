@@ -22,6 +22,11 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
   const message = h("div", { class: "sv-libwin-empty" });
   const busy = new Set<string>();
   let names: string[] = [];
+  // Order is fixed when the list is filtered or loads, so ticking a box doesn't move its row.
+  let rank = new Map<string, number>();
+  let rankedLoaded = false;
+  // The one row Tab stops at (a roving tabindex): Tab leaves the list, arrows move in it.
+  let current: string | undefined;
   let disposed = false;
   let failed = false;
   const explain = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -30,6 +35,7 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
     const top = index * ROW_HEIGHT;
     if (top < viewport.scrollTop) viewport.scrollTop = top;
     else if (top + ROW_HEIGHT > viewport.scrollTop + viewport.clientHeight) viewport.scrollTop = top + ROW_HEIGHT - viewport.clientHeight;
+    current = names[index];
     draw();
     rows.querySelector<HTMLInputElement>(`input[data-personal-enzyme="${CSS.escape(names[index])}"]`)?.focus();
   }
@@ -44,10 +50,14 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
     const indices = new Set(Array.from({ length: Math.max(0, to - from) }, (_, i) => from + i));
     const focused = active ? names.indexOf(active) : -1;
     if (focused >= 0) indices.add(focused);
+    // Keep the row Tab stops at in the page even when it is scrolled away.
+    if (current === undefined || !names.includes(current)) current = names[0];
+    const stop = current === undefined ? -1 : names.indexOf(current);
+    if (stop >= 0) indices.add(stop);
     rows.style.height = `${names.length * ROW_HEIGHT}px`;
     rows.replaceChildren(...[...indices].sort((a, b) => a - b).map(index => {
       const name = names[index];
-      const checkbox = h("input", { type: "checkbox", checked: picked.has(name), "aria-label": name, "data-personal-enzyme": name, "aria-disabled": String(busy.has(name) || !personalEnzymes.loaded || !!personalEnzymes.error) });
+      const checkbox = h("input", { type: "checkbox", checked: picked.has(name), "aria-label": name, "data-personal-enzyme": name, tabindex: name === current ? "0" : "-1", "aria-disabled": String(busy.has(name) || !personalEnzymes.loaded || !!personalEnzymes.error) });
       checkbox.addEventListener("change", () => {
         if (busy.has(name) || personalEnzymes.error) { checkbox.checked = picked.has(name); return; }
         busy.add(name);
@@ -63,8 +73,9 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
           render();
         });
       });
+      checkbox.addEventListener("focus", () => { current = name; });
       checkbox.addEventListener("keydown", e => {
-        const step = e.key === "ArrowDown" || e.key === "Tab" && !e.shiftKey ? 1 : e.key === "ArrowUp" || e.key === "Tab" && e.shiftKey ? -1 : 0;
+        const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
         const next = e.key === "Home" ? 0 : e.key === "End" ? names.length - 1 : index + step;
         if ((step || e.key === "Home" || e.key === "End") && next >= 0 && next < names.length) {
           e.preventDefault();
@@ -90,9 +101,17 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
     const oldIndex = active ? names.indexOf(active) : -1;
     const q = search.value.trim().toLowerCase();
     const picked = new Set(personalEnzymes.all);
-    names = [...KNOWN_ENZYMES, ...personalEnzymes.all.filter(n => !enzymeName(n))]
+    const all = [...KNOWN_ENZYMES, ...personalEnzymes.all.filter(n => !enzymeName(n))];
+    const byPicked = (a: string, b: string) => Number(picked.has(b)) - Number(picked.has(a)) || a.localeCompare(b);
+    if (reset || !rank.size || rankedLoaded !== personalEnzymes.loaded) {
+      rank = new Map([...all].sort(byPicked).map((n, i) => [n, i]));
+      rankedLoaded = personalEnzymes.loaded;
+    }
+    // Names that arrived since (another window's unrecognised ones) go after the ranked ones.
+    const order = (n: string) => rank.get(n) ?? Infinity;
+    names = all
       .filter(n => (!selected.checked || picked.has(n)) && (!q || n.toLowerCase().includes(q) || enzymeSite(n).toLowerCase().includes(q)))
-      .sort((a, b) => Number(picked.has(b)) - Number(picked.has(a)) || a.localeCompare(b));
+      .sort((a, b) => order(a) - order(b) || byPicked(a, b));
     count.textContent = `${fmt(picked.size)} selected`;
     const error = personalEnzymes.error;
     search.disabled = selected.disabled = !personalEnzymes.loaded || !!error;

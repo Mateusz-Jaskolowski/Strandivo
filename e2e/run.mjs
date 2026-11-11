@@ -796,6 +796,7 @@ async function main() {
       await s.exec("document.querySelector('[data-personal-enzyme=\"Acc65I\"]').focus();");
       await s.press("\uE015");
       check("The personal checklist keeps keyboard navigation between rows", await s.exec("return document.activeElement?.dataset.personalEnzyme === 'EcoRI';"));
+      check("Only the current checklist row is in the Tab order, so Tab leaves the list", await s.exec("return document.querySelectorAll('[data-personal-enzyme][tabindex=\"0\"]').length === 1 && document.activeElement?.getAttribute('tabindex') === '0';"));
       await s.shot("10e-my-enzymes");
       await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_enzyme_library', { section: 'lab' }).then(done);");
       await s.waitFor("document.querySelector('[aria-label=\"New stock enzyme\"]') || document.querySelector('.sv-enzyme-grid')", 5000);

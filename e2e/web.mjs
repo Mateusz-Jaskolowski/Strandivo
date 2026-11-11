@@ -175,8 +175,19 @@ class Session {
     }
     return false;
   }
-  async click(xpath) {
-    const v = await wd("POST", `/session/${this.id}/element`, { using: "xpath", value: xpath });
+  /** Clicks an element once it is in the page, as panels load their code when first opened. */
+  async click(xpath, timeout = 5000) {
+    const end = Date.now() + timeout;
+    let v;
+    for (;;) {
+      try {
+        v = await wd("POST", `/session/${this.id}/element`, { using: "xpath", value: xpath });
+        break;
+      } catch (e) {
+        if (Date.now() > end || !String(e.message).includes("no such element")) throw e;
+        await sleep(100);
+      }
+    }
     await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/click`, {});
   }
   /** Types into an element; for a file input, the text is a file's path. */
@@ -299,7 +310,7 @@ async function main(outDir) {
     await s.click("//button[@aria-label='Enzyme library']");
     await s.click("//button[normalize-space()='My enzymes']");
     await s.click("//input[@aria-label='Selected only']");
-    check("The reopened checklist keeps all personal selections", await s.exec("return Array.from(document.querySelectorAll('[data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).sort().join() === 'Acc65I,EcoRI,PvuII';"));
+    check("The reopened checklist keeps all personal selections", await s.waitFor("Array.from(document.querySelectorAll('[data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).sort().join() === 'Acc65I,EcoRI,PvuII'", 5000));
     await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     check("Personal enzyme changes do not mark the sequence as edited", await s.exec("return !window.__strandivo.isDirty();"));
     await enzymeChoice("Which map enzymes to show", "common");

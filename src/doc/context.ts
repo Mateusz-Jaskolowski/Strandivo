@@ -5,7 +5,7 @@
 // window-level actions (switching tabs, read coverage from the Sanger view).
 
 import type { MenuTarget } from "../lib/contextMenu.ts";
-import type { EnzymeSet } from "../lib/enzymes.ts";
+import type { EnzymeOptions } from "../lib/enzymes.ts";
 import type { OrfOptions } from "../lib/orfs.ts";
 import type { Range, SeqData } from "../lib/seqdata.ts";
 import type { DocStore } from "./store.ts";
@@ -13,7 +13,7 @@ import type { ProteinDetail } from "../lib/regions.ts";
 
 export type Tab = "map" | "sequence" | "primers" | "reads" | "info";
 
-export interface ViewOptions {
+export interface ViewOptions extends EnzymeOptions {
   features: boolean;
   /** Map visibility is separate from the remembered top-level/all detail choice. */
   mapRegions: boolean;
@@ -31,9 +31,6 @@ export interface ViewOptions {
   /** Open reading frames on the map and sequence, and which ones (from Settings). */
   orfs: boolean;
   orfOptions: OrfOptions;
-  enzymeSet: EnzymeSet;
-  /** The lab's stocked enzymes (the enzyme library), for lab sets and the Digest dialog. */
-  labEnzymes: readonly string[];
   mapRotation: number;
   /** 1…8, how much larger than fitting the window the map is drawn. */
   mapZoom: number;

@@ -550,13 +550,14 @@ export async function copyText(text: string): Promise<void> {
 }
 
 export type PageWindow = "settings" | "library" | "enzymes";
-let showInPage: ((w: PageWindow) => void) | null = null;
+export type EnzymeLibrarySection = "lab" | "personal";
+let showInPage: ((w: PageWindow, section?: EnzymeLibrarySection) => void) | null = null;
 
 /**
  * In a browser, pages can't reliably open windows (blocked, or loaded over the app), so the
  * main window shows Settings and the library windows itself.
  */
-export function showWindowsInPage(show: (w: PageWindow) => void) {
+export function showWindowsInPage(show: (w: PageWindow, section?: EnzymeLibrarySection) => void) {
   showInPage = show;
 }
 
@@ -580,20 +581,38 @@ export async function openLibrary(): Promise<void> {
 }
 
 /** The lab's enzyme stock, shared by all documents. */
-export async function openEnzymeLibrary(): Promise<void> {
+export async function openEnzymeLibrary(section?: EnzymeLibrarySection): Promise<void> {
   if (!isDesktop) {
-    if (showInPage) showInPage("enzymes");
-    else window.open(`${location.pathname}?enzymes`, "_blank");
+    if (showInPage) showInPage("enzymes", section);
+    else window.open(`${location.pathname}?enzymes${section ? `&section=${section}` : ""}`, "_blank");
     return;
   }
-  return invoke<void>("open_enzyme_library");
+  return invoke<void>("open_enzyme_library", { section: section ?? null });
+}
+
+/** Listen before taking the pending request, so requests during window startup aren't lost. */
+export async function onEnzymeLibrarySection(fn: (section: EnzymeLibrarySection) => void): Promise<() => void> {
+  if (!isDesktop) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  const read = async () => {
+    const section = await invoke<EnzymeLibrarySection | null>("enzyme_library_section");
+    if (section) fn(section);
+  };
+  const off = await listen("enzyme-library-section", () => void read());
+  try {
+    await read();
+    return off;
+  } catch (e) {
+    off();
+    throw e;
+  }
 }
 
 /**
  * Lists the app keeps for the user (`src-tauri/src/app_data.rs` names them): JSON files in
  * app data on the desktop, local storage in a browser.
  */
-export type AppData = "enzyme-library";
+export type AppData = "enzyme-library" | "personal-enzymes";
 const appDataKey = (name: AppData) => `strandivo.data.${name}`;
 
 export async function loadAppData(name: AppData): Promise<string | null> {

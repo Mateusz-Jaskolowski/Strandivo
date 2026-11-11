@@ -5,21 +5,43 @@
 
 import { aliasedEnzymesByName, getCutsitesFromSequence, type RestrictionEnzyme } from "@teselagen/sequence-utils";
 
-export type EnzymeSet = "unique6" | "unique" | "unique2" | "lab1" | "lab2" | "lab" | "none";
-
-/** The sets offered in the map and outline; `lab` ones are grouped under "Lab enzymes". */
-export const ENZYME_SETS: { id: EnzymeSet; label: string; lab?: boolean }[] = [
+export type EnzymeSource = "common" | "lab" | "personal";
+export type EnzymeFilter = "unique6" | "unique" | "unique2" | "all";
+export const ENZYME_SOURCES: { id: EnzymeSource; label: string }[] = [
+  { id: "common", label: "Common enzymes" },
+  { id: "lab", label: "Lab enzymes" },
+  { id: "personal", label: "My enzymes" }
+];
+export const ENZYME_FILTERS: { id: EnzymeFilter; label: string }[] = [
   { id: "unique6", label: "Unique 6+ cutters" },
   { id: "unique", label: "Unique cutters" },
   { id: "unique2", label: "Unique and dual cutters" },
-  { id: "lab1", label: "Lab enzymes: unique cutters", lab: true },
-  { id: "lab2", label: "Lab enzymes: unique and dual", lab: true },
-  { id: "lab", label: "Lab enzymes: every site", lab: true },
-  { id: "none", label: "None" }
+  { id: "all", label: "Every site" }
 ];
 
-/** Whether a set shows the lab's stocked enzymes rather than the curated list. */
-export const isLabSet = (set: EnzymeSet) => set === "lab" || set === "lab1" || set === "lab2";
+export interface EnzymeOptions {
+  enzymeSource: EnzymeSource;
+  enzymeFilter: EnzymeFilter;
+  labEnzymes: readonly string[];
+  personalEnzymes: readonly string[];
+}
+
+/** Read old combined choices once; new choices and visibility are independent. */
+export function enzymePreferences(saved: { enzymeSet?: unknown; enzymeSource?: unknown; enzymeFilter?: unknown; cutsites?: unknown }, visible = true): Pick<EnzymeOptions, "enzymeSource" | "enzymeFilter"> & { cutsites: boolean } {
+  const legacy = saved.enzymeSet;
+  const source = legacy === "lab" || legacy === "lab1" || legacy === "lab2" ? "lab" : "common";
+  const filter = legacy === "lab" ? "all" : legacy === "lab1" ? "unique" : legacy === "lab2" ? "unique2" : legacy === "unique" || legacy === "unique2" ? legacy : "unique6";
+  return {
+    enzymeSource: ENZYME_SOURCES.some(s => s.id === saved.enzymeSource) ? saved.enzymeSource as EnzymeSource : source,
+    enzymeFilter: ENZYME_FILTERS.some(f => f.id === saved.enzymeFilter) ? saved.enzymeFilter as EnzymeFilter : filter,
+    cutsites: typeof saved.cutsites === "boolean" ? saved.cutsites : legacy === "none" ? false : visible
+  };
+}
+
+/** Names to offer for this source, preserving the enzyme the user actually chose. */
+export function sourceEnzymes(o: Pick<EnzymeOptions, "enzymeSource" | "labEnzymes" | "personalEnzymes">): readonly string[] {
+  return o.enzymeSource === "lab" ? o.labEnzymes : o.enzymeSource === "personal" ? o.personalEnzymes : COMMON_ENZYMES;
+}
 
 export interface CutSite {
   id: string;
@@ -229,30 +251,26 @@ function updateAround(a: string, b: string, p: number, s: number, hits: SiteHit[
 }
 
 /**
- * The sites shown for an enzyme set, with how often each enzyme cuts, sorted by position.
- * Lab sets show only stocked enzymes; the others only the curated list, so a lab's
- * Esp3I doesn't sit on every BsmBI site.
+ * Sites from the chosen list, filtered by their total cut counts and sorted by position.
+ * Membership preserves chosen names, so a personal Esp3I does not add BsmBI labels.
  */
-export function selectSites(hits: SiteHit[], set: EnzymeSet, labEnzymes: readonly string[] = []): CutSite[] {
-  if (set === "none") return [];
-  const lab = isLabSet(set) ? new Set(labEnzymes.map(enzymeName)) : null;
-  const maxCuts = set === "lab" ? Infinity : set === "unique2" || set === "lab2" ? 2 : 1;
-  const minSpecificity = set === "unique6" ? 6 : 0;
+export function selectSites(hits: SiteHit[], o: EnzymeOptions): CutSite[] {
+  const names = new Set(sourceEnzymes(o).map(enzymeName));
+  const maxCuts = o.enzymeFilter === "all" ? Infinity : o.enzymeFilter === "unique2" ? 2 : 1;
+  const minSpecificity = o.enzymeFilter === "unique6" ? 6 : 0;
   const counts = new Map<string, number>();
   for (const h of hits) counts.set(h.enzyme, (counts.get(h.enzyme) ?? 0) + 1);
   const out: CutSite[] = [];
   for (const h of hits) {
     const cuts = counts.get(h.enzyme)!;
-    const shown = lab ? lab.has(h.enzyme) : CURATED.has(h.enzyme.toLowerCase());
-    if (!shown || cuts > maxCuts || (SPECIFICITY.get(h.enzyme) ?? 0) < minSpecificity) continue;
+    const e = aliasedEnzymesByName[h.enzyme.toLowerCase()];
+    if (!names.has(h.enzyme) || cuts > maxCuts || (e ? specificity(e) : 0) < minSpecificity) continue;
     // Stable ids, so a selected site stays selected when the sites are recomputed.
     out.push({ id: `${h.enzyme}@${h.start}`, ...h, cuts });
   }
   out.sort((x, y) => x.cut - y.cut || x.enzyme.localeCompare(y.enzyme));
   return out;
 }
-
-const SPECIFICITY = new Map(ALL_ENZYMES.map(e => [e.name, specificity(e)]));
 
 /** An enzyme's recognition site in upper case ("GGTCTC" for BsaI), or "" if TeselaGen doesn't know it. */
 export function enzymeSite(name: string): string {
@@ -272,9 +290,17 @@ export function cutCounts(sequence: string, circular: boolean, names: string[]):
   return out;
 }
 
-/** Cut sites of the enzymes in a set, sorted by position. */
-export function findCutSites(sequence: string, circular: boolean, set: EnzymeSet, labEnzymes: readonly string[] = []): CutSite[] {
-  return set === "none" ? [] : selectSites(scanSites(sequence, circular, labEnzymes), set, labEnzymes);
+/** Cut sites of the chosen enzymes, sorted by position. */
+export function findCutSites(sequence: string, circular: boolean, o: EnzymeOptions): CutSite[] {
+  return selectSites(scanSites(sequence, circular, sourceEnzymes(o)), o);
+}
+
+/** Reaction choices honour membership, but already chosen enzymes always remain available. */
+export function reactionEnzymes(counts: ReadonlyMap<string, number>, members: readonly string[], selected: readonly string[], maxCuts = Infinity, query = ""): string[] {
+  const q = query.trim().toLowerCase();
+  return [...new Set([...selected, ...members])]
+    .filter(name => selected.includes(name) || ((counts.get(name) ?? 0) > 0 && counts.get(name)! <= maxCuts && (!q || name.toLowerCase().includes(q))))
+    .sort((a, b) => Number(selected.includes(b)) - Number(selected.includes(a)) || a.localeCompare(b));
 }
 
 /** "5′ overhang AATT", "blunt", … */

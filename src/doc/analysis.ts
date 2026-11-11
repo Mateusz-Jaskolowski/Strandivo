@@ -4,7 +4,7 @@
 // Things computed from the document for drawing: feature colours, cut sites, codons.
 // Results are cached on the sequence so redraws stay cheap.
 
-import { extraKey, rescanSites, scanSites, selectSites, type CutSite, type EnzymeSet, type SiteHit } from "../lib/enzymes.ts";
+import { extraKey, sourceEnzymes, rescanSites, scanSites, selectSites, type CutSite, type EnzymeOptions, type SiteHit } from "../lib/enzymes.ts";
 import { amberSuppressed, translateCodon } from "../lib/genetics.ts";
 import { findOrfs, frameLabel, type Orf, type OrfOptions } from "../lib/orfs.ts";
 import { bindingTm, changesText } from "../lib/primers.ts";
@@ -114,20 +114,21 @@ export function featureStyles(d: SeqData): Map<string, FeatureStyle> {
 
 // ---------- cut sites ----------
 
-// Every site of every listed enzyme (and of stocked ones outside the list), updated around
-// each edit rather than searched again.
+// Sites are rescanned only around an edit; changing the source scans its extra names once.
 let hitCache: { sequence: string; circular: boolean; extra: string; hits: SiteHit[] } | null = null;
-let cutCache: { hits: SiteHit[]; set: EnzymeSet; lab: readonly string[]; sites: CutSite[] } | null = null;
+let cutCache: { hits: SiteHit[]; key: string; sites: CutSite[] } | null = null;
 
-/** The sites the view options ask for: their enzyme set, and the lab's stock for lab sets. */
-export function cutSites(d: SeqData, o: { enzymeSet: EnzymeSet; labEnzymes: readonly string[] }): CutSite[] {
-  const extra = extraKey(o.labEnzymes);
+/** Shared display choices for Map, Sequence and the outline. */
+export function cutSites(d: SeqData, o: EnzymeOptions): CutSite[] {
+  const names = sourceEnzymes(o);
+  const extra = extraKey(names);
   if (!hitCache || hitCache.sequence !== d.sequence || hitCache.circular !== d.circular || hitCache.extra !== extra) {
-    const hits = hitCache && hitCache.extra === extra ? rescanSites(hitCache, d.sequence, d.circular, o.labEnzymes) : scanSites(d.sequence, d.circular, o.labEnzymes);
+    const hits = hitCache && hitCache.extra === extra ? rescanSites(hitCache, d.sequence, d.circular, names) : scanSites(d.sequence, d.circular, names);
     hitCache = { sequence: d.sequence, circular: d.circular, extra, hits };
   }
-  if (!cutCache || cutCache.hits !== hitCache.hits || cutCache.set !== o.enzymeSet || cutCache.lab !== o.labEnzymes)
-    cutCache = { hits: hitCache.hits, set: o.enzymeSet, lab: o.labEnzymes, sites: selectSites(hitCache.hits, o.enzymeSet, o.labEnzymes) };
+  const key = JSON.stringify([o.enzymeSource, o.enzymeFilter, names]);
+  if (!cutCache || cutCache.hits !== hitCache.hits || cutCache.key !== key)
+    cutCache = { hits: hitCache.hits, key, sites: selectSites(hitCache.hits, o) };
   return cutCache.sites;
 }
 

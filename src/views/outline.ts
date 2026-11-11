@@ -13,11 +13,12 @@ import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
-import { ENZYME_SETS, isLabSet, type EnzymeSet } from "../lib/enzymes.ts";
+import { enzymeControls } from "./enzymeControls.ts";
 import { fmt } from "../ui/format.ts";
 import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
 import { dropGap, moveSection, SIDEBAR_SECTIONS, type SidebarSection } from "../lib/sidebar.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
+import { personalEnzymes } from "../personalEnzymes.ts";
 import { openEnzymeLibrary } from "../platform.ts";
 
 /** How far the pointer moves on a heading before it is a drag rather than a click. */
@@ -43,10 +44,12 @@ export class Outline {
   private drag: HeadingDrag | null = null;
   /** A drag just ended on a heading: the click that follows it is not a fold. */
   private dropped = false;
+  private enzymeControls: ReturnType<typeof enzymeControls>;
   private offSettings: () => void;
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
+    this.enzymeControls = enzymeControls(ctx);
     const { sidebar } = loadSettings();
     this.order = sidebar.order;
     this.folded = new Set(sidebar.folded);
@@ -196,7 +199,7 @@ export class Outline {
     const styles = featureStyles(d);
     // While filtering, folded sections open so nothing that matches is hidden.
     const open = (id: SidebarSection) => !!this.filter || !this.folded.has(id);
-    const section = (id: SidebarSection, title: string, count: number | null, action: HTMLElement, content: HTMLElement) => {
+    const section = (id: SidebarSection, title: string, count: number | null, action: HTMLElement | null, content: HTMLElement) => {
       const toggle = h(
         "button",
         {
@@ -278,13 +281,12 @@ export class Outline {
       );
     });
 
-    const setSelect = h(
-      "select",
-      { class: "sv-select-quiet", "aria-label": "Which enzymes to show", onchange: (e: Event) => this.ctx.setOptions({ enzymeSet: (e.target as HTMLSelectElement).value as EnzymeSet }) },
-      ENZYME_SETS.map(s => h("option", { value: s.id, selected: s.id === this.ctx.options.enzymeSet }, s.label))
-    );
+    this.enzymeControls.update();
     const sites = cutSites(d, this.ctx.options).filter(c => this.matches(c.enzyme));
-    const lab = isLabSet(this.ctx.options.enzymeSet);
+    const source = this.ctx.options.enzymeSource;
+    const library = source === "lab" ? enzymeLibrary : source === "personal" ? personalEnzymes : null;
+    const unfiltered = sites.length ? sites : cutSites(d, { ...this.ctx.options, enzymeFilter: "all" });
+    const emptyEnzymes = this.filter ? "No matching enzymes." : library?.error ? (source === "lab" ? "The enzyme library couldn't be loaded." : "My enzymes couldn't be loaded.") : library && !library.loaded ? "Loading enzymes…" : source === "personal" && !personalEnzymes.all.length ? "My enzymes is empty." : source === "lab" && !enzymeLibrary.all.length ? "Your lab enzyme library is empty." : unfiltered.length ? "No enzymes match this cut-site filter." : "None of these enzymes cut.";
     const chips = sites.map(c =>
       h(
         "button",
@@ -324,20 +326,23 @@ export class Outline {
           "enzymes",
           "Enzymes",
           null,
-          setSelect,
+          null,
           h("div", null,
+            this.enzymeControls.el,
             chips.length
               ? h("div", { class: "sv-enzyme-chips" }, chips)
-              : empty(this.ctx.options.enzymeSet === "none" ? "Enzymes are hidden." : this.filter ? "No matching enzymes." : lab && enzymeLibrary.error ? "The enzyme library couldn't be loaded." : lab && !enzymeLibrary.all.length ? "Your lab enzyme library is empty." : "None of these enzymes cut."),
-            lab ? h("button", { class: "sv-btn sv-btn-small sv-btn-quiet sv-lab-enzymes-edit", type: "button", onclick: () => void openEnzymeLibrary() }, "Edit lab enzymes…") : ""
+              : empty(emptyEnzymes),
+            source === "lab" ? h("button", { class: "sv-btn sv-btn-small sv-btn-quiet sv-lab-enzymes-edit", type: "button", onclick: () => void openEnzymeLibrary("lab") }, "Edit lab enzymes…") : ""
           )
         )
     };
     // Keep the keyboard on a heading that was just folded or moved.
+    const enzymeFocus = this.enzymeControls.el.contains(document.activeElement) ? document.activeElement as HTMLElement : null;
     const focused = (document.activeElement as HTMLElement | null)?.closest?.<HTMLElement>(".sv-section-toggle");
     const refocus = focused && this.body.contains(focused) ? focused.dataset.section : null;
     this.body.replaceChildren(...this.order.map(id => sections[id]()));
     if (refocus) this.body.querySelector<HTMLElement>(`.sv-section-toggle[data-section="${refocus}"]`)?.focus();
+    if (enzymeFocus?.isConnected) enzymeFocus.focus();
     this.updateSelected();
   }
 

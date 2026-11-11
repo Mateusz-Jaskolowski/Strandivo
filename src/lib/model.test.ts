@@ -359,7 +359,7 @@ test("binding sites of mutagenic primers take in their 5′ arm", () => {
 });
 
 test("unique cutters in pUC19", () => {
-  const sites = findCutSites(puc19(), true, "unique6");
+  const sites = findCutSites(puc19(), true, { enzymeSource: "common", enzymeFilter: "unique6", labEnzymes: [], personalEnzymes: [] });
   const at = (name: string) => sites.find(s => s.enzyme === name);
   assert.equal(at("EcoRI")!.cut, 396);
   assert.equal(at("HindIII")!.cut, 447);

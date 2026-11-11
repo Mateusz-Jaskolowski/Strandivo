@@ -53,7 +53,8 @@ test("selected bases: primers for primer-sized stretches, design for longer ones
 });
 
 test("cut sites and ORFs", () => {
-  assert.deepEqual(labels({ kind: "cutsite", id: "EcoRI@395" }), ["Copy recognition site", "Digest with EcoRI…", "Show on map"]);
+  assert.deepEqual(labels({ kind: "cutsite", id: "EcoRI@395" }), ["Copy recognition site", "Digest with EcoRI…", "Show on map", "Add to My enzymes"]);
+  assert.ok(labels({ kind: "cutsite", id: "EcoRI@395" }, { personalEnzymes: ["EcoRI"] }).includes("Remove from My enzymes"));
   // With enzymes picked, a site of one of them digests with them all; any other only with its own.
   assert.equal(labels({ kind: "cutsite", id: "EcoRI@395" }, { enzymes: ["EcoRI", "BamHI"] })[1], "Digest with EcoRI and BamHI…");
   assert.equal(labels({ kind: "cutsite", id: "XbaI@423" }, { enzymes: ["EcoRI", "BamHI"] })[1], "Digest with XbaI…");

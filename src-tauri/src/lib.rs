@@ -45,6 +45,7 @@ struct AppState {
     pending: Vec<Option<PathBuf>>,
     /// The main window's page asked for its files, so it now hears "open-files" events.
     main_ready: bool,
+    enzyme_section: Option<String>,
     quitting: bool,
     /// The last menu command a key ran, and whether the page or the menu ran it
     /// (`shortcut_ran_twice`).
@@ -598,9 +599,23 @@ async fn open_library(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn open_enzyme_library(app: AppHandle) -> Result<(), String> {
+async fn open_enzyme_library(app: AppHandle, section: Option<String>) -> Result<(), String> {
+    if let Some(ref section) = section {
+        if section != "lab" && section != "personal" {
+            return Err("Unknown enzyme library section".to_string());
+        }
+        app.state::<Shared>().lock().unwrap().enzyme_section = Some(section.clone());
+    }
     show_enzyme_library_window(&app);
+    if section.is_some() {
+        let _ = app.emit_to(ENZYMES_LABEL, "enzyme-library-section", ());
+    }
     Ok(())
+}
+
+#[tauri::command]
+fn enzyme_library_section(state: tauri::State<'_, Shared>) -> Option<String> {
+    state.lock().unwrap().enzyme_section.take()
 }
 
 #[tauri::command]
@@ -710,6 +725,7 @@ pub fn run() {
             menu_shortcut,
             open_library,
             open_enzyme_library,
+            enzyme_library_section,
             app_data::load_app_data,
             app_data::save_app_data,
             app_data::set_aside_app_data,

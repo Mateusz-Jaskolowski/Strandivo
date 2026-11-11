@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Lists the app keeps for the user (the lab's enzyme stock), as JSON files in app data,
+//! Lists the app keeps for the user (lab stock and personal enzymes), as JSON files in app data,
 //! outside the web view's storage, which a reinstall or a cleared cache can lose. Only the
 //! names in `NAMES` can be read or written, so the page can't reach any other file. A file
 //! is replaced only after the new contents have been written, so an interrupted save keeps
@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// What the page may keep. The primer library can move here from local storage later.
-const NAMES: &[&str] = &["enzyme-library"];
+const NAMES: &[&str] = &["enzyme-library", "personal-enzymes"];
 const CHANGED_EVENT: &str = "app-data-changed";
 
 static WRITE_LOCK: Mutex<()> = Mutex::new(());

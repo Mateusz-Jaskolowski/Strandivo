@@ -47,6 +47,8 @@ export type MenuAction =
   | "copy-for-ordering"
   | "copy-site"
   | "digest"
+  | "add-personal-enzyme"
+  | "remove-personal-enzyme"
   | "add-orf-feature"
   | "show-other"
   | "show-in-primers"
@@ -109,6 +111,7 @@ export interface MenuContext {
   inLibrary(bases: string): boolean;
   /** Enzymes picked with ⌘/Ctrl-click; a site of one of them digests with them all. */
   enzymes?: string[];
+  personalEnzymes?: readonly string[];
 }
 
 const item = (action: MenuAction, label: string, enabled = true): MenuItem => (enabled ? { action, label } : { action, label, enabled });
@@ -198,7 +201,9 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
       ]);
     }
     case "cutsite": {
-      return [item("copy-site", "Copy recognition site"), item("digest", `Digest with ${enzymesText(digestEnzymes(target.id, c.enzymes))}…`), show];
+      const saved = c.personalEnzymes?.includes(enzymeOf(target.id));
+      return [item("copy-site", "Copy recognition site"), item("digest", `Digest with ${enzymesText(digestEnzymes(target.id, c.enzymes))}…`), show,
+        saved ? item("remove-personal-enzyme", "Remove from My enzymes") : item("add-personal-enzyme", "Add to My enzymes")];
     }
     case "orf":
       return tidy([item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), "separator", item("add-orf-feature", "Add as feature"), show]);

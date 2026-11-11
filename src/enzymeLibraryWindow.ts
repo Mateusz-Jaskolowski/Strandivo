@@ -1,18 +1,19 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// The lab's enzyme stock. Recognition and cut positions come from TeselaGen's enzyme list,
-// as the map's do; product names, locations and notes are the user's own records.
+// Lab stock and a separate personal selection, shared across documents. Recognition and
+// cut positions come from TeselaGen; stock products, locations and notes are user text.
 
 import "./doc/document.css";
 import { enzymeLibrary } from "./enzymeLibrary.ts";
 import { enzymeName, enzymeSite, KNOWN_ENZYMES } from "./lib/enzymes.ts";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, parseEnzymeLibrary, parseEnzymeTable, type EnzymeStock, type LabEnzyme } from "./lib/enzymeLibrary.ts";
-import { chooseSavePath, isDesktop, pickFiles, saveText, setWindowTitle } from "./platform.ts";
+import { chooseSavePath, isDesktop, onEnzymeLibrarySection, pickFiles, saveText, setWindowTitle, type EnzymeLibrarySection } from "./platform.ts";
 import { h, toast } from "./ui/dom.ts";
 import { fmt } from "./ui/format.ts";
 import { iconSvg } from "./ui/icons.ts";
 import { choose } from "./ui/modal.ts";
+import { mountPersonalEnzymes } from "./views/personalEnzymesPanel.ts";
 
 /** How long typing pauses before a cell saves (it also saves when the cell is left). */
 const SAVE_DELAY = 700;
@@ -21,11 +22,36 @@ const LIST_ID = "sv-known-enzymes";
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Returns a disposer for the browser's panel, which may be opened and closed repeatedly. */
-export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => void {
+export function mountEnzymeLibrary(root: HTMLElement, embedded = false, initial?: EnzymeLibrarySection): () => void {
   if (!embedded) {
     document.body.classList.add("sv-doc-body");
     void setWindowTitle("Enzyme Library");
   }
+  const body = h("div", { class: "sv-enzyme-library-body" });
+  const hint = h("p", { class: "sv-small sv-dim" });
+  let section: EnzymeLibrarySection = initial ?? (new URLSearchParams(location.search).get("section") === "personal" ? "personal" : "lab");
+  let dispose: (() => void) | undefined;
+  let closed = false;
+  const buttons = ([["lab", "Lab stock"], ["personal", "My enzymes"]] as const).map(([id, label]) => h("button", { type: "button", "aria-pressed": String(id === section), onclick: () => show(id) }, label));
+  function show(next: EnzymeLibrarySection) {
+    if (closed) return;
+    section = next;
+    dispose?.();
+    body.replaceChildren();
+    buttons.forEach((b, i) => b.setAttribute("aria-pressed", String((i === 0 ? "lab" : "personal") === section)));
+    hint.textContent = section === "personal" ? "Your personal selection of restriction enzymes." : isDesktop ? "Your lab's restriction enzyme stock." : "Your lab's enzyme stock (saved in this browser; Export… keeps a backup).";
+    dispose = section === "personal" ? mountPersonalEnzymes(body) : mountLabStock(body);
+  }
+  root.appendChild(h("div", { class: "sv-app sv-libwin sv-enzyme-library" },
+    h("header", { class: "sv-libwin-head" }, h("div", { class: "sv-libwin-title" }, h("h1", null, "Enzyme library"), hint),
+      h("div", { class: "sv-segmented", role: "group", "aria-label": "Enzyme library section" }, buttons)), body));
+  show(section);
+  let off: (() => void) | undefined;
+  void onEnzymeLibrarySection(show).then(stop => { if (closed) stop(); else off = stop; }).catch(e => toast(message(e), "error"));
+  return () => { closed = true; off?.(); dispose?.(); };
+}
+
+function mountLabStock(root: HTMLElement): () => void {
   const count = h("span", { class: "sv-count" });
   const status = h("span", { class: "sv-small sv-dim", role: "status" });
   const search = h("input", { class: "sv-input sv-input-filter", type: "search", placeholder: "Search enzymes, products, locations and notes", "aria-label": "Search the enzyme library" }) as HTMLInputElement;
@@ -283,7 +309,7 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false): () => v
   root.appendChild(h("div", { class: "sv-app sv-libwin" },
     known,
     h("header", { class: "sv-libwin-head" },
-      h("div", { class: "sv-libwin-title" }, h("h1", null, "Enzyme library", count), h("p", { class: "sv-small sv-dim" }, isDesktop ? "Your lab's restriction enzyme stock." : "Your lab's restriction enzyme stock (saved in this browser — Export… to keep a backup).")),
+      h("span", { class: "sv-count", "aria-label": "Stock records" }, count),
       h("div", { class: "sv-libwin-tools" }, h("div", { class: "sv-outline-filter sv-libwin-search sv-enzyme-search" }, iconSvg("search", 14), search), addButton, importButton, exportButton, status)
     ), panel, h("main", { class: "sv-libwin-body" }, table)
   ));

@@ -10,12 +10,13 @@ import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
 import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
+import { enzymeSourceSelect } from "./enzymeControls.ts";
 import type { DocContext } from "../doc/context.ts";
 import { parseSequenceFile } from "../doc/fileio.ts";
 import { fromParsed } from "../doc/convert.ts";
 import { pickFiles } from "../platform.ts";
 import { SEQUENCE_EXTENSIONS } from "../lib/files.ts";
-import { scanSites } from "../lib/enzymes.ts";
+import { extraKey, reactionEnzymes, scanSites, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
 import {
   digest,
   endLabel,
@@ -70,14 +71,15 @@ interface InsertRow {
 /** Kept between openings in this window. */
 const memory = { method: "restriction" as Method, goldenGate: "BsaI" };
 
-const counts = new WeakMap<SeqData, { extra: readonly string[]; m: Map<string, number> }>();
+const counts = new WeakMap<SeqData, { key: string; m: Map<string, number> }>();
 /** How many times each enzyme in the list, or in the lab's stock (`extra`), cuts a sequence. */
 function cutCountsOf(d: SeqData, extra: readonly string[]): Map<string, number> {
+  const key = extraKey(extra);
   const known = counts.get(d);
-  if (known?.extra === extra) return known.m;
+  if (known?.key === key) return known.m;
   const m = new Map<string, number>();
   for (const hit of scanSites(d.sequence, d.circular, extra)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
-  counts.set(d, { extra, m });
+  counts.set(d, { key, m });
   return m;
 }
 
@@ -120,7 +122,9 @@ export function openCloningDialog(ctx: DocContext) {
   const vectorSel = ctx.store.selection;
   const nV = vector.sequence.length;
   const sources: Source[] = ctx.otherSequences().map(s => ({ title: s.data.name || s.title, data: s.data, selection: s.selection }));
-  const dlg = openDialog({ title: "Simulate cloning", note: `Assemble inserts into ${vector.name || "this vector"}.`, width: 820 });
+  let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
+  let offOptions = () => {};
+  const dlg = openDialog({ onClose: () => offOptions(), title: "Simulate cloning", note: `Assemble inserts into ${vector.name || "this vector"}.`, width: 820 });
 
   let method: Method = memory.method;
   let vectorEnzymes: [string, string] = ["", ""];
@@ -147,10 +151,12 @@ export function openCloningDialog(ctx: DocContext) {
   if (sources[0]?.selection) rows[0].region = "sel";
 
   const update = () => rerender(dlg, render);
+  offOptions = ctx.onOptions(update);
 
   const enzymeSelect = (d: SeqData, value: string, label: string, onChange: (v: string) => void, names?: string[]) => {
-    const cuts = cutCountsOf(d, ctx.options.labEnzymes);
-    const list = (names ?? [...cuts.keys()].sort((a, b) => a.localeCompare(b))).filter(x => names || (cuts.get(x) ?? 0) > 0);
+    const members = names ?? sourceEnzymes({ ...ctx.options, enzymeSource });
+    const cuts = cutCountsOf(d, [...members, value].filter(Boolean));
+    const list = names ? [...names] : reactionEnzymes(cuts, members, value ? [value] : []);
     if (value && !list.includes(value)) list.unshift(value);
     const el = h(
       "select",
@@ -261,7 +267,7 @@ export function openCloningDialog(ctx: DocContext) {
           )
         );
       }
-      return h("div", { class: "sv-clone-fields" }, ...row);
+      return h("div", { class: "sv-clone-fields" }, field("Enzymes", enzymeSourceSelect(enzymeSource, "Cloning enzyme list", source => { enzymeSource = source; update(); })), ...row);
     };
     if (method === "goldengate") {
       parts.push(

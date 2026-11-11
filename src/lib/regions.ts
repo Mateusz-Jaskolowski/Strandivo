@@ -233,14 +233,30 @@ export function layoutRegions(regions: ProteinRegion[], detail: ProteinDetail = 
     });
 }
 
+const regionFeatureId = (f: { id: string }, r: ProteinRegion, index: number) => `${f.id}:region:${r.id ?? index}`;
+
 /** Project attached library regions into the existing read-analysis model, never as CDSs. */
 export function variableProteinFeatures(f: Located & Noted & { id: string; name: string }, n: number): Feature[] {
   return regionsOf(f).flatMap((r, index) => {
     if (!r.variable) return [];
     const spans = regionSpans(f, r, n);
     if (!spans.length) return [];
-    return [{ id: `${f.id}:region:${r.id ?? index}`, name: r.name, type: "misc_feature", start: spans[0].start, end: spans[spans.length - 1].end, strand: f.strand, forward: f.strand !== -1, ...(spans.length > 1 ? { locations: spans } : {}), variable: r.variable }];
+    return [{ id: regionFeatureId(f, r, index), name: r.name, type: "misc_feature", start: spans[0].start, end: spans[spans.length - 1].end, strand: f.strand, forward: f.strand !== -1, ...(spans.length > 1 ? { locations: spans } : {}), variable: r.variable }];
   });
+}
+
+/**
+ * The CDS and region a projected feature's id stands for, so selecting it selects the
+ * region: the projection is not a document feature, and focusing its id would leave
+ * nothing clicked (Delete would then take the bases at once).
+ */
+export function regionOfFeatureId(features: readonly (Noted & { id: string })[], id: string): { id: string; region: number } | null {
+  for (const f of features) {
+    if (!id.startsWith(`${f.id}:region:`)) continue;
+    const index = regionsOf(f).findIndex((r, i) => regionFeatureId(f, r, i) === id);
+    if (index >= 0) return { id: f.id, region: index };
+  }
+  return null;
 }
 
 /** Portable DNA annotations for an exported copy; the document keeps its attached regions. */
@@ -248,7 +264,7 @@ export function proteinRegionFeatures(f: SeqFeature, n: number): SeqFeature[] {
   return regionsOf(f).flatMap((r, index) => {
     const spans = regionSpans(f, r, n);
     if (!spans.length) return [];
-    return [{ id: `${f.id}:region:${r.id ?? index}`, name: r.name, type: r.kind === "Signal peptide" ? "sig_peptide" : r.kind === "Transit peptide" ? "transit_peptide" : "misc_feature", start: spans[0].start, end: spans[spans.length - 1].end, strand: f.strand, ...(spans.length > 1 ? { locations: spans } : {}), color: regionColor(r), notes: { note: [`${r.kind}; ${f.name}, residues ${r.start}-${r.end}${r.accession ? `; UniProtKB ${r.accession} ${r.sourceStart}-${r.sourceEnd}` : ""}`] }, raw: {} }];
+    return [{ id: regionFeatureId(f, r, index), name: r.name, type: r.kind === "Signal peptide" ? "sig_peptide" : r.kind === "Transit peptide" ? "transit_peptide" : "misc_feature", start: spans[0].start, end: spans[spans.length - 1].end, strand: f.strand, ...(spans.length > 1 ? { locations: spans } : {}), color: regionColor(r), notes: { note: [`${r.kind}; ${f.name}, residues ${r.start}-${r.end}${r.accession ? `; UniProtKB ${r.accession} ${r.sourceStart}-${r.sourceEnd}` : ""}`] }, raw: {} }];
   });
 }
 

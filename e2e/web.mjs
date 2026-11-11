@@ -175,8 +175,19 @@ class Session {
     }
     return false;
   }
-  async click(xpath) {
-    const v = await wd("POST", `/session/${this.id}/element`, { using: "xpath", value: xpath });
+  /** Clicks an element once it is in the page, as panels load their code when first opened. */
+  async click(xpath, timeout = 5000) {
+    const end = Date.now() + timeout;
+    let v;
+    for (;;) {
+      try {
+        v = await wd("POST", `/session/${this.id}/element`, { using: "xpath", value: xpath });
+        break;
+      } catch (e) {
+        if (Date.now() > end || !String(e.message).includes("no such element")) throw e;
+        await sleep(100);
+      }
+    }
     await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/click`, {});
   }
   /** Types into an element; for a file input, the text is a file's path. */
@@ -261,7 +272,8 @@ async function main(outDir) {
     await enzymeChoice("Which map enzymes to show", "personal");
     await enzymeChoice("Map cut-site filter", "all");
     check("The personal map shows every chosen site and keeps Acc65I's name", await s.waitFor("document.querySelectorAll('.sv-map-svgel text[data-id^=\"EcoRI@\"]').length === 1 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"Acc65I@\"]').length === 1 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"PvuII@\"]').length === 2 && !document.querySelector('.sv-map-svgel text[data-id^=\"KpnI@\"]')", 5000));
-    check("The outline shares both enzyme choices", await s.exec("return document.querySelector('[aria-label=\"Which enzymes to show\"]').value === 'personal' && document.querySelector('[aria-label=\"Cut-site filter\"]').value === 'all';"));
+    // The outline and dialogs redraw on the next frame, so these wait rather than read at once.
+    check("The outline shares both enzyme choices", await s.waitFor("document.querySelector('[aria-label=\"Which enzymes to show\"]')?.value === 'personal' && document.querySelector('[aria-label=\"Cut-site filter\"]')?.value === 'all'", 5000));
     await enzymeChoice("Map cut-site filter", "unique");
     check("Unique cutters hides PvuII without changing the personal source", await s.waitFor("!document.querySelector('.sv-map-svgel text[data-id^=\"PvuII@\"]') && document.querySelectorAll('.sv-enzyme-chip').length === 2", 5000));
     await s.exec("window.__strandivo.setView('sequence'); window.__strandivo.store.select({ range: { start: 390, end: 420 } }, 'test');");
@@ -271,17 +283,18 @@ async function main(outDir) {
     check("Digest starts from My enzymes and offers a multi-cutter hidden on the map", await s.exec("return document.querySelector('[aria-label=\"Digest enzyme list\"]').value === 'personal' && !!document.querySelector('input[data-enzyme=\"PvuII\"]');"));
     await s.click("//input[@data-enzyme='Acc65I']");
     await enzymeChoice("Digest enzyme list", "common");
-    check("Changing Digest's source retains an explicitly chosen non-common enzyme", await s.exec("return document.querySelector('input[data-enzyme=\"Acc65I\"]')?.checked && document.querySelector('[aria-label=\"Which map enzymes to show\"]').value === 'personal';"));
+    check("Changing Digest's source retains an explicitly chosen non-common enzyme", await s.waitFor("document.querySelector('[aria-label=\"Digest enzyme list\"]')?.value === 'common' && document.querySelector('input[data-enzyme=\"Acc65I\"]')?.checked && document.querySelector('[aria-label=\"Which map enzymes to show\"]').value === 'personal'", 5000));
     await s.click("//button[contains(@class,'sv-dialog-close')]");
     await s.exec("window.__strandivo.command('simulate-cloning');");
     await s.waitFor("document.querySelector('[aria-label=\"Cloning method\"]')", 5000);
     await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'Restriction & ligation').click();");
-    check("Restriction cloning starts with the personal source", await s.exec("return document.querySelector('[aria-label=\"Cloning enzyme list\"]').value === 'personal';"));
+    check("Restriction cloning starts with the personal source", await s.waitFor("document.querySelector('[aria-label=\"Cloning enzyme list\"]')?.value === 'personal' && document.querySelector('[aria-label=\"First vector enzyme\"]')", 5000));
     await enzymeChoice("First vector enzyme", "Acc65I");
+    await s.waitFor("document.querySelector('[aria-label=\"First vector enzyme\"]')?.value === 'Acc65I'", 5000);
     await enzymeChoice("Cloning enzyme list", "common");
-    check("Restriction cloning keeps the selected enzyme through a source change", await s.exec("return document.querySelector('[aria-label=\"First vector enzyme\"]').value === 'Acc65I';"));
+    check("Restriction cloning keeps the selected enzyme through a source change", await s.waitFor("document.querySelector('[aria-label=\"Cloning enzyme list\"]')?.value === 'common' && document.querySelector('[aria-label=\"First vector enzyme\"]')?.value === 'Acc65I'", 5000));
     await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'Golden Gate').click();");
-    check("Golden Gate retains its Type IIS choices", await s.exec("const values = Array.from(document.querySelector('[aria-label=\"Golden Gate enzyme\"]').options).map(o => o.value); return values.includes('BsaI') && !values.includes('Acc65I');"));
+    check("Golden Gate retains its Type IIS choices", await s.waitFor("(values => values.includes('BsaI') && !values.includes('Acc65I'))(Array.from(document.querySelector('[aria-label=\"Golden Gate enzyme\"]')?.options ?? []).map(o => o.value))", 5000));
     await s.click("//button[contains(@class,'sv-dialog-close')]");
     await s.exec("document.querySelector('.sv-enzyme-chip[data-id^=\"EcoRI@\"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));");
     await s.click("//button[normalize-space()='Remove from My enzymes']");
@@ -298,7 +311,7 @@ async function main(outDir) {
     await s.click("//button[@aria-label='Enzyme library']");
     await s.click("//button[normalize-space()='My enzymes']");
     await s.click("//input[@aria-label='Selected only']");
-    check("The reopened checklist keeps all personal selections", await s.exec("return Array.from(document.querySelectorAll('[data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).sort().join() === 'Acc65I,EcoRI,PvuII';"));
+    check("The reopened checklist keeps all personal selections", await s.waitFor("Array.from(document.querySelectorAll('[data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).sort().join() === 'Acc65I,EcoRI,PvuII'", 5000));
     await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     check("Personal enzyme changes do not mark the sequence as edited", await s.exec("return !window.__strandivo.isDirty();"));
     await enzymeChoice("Which map enzymes to show", "common");

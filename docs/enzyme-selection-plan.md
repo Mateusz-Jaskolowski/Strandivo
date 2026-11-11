@@ -60,7 +60,8 @@ and an “In lab only” filter are deferred.
   must survive window startup and work when the library is already open.
 - Translate old choices: unique6/unique/unique2 become Common with the same filter;
   lab1/lab2/lab become Lab with unique/unique2/all. None becomes Common + unique6 with
-  drawing off. Persist the new choices and visibility across reopening.
+  drawing off. Persist the new choices across reopening; whether sites are drawn in a
+  newly opened file follows the Restriction sites setting, like features and primers.
 - Deliver the feature in one PR, with an agent-guide update and an Unreleased changelog
   bullet. Follow Conventional Commits, keep commits logical and never rewrite pushed
   commits.

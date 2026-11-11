@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { parseSequenceFile, serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { protein } from "../doc/analysis.ts";
-import { carryRegions, formatRegion, isClipped, layoutRegions, nextRegionColor, parseRegion, proteinRegionFeatures, proteinRegionTargets, regionColor, regionRange, regionSpans, regionsOf, regionTree, selectedProteinResidues, REGIONS_QUALIFIER, variableProteinFeatures, withRegions, type ProteinRegion } from "./regions.ts";
+import { carryRegions, formatRegion, isClipped, layoutRegions, nextRegionColor, parseRegion, proteinRegionFeatures, proteinRegionTargets, regionColor, regionRange, regionSpans, regionsOf, regionOfFeatureId, regionTree, selectedProteinResidues, REGIONS_QUALIFIER, variableProteinFeatures, withRegions, type ProteinRegion } from "./regions.ts";
 import { cloneVariants } from "./variants.ts";
 import { splitVariable } from "./variable.ts";
 import type { CloneDifference, CloneResult } from "./types.ts";
@@ -218,6 +218,11 @@ test("protein library regions use the CDS frame without adding another coding fe
   assert.ok(result.regions[0].protein, "the region is translated in its parent's frame");
   const reverse = doc({ strand: -1, regions: [r] });
   assert.equal(variableProteinFeatures(cds(reverse), reverse.sequence.length)[0].strand, -1);
+  // Selecting the projection (the Reads tab's coverage list) selects the region itself.
+  assert.deepEqual(regionOfFeatureId(d.features, projected[0].id!), { id: f.id, region: 0 });
+  const unnamed = doc({ regions: [region("Plain", 1, 2), { ...region("Library", 3, 5), variable: { kind: "any" as const } }] });
+  assert.deepEqual(regionOfFeatureId(unnamed.features, variableProteinFeatures(cds(unnamed), unnamed.sequence.length)[0].id!), { id: cds(unnamed).id, region: 1 });
+  assert.equal(regionOfFeatureId(d.features, f.id), null);
 });
 
 test("portable region annotations preserve direction and split CDS locations", () => {

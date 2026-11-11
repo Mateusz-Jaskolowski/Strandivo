@@ -153,6 +153,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   tint of its colour (solid leader), a primer's after an arrow pointing its way (dashed), an
   enzyme's in small grey monospace with no mark (dotted), darker when it cuts once. Marks on
   enzymes were tried and made the map busy; their positions are in the tooltip and outline.
+  Protein regions have plain, regular-weight grey names and light solid leaders; their
+  colours stay on their bands. Hovering a region's band or name highlights its pieces and
+  outlines the owning CDS without changing selection. Hover and selection keep region
+  text at its measured weight, so names never widen into their neighbours.
 - **Right-click menus**: `src/lib/contextMenu.ts` decides what each menu offers (as data,
   unit-tested) and `src/doc/contextMenu.ts` runs it with the inspector's and toolbar's own
   functions. A view selects what was clicked first (`menuTargetAt`), then calls

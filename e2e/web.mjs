@@ -23,6 +23,7 @@ import { spawn } from "node:child_process";
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
+import { checkMapRegionDisplay } from "./mapRegions.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const dist = path.join(root, "dist-web");
@@ -190,6 +191,9 @@ class Session {
     }
     await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/click`, {});
   }
+  async pointer(actions) {
+    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions }] });
+  }
   /** Types into an element; for a file input, the text is a file's path. */
   async keys(css, text) {
     const v = await wd("POST", `/session/${this.id}/element`, { using: "css selector", value: css });
@@ -316,6 +320,8 @@ async function main(outDir) {
     check("Personal enzyme changes do not mark the sequence as edited", await s.exec("return !window.__strandivo.isDirty();"));
     await enzymeChoice("Which map enzymes to show", "common");
     await enzymeChoice("Map cut-site filter", "unique6");
+
+    await checkMapRegionDisplay(s, check, { smoke: true });
 
     // --- detection, in the worker ---
     await s.exec("window.__strandivo.command('detect-features')");

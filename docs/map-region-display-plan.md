@@ -1,6 +1,7 @@
 # Distinguish protein regions on the map
 
-Status: Planned (10 November 2026).
+Implementation and local validation complete on 11 November 2026. Desktop and browser
+end-to-end checks await CI.
 
 ## Summary
 
@@ -64,7 +65,10 @@ Extend desktop protein-region e2e checks and add a browser smoke check:
   origin-crossing regions at small, default and large label sizes. Capture default and
   hovered states.
 
-Run `npm run check`; desktop and browser e2e runs remain in CI.
+`npm run check` passed on the branch rebased onto `origin/main`. Both map modes were
+reviewed in a preview fixture at label sizes 3, 8 and 16, with overlapping CDSs, a nested
+region and a reverse CDS that crosses the origin. The preview included hover and selected
+states. The desktop and browser scripts cover actual pointer actions in CI.
 
 ## Branch, attribution and delivery
 

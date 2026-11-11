@@ -10,8 +10,9 @@ import { s } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
 import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
+import { enzymeSourceSelect } from "./enzymeControls.ts";
 import type { DocContext } from "../doc/context.ts";
-import { scanSites } from "../lib/enzymes.ts";
+import { extraKey, reactionEnzymes, scanSites, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
 import { endLabel } from "../lib/cloning.ts";
 import { bands, bandY, digestSequence, fragmentName, fragmentSize, fragmentSpan, LADDERS, type DigestResult } from "../lib/gel.ts";
 import type { SeqData } from "../lib/seqdata.ts";
@@ -26,14 +27,15 @@ interface Lane {
 /** Kept between openings in this window. */
 const memory = { ladder: LADDERS[0].id, allEnzymes: false };
 
-const counts = new WeakMap<SeqData, { extra: readonly string[]; m: Map<string, number> }>();
+const counts = new WeakMap<SeqData, { key: string; m: Map<string, number> }>();
 /** How many times each enzyme in the list, or in the lab's stock (`extra`), cuts a sequence. */
 function cutCountsOf(d: SeqData, extra: readonly string[]): Map<string, number> {
+  const key = extraKey(extra);
   const known = counts.get(d);
-  if (known?.extra === extra) return known.m;
+  if (known?.key === key) return known.m;
   const m = new Map<string, number>();
   for (const hit of scanSites(d.sequence, d.circular, extra)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
-  counts.set(d, { extra, m });
+  counts.set(d, { key, m });
   return m;
 }
 
@@ -50,8 +52,11 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
   let filter = "";
   /** The fragment picked in the table or on the gel (in the current lane). */
   let picked: number | null = null;
-  const dlg = openDialog({ title: "Digest", note: "Choose enzymes to see the fragments and how they would run on a gel.", width: 920 });
+  let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
+  let offOptions = () => {};
+  const dlg = openDialog({ onClose: () => offOptions(), title: "Digest", note: "Choose enzymes to see the fragments and how they would run on a gel.", width: 920 });
   const update = () => rerender(dlg, render);
+  offOptions = ctx.onOptions(update);
   const results = new Map<Lane, { key: string; result: DigestResult }>();
   const resultOf = (lane: Lane) => {
     const key = lane.enzymes.join(",");
@@ -66,12 +71,10 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
 
   function enzymeList(): HTMLElement {
     const lane = lanes[current];
-    const cuts = cutCountsOf(lane.data, ctx.options.labEnzymes);
+    const members = sourceEnzymes({ ...ctx.options, enzymeSource });
+    const cuts = cutCountsOf(lane.data, [...members, ...lane.enzymes]);
     const q = filter.trim().toLowerCase();
-    const names = [...cuts.keys()]
-      .filter(x => lane.enzymes.includes(x) || ((memory.allEnzymes || (cuts.get(x) ?? 0) <= 3) && (!q || x.toLowerCase().includes(q))))
-      // The chosen enzymes first, so they stay in view.
-      .sort((a, b) => Number(lane.enzymes.includes(b)) - Number(lane.enzymes.includes(a)) || a.localeCompare(b));
+    const names = reactionEnzymes(cuts, members, lane.enzymes, memory.allEnzymes ? Infinity : 3, q);
     const rows = names.map(name =>
       h(
         "label",
@@ -94,6 +97,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
     return h(
       "div",
       { class: "sv-digest-enzymes" },
+      h("label", null, "Enzymes", enzymeSourceSelect(enzymeSource, "Digest enzyme list", source => { enzymeSource = source; update(); })),
       h("input", {
         type: "search",
         class: "sv-input",

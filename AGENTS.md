@@ -307,20 +307,25 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   applied the same way (`useAmberSuppression`), so everything that translates through
   `translateCodon` follows it. ORF stops get it in `OrfOptions`, and caches of
   translations must include it in their key.
-- **Enzymes**: a curated list of common commercial enzymes (`src/lib/enzymes.ts`), not every
-  isoschizomer, is what the map shows by default. The lab's stock (`src/enzymeLibrary.ts`)
-  may name any enzyme TeselaGen knows (`enzymeName`), since a lab's Acc65I is not KpnI:
-  same site, other ends. Lab sets (`isLabSet`) show only stocked enzymes and the others
-  only the curated list, so a stocked Esp3I doesn't double every BsmBI label; stocked names
-  reach `cutSites`, the Digest and Cloning dialogs through `ViewOptions.labEnzymes`, never
-  a global, and `enzymeLibrary.names` keeps one array until the names change, so editing a
-  note redraws no map. Product names are user text, never read for recognition or reaction
-  conditions. The stock is kept by the shell (`src-tauri/src/app_data.rs`, which writes
-  only the files it names), not in local storage like the primer library, which a cleared
-  web view loses. A saved list is read even if it names an enzyme this version doesn't know
-  (kept as written, left off the map), as one unknown name must not lock a lab's list; one
-  that can't be read at all blocks writes until the user starts a new list, which keeps
-  the old file beside it. An import, unlike the saved list, is all or nothing.
+- **Enzymes**: Common, Lab and My enzymes choose membership; a separate filter chooses
+  unique 6+ cutters, unique, unique and dual, or every site. The common list
+  (`src/lib/enzymes.ts`) is curated to avoid duplicate isoschizomers. Lab stock
+  (`src/enzymeLibrary.ts`) and the independent personal list (`src/personalEnzymes.ts`)
+  may name any enzyme TeselaGen knows: Acc65I is not KpnI (same site, other ends), and
+  Esp3I keeps its chosen name. Names reach analysis and reaction dialogs through
+  `ViewOptions`, never a global; name arrays remain the same until membership changes,
+  so editing a stock note redraws no map. Source and filter changes prune unavailable
+  enzyme picks; drawing visibility is separate and the outline still lists sites when
+  drawing is off. Digest and restriction cloning choose their own source, initially the
+  document's, and keep already chosen reaction enzymes available through filter changes.
+  Product names are user text, never read for recognition or reaction conditions.
+  Both lists are kept by the shell (`src-tauri/src/app_data.rs`, which writes only the
+  files it names), with browser storage in the web version. A saved list keeps names
+  this version doesn't know, leaving them off the map. An unreadable file blocks writes
+  until a new list is started with the old file kept beside it. Lab imports, unlike saved
+  lists, reject unknown names as a whole. The Enzyme Library opens to a requested section
+  through a pending shell request listened for before it is read, so a request isn't lost
+  while the window starts.
 - **Bases in upper case** by default; Settings can show them as in the file.
 
 ## Traps

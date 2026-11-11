@@ -30,6 +30,7 @@ import {
   showOpenDialog,
   showWindowsInPage,
   trapWebCore,
+  type EnzymeLibrarySection,
   type PageWindow
 } from "./platform.ts";
 import { shownPath } from "./webFiles.ts";
@@ -138,10 +139,10 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     appButtons[panel.kind].classList.remove("sv-on");
     panel = null;
   }
-  async function showPanel(kind: PageWindow) {
+  async function showPanel(kind: PageWindow, section?: EnzymeLibrarySection) {
     const same = panel?.kind === kind;
     closePanel();
-    if (same) return;
+    if (same && !section) return;
     const body = h("div", { class: `sv-panel-body sv-panel-${kind}` });
     const el = h(
       "div",
@@ -157,13 +158,13 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       if (panel?.el === el) mountSettings(body, true);
     } else if (kind === "enzymes") {
       const { mountEnzymeLibrary } = await import("./enzymeLibraryWindow.ts");
-      if (panel?.el === el) panel.dispose = mountEnzymeLibrary(body, true);
+      if (panel?.el === el) panel.dispose = mountEnzymeLibrary(body, true, section);
     } else {
       const { mountLibrary } = await import("./libraryWindow.ts");
       if (panel?.el === el) mountLibrary(body, true);
     }
   }
-  showWindowsInPage(kind => void showPanel(kind));
+  showWindowsInPage((kind, section) => void showPanel(kind, section));
 
   // ---------- tabs ----------
   function newTab(path: string | null, data?: SeqData): Tab {

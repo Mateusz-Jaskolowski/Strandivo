@@ -8,6 +8,7 @@ import { toast } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
 import { showContextMenu, type ContextMenuEntry } from "../platform.ts";
 import { primerLibrary } from "../primerLibrary.ts";
+import { personalEnzymes } from "../personalEnzymes.ts";
 import { enzymeOf } from "../lib/enzymePick.ts";
 import { digestEnzymes, menuFor, type MenuEntry, type MenuItem, type MenuTarget } from "../lib/contextMenu.ts";
 import { basesIn, deleteRange, featureBases, inRange, rangeLength, reverseComplement, type Range } from "../lib/seqdata.ts";
@@ -42,7 +43,8 @@ export function openContextMenu(host: ContextMenuHost, target: MenuTarget, at: {
     onMap,
     tab: host.ctx.tab,
     inLibrary: bases => primerLibrary.all.some(x => x.bases === bases),
-    enzymes: host.ctx.store.selection.enzymes
+    enzymes: host.ctx.store.selection.enzymes,
+    personalEnzymes: host.ctx.options.personalEnzymes
   }).map(convert);
   void showContextMenu(entries, at);
 }
@@ -164,6 +166,14 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       return;
     case "digest":
       if (target.kind === "cutsite") host.digest(digestEnzymes(target.id, store.selection.enzymes));
+      return;
+    case "add-personal-enzyme":
+    case "remove-personal-enzyme":
+      if (target.kind === "cutsite") {
+        const name = enzymeOf(target.id);
+        const selected = action === "add-personal-enzyme";
+        void personalEnzymes.set(name, selected).then(() => toast(selected ? `Added ${name} to My enzymes.` : `Removed ${name} from My enzymes.`, "success")).catch(e => toast(e instanceof Error ? e.message : String(e), "error", 7000));
+      }
       return;
     case "add-orf-feature":
       if (orf) {

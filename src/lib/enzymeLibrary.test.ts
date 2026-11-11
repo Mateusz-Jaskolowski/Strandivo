@@ -4,7 +4,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, newEnzymeStocks, parseEnzymeLibrary, parseEnzymeTable, unknownEnzymes, type LabEnzyme } from "./enzymeLibrary.ts";
-import { enzymeName, findCutSites, KNOWN_ENZYMES, rescanSites, scanSites, selectSites } from "./enzymes.ts";
+import { enzymeName, findCutSites, KNOWN_ENZYMES, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+
+const labOptions = (names: readonly string[] = [], enzymeFilter: EnzymeFilter = "all"): EnzymeOptions => ({ enzymeSource: "lab", enzymeFilter, labEnzymes: names, personalEnzymes: [] });
+const commonOptions = (labEnzymes: readonly string[], enzymeFilter: EnzymeFilter): EnzymeOptions => ({ enzymeSource: "common", enzymeFilter, labEnzymes, personalEnzymes: [] });
 
 const stock: LabEnzyme = { id: "enzyme-1", enzyme: "EcoRI", product: "NEB EcoRI-HF", location: "−20 °C, box A", notes: "New tube\nKeep in rack 2" };
 
@@ -84,12 +87,12 @@ test("a tab-separated export reads back, even with tabs, quotes and new lines in
 
 test("lab enzymes show every cut, once per enzyme even with several stock records", () => {
   const sequence = "TTTGAATTCTTTGAATTCTTTGAATTCTTTAAGCTTTTT";
-  const lab = findCutSites(sequence, false, "lab", ["EcoRI", "EcoRI"]);
+  const lab = findCutSites(sequence, false, labOptions(["EcoRI", "EcoRI"]));
   assert.equal(lab.length, 3);
   assert.ok(lab.every(c => c.enzyme === "EcoRI" && c.cuts === 3));
   assert.equal(new Set(lab.map(c => c.id)).size, 3);
-  assert.deepEqual(findCutSites(sequence, false, "lab"), []);
-  const unique = findCutSites(sequence, false, "unique6", ["EcoRI"]);
+  assert.deepEqual(findCutSites(sequence, false, labOptions()), []);
+  const unique = findCutSites(sequence, false, commonOptions(["EcoRI"], "unique6"));
   assert.ok(unique.some(c => c.enzyme === "HindIII"));
   assert.ok(!unique.some(c => c.enzyme === "EcoRI"), "existing cutter filters stay independent of lab stock");
 });
@@ -98,23 +101,23 @@ test("lab sets limit cuts like the others: once, at most twice, or every site", 
   // EcoRI three times, BamHI twice, HindIII once.
   const sequence = "TTGAATTCTTGAATTCTTGAATTCTTGGATCCTTGGATCCTTAAGCTTTT";
   const lab = ["EcoRI", "BamHI", "HindIII"];
-  const enzymes = (set: "lab1" | "lab2" | "lab") => [...new Set(findCutSites(sequence, false, set, lab).map(c => c.enzyme))].sort();
-  assert.deepEqual(enzymes("lab1"), ["HindIII"]);
-  assert.deepEqual(enzymes("lab2"), ["BamHI", "HindIII"]);
-  assert.deepEqual(enzymes("lab"), ["BamHI", "EcoRI", "HindIII"]);
+  const enzymes = (filter: EnzymeFilter) => [...new Set(findCutSites(sequence, false, labOptions(lab, filter)).map(c => c.enzyme))].sort();
+  assert.deepEqual(enzymes("unique"), ["HindIII"]);
+  assert.deepEqual(enzymes("unique2"), ["BamHI", "HindIII"]);
+  assert.deepEqual(enzymes("all"), ["BamHI", "EcoRI", "HindIII"]);
 });
 
 test("a stocked isoschizomer outside the curated list is found with its own cut", () => {
   const sequence = "TTTTTGGTACCTTTTT";
-  const kpn = findCutSites(sequence, false, "unique", ["Acc65I"]);
+  const kpn = findCutSites(sequence, false, commonOptions(["Acc65I"], "unique"));
   assert.deepEqual(kpn.map(c => c.enzyme), ["KpnI"], "the curated sets ignore stock outside the list");
-  const acc = findCutSites(sequence, false, "lab", ["Acc65I"]);
+  const acc = findCutSites(sequence, false, labOptions(["Acc65I"]));
   assert.deepEqual(acc.map(c => c.enzyme), ["Acc65I"]);
   // KpnI: GGTAC^C, a 3′ overhang; Acc65I: G^GTACC, a 5′ one.
   assert.equal(acc[0].cut, 6);
   assert.equal(kpn[0].cut, 10);
   // Esp3I is BsmBI under another name: the lab set shows the stocked name, not the curated one.
-  const esp = findCutSites("TTTTCGTCTCTTTTTTTTTTTT", false, "lab", ["Esp3I"]);
+  const esp = findCutSites("TTTTCGTCTCTTTTTTTTTTTT", false, labOptions(["Esp3I"]));
   assert.deepEqual(esp.map(c => c.enzyme), ["Esp3I"]);
 });
 
@@ -123,7 +126,7 @@ test("rescanning after an edit finds stocked enzymes too", () => {
   const after = before.slice(0, 60) + "GGTACC" + before.slice(60);
   const extra = ["Acc65I"];
   const hits = rescanSites({ sequence: before, circular: false, hits: scanSites(before, false, extra) }, after, false, extra);
-  const sites = (h: ReturnType<typeof scanSites>) => selectSites(h, "lab", extra).map(c => c.id).sort();
+  const sites = (h: ReturnType<typeof scanSites>) => selectSites(h, labOptions(extra)).map(c => c.id).sort();
   assert.deepEqual(sites(hits), sites(scanSites(after, false, extra)));
   assert.equal(sites(hits).length, 2);
 });
@@ -131,7 +134,7 @@ test("rescanning after an edit finds stocked enzymes too", () => {
 test("lab filtering retains both strands and sites crossing a circular origin", () => {
   // EcoRI's GAATTC wraps across the origin; reverse BsaI recognises GAGACC.
   const sequence = "AATTCTTTGAGACCTTTG";
-  const sites = findCutSites(sequence, true, "lab", ["EcoRI", "BsaI"]);
+  const sites = findCutSites(sequence, true, labOptions(["EcoRI", "BsaI"]));
   assert.ok(sites.some(c => c.enzyme === "EcoRI" && c.start > c.end));
   assert.ok(sites.some(c => c.enzyme === "BsaI" && !c.forward));
 });

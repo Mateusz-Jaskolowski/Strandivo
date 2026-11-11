@@ -2935,6 +2935,107 @@
   margin: 2px 8px 8px;
 }
 
+/* List membership and cut frequency are independent choices. */
+.sv-enzyme-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.sv-enzyme-controls > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 11px;
+}
+.sv-enzyme-controls select {
+  min-width: 0;
+  max-width: 100%;
+}
+.sv-outline .sv-enzyme-controls {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 4px 10px 10px;
+}
+.sv-outline .sv-enzyme-controls > label {
+  justify-content: space-between;
+}
+.sv-outline .sv-enzyme-controls > button {
+  align-self: flex-start;
+}
+.sv-enzyme-library-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.sv-enzyme-library-body > .sv-libwin {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+}
+.sv-personal-enzymes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 20px;
+  gap: 12px;
+}
+.sv-personal-enzyme-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.sv-personal-enzyme-tools > input {
+  width: 240px;
+  max-width: 100%;
+}
+.sv-personal-enzyme-tools > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sv-personal-enzyme-list {
+  flex: 1;
+  min-height: 100px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-anchor: none;
+}
+.sv-personal-enzyme-rows {
+  position: relative;
+}
+.sv-personal-enzyme-row {
+  position: absolute;
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) minmax(130px, 2fr) 44px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.sv-personal-enzyme-row:focus-within {
+  background: var(--side);
+}
+.sv-personal-enzyme-name {
+  font-weight: 500;
+}
+.sv-personal-enzyme-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- task dialogs ---------- */
 .sv-dialog-overlay {
   position: fixed;

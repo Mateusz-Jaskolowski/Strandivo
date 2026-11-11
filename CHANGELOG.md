@@ -16,6 +16,10 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **My enzymes**: keep a personal restriction enzyme list alongside your lab stock, and
+  choose the list separately from how often its enzymes cut. Use your list on maps, in
+  Sequence, and when choosing enzymes for a digest or restriction cloning.
+
 If Strandivo quits unexpectedly, it now offers to report the crash the next time it opens,
 and shows everything it would send before anything goes. Usage statistics, if you share
 them, count a little more, still only as fixed words and ranges.

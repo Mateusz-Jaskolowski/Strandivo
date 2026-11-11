@@ -37,7 +37,7 @@ import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts
 import { basesIn, newId, rangeLength, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData, type SeqPrimer } from "../lib/seqdata.ts";
 import { PRIMER_BASES } from "../lib/contextMenu.ts";
 import { gcPercent } from "../lib/labinfo.ts";
-import { isLabSet, type EnzymeSet } from "../lib/enzymes.ts";
+import { enzymePreferences } from "../lib/enzymes.ts";
 import { ALTERNATIVE_STARTS, type OrfOptions } from "../lib/orfs.ts";
 import type { Feature } from "../lib/types.ts";
 import { describeDifference } from "../lib/genetics.ts";
@@ -67,6 +67,7 @@ import { describeLost, lostWith } from "../lib/deletion.ts";
 import { enzymeOf, prunePick } from "../lib/enzymePick.ts";
 import { cutSites } from "./analysis.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
+import { personalEnzymes } from "../personalEnzymes.ts";
 import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
@@ -87,7 +88,7 @@ const TABS: { id: Tab; label: string; key: string }[] = [
 const orfOptions = (s: Settings): OrfOptions => ({ minCodons: s.orfs.minCodons, starts: s.orfs.alternativeStarts ? ALTERNATIVE_STARTS : ["ATG"], amberAsQ: s.amberAsQ });
 
 function loadViewOptions(settings: Settings): ViewOptions {
-  let saved: Partial<ViewOptions> = {};
+  let saved: Partial<ViewOptions> & { enzymeSet?: unknown } = {};
   try {
     const value = JSON.parse(localStorage.getItem(VIEW_KEY) || "{}");
     if (value && typeof value === "object") saved = value;
@@ -98,22 +99,22 @@ function loadViewOptions(settings: Settings): ViewOptions {
     features: settings.show.features,
     sequenceRegions: true,
     primers: settings.show.primers,
-    cutsites: settings.show.cutsites,
     ruler: settings.show.ruler,
     translations: settings.show.cdsFeatureTranslations,
     orfs: settings.show.orfs,
     aaColors: false,
     complement: true,
-    enzymeSet: "unique6" as EnzymeSet,
     mapRotation: 0,
     mapZoom: 1,
     labelSize: settings.labelSize,
     linearMap: false,
     ...saved,
+    ...enzymePreferences(saved, settings.show.cutsites),
     // Older previews used "none" as the map's detail choice instead of a visibility toggle.
     mapRegions: saved.mapRegions ?? (saved.proteinDetail !== "none"),
     proteinDetail: saved.proteinDetail === "all" ? "all" : "domains",
     labEnzymes: enzymeLibrary.names,
+    personalEnzymes: personalEnzymes.names,
     orfOptions: orfOptions(settings),
     caseMode: settings.sequenceCase
   };
@@ -203,7 +204,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // The map's rotation is the file's own (label size is a setting, and every map opens unzoomed).
   const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0 }, o => {
     try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSet: o.enzymeSet, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap, mapRegions: o.mapRegions, proteinDetail: o.proteinDetail, sequenceRegions: o.sequenceRegions }));
+      localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSource: o.enzymeSource, enzymeFilter: o.enzymeFilter, cutsites: o.cutsites, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap, mapRegions: o.mapRegions, proteinDetail: o.proteinDetail, sequenceRegions: o.sequenceRegions }));
     } catch {
       /* ignore */
     }
@@ -263,6 +264,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       return opts.get();
     },
     setOptions: patch => {
+      if (patch.enzymeSource !== undefined || patch.enzymeFilter !== undefined) pruneEnzymePick({ ...opts.get(), ...patch });
       opts.set(patch);
       if (patch.labelSize !== undefined) void saveSettings({ ...loadSettings(), labelSize: patch.labelSize });
       if (patch.mapRotation !== undefined && path) rememberRotation(path, patch.mapRotation);
@@ -848,26 +850,31 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     readsView.refresh();
     if (tab === "info") infoPanel.render();
   });
-  // The lab's stock changes what lab sets show and what the Digest dialog offers. Notes and
-  // locations keep the same names, so they redraw nothing.
-  let libraryError = enzymeLibrary.error;
+  // Membership updates reach every document; changes to stock notes keep stable names.
+  function pruneEnzymePick(nextOptions: ViewOptions) {
+    const next = prunePick(store.selection, cutSites(store.data, nextOptions));
+    if (next) store.select(
+      next.site ? { range: { start: next.site.start, end: next.site.end }, focus: { kind: "cutsite", id: next.site.id }, enzymes: next.enzymes } : { range: null, caret: store.selection.caret },
+      "enzyme-list"
+    );
+  }
+  let libraryError = `${enzymeLibrary.loaded}:${enzymeLibrary.error}`;
+  let personalError = `${personalEnzymes.loaded}:${personalEnzymes.error}`;
   const offEnzymeLibrary = enzymeLibrary.onChange(() => {
     const names = enzymeLibrary.names;
-    if (names === ctx.options.labEnzymes) {
-      // The outline says when the library couldn't be loaded.
-      if (enzymeLibrary.error !== libraryError && isLabSet(ctx.options.enzymeSet)) opts.set({});
-      libraryError = enzymeLibrary.error;
-      return;
-    }
-    libraryError = enzymeLibrary.error;
-    // A picked enzyme may have left the stock: drop just that one.
-    const next = prunePick(store.selection, cutSites(store.data, { ...ctx.options, labEnzymes: names }));
-    if (next)
-      store.select(
-        next.site ? { range: { start: next.site.start, end: next.site.end }, focus: { kind: "cutsite", id: next.site.id }, enzymes: next.enzymes } : { range: null, caret: store.selection.caret },
-        "enzyme-library"
-      );
-    opts.set({ labEnzymes: names });
+    if (names !== ctx.options.labEnzymes) {
+      pruneEnzymePick({ ...ctx.options, labEnzymes: names });
+      opts.set({ labEnzymes: names });
+    } else if (libraryError !== `${enzymeLibrary.loaded}:${enzymeLibrary.error}` && ctx.options.enzymeSource === "lab") opts.set({});
+    libraryError = `${enzymeLibrary.loaded}:${enzymeLibrary.error}`;
+  });
+  const offPersonalEnzymes = personalEnzymes.onChange(() => {
+    const names = personalEnzymes.names;
+    if (names !== ctx.options.personalEnzymes) {
+      pruneEnzymePick({ ...ctx.options, personalEnzymes: names });
+      opts.set({ personalEnzymes: names });
+    } else if (personalError !== `${personalEnzymes.loaded}:${personalEnzymes.error}` && ctx.options.enzymeSource === "personal") opts.set({});
+    personalError = `${personalEnzymes.loaded}:${personalEnzymes.error}`;
   });
 
   // ---------- keyboard ----------
@@ -1138,6 +1145,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       closeEditNote();
       offSettings();
       offEnzymeLibrary();
+      offPersonalEnzymes();
       inspector.dispose();
       outline.dispose();
     },

@@ -154,7 +154,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   the place zoomed into would open a file on an arbitrary part of its map.
 - **Resizable parts** of a window use `splitter` (`src/ui/splitter.ts`): drag, arrow keys,
   double-click to reset or fit. The caller limits the size and keeps it in local storage
-  for the whole app, not per file, like the alignment's names column.
+  for the whole app, not per file, like the alignment's names column. The side panels'
+  two widths (`src/panelWidths.ts`) are CSS variables on the page, so every open file
+  follows a change; the left one is the outline's and the Reads tab list's, each keeping
+  its own default until resized.
 - **Canvases** never take the full height of what they draw: the alignment's reads draw
   only the rows near the pane, as a canvas above 268 million pixels draws blank in WebKit
   (the Mac app) and a plate of traces would take hundreds of megabytes.

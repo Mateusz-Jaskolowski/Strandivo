@@ -28,6 +28,10 @@ with Unreleased's notes and leaves them where they are.
   instead of being cut off. Drag the edge of the names column to resize it, or
   double-click it to fit the names.
 
+- **Resizable sidebar and inspector**: drag the inner edge of either panel to make it
+  wider or narrower, in every view that has them, Reads included. The widths are kept for
+  every file; double-click an edge for the usual width.
+
 - **Design primers a little away from the selection**: the Design primers dialog has a
   "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
   a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge

@@ -1171,6 +1171,24 @@ async function main() {
     await sleep(300);
     const sidebarBack = await s.exec("return !document.querySelector('.sv-outline').hidden");
     check("The sidebar button hides and shows the sidebar", sidebarHidden && sidebarBack, JSON.stringify({ sidebarHidden, sidebarBack }));
+    // Both side panels resize from their inner edge, and a double-click gives back the usual width.
+    const panels = await s.exec(`
+      const side = document.querySelector('.sv-body > .sv-splitter-sidebar');
+      const insp = document.querySelector('.sv-body > .sv-splitter-inspector');
+      const w = () => [document.querySelector('.sv-outline'), document.querySelector('.sv-inspector')].map(e => Math.round(e.getBoundingClientRect().width));
+      const before = w();
+      side.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      insp.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      const wider = w();
+      const saved = JSON.parse(localStorage.getItem('strandivo.panels') || '{}');
+      side.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      insp.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      return { before, wider, saved, after: w() };`);
+    check(
+      "The sidebar and inspector resize from their edges, and a double-click resets them",
+      panels.wider[0] === panels.before[0] + 16 && panels.wider[1] === panels.before[1] + 16 && panels.saved.sidebar === panels.wider[0] && panels.after.join() === panels.before.join(),
+      JSON.stringify(panels)
+    );
 
     const sidebarState = "return Array.from(document.querySelectorAll('.sv-outline-section')).map(e => e.dataset.section + (e.querySelector('.sv-list, .sv-enzyme-chips, .sv-list-empty') ? '' : ' folded'))";
     const sidebarStart = await s.exec(sidebarState);

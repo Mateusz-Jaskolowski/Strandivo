@@ -386,6 +386,29 @@ test("a region the reads don't reach is not read, never unchanged", () => {
   assert.ok(v.flags.includes("partial"));
 });
 
+test("clones with other CDRs are different clones when the vector has Ns there", () => {
+  // The core calls no differences against an N, and a longer CDR3 is just an insertion.
+  const cdrs = [VHH.cdr1, VHH.cdr3];
+  const inCdr = (p: number) => cdrs.some(f => p >= f.start && p <= f.end);
+  const masked = [...LIB].map((b, p) => (inCdr(p) ? "N" : b)).join("");
+  const asCore = (c: CloneResult): CloneResult => {
+    const piece = c.pieces[0];
+    let p = piece.refFrom;
+    const gappedReference = [...piece.gappedReference].map(b => (b === "-" ? b : inCdr(p++) ? "N" : b)).join("");
+    return { ...c, pieces: [{ ...piece, gappedReference }], differences: c.differences.filter(d => d.kind !== "substitution" || !inCdr(d.refPos)) };
+  };
+  const key = (cdr1: string, cdr3: string, quality?: number) =>
+    cloneVariants(asCore(libClone([{ start: 2171, end: 2200, bases: cdr1, quality }, { start: 2384, end: 2416, bases: cdr3 }])), masked, true, libFeatures({ cdr1: ANY, cdr3: ANY })).key;
+  const otherCdr1 = A01_CDR1.replace("GCCCGA", "GGCATG");
+  const otherCdr3 = A01_CDR3.replace("CTGCAC", "AAGTTC");
+  assert.equal(key(A01_CDR1, A01_CDR3), key(A01_CDR1, A01_CDR3));
+  assert.notEqual(key(A01_CDR1, A01_CDR3), key(otherCdr1, A01_CDR3));
+  // Same length, other bases: the insertions alone would look the same.
+  assert.notEqual(key(A01_CDR1, A01_CDR3), key(A01_CDR1, otherCdr3));
+  // Bases below the quality threshold count as called.
+  assert.equal(key(A01_CDR1, A01_CDR3, 12), key(A01_CDR1, A01_CDR3));
+});
+
 test("clones with other CDRs are different clones, and open with their CDRs", () => {
   const a = libClone([{ start: 2171, end: 2200, bases: A01_CDR1 }]);
   const b = libClone([{ start: 2171, end: 2200, bases: A01_CDR1.replace("GCCCGA", "GGCATG") }]);

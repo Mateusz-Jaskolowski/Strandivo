@@ -342,9 +342,11 @@ export function cloneVariants(clone: CloneResult, reference: string, circular: b
     mutations.push({ label: describeDifference(d, n), feature: inside ? inside.name || inside.type || null : null, kind: "dna", refPos: d.refPos });
   }
   const calls: RegionCall[] = [];
+  const readWhole: Feature[] = [];
   for (const f of [...regions].sort((a, b) => a.start - b.start)) {
     const call = regionCall(clone, f, reference, coding, minQuality, peaks?.mixedRegions.has(regionKey(f)) ?? false);
     calls.push(call);
+    if (call.read === "all") readWhole.push(f);
     for (const m of call.mutations) order.set(m, Math.min(f.start, f.end));
     mutations.push(...call.mutations);
     if (call.violations.length) flags.add("design");
@@ -352,8 +354,12 @@ export function cloneVariants(clone: CloneResult, reference: string, circular: b
   }
   mutations.sort((a, b) => (order.get(a) ?? a.refPos) - (order.get(b) ?? b.refPos));
   const ordered = FLAG_ORDER.filter(f => flags.has(f));
-  // Identical means the same DNA: TGA and TAG are both W163* but not the same clone.
-  const key = [...ordered, ...[...confident].sort((a, b) => a.refPos - b.refPos).map(d => describeDifference(d, n))].join("|");
+  // Identical means the same DNA: TGA and TAG are both W163* but not the same clone. A
+  // region read whole counts by its bases, not its differences: against a reference of Ns
+  // a new CDR has none, and a longer one is only an insertion of so many bases.
+  const changes = [...confident].filter(d => !inVariable(d, readWhole, n)).sort((a, b) => a.refPos - b.refPos);
+  const contents = calls.filter(c => c.read === "all").map(c => `${c.feature}=${c.bases.toUpperCase()}`);
+  const key = [...ordered, ...changes.map(d => describeDifference(d, n)), ...contents].join("|");
   return {
     mutations,
     flags: ordered,

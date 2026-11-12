@@ -1113,6 +1113,32 @@
 .sv-orf {
   cursor: pointer;
 }
+/* GC content around each base (docs/gc-content-plan.md); 40–60% is barely there. */
+.sv-gc-strip {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 2px;
+}
+.sv-gc {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+.sv-gc-at {
+  background: var(--gc-at);
+}
+.sv-gc-at-light {
+  background: color-mix(in srgb, var(--gc-at) 40%, transparent);
+}
+.sv-gc-mid {
+  background: var(--line);
+}
+.sv-gc-gc-light {
+  background: color-mix(in srgb, var(--gc-gc) 40%, transparent);
+}
+.sv-gc-gc {
+  background: var(--gc-gc);
+}
 .sv-orf:hover {
   filter: brightness(0.9);
 }
@@ -1460,6 +1486,12 @@
   height: 9px;
   min-width: 1px;
   border-radius: 2px;
+}
+.sv-strip-gc {
+  position: absolute;
+  top: 18px;
+  height: 3px;
+  min-width: 1px;
 }
 .sv-strip-view {
   position: absolute;

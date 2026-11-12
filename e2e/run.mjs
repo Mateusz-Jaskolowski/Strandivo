@@ -744,6 +744,14 @@ async function main() {
     check("ORFs show in the sequence too", await s.waitFor("document.querySelector('.sv-seq .sv-orf')", 5000));
     await s.click("//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='ORFs']", "xpath");
     check("The ORFs button hides them again", await s.waitFor("!document.querySelector('.sv-seq .sv-orf')", 3000));
+    // GC content: off in Sequence until its button is on, then under the bases and along the overview strip.
+    const gcChip = "//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='GC']";
+    check("Sequence shows no GC until its button is on", await s.exec("return !document.querySelector('.sv-seq .sv-gc') && !document.querySelector('.sv-strip-gc')"));
+    await s.click(gcChip, "xpath");
+    check("The GC button draws GC under the bases and along the overview strip", await s.waitFor("document.querySelector('.sv-seq .sv-gc') && document.querySelector('.sv-strip-gc')", 5000));
+    check("Each stretch of the GC strip says its GC and bases", await s.exec("return Array.from(document.querySelectorAll('.sv-seq .sv-gc')).every(e => /^GC [0-9]+(–[0-9]+)?% around [0-9,]+–[0-9,]+$/.test(e.title))"));
+    await s.click(gcChip, "xpath");
+    check("The GC button hides it again", await s.waitFor("!document.querySelector('.sv-seq .sv-gc') && !document.querySelector('.sv-strip-gc')", 3000));
     await s.exec("window.__strandivo.command('digest')");
     check("Digest opens a dialog", await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000));
     await s.click(".sv-dialog input[data-enzyme='EcoRI']");
@@ -1086,6 +1094,7 @@ async function main() {
       s.apply({ ...d, features: d.features.map(x => x.id === f.id ? { ...x, notes } : x), primers: [...d.primers, p] }, 'Test primer context', { range, focus: { kind: 'primer', id: p.id } });
       window.__strandivo.command('show-primers');`);
     check("Primer context shows the overlapping CDR and a neighbouring region", await s.waitFor("document.querySelector('.sv-ctx-primer') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'CDR1 edited') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'Nearby region')", 5000));
+    check("The primer's context shows GC under its bases without turning it on", await s.waitFor("document.querySelector('.sv-ctx .sv-gc') && Array.from(document.querySelectorAll('.sv-ctx .sv-chip')).find(b => b.textContent.trim() === 'GC')?.getAttribute('aria-pressed') === 'true'", 5000));
     const primerWindowBeforeToggle = await s.exec("return document.querySelector('.sv-ctx-readout .sv-mono').textContent;");
     await s.click("//section[contains(@class,'sv-ctx')]//button[normalize-space(.)='Regions']", "xpath");
     check("Primer regions can be hidden without hiding the primer or its handles", await s.waitFor("document.querySelectorAll('.sv-ctx .sv-seq-region-bar').length === 0 && document.querySelector('.sv-ctx-primer') && document.querySelectorAll('.sv-ctx-handle').length === 2", 5000));

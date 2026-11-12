@@ -20,6 +20,12 @@ with Unreleased's notes and leaves them where they are.
   features, translation and reference stay at the top while you scroll down through the
   reads. In a pane too short for both, they scroll with the reads as before.
 
+- **GC content along the sequence**: a thin strip under the bases shows where GC leaves
+  40–60%, teal where it is AT-rich and orange where it is GC-rich, so you can see where a
+  primer will sit well before you draw it. It is on in the Primers tab's sequence panel
+  and turned on with the GC button in the Sequence tab, where the bar at the top also
+  shows GC across the whole sequence.
+
 - **A tidier toolbar**: the sidebar's button is on the left and the inspector's on the
   right, beside the panels they show, and split view sits next to the views. Buttons that
   do nothing in the current view are greyed out.

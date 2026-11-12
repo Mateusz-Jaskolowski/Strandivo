@@ -12,7 +12,7 @@ import { featureStyles, primerAlignment, primerColors } from "../doc/analysis.ts
 import type { DocContext } from "../doc/context.ts";
 import { primerReport, tmLabel, type PrimerReport } from "../lib/primers.ts";
 import { DEFAULT_SORT, matchesFilter, nextSort, parseSort, primerNote, shortTail, sortRows, type ExportRow, type PrimerRow, type Sort, type SortKey } from "../lib/primerTable.ts";
-import { primerPairs, TM_APART, type PrimerPair } from "../lib/primerPairs.ts";
+import { overTmLimit, parseTmLimit, primerPairs, TM_APART, TM_APART_MAX, withinTmLimit, type PrimerPair } from "../lib/primerPairs.ts";
 import { extendPick, NO_PICKS, prunePicks, togglePick, type Picks } from "../lib/picks.ts";
 import { primerLibrary } from "../primerLibrary.ts";
 import { confirmDialog, showContextMenu } from "../platform.ts";
@@ -26,19 +26,26 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 /** What the tab remembers between sessions, like the other views' options. */
 const OPTIONS_KEY = "strandivo.primers";
 
-function loadSort(): Sort {
+interface Options {
+  sort: Sort;
+  /** The Pairs view hides pairs whose Tms are further apart than this, in °C. */
+  tmLimit: number;
+}
+
+function loadOptions(): Options {
   try {
-    return parseSort(JSON.parse(localStorage.getItem(OPTIONS_KEY) || "{}").sort);
+    const o = JSON.parse(localStorage.getItem(OPTIONS_KEY) || "{}");
+    return { sort: parseSort(o.sort), tmLimit: parseTmLimit(o.tmLimit) };
   } catch {
-    return DEFAULT_SORT;
+    return { sort: DEFAULT_SORT, tmLimit: TM_APART };
   }
 }
 
-function saveSort(sort: Sort) {
+function saveOptions(o: Options) {
   try {
-    localStorage.setItem(OPTIONS_KEY, JSON.stringify({ sort }));
+    localStorage.setItem(OPTIONS_KEY, JSON.stringify(o));
   } catch {
-    // Storage can be full or turned off; the sort is then just not remembered.
+    // Storage can be full or turned off; the options are then just not remembered.
   }
 }
 
@@ -64,14 +71,19 @@ export class PrimersView {
   private reportCache: { data: SeqData; map: Map<string, PrimerReport> } | null = null;
   private pairCache: { data: SeqData; pairs: PrimerPair[] } | null = null;
   private foot = h("p", { class: "sv-small sv-dim sv-primers-foot" });
-  private listNote = h("span", { class: "sv-pane-note" });
+  private listNote = h("span", { class: "sv-pane-note sv-primers-note" });
   private filterBox: HTMLElement;
   private switcher = h("div", { class: "sv-segmented", role: "group", "aria-label": "Show" });
   /** What the middle of the section shows: the primers, or the pairs they make. */
   private listView: "list" | "pairs" = "list";
   /** What was typed in the filter box; "" shows every primer. */
   private filter = "";
-  private sort: Sort = loadSort();
+  private sort: Sort;
+  /** Pairs further apart in Tm than this are hidden, unless `showAllPairs`. */
+  private tmLimit: number;
+  /** Set by Show all under the pairs; for this tab while it is open, not remembered. */
+  private showAllPairs = false;
+  private limitBox: HTMLElement;
   /** The rows in the order shown, for Copy for ordering. */
   private shownOrder: SeqPrimer[] = [];
   private context: PrimerContextView;
@@ -80,6 +92,7 @@ export class PrimersView {
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
+    ({ sort: this.sort, tmLimit: this.tmLimit } = loadOptions());
     this.context = new PrimerContextView(ctx, { rows: 1 });
     this.context.onWindow = r => {
       this.shown = r;
@@ -94,6 +107,23 @@ export class PrimersView {
       this.markSelected();
     });
     this.filterBox = h("div", { class: "sv-primers-filter" }, iconSvg("filter", 14), filter);
+    const limit = h("input", {
+      type: "number",
+      class: "sv-input sv-input-small sv-num sv-primers-limit-input",
+      min: "0",
+      max: String(TM_APART_MAX),
+      step: "0.5",
+      value: String(this.tmLimit),
+      "aria-label": "Most the two Tms may be apart, in °C"
+    }) as HTMLInputElement;
+    limit.addEventListener("change", () => {
+      this.tmLimit = parseTmLimit(limit.value);
+      limit.value = String(this.tmLimit);
+      saveOptions({ sort: this.sort, tmLimit: this.tmLimit });
+      this.renderBody();
+      this.markSelected();
+    });
+    this.limitBox = h("label", { class: "sv-primers-limit sv-small", hidden: true }, "Tm apart up to", limit, "°C");
     const head = h(
       "div",
       { class: "sv-pane-head sv-primers-head" },
@@ -122,7 +152,7 @@ export class PrimersView {
         h(
           "section",
           { class: "sv-card-section" },
-          h("div", { class: "sv-section-head sv-primers-section-head" }, this.switcher, this.listNote, h("span", { class: "sv-push" }), this.filterBox),
+          h("div", { class: "sv-section-head sv-primers-section-head" }, this.switcher, this.listNote, h("span", { class: "sv-push" }), this.filterBox, this.limitBox),
           this.table,
           this.picked,
           this.foot
@@ -284,8 +314,11 @@ export class PrimersView {
         },
         label
       );
-    this.switcher.replaceChildren(button("list", "List"), button("pairs", pairs.length ? `Pairs ${pairs.length}` : "Pairs"));
+    // The count is of the pairs the view lists, so it matches the rows.
+    const listed = this.showAllPairs ? pairs.length : withinTmLimit(pairs, this.tmLimit).within.length;
+    this.switcher.replaceChildren(button("list", "List"), button("pairs", listed ? `Pairs ${listed}` : "Pairs"));
     this.filterBox.hidden = !d.primers.length || this.listView !== "list";
+    this.limitBox.hidden = !pairs.length || this.listView !== "pairs";
     if (this.listView === "pairs") {
       // Copy for ordering and Export list follow the list, which isn't drawn here: keep its
       // order up to date, without the filter, whose box this view hides.
@@ -334,10 +367,36 @@ export class PrimersView {
     return this.ctx.store.data.primers.map(p => ({ primer: p, tm: reports.get(p.id)?.tm ?? null }));
   }
 
-  private renderPairs(pairs: PrimerPair[]) {
+  private renderPairs(all: PrimerPair[]) {
     const d = this.ctx.store.data;
-    this.listNote.textContent = pairs.length ? `${pairs.length === 1 ? "1 pair" : `${pairs.length} pairs`} · click one to see its PCR product` : "";
-    if (!pairs.length) {
+    const { within, over } = withinTmLimit(all, this.tmLimit);
+    const pairs = this.showAllPairs ? all : within;
+    const count = (n: number) => (n === 1 ? "1 pair" : `${n} pairs`);
+    const toggle = (label: string) =>
+      h(
+        "button",
+        {
+          type: "button",
+          class: "sv-link",
+          onclick: () => {
+            this.showAllPairs = !this.showAllPairs;
+            this.renderBody();
+            this.markSelected();
+          }
+        },
+        label
+      );
+    const limit = `${this.tmLimit} °C`;
+    this.listNote.replaceChildren(
+      ...(!all.length
+        ? []
+        : !over
+          ? [`${count(pairs.length)} · click one to see its PCR product`]
+          : this.showAllPairs
+            ? [`${count(pairs.length)} · ${over} over ${limit} apart · `, toggle("Hide them")]
+            : [pairs.length ? `${count(pairs.length)} · ${over} more over ${limit} apart · ` : `${count(over)} over ${limit} apart · `, toggle("Show all")])
+    );
+    if (!all.length) {
       this.table.replaceChildren(
         h(
           "div",
@@ -347,6 +406,10 @@ export class PrimersView {
             : "No forward and reverse primers face each other to form a PCR product."
         )
       );
+      return;
+    }
+    if (!pairs.length) {
+      this.table.replaceChildren(h("div", { class: "sv-empty" }, `Every pair's Tms are more than ${limit} apart.`));
       return;
     }
     const cell = (p: SeqPrimer) => h("td", { class: "sv-td-name" }, primerIcon(p.strand, primerColors(p).color), p.name);
@@ -363,7 +426,7 @@ export class PrimersView {
         h("td", { class: "sv-num" }, `${fmt(pair.length)} bp`),
         h(
           "td",
-          { class: `sv-num${apart !== null && apart > TM_APART ? " sv-text-warn" : ""}`, title: apart !== null && apart > TM_APART ? `Aim for under ${TM_APART} °C apart` : null },
+          { class: `sv-num${overTmLimit(pair, this.tmLimit) ? " sv-text-warn" : ""}`, title: overTmLimit(pair, this.tmLimit) ? `More than ${limit} apart` : null },
           apart === null ? "—" : `${apart.toFixed(1)} °C`
         ),
         h("td", { class: "sv-dim sv-mono sv-td-binds" }, `${pair.tmForward === null ? "—" : pair.tmForward.toFixed(1)} / ${pair.tmReverse === null ? "—" : pair.tmReverse.toFixed(1)} °C`)
@@ -557,7 +620,7 @@ export class PrimersView {
             title: `Sort by ${c.label.toLowerCase()}`,
             onclick: () => {
               this.sort = nextSort(this.sort, key);
-              saveSort(this.sort);
+              saveOptions({ sort: this.sort, tmLimit: this.tmLimit });
               this.renderTable();
               this.markSelected();
             }

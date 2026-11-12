@@ -155,17 +155,24 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
           window.__mapRegionTest.entries = null;
           window.__strandivoMenu = entries => { window.__mapRegionTest.entries = entries; };
         `);
-        await move(label());
-        await s.pointer([{ type: "pointerDown", button: 2 }, { type: "pointerUp", button: 2 }], { release: true });
+        // Right-clicks and drags are dispatched in the page, as elsewhere in the suite: after
+        // a WebDriver right-click on the map, WebKitWebDriver's mouse no longer reached the
+        // page, so every later hover and click in the desktop run failed.
+        const at = await move(label());
+        await s.exec(`
+          const [x, y] = arguments[1], el = document.querySelector(arguments[0]);
+          const init = { bubbles: true, cancelable: true, composed: true, button: 2, clientX: x, clientY: y };
+          el.dispatchEvent(new PointerEvent('pointerdown', { ...init, pointerId: 1, pointerType: 'mouse', isPrimary: true, buttons: 2 }));
+          el.dispatchEvent(new PointerEvent('pointerup', { ...init, pointerId: 1, pointerType: 'mouse', isPrimary: true, buttons: 0 }));
+          el.dispatchEvent(new MouseEvent('contextmenu', { ...init, buttons: 0 }));
+        `, label(), at);
         check(`${name} right-clicking a region keeps its own actions`, await s.waitFor(`
           window.__strandivo.store.selection.focus?.region === 0 &&
           window.__mapRegionTest.entries?.some(e => e.label === 'Edit region…')
         `, 3000));
         await s.exec("window.__strandivoMenu = window.__mapRegionTest.menu; window.__strandivo.store.select({ range: null }, 'e2e');");
         const from = await move(label());
-        // The drag is dispatched in the page: a WebDriver drag on the map, with its pointer
-        // capture, left WebKitWebDriver's mouse unusable for every later click and hover in
-        // the desktop run, in any tab. The capture is stubbed, as this pointer isn't real.
+        // The capture is stubbed, as this pointer isn't real.
         const dragged = await s.exec(`
           const [x, y] = arguments[1], el = document.querySelector(arguments[0]);
           const host = document.querySelector('.sv-map-svg'), store = window.__strandivo.store;

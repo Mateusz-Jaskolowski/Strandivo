@@ -264,7 +264,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   paths. Checks itself runs tests,
   type check, clippy, a debug build, then `e2e/run.mjs` clicks through the real app with
   WebDriver and pushes screenshots and a report to the `e2e-results` branch (for a pull
-  request from a fork, whose token can't push, they are the run's artifact). Add an e2e
+  request from a fork, whose token can't push, they are the run's artifact). The branch
+  holds whichever run finished last; two runs racing to push it retry, and a push that
+  still fails is a warning, not a failure. Add an e2e
   check when you add something users do. It drives the window through `window.__strandivo`:
   the main window's own actions (open, tabs, Home's folders, `saveSettings`) plus those of
   the file in the current tab (store, `command()`, adding reads, saving and `saveCheck`

@@ -191,8 +191,10 @@ class Session {
     }
     await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/click`, {});
   }
-  async pointer(actions) {
+  /** Runs pointer actions; `release` then lets go of anything pressed, as a later call can't. */
+  async pointer(actions, { release = false } = {}) {
     await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions }] });
+    if (release) await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
   }
   /** Types into an element; for a file input, the text is a file's path. */
   async keys(css, text) {

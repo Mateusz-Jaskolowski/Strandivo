@@ -127,7 +127,7 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
           t.undo === store.undoLabel && t.redo === store.redoLabel && t.changes === 0 &&
           t.svg === document.querySelector('.sv-map-svgel') && t.width === document.querySelector(arguments[0]).getBoundingClientRect().width;
       `, label()));
-      await s.pointer([{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }]);
+      await s.pointer([{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
       check(`${name} clicking a region label selects region zero at the measured weight`, await s.exec(`
         const focus = window.__strandivo.store.selection.focus;
         const el = document.querySelector(arguments[0]);
@@ -156,16 +156,26 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
           window.__strandivoMenu = entries => { window.__mapRegionTest.entries = entries; };
         `);
         await move(label());
-        await s.pointer([{ type: "pointerDown", button: 2 }, { type: "pointerUp", button: 2 }]);
+        await s.pointer([{ type: "pointerDown", button: 2 }, { type: "pointerUp", button: 2 }], { release: true });
         check(`${name} right-clicking a region keeps its own actions`, await s.waitFor(`
           window.__strandivo.store.selection.focus?.region === 0 &&
           window.__mapRegionTest.entries?.some(e => e.label === 'Edit region…')
         `, 3000));
         await s.exec("window.__strandivoMenu = window.__mapRegionTest.menu; window.__strandivo.store.select({ range: null }, 'e2e');");
         const from = await move(label());
-        await s.pointer([{ type: "pointerDown", button: 0 }, { ...pointerTo([from[0] - 15, from[1] + 15]), duration: 100 }]);
-        check(`${name} dragging suppresses region hover`, await s.exec(`return ${noHover};`));
-        await s.pointer([{ type: "pointerUp", button: 0 }]);
+        // One sequence, then released: WebKitWebDriver keeps a button pressed across a
+        // release sent in a later call, which broke every click and hover after it.
+        // The probe runs after the map's own handler and notes any hover while pressed.
+        await s.exec(`
+          const t = window.__mapRegionTest; t.dragMoves = 0; t.dragHover = false;
+          t.dragProbe = e => { if (e.buttons) { t.dragMoves++; t.dragHover ||= !(${noHover}); } };
+          document.addEventListener('pointermove', t.dragProbe);
+        `);
+        await s.pointer([{ type: "pointerDown", button: 0 }, { ...pointerTo([from[0] - 15, from[1] + 15]), duration: 100 }, { type: "pointerUp", button: 0 }], { release: true });
+        check(`${name} dragging suppresses region hover`, await s.exec(`
+          const t = window.__mapRegionTest; document.removeEventListener('pointermove', t.dragProbe);
+          return t.dragMoves > 0 && !t.dragHover;
+        `));
         await move(label());
         check(`${name} hover resumes after dragging`, await hoverIs("a", 0));
         await s.exec("document.querySelector('.sv-map-svg').dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }));");

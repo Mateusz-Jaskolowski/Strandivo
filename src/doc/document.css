@@ -2704,6 +2704,32 @@
   display: flex;
   min-height: 100%;
 }
+/* Ruler, features, translation and reference; pinned, the reads scroll under them. */
+.sv-aln-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  background: var(--panel);
+}
+.sv-aln-head-pinned {
+  position: sticky;
+  top: 0;
+}
+.sv-aln-head-pinned.sv-aln-head-over {
+  box-shadow: 0 2px 4px -2px rgba(21, 24, 30, 0.18);
+}
+.sv-aln-head-names {
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.sv-aln-head-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.sv-aln-head-canvas {
+  display: block;
+  cursor: text;
+}
 .sv-aln-names {
   position: relative;
   flex: 0 0 176px;

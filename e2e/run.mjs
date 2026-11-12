@@ -1171,6 +1171,16 @@ async function main() {
       body.scrollTop = 0;
       return { room, rows, moved };`);
     check("The wheel moves the rows and never sideways", (wheel.room < 1 || wheel.rows > 0) && wheel.moved === 0, JSON.stringify(wheel));
+    // The reference stays at the top while the reads scroll under it.
+    const pinned = await s.exec(`
+      const body = document.querySelector('.sv-aln-body');
+      const head = document.querySelector('.sv-aln-head');
+      const room = body.scrollHeight - body.clientHeight;
+      body.scrollTop = room;
+      const offset = head.getBoundingClientRect().top - body.getBoundingClientRect().top;
+      body.scrollTop = 0;
+      return { room, offset, pinned: head.classList.contains('sv-aln-head-pinned'), share: head.offsetHeight / body.clientHeight };`);
+    check("The reference stays at the top while the reads scroll", pinned.share > 0.4 ? !pinned.pinned : pinned.pinned && Math.abs(pinned.offset) < 1, JSON.stringify(pinned));
     // The horizontal scroll bar stays in view whatever the rows do, and moves the traces.
     await s.exec("const b = document.querySelector('.sv-aln-bar'); b.scrollLeft += 120;");
     await sleep(300);

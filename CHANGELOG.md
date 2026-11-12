@@ -16,6 +16,10 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Reads stay lined up with the reference**: in the Reads tab's alignment, the ruler,
+  features, translation and reference stay at the top while you scroll down through the
+  reads. In a pane too short for both, they scroll with the reads as before.
+
 - **A tidier toolbar**: the sidebar's button is on the left and the inspector's on the
   right, beside the panels they show, and split view sits next to the views. Buttons that
   do nothing in the current view are greyed out.

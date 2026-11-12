@@ -100,3 +100,45 @@ test("saving and reopening keeps every value, whatever it holds", async () => {
   assert.deepEqual(cds.notes.note, doc.data.features.find(f => f.type === "CDS")!.notes.note);
   assert.equal(String((cds.notes.translation as string[])[0]), "MSIQHFRVALIPFFAAFCLPVFAHPETLVKVKDAEDQLGARVGYIELDLNSGKILESFRPEERFPMMSTFK");
 });
+
+// A note as Strandivo up to 0.4.0-rc.1 saved it: the generic writer, which cut values at 79
+// columns mid-word, and padded locations to the longest key.
+const OLD_NOTE = "Codon optimised for E. coli by the core facility, checked by Sanger sequencing in March, with a silent change at base 120.";
+const oldFile = async () => {
+  const { jsonToGenbank } = await import("@teselagen/bio-parsers");
+  return jsonToGenbank({
+    name: "old",
+    sequence: "atggctagcatgactggtggacagcaaatgatggctagcatgactggtggacagcaaatg",
+    circular: true,
+    features: [
+      { name: "tag", type: "misc_feature", start: 0, end: 11, strand: 1, notes: { note: [OLD_NOTE, "short"] } },
+      { name: "bla", type: "CDS", start: 20, end: 40, strand: -1, notes: {} }
+    ]
+  }) as string;
+};
+
+test("a note the old writer cut mid-word opens whole", async () => {
+  const text = await oldFile();
+  // The cut is mid-word, so this checks something.
+  assert.ok(text.split(/\r?\n/).some(l => l.length === 79 && /\w$/.test(l)), text);
+  const [features] = readFeatureTables(text);
+  assert.deepEqual(features[0].qualifiers.filter(([n]) => n === "note").map(([, v]) => v), [OLD_NOTE, "short"]);
+  const doc = fromParsed((await parseSequenceFile(new TextEncoder().encode(text), "old.gb")).sequences[0]);
+  assert.deepEqual(doc.data.features.find(f => f.name === "tag")!.notes.note, [OLD_NOTE, "short"]);
+});
+
+test("a note wrapped at a space at the 79th column still joins with a space elsewhere", () => {
+  const first = '                     /note="Wrapped at a space, as GenBank does; this line ends';
+  assert.equal(first.length, 79);
+  const text = FILE.replace('/note="short"', `${first}\n                     exactly at the edge"`);
+  const [features] = readFeatureTables(text);
+  assert.equal(features[2].qualifiers[1][1], "Wrapped at a space, as GenBank does; this line ends exactly at the edge");
+});
+
+test("the app's own wrapped lines stop short of the 79th column", () => {
+  for (let n = 40; n < 200; n++) {
+    const value = Array.from({ length: n }, (_, i) => "ab".repeat(1 + (i % 4))).join(" ");
+    const lines = formatQualifier("note", value);
+    assert.ok(lines.slice(0, -1).every(l => l.length < 79), lines.join("\n"));
+  }
+});

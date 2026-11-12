@@ -412,7 +412,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   first quote, joined wrapped lines with no space, and wrote values wrapped mid-word with
   quotes not doubled. Features are matched to the file's table by their first and last
   base. Lines join with a space, as GenBank's do, except in `/translation` and the app's
-  own `/strandivo_…` values, which have no spaces and are cut to the width.
+  own `/strandivo_…` values, which have no spaces and are cut to the width, and in files
+  the generic writer saved (Strandivo up to 0.4.0-rc.1), whose values it cut mid-word:
+  each feature starts with a quoted `/label` and every wrapped line is 79 columns. So our
+  writer never fills a wrapped line to the 79th column; keep it that way.
 - **Saving** must not lose anything: `src/lib/saving.test.ts` saves and reopens every file
   in `testdata/`, also after edits. Add a file there when you meet one that breaks.
 - **HTTPS in the shell**: reqwest is built without a TLS provider (the updater's

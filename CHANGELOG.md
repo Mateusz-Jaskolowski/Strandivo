@@ -57,7 +57,8 @@ with Unreleased's notes and leaves them where they are.
   in the file as its GenBank note, and lists the feature's other details from the file,
   such as gene and database links. Notes with quotes, or long enough to wrap, now open and
   save whole: a quote used to cut the rest of a line off, and words at a line break were
-  run together.
+  run together. Long notes saved by earlier versions, which split them mid-word, open
+  whole too.
 
 - **Saving right after typing**: a primer's bases edited in the inspector are saved with
   every last keystroke, even when you save straight away. The last letters used to be

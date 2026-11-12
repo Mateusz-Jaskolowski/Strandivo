@@ -16,154 +16,45 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
-- **Sort more tables**: click a heading to sort Home's constructs by name, length or date
-  changed (within each folder), the Clones table by clone, how often it was seen, status
-  or mutations, and the primer library by name, length, Tm or GC. A second click turns
-  the order round; in the Clones table a third goes back to the order of your reads.
+Mark domains, linkers and CDRs in a coding sequence as protein regions, and see them on the
+map. The Reads tab copes with hundreds of reads and keeps the reference in view, and primer
+design can move ends onto better stretches. Ctrl+S works again on Windows, and if Strandivo
+ever quits unexpectedly it offers to report the crash.
 
-- **Reads stay lined up with the reference**: in the Reads tab's alignment, the ruler,
-  features, translation and reference stay at the top while you scroll down through the
-  reads. In a pane too short for both, they scroll with the reads as before.
-
-- **Hundreds of reads**: the alignment draws only the reads near the view, so large sets
-  of reads with traces use far less memory, and on a Mac no longer leave the traces blank.
-
-- **Read names in the alignment**: reads from one plate leave out the start their names
-  share, such as the date, so the well and primer show. With traces on, a long name wraps
-  instead of being cut off. Drag the edge of the names column to resize it, or
-  double-click it to fit the names.
-
-- **Resizable sidebar and inspector**: drag the inner edge of either panel to make it
-  wider or narrower, in every view that has them, Reads included. The widths are kept for
-  every file; double-click an edge for the usual width.
-
-- **Design primers a little away from the selection**: the Design primers dialog has a
-  "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
-  a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge
-  of what you selected. The product only grows, so it still covers the whole region, and
-  the pair nearest your selection wins when moving gains nothing. An end that gets a
-  restriction site stays where it is.
-
-- **Hide badly matched primer pairs**: the Primers tab's Pairs list hides pairs whose two
-  Tms are more than 5 °C apart, and says how many it hid. Set your own limit beside the
-  list, or choose Show all to see them, marked.
-
-- **No more "ResizeObserver loop" errors**: the browser's harmless notice when a panel
-  resizes as it is drawn no longer shows as an "Unexpected error" or goes into the recent
-  errors a bug report can include.
-
+- **Protein regions**: mark domains, helices, linkers, CDRs and frameworks within a CDS,
+  nested if need be, from more kinds or categories of your own. Select bases within a CDS
+  and choose Add as region… in the inspector or the right-click menu, and the residue
+  positions are filled in; Get from UniProt… now offers domains, repeats and other regions
+  too. New regions get colours of their own near their CDS's, and colours you choose are
+  kept. Regions show in a protein diagram, in the outline, as coloured bars with their
+  names in the Sequence view and around the selected primer, and on the map, where the
+  Regions button chooses all of them, the top level or none, and hovering one highlights
+  its CDS. A region can be marked to vary between clones of a library, and Export can
+  include regions as ordinary annotations in a GenBank copy for other software.
+- **Select codons from translation**: click an amino acid in the Sequence view or around
+  a primer to select its DNA bases, or drag to select whole codons. Hold ⌘ on Mac or Ctrl
+  elsewhere to pick separate amino acids, and Shift to select through the intervening
+  residues. Double-click an amino acid or click the feature name to select the whole
+  feature. Copying or deleting separate codons leaves the bases between them alone.
+- **Partial coding sequences**: a CDS that starts mid-codon (GenBank's codon_start, as in
+  many database records) is now translated in its own frame, in the Sequence view, Copy
+  protein, and the amino-acid changes reported for reads. Saving keeps qualifiers that
+  hold numbers, such as codon_start, and web addresses in notes, which were being dropped.
 - **GC content along the sequence**: a thin strip under the bases shows where GC leaves
   40–60%, teal where it is AT-rich and orange where it is GC-rich, so you can see where a
   primer will sit well before you draw it. It is on in the Primers tab's sequence panel
   and turned on with the GC button in the Sequence tab, where the bar at the top also
   shows GC across the whole sequence.
-
-- **A tidier toolbar**: the sidebar's button is on the left and the inspector's on the
-  right, beside the panels they show, and split view sits next to the views. Buttons that
-  do nothing in the current view are greyed out.
-
-- **Choosing enzymes**: Common, Lab and Mine are one row of buttons in the sidebar, with
-  the list's Edit link in the Enzymes heading. On the map they are in a menu beside the
-  Cut sites button, which shows what is chosen, and the region detail is beside Regions,
-  so the bar at the bottom holds only rotate, zoom (with Fit) and label size.
-
-- **Selecting on the map**: dragging round a circular map selects the bases the pointer
-  passed over, whichever way it goes. Dragging anticlockwise used to select nearly the
-  whole plasmid and shrink it as you went.
-
-- **Primers tab**: clicking another primer in the sequence panel moves the panel to that
-  primer, with its Tm, checks and handles, as clicking it in the list does.
-
 - **Notes on features**: the inspector has a Note field for the selected feature, saved
   in the file as its GenBank note, and lists the feature's other details from the file,
   such as gene and database links. Notes with quotes, or long enough to wrap, now open and
   save whole: a quote used to cut the rest of a line off, and words at a line break were
   run together. Long notes saved by earlier versions, which split them mid-word, open
   whole too.
-
-- **Saving right after typing**: a primer's bases edited in the inspector are saved with
-  every last keystroke, even when you save straight away. The last letters used to be
-  left out of the file.
-
 - **Pasting a sequence**: text copied from a database or another program can be pasted
   whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.
   Letters that aren't bases used to be pasted as DNA; now Strandivo says the clipboard
   isn't a sequence instead. U is read as T.
-
-- **Partial coding sequences**: a CDS that starts mid-codon (GenBank's codon_start, as in
-  many database records) is now translated in its own frame, in the Sequence view, Copy
-  protein, and the amino-acid changes reported for reads. Saving keeps qualifiers that hold
-  numbers, such as codon_start, and web addresses in notes, which were being dropped.
-
-- **Mutagenic primers**: a primer whose change sits close to its 3′ end is no longer
-  reported as not binding the sequence.
-
-- **Library clones**: clones with different CDRs are no longer counted as identical in
-  the Clones table when the vector has Ns in its CDRs, or when two CDR3s have the same
-  length.
-
-- **Amino-acid changes from reads**: two or three changes in one codon are now read
-  together, so a codon swapped whole is reported as one change, such as A2W.
-
-- **Markers on Home and in Info**: NeoR/KanR counts as both kanamycin and neomycin, TcR as
-  tetracycline resistance, and TetR, the repressor in Tet-On plasmids, no longer does.
-
-- The PCR dialog gives the same Tm as the Primers tab, and saving while an edit is in
-  flight no longer loses it.
-
-- **Designing primers**: candidates that bind more than one place or whose 3′ end pairs
-  with itself are avoided, and the pair says so when nothing better fits the region.
-
-- **Find**: finds an enzyme from the chosen list even when the cut-site filter hides it,
-  and accepts U in a sequence.
-
-- A coding sequence keeps its colour on the map when another is added before it, and
-  positions are written as 1,700–2,400 throughout.
-
-- **My enzymes**: keep a personal restriction enzyme list alongside your lab stock, and
-  choose the list separately from how often its enzymes cut. Use your list on maps, in
-  Sequence, and when choosing enzymes for a digest or restriction cloning.
-
-If Strandivo quits unexpectedly, it now offers to report the crash the next time it opens,
-and shows everything it would send before anything goes. Usage statistics, if you share
-them, count a little more, still only as fixed words and ranges.
-
-- **Select codons from translation**: click an amino acid in the Sequence view or around
-  a primer to select its DNA bases, or drag to select whole codons. Hold ⌘ on Mac or Ctrl
-  elsewhere to pick separate amino acids, and Shift to select through the intervening
-  residues. Double-click an amino acid or click the feature name to select the whole
-  feature. Copying or deleting separate codons leaves the bases between them alone.
-
-- **Protein regions**: add and edit domains, helices, linkers, CDRs and frameworks within
-  one CDS, with colours and nested regions. A protein diagram and expandable outline
-  show them, and the map can show all regions, just the top level or none. UniProt now
-  offers domains, repeats and other regions too. Regions can vary between clones, and
-  Export can include them as ordinary annotations in a GenBank copy for other software.
-  Select bases within a CDS and choose Add as region… in the inspector or right-click
-  menu; the residue positions are filled in. The Sequence view's Regions button shows
-  coloured bars with their names underneath, separately from the CDS's translation.
-  The Map view has a Regions button too, which remembers the chosen level of detail;
-  there, region names are quieter than features', and hovering a region highlights the
-  CDS it belongs to. Regions also appear around the selected primer in the Primers tab, sharing the
-  Sequence view's Regions setting.
-  New regions get different, coordinated colours automatically, starting near their
-  CDS's colour; colours you choose yourself are kept.
-
-- **Protein region controls**: a compact editor offers more kinds and custom categories,
-  and keeps names as typed. Clearer action buttons fill the inspector's width, feature
-  names stay aligned in the outline, and the map's top-level/all choice appears only for
-  nested regions.
-
-- **Crash reports**: if Strandivo quits unexpectedly, it notes why on your computer, and
-  the next time it opens a strip under the app bar offers to report it. Report it… opens
-  Report a Bug with what it noted, shown in full and with file paths removed; nothing is
-  sent until you click Send. Recent errors are now kept for a week, so a report after a
-  crash can still include them if you tick them.
-- **Usage statistics**, if you share them, count a little more, still only as fixed words
-  and ranges: saving, adding features and primers, adding reads, how long a file's
-  sequence is and how long alignment takes, and three choices in Settings. Each view is
-  counted once each time the app opens, not at every switch. The Privacy page lists every
-  event and what it carries.
 - **Delete with a feature or primer selected** now deletes only the feature or primer, as
   the inspector's Delete button does, and leaves its bases selected: press Delete again to
   delete them too. Before, one press deleted the bases, and the feature went with them. A
@@ -174,51 +65,95 @@ them, count a little more, still only as fixed words and ranges.
   lay wholly inside them was deleted too, which was easy to miss. A new message about an
   edit replaces the last one instead of piling up, at most three messages show at once,
   and one with a button, or an error, stays while the pointer is over it and can be closed.
-- **Gibson and In-Fusion say when two pieces already share their overlap**: where one piece
-  ends with the bases the next one starts with, they are joined on those bases and the
-  product keeps one copy. That is usually what you want, but not when each piece was meant
-  to carry its own copy of a linker or a tag, so the result now says so and gives both
-  lengths. Keeping both copies can't be done by moving the overlap around — two copies in
-  a row give the join two places to land — so it says to put both copies inside one piece
-  and to put the join past them, somewhere the sequence occurs only once.
-- **Overlap melting temperatures in Gibson** are now worked out the way the 48 °C guideline
-  they are checked against was, by the Wallace rule, and the result says so. They no longer
-  change with the method chosen in Settings, which is for the temperatures shown elsewhere.
-  A Gibson overlap that melts below the guideline is still only a warning: the product is
-  built either way. In-Fusion has no melting temperature to meet, so nothing is warned about
-  there, but the temperature it shows for an overlap is now worked out the same way, so both
-  methods mean the same thing by it.
-- **Gibson and In-Fusion say when an overlap reads the same somewhere else.** An overlap
-  that turns up again in the product gives the join another sequence that could pair with
-  it, which is one way an assembly comes back with its pieces rearranged or a repeat
-  collapsed. The result now names the join and lists where the other copies are, saying
-  which are on the other strand. Copies across the origin of a circular product count, and
-  capital or small letters make no difference.
-- **A piece too short to carry the whole overlap** no longer loses the difference. The
-  overlap used to be taken as the full length whether or not the pieces had that many bases
-  to share, which quietly cut the missing bases out of the product. The plan now joins on
-  the bases the pieces really share, keeps every base of both, and says the overlap came out
-  shorter than the method asks for. Where there are no bases to join on at all, it says so
-  and builds nothing.
-- **An overlap that can't be judged is now reported**, in both Gibson and In-Fusion: where
-  the shared bases include anything other than A, C, G or T there is no telling whether
-  they will anneal, and the plan says so instead of passing quietly.
-- **Keyboard shortcuts on Windows**: Ctrl+S saves again, and so do the other menu keys
-  that did nothing there: Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+, and the rest.
-- **Menu bar on Windows** stays light, like the rest of the window, instead of switching
-  from dark to light when another window such as Settings opened.
-- **Cut sites at the end of a row** in the Sequence tab stay inside it: an enzyme that cuts
-  right at a row's edge is shown at the start of the next row, beside the rest of its site,
-  and a cut on the bottom strand that falls in the next row is drawn there.
-- **Codon shading** in the Sequence tab alternates evenly again: the first codon of a
-  feature or row was sometimes partly shaded.
+- **My enzymes**: keep a personal list of restriction enzymes beside your lab's stock, and
+  choose how often an enzyme must cut to be shown separately from which list it comes
+  from. Common, Lab and Mine are one row of buttons in the sidebar, and on the map they are
+  in a menu beside the Cut sites button, which shows what is chosen. Any list can be used
+  on the map, in the Sequence tab, and to choose enzymes for a digest or restriction
+  cloning, and Find finds an enzyme from the chosen list even when the filter hides it.
+- **A tidier toolbar**: the sidebar's button is on the left and the inspector's on the
+  right, beside the panels they show, and split view sits next to the views. Buttons that
+  do nothing in the current view are greyed out. Under the map, the bar holds only rotate,
+  zoom (with Fit) and label size.
+- **Resizable sidebar and inspector**: drag the inner edge of either panel to make it
+  wider or narrower, in every view that has them, Reads included. The widths are kept for
+  every file; double-click an edge for the usual width.
+- **The map**: each file's map opens turned the way you last turned it. Dragging round a
+  circular map selects the bases the pointer passed over, whichever way it goes; dragging
+  anticlockwise used to select nearly the whole plasmid. A coding sequence keeps its
+  colour when another is added before it, and on a Mac labels sit in the middle of their
+  coloured backgrounds, with position numbers centred too.
 - **The Sequence tab stays where you are** when you turn on Translation, Both strands, ORFs,
-  Cut sites or Primers, or resize the window. It used to jump to another part of the
-  sequence, further the further down you were.
-- **Each map keeps its rotation**: a file's map opens turned the way you last turned it.
-  The enzymes to show now come last under the map, after rotation, zoom and label size.
-- **Map labels on a Mac** sit in the middle of their coloured backgrounds, which no longer
-  run on past the end of the name; position numbers around the map are centred too.
+  Cut sites or Primers, or resize the window; it used to jump, further the further down you
+  were. An enzyme that cuts right at a row's edge is shown beside the rest of its site, and
+  codon shading alternates evenly again.
+- **Sort more tables**: click a heading to sort Home's constructs by name, length or date
+  changed (within each folder), the Clones table by clone, how often it was seen, status
+  or mutations, and the primer library by name, length, Tm or GC. A second click turns
+  the order round; in the Clones table a third goes back to the order of your reads.
+- **Hundreds of reads**: the Reads tab's alignment draws only the reads near the view, so
+  large sets of reads with traces use far less memory, and on a Mac no longer leave the
+  traces blank. The ruler, features, translation and reference stay at the top while you
+  scroll down through the reads, unless the pane is too short for both.
+- **Read names in the alignment**: reads from one plate leave out the start their names
+  share, such as the date, so the well and primer show. With traces on, a long name wraps
+  instead of being cut off. Drag the edge of the names column to resize it, or
+  double-click it to fit the names.
+- **Amino-acid changes from reads**: two or three changes in one codon are now read
+  together, so a codon swapped whole is reported as one change, such as A2W.
+- **Library clones**: clones with different CDRs are no longer counted as identical in
+  the Clones table when the vector has Ns in its CDRs, or when two CDR3s have the same
+  length.
+- **Design primers a little away from the selection**: the Design primers dialog has a
+  "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
+  a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge
+  of what you selected. The product only grows, so it still covers the whole region, and
+  the pair nearest your selection wins when moving gains nothing. An end that gets a
+  restriction site stays where it is. Candidates that bind more than one place or whose
+  3′ end pairs with itself are avoided, and the pair says so when nothing better fits.
+- **Hide badly matched primer pairs**: the Primers tab's Pairs list hides pairs whose two
+  Tms are more than 5 °C apart, and says how many it hid. Set your own limit beside the
+  list, or choose Show all to see them, marked.
+- **Primers tab**: clicking another primer in the sequence panel moves the panel to that
+  primer, with its Tm, checks and handles, as clicking it in the list does. The PCR dialog
+  gives the same Tm as the Primers tab.
+- **Mutagenic primers**: a primer whose change sits close to its 3′ end is no longer
+  reported as not binding the sequence.
+- **Saving right after typing**: a primer's bases edited in the inspector are saved with
+  every last keystroke, even when you save straight away, and saving while any edit is in
+  flight no longer loses it. The last letters used to be left out of the file.
+- **Gibson and In-Fusion check their overlaps more closely.** The result says when two
+  pieces already share their overlap, so the product keeps one copy of it, which matters
+  when each was meant to carry its own linker or tag; to keep both, put both copies inside
+  one piece and the join past them. It names a join whose overlap reads the same somewhere
+  else in the product, on either strand, which is one way an assembly comes back
+  rearranged, and one whose shared bases include anything other than A, C, G or T.
+- **A piece too short to carry the whole overlap** no longer loses bases: the plan joins
+  on the bases the pieces really share, keeps every base of both, and says the overlap
+  came out shorter than the method asks for.
+- **Overlap melting temperatures** in Gibson and In-Fusion are worked out by the Wallace
+  rule, as the 48 °C guideline they are checked against was, and no longer change with the
+  method chosen in Settings, which is for the temperatures shown elsewhere.
+- **Markers on Home and in Info**: NeoR/KanR counts as both kanamycin and neomycin, TcR as
+  tetracycline resistance, and TetR, the repressor in Tet-On plasmids, no longer does.
+- **On Windows**, Ctrl+S saves again, and so do the other menu keys that did nothing
+  there: Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+, and the rest. The menu bar stays
+  light, like the rest of the window, instead of turning dark when another window such as
+  Settings opened.
+- **Crash reports**: if Strandivo quits unexpectedly, it notes why on your computer, and
+  the next time it opens a strip under the app bar offers to report it. Report it… opens
+  Report a Bug with what it noted, shown in full and with file paths removed; nothing is
+  sent until you click Send. Recent errors are now kept for a week, so a report after a
+  crash can still include them if you tick them.
+- **No more "ResizeObserver loop" errors**: this harmless notice, given when a panel
+  resizes as it is drawn, no longer shows as an "Unexpected error" or goes into the recent
+  errors a bug report can include.
+- **Usage statistics**, if you share them, count a little more, still only as fixed words
+  and ranges: saving, adding features and primers, adding reads, how long a file's
+  sequence is and how long alignment takes, and three choices in Settings. Each view is
+  counted once each time the app opens, not at every switch. The Privacy page lists every
+  event and what it carries.
+- Find accepts U in a sequence, and positions are written as 1,700–2,400 throughout.
 
 ## 0.3.1
 

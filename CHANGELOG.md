@@ -16,6 +16,10 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Reads stay lined up with the reference**: in the Reads tab's alignment, the ruler,
+  features, translation and reference stay at the top while you scroll down through the
+  reads. In a pane too short for both, they scroll with the reads as before.
+
 - **Design primers a little away from the selection**: the Design primers dialog has a
   "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
   a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge

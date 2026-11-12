@@ -95,12 +95,13 @@ time. Verdict: better on a map, where there is room and no per-base reading; not
 features and is already layered; the overview band gives the same overall picture in the
 tab where primers are placed. Verdict: not now; reconsider if people ask for it on the map.
 
-**Letting "Design primers…" move the ends.** `designPairs` in `src/lib/design.ts` puts the
+**Letting "Design primers…" move the ends.** `designPairs` in `src/lib/design.ts` put the
 forward primer exactly at the selection's start and the reverse exactly at its end, so
-in an AT-rich spot it can only make the primer longer. Letting the ends move a set
-distance would let it find a balanced stretch on its own. This answers "design primers
-for me" better than any strip, while the strip answers "where should I put this one".
-Verdict: worth doing as its own change; complementary.
+in an AT-rich spot it could only make the primer longer. Letting the ends move a set
+distance lets it find a balanced stretch on its own. This answers "design primers for
+me" better than any strip, while the strip answers "where should I put this one".
+Verdict: complementary, and done as its own change (PR 73): the dialog's "Move ends"
+distance (`moveEnds` in `DesignOptions`, 0 by default) lets each end move outward.
 
 **Marking where a good primer can start** (Tm in the window, a 3′ clamp, one binding
 site). Answers the real question more directly than GC, which is a proxy, but costs a Tm

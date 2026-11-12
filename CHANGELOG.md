@@ -16,6 +16,13 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Design primers a little away from the selection**: the Design primers dialog has a
+  "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
+  a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge
+  of what you selected. The product only grows, so it still covers the whole region, and
+  the pair nearest your selection wins when moving gains nothing. An end that gets a
+  restriction site stays where it is.
+
 - **GC content along the sequence**: a thin strip under the bases shows where GC leaves
   40–60%, teal where it is AT-rich and orange where it is GC-rich, so you can see where a
   primer will sit well before you draw it. It is on in the Primers tab's sequence panel

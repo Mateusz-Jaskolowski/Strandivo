@@ -10,7 +10,9 @@
 import { h } from "../ui/dom.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { checkIcon } from "../ui/icons.ts";
-import { codons, featureStyles, isCds, primerAlignment, primerColors, primerTitle, primerTm } from "../doc/analysis.ts";
+import { codons, featureStyles, gcValues, isCds, primerAlignment, primerColors, primerTitle, primerTm } from "../doc/analysis.ts";
+import { GC_WINDOW } from "../lib/gc.ts";
+import { drawGcStrip, GC_STRIP_HEIGHT } from "./gcStrip.ts";
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { boxTop, drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -76,6 +78,7 @@ export class PrimerContextView {
   private controls = h("span", { class: "sv-ctx-controls" });
   private body = h("div", { class: "sv-ctx-body" });
   private regionsToggle: HTMLButtonElement;
+  private gcToggle: HTMLButtonElement;
   private chPx = 7.8;
   /** The primer shown, and the first position of the window it is shown in. */
   private primerId: string | null = null;
@@ -91,10 +94,11 @@ export class PrimerContextView {
     this.ctx = ctx;
     this.rowCount = opts.rows;
     this.regionsToggle = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ sequenceRegions: !ctx.options.sequenceRegions }) }, checkIcon(), "Regions");
+    this.gcToggle = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ primerGc: !ctx.options.primerGc }) }, checkIcon(), "GC");
     this.el = h(
       "section",
       { class: "sv-ctx", "aria-label": "Sequence around the selected primer" },
-      h("div", { class: "sv-ctx-head" }, h("h3", { class: "sv-section-title" }, "Sequence"), this.title, this.regionsToggle, this.readout, this.controls),
+      h("div", { class: "sv-ctx-head" }, h("h3", { class: "sv-section-title" }, "Sequence"), this.title, this.regionsToggle, this.gcToggle, this.readout, this.controls),
       this.body,
       h("p", { class: "sv-small sv-dim sv-ctx-hint" }, "Drag an end of the primer, or use the arrow keys on it, to extend or trim it. Tm and checks update as you go; the tail stays as it is.")
     );
@@ -143,6 +147,8 @@ export class PrimerContextView {
     const showRegions = this.ctx.options.sequenceRegions;
     this.regionsToggle.setAttribute("aria-pressed", String(showRegions));
     this.regionsToggle.classList.toggle("sv-chip-off", !showRegions);
+    this.gcToggle.setAttribute("aria-pressed", String(this.ctx.options.primerGc));
+    this.gcToggle.classList.toggle("sv-chip-off", !this.ctx.options.primerGc);
     const d = this.ctx.store.data;
     const n = d.sequence.length;
     const p = this.primer();
@@ -424,6 +430,9 @@ export class PrimerContextView {
       return top;
     });
     y += 4;
+    // GC content, after the reverse primers so they stay beside their strand.
+    const yGc = o.primerGc ? y : null;
+    if (o.primerGc) y += GC_STRIP_HEIGHT + 4;
     const featLanes = feats.length ? Math.max(...feats.map(x => x.lane)) + 1 : 0;
     // A name goes under its bar when the bar shows amino acids or is too short for it.
     const fitsInside = (r: Run<SeqFeature>) => (r.b - r.a + 1) * this.chPx > r.item.name.length * 7 + 10;
@@ -473,6 +482,13 @@ export class PrimerContextView {
         track.appendChild(abs(`left:${ch(i + 1)};top:${yRuler}px;transform:translateX(-100%)`, "sv-ruler", label));
       }
     });
+
+    // GC around each base.
+    if (yGc !== null) {
+      const strip = abs(`left:0;top:${yGc}px;width:${ch(len)};height:${GC_STRIP_HEIGHT}px`, "sv-gc-strip");
+      strip.append(...drawGcStrip(gcValues(d, GC_WINDOW), len, i => positions[i], ch));
+      track.appendChild(strip);
+    }
 
     // Primers, the selected one outlined, with handles at both ends of its site.
     const x = (c: number) => Math.round(c * this.chPx * 100) / 100;

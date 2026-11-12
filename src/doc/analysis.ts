@@ -7,6 +7,7 @@
 import { extraKey, sourceEnzymes, rescanSites, scanSites, selectSites, type CutSite, type EnzymeOptions, type SiteHit } from "../lib/enzymes.ts";
 import { amberSuppressed, codingPositions, translateCodon } from "../lib/genetics.ts";
 import { findOrfs, frameLabel, type Orf, type OrfOptions } from "../lib/orfs.ts";
+import { gcProfile } from "../lib/gc.ts";
 import { bindingTm, changesText } from "../lib/primers.ts";
 import { alignPrimer, type PrimerAlignment } from "../lib/primerAlign.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
@@ -174,6 +175,19 @@ export function orfs(d: SeqData, o: OrfOptions): Orf[] {
   if (!orfCache || orfCache.sequence !== d.sequence || orfCache.circular !== d.circular || orfCache.key !== key)
     orfCache = { sequence: d.sequence, circular: d.circular, key, orfs: findOrfs(d.sequence, d.circular, o) };
   return orfCache.orfs;
+}
+
+// One profile per window size (the rows' and the overview's), for the current sequence.
+const gcCache = new Map<number, { sequence: string; circular: boolean; values: Float64Array }>();
+
+/** GC in a window centred on each base, counted once per sequence and window. */
+export function gcValues(d: SeqData, window: number): Float64Array {
+  const c = gcCache.get(window);
+  if (c && c.sequence === d.sequence && c.circular === d.circular) return c.values;
+  if (gcCache.size > 3) gcCache.clear();
+  const values = gcProfile(d.sequence, d.circular, window);
+  gcCache.set(window, { sequence: d.sequence, circular: d.circular, values });
+  return values;
 }
 
 const orfFeatures = new WeakMap<Orf, SeqFeature>();

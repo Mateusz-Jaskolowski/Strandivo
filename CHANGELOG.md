@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Sort more tables**: click a heading to sort Home's constructs by name, length or date
+  changed (within each folder), the Clones table by clone, how often it was seen, status
+  or mutations, and the primer library by name, length, Tm or GC. A second click turns
+  the order round; in the Clones table a third goes back to the order of your reads.
+
 - **Reads stay lined up with the reference**: in the Reads tab's alignment, the ruler,
   features, translation and reference stay at the top while you scroll down through the
   reads. In a pane too short for both, they scroll with the reads as before.

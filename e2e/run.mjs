@@ -1399,6 +1399,18 @@ async function main() {
     );
     check("The clone table flags a stop and a frameshift", /Stop/.test(row("A03_bla")[3]) && /W163\*/.test(row("A03_bla")[4]) && /Frameshift/.test(row("A05_bla")[3]) && /fs/.test(row("A05_bla")[4]), JSON.stringify([row("A03_bla"), row("A05_bla")]));
     await s.shot("07c-clone-table");
+    // Its headings sort it: the worst status first, the most clones first, and a third click
+    // goes back to the order of the list of reads.
+    const clickSort = label => s.exec(`Array.from(document.querySelectorAll('.sv-clonetab th .sv-sort')).find(b => b.firstChild.textContent === arguments[0]).click(); ${rowsOf}`, label);
+    const byStatus = await clickSort("Status");
+    const bySeen = await clickSort("Seen");
+    await clickSort("Seen");
+    const unsorted = await clickSort("Seen");
+    check(
+      "The clone table sorts by status and by how often a clone was seen, and goes back to the list's order",
+      /Stop|Frameshift|Mixed/.test(byStatus[0]?.[3] ?? "") && Number(bySeen[0]?.[2]) === Math.max(...rows.map(r => Number(r[2]))) && unsorted.map(r => r[1]).join() === rows.map(r => r[1]).join(),
+      JSON.stringify({ status: byStatus.map(r => r[3]), seen: bySeen.map(r => r[2]) })
+    );
     const alignmentHidden = "return document.querySelector('.sv-reads-aln').hidden";
     check("The clone table has the column to itself until something is selected", await s.exec(alignmentHidden));
     // Changing the setting aligns the reads again, which draws the table anew: wait for
@@ -1747,6 +1759,18 @@ async function main() {
     );
     check("Home lists the constructs in a library folder", Array.isArray(homeList) && homeList.includes("pUC19-annotated.gb") && homeList.includes("bla-check.fasta"), JSON.stringify(homeList));
     await s.shot("12-home");
+    // Its Length heading sorts the files either way round; Name puts them back.
+    const homeLengths = label =>
+      s.exec(
+        `Array.from(document.querySelectorAll('.sv-home-table th .sv-sort')).find(b => b.firstChild.textContent === arguments[0]).click();
+        return Array.from(document.querySelectorAll('.sv-home-row:not(.sv-home-unreadable)')).map(r => Number((r.cells[1].textContent.match(/[\\d,]+/) || ["0"])[0].replace(/,/g, "")));`,
+        label
+      );
+    const lengthsUp = await homeLengths("Length");
+    const lengthsDown = await homeLengths("Length");
+    await homeLengths("Name");
+    const rising = xs => xs.every((x, i) => i === 0 || xs[i - 1] <= x);
+    check("Home sorts its constructs by length, either way round", lengthsUp.length > 1 && lengthsUp.join() !== lengthsDown.join() && ((rising(lengthsUp) && rising([...lengthsDown].reverse())) || (rising(lengthsDown) && rising([...lengthsUp].reverse()))), JSON.stringify({ lengthsUp, lengthsDown }));
     const tabsBefore = await s.exec("return window.__strandivo.tabs().length");
     await s.click("//button[contains(@class,'sv-home-open')][normalize-space()='bla-check.fasta']", "xpath");
     check("Opening a construct from Home adds a tab", await s.waitFor(`window.__strandivo.tabs().length === ${tabsBefore + 1} && window.__strandivo.store?.data.sequence.length > 0`, 20000));

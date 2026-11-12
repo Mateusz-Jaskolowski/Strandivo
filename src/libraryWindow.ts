@@ -14,10 +14,26 @@ import { primerLibrary } from "./primerLibrary.ts";
 import { onSettingsChanged } from "./settings.ts";
 import { COMMON_SEQUENCING_PRIMERS, formatPrimerList, parsePrimerList, type LibraryPrimer } from "./lib/library.ts";
 import { gcContent, meltingTemp } from "./lib/primers.ts";
+import { nextTableSort, parseTableSort, sortedBy, type TableSort } from "./lib/tableSort.ts";
+import { sortHeader } from "./ui/sortHead.ts";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
 const BASES = /^[ACGTURYSWKMBDHVN]+$/;
 const byName = (a: LibraryPrimer, b: LibraryPrimer) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+
+/** The library's columns that sort, and the sort kept between visits. */
+type LibrarySortKey = "name" | "length" | "tm" | "gc";
+const LIBRARY_SORT_KEY = "strandivo.librarySort";
+const LIBRARY_SORT_KEYS: LibrarySortKey[] = ["name", "length", "tm", "gc"];
+const BY_NAME: TableSort<LibrarySortKey> = { key: "name", descending: false };
+
+function loadLibrarySort(): TableSort<LibrarySortKey> {
+  try {
+    return parseTableSort(JSON.parse(localStorage.getItem(LIBRARY_SORT_KEY) || "null"), LIBRARY_SORT_KEYS, BY_NAME) ?? BY_NAME;
+  } catch {
+    return BY_NAME;
+  }
+}
 
 /** Adds the common sequencing primers; returns the message to show. */
 export function addCommonPrimers(): string {
@@ -161,6 +177,24 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
     return el;
   };
 
+  let sort = loadLibrarySort();
+  const header = (label: string, key: LibrarySortKey, cls?: string) =>
+    sortHeader({
+      label,
+      key,
+      cls,
+      sort,
+      onSort: k => {
+        sort = nextTableSort(sort, k) ?? BY_NAME;
+        try {
+          localStorage.setItem(LIBRARY_SORT_KEY, JSON.stringify(sort));
+        } catch {
+          /* storage unavailable: the sort lasts until the window closes */
+        }
+        render();
+      }
+    });
+
   const render = () => {
     const lib = primerLibrary.all;
     count.textContent = String(lib.length);
@@ -183,13 +217,24 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
     }
     const q = search.value.trim().toLowerCase();
     const qBases = q.replace(/\s+/g, "").toUpperCase();
-    const shown = [...lib].sort(byName).filter(p => !q || p.name.toLowerCase().includes(q) || p.notes.toLowerCase().includes(q) || (qBases.length >= 3 && p.bases.includes(qBases)));
+    const matching = lib.filter(p => !q || p.name.toLowerCase().includes(q) || p.notes.toLowerCase().includes(q) || (qBases.length >= 3 && p.bases.includes(qBases)));
+    // Worked out once a primer, not at every comparison.
+    const tms = new Map(matching.map(p => [p.id, meltingTemp(p.bases)]));
+    const gcs = new Map(matching.map(p => [p.id, gcContent(p.bases)]));
+    const shown = sortedBy(
+      matching,
+      sort,
+      (key, a, b) =>
+        key === "name" ? byName(a, b) : key === "length" ? a.bases.length - b.bases.length : key === "tm" ? (tms.get(a.id) ?? 0) - (tms.get(b.id) ?? 0) : gcs.get(a.id)! - gcs.get(b.id)!,
+      byName,
+      (key, p) => key === "tm" && tms.get(p.id) === null
+    );
     if (!shown.length) {
       table.replaceChildren(h("div", { class: "sv-empty" }, `No primer matches “${search.value.trim()}”.`));
       return;
     }
     const rows = shown.map(p => {
-      const tm = meltingTemp(p.bases);
+      const tm = tms.get(p.id) ?? null;
       return h(
         "tr",
         { "data-id": p.id },
@@ -197,7 +242,7 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
         h("td", { class: "sv-td-seq" }, cell(p, "bases", "Sequence")),
         h("td", { class: "sv-num" }, String(p.bases.length)),
         h("td", { class: "sv-num" }, tm === null ? "—" : `${tm.toFixed(1)} °C`),
-        h("td", { class: "sv-num sv-col-gc" }, `${gcContent(p.bases).toFixed(0)}%`),
+        h("td", { class: "sv-num sv-col-gc" }, `${gcs.get(p.id)!.toFixed(0)}%`),
         h("td", { class: "sv-td-notes" }, cell(p, "notes", "Notes")),
         h("td", null, h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": `Remove ${p.name}`, title: "Remove from the library", onclick: () => void remove(p) }, iconSvg("trash", 14)))
       );
@@ -206,7 +251,21 @@ export function mountLibrary(root: HTMLElement, embedded = false) {
       h(
         "table",
         { class: "sv-table sv-libwin-grid" },
-        h("thead", null, h("tr", null, ...["Name", "Sequence 5′→3′", "Length", "Tm", "GC", "Notes", ""].map(t => h("th", { scope: "col", class: `${["Length", "Tm", "GC"].includes(t) ? "sv-num" : ""}${t === "GC" ? " sv-col-gc" : ""}` }, t)))),
+        h(
+          "thead",
+          null,
+          h(
+            "tr",
+            null,
+            header("Name", "name"),
+            h("th", { scope: "col" }, "Sequence 5′→3′"),
+            header("Length", "length", "sv-num"),
+            header("Tm", "tm", "sv-num"),
+            header("GC", "gc", "sv-num sv-col-gc"),
+            h("th", { scope: "col" }, "Notes"),
+            h("th", { scope: "col" }, "")
+          )
+        ),
         h("tbody", null, rows)
       ),
       shown.length < lib.length ? h("p", { class: "sv-small sv-dim sv-libwin-more" }, `Showing ${fmt(shown.length)} of ${fmt(lib.length)}.`) : ""

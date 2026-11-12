@@ -5,6 +5,7 @@
 // here, so it is unit-tested.
 
 import type { SeqPrimer } from "./seqdata.ts";
+import { naturalOrder, nextTableSort, parseTableSort, sortedBy, type TableSort } from "./tableSort.ts";
 
 /** A row as the table shows it: the primer and what its report says. */
 export interface PrimerRow {
@@ -17,10 +18,7 @@ export interface PrimerRow {
 }
 
 export type SortKey = "name" | "direction" | "length" | "tm" | "gc" | "binds" | "checks";
-export interface Sort {
-  key: SortKey;
-  descending: boolean;
-}
+export type Sort = TableSort<SortKey>;
 
 /** By where they bind, as the binding map reads. */
 export const DEFAULT_SORT: Sort = { key: "binds", descending: false };
@@ -29,26 +27,19 @@ export const SORT_KEYS: SortKey[] = ["name", "direction", "length", "tm", "gc", 
 
 /** A sort read back from storage, or the default if it isn't one of the table's columns. */
 export function parseSort(raw: unknown): Sort {
-  if (!raw || typeof raw !== "object") return DEFAULT_SORT;
-  const o = raw as { key?: unknown; descending?: unknown };
-  const key = SORT_KEYS.find(k => k === o.key);
-  return key ? { key, descending: o.descending === true } : DEFAULT_SORT;
+  return parseTableSort(raw, SORT_KEYS, DEFAULT_SORT) ?? DEFAULT_SORT;
 }
-
-// "Primer 4" before "Primer 10", and case doesn't matter.
-const names = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /**
  * The rows in the order asked for. Ties fall back to the binding position, so the order is
  * always the same; a primer without a Tm goes last either way.
  */
 export function sortRows(rows: PrimerRow[], sort: Sort): PrimerRow[] {
-  const sign = sort.descending ? -1 : 1;
   const byPosition = (a: PrimerRow, b: PrimerRow) => a.primer.start - b.primer.start || a.primer.end - b.primer.end;
-  const compare = (a: PrimerRow, b: PrimerRow): number => {
-    switch (sort.key) {
+  const compare = (key: SortKey, a: PrimerRow, b: PrimerRow): number => {
+    switch (key) {
       case "name":
-        return names.compare(a.primer.name, b.primer.name);
+        return naturalOrder.compare(a.primer.name, b.primer.name);
       case "direction":
         // Forward first.
         return b.primer.strand - a.primer.strand;
@@ -65,15 +56,12 @@ export function sortRows(rows: PrimerRow[], sort: Sort): PrimerRow[] {
         return b.warnings - a.warnings;
     }
   };
-  return [...rows].sort((a, b) => {
-    if (sort.key === "tm" && (a.tm === null) !== (b.tm === null)) return a.tm === null ? 1 : -1;
-    return sign * compare(a, b) || sign * byPosition(a, b);
-  });
+  return sortedBy(rows, sort, compare, byPosition, (key, r) => key === "tm" && r.tm === null);
 }
 
 /** The next sort after clicking a column: the same column turns round, another starts ascending. */
 export function nextSort(current: Sort, key: SortKey): Sort {
-  return current.key === key ? { key, descending: !current.descending } : { key, descending: false };
+  return nextTableSort(current, key) ?? DEFAULT_SORT;
 }
 
 /** A primer's note, as a file's /note qualifier or the lab library wrote it; "" if it has none. */

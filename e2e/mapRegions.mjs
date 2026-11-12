@@ -163,19 +163,29 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
         `, 3000));
         await s.exec("window.__strandivoMenu = window.__mapRegionTest.menu; window.__strandivo.store.select({ range: null }, 'e2e');");
         const from = await move(label());
-        // One sequence, then released: WebKitWebDriver keeps a button pressed across a
-        // release sent in a later call, which broke every click and hover after it.
-        // The probe runs after the map's own handler and notes any hover while pressed.
-        await s.exec(`
-          const t = window.__mapRegionTest; t.dragMoves = 0; t.dragHover = false;
-          t.dragProbe = e => { if (e.buttons) { t.dragMoves++; t.dragHover ||= !(${noHover}); } };
-          document.addEventListener('pointermove', t.dragProbe);
-        `);
-        await s.pointer([{ type: "pointerDown", button: 0 }, { ...pointerTo([from[0] - 15, from[1] + 15]), duration: 100 }, { type: "pointerUp", button: 0 }], { release: true });
-        check(`${name} dragging suppresses region hover`, await s.exec(`
-          const t = window.__mapRegionTest; document.removeEventListener('pointermove', t.dragProbe);
-          return t.dragMoves > 0 && !t.dragHover;
-        `));
+        // The drag is dispatched in the page: a WebDriver drag on the map, with its pointer
+        // capture, left WebKitWebDriver's mouse unusable for every later click and hover in
+        // the desktop run, in any tab. The capture is stubbed, as this pointer isn't real.
+        const dragged = await s.exec(`
+          const [x, y] = arguments[1], el = document.querySelector(arguments[0]);
+          const host = document.querySelector('.sv-map-svg'), store = window.__strandivo.store;
+          host.setPointerCapture = host.releasePointerCapture = () => {};
+          const at = (type, dx, buttons) => el.dispatchEvent(new PointerEvent(type, {
+            bubbles: true, cancelable: true, composed: true, pointerId: 1, pointerType: 'mouse', isPrimary: true,
+            button: type === 'pointermove' ? -1 : 0, buttons, clientX: x - dx, clientY: y + dx }));
+          try {
+            at('pointerdown', 0, 1);
+            at('pointermove', 8, 1);
+            at('pointermove', 15, 1);
+            const quiet = ${noHover};
+            at('pointerup', 15, 0);
+            return quiet && !!store.selection.range && !store.selection.focus;
+          } finally {
+            delete host.setPointerCapture;
+            delete host.releasePointerCapture;
+          }
+        `, label(), from);
+        check(`${name} dragging suppresses region hover`, dragged);
         await move(label());
         check(`${name} hover resumes after dragging`, await hoverIs("a", 0));
         await s.exec("document.querySelector('.sv-map-svg').dispatchEvent(new PointerEvent('pointercancel', { bubbles: true }));");

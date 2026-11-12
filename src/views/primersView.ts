@@ -4,6 +4,7 @@
 // The Primers tab: where this plasmid's primers bind and a table with Tm and checks. Adding
 // primers, the PCR product and primer design open as dialogs (primerDialogs.ts).
 
+import { sortHeader } from "../ui/sortHead.ts";
 import { h, toast } from "../ui/dom.ts";
 import { track } from "../usage.ts";
 import { iconSvg, primerIcon } from "../ui/icons.ts";
@@ -607,28 +608,18 @@ export class PrimersView {
     ];
     const head = columns.map(c => {
       if (!c.key) return h("th", { scope: "col", class: c.cls }, c.label);
-      const key = c.key;
-      const on = this.sort.key === key;
-      return h(
-        "th",
-        { scope: "col", class: `${c.cls ?? ""} sv-th-sort`, "aria-sort": on ? (this.sort.descending ? "descending" : "ascending") : null },
-        h(
-          "button",
-          {
-            type: "button",
-            class: `sv-sort${on ? " sv-sort-on" : ""}`,
-            title: `Sort by ${c.label.toLowerCase()}`,
-            onclick: () => {
-              this.sort = nextSort(this.sort, key);
-              saveOptions({ sort: this.sort, tmLimit: this.tmLimit });
-              this.renderTable();
-              this.markSelected();
-            }
-          },
-          c.label,
-          h("span", { class: "sv-sort-mark", "aria-hidden": "true" }, on ? (this.sort.descending ? "↓" : "↑") : "")
-        )
-      );
+      return sortHeader({
+        label: c.label,
+        key: c.key,
+        sort: this.sort,
+        cls: c.cls,
+        onSort: key => {
+          this.sort = nextSort(this.sort, key);
+          saveOptions({ sort: this.sort, tmLimit: this.tmLimit });
+          this.renderTable();
+          this.markSelected();
+        }
+      });
     });
     this.table.replaceChildren(h("table", { class: "sv-table sv-primer-table" }, h("thead", null, h("tr", null, head)), h("tbody", null, body)));
   }

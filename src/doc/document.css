@@ -2084,6 +2084,17 @@
   flex: 0 0 auto;
   width: 220px;
 }
+/* The Pairs view's Tm limit, where the list's filter is. */
+.sv-primers-limit {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+}
+.sv-primers-limit-input {
+  width: 58px;
+}
 .sv-primers-filter > .sv-icon {
   position: absolute;
   left: 9px;

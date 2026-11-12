@@ -177,19 +177,19 @@ class Session {
     return false;
   }
   /** Clicks an element once it is in the page, as panels load their code when first opened. */
+  /** Clicks what `xpath` finds, finding it again if the page replaced it in between (Home redraws its list as it loads). */
   async click(xpath, timeout = 5000) {
     const end = Date.now() + timeout;
-    let v;
     for (;;) {
       try {
-        v = await wd("POST", `/session/${this.id}/element`, { using: "xpath", value: xpath });
-        break;
+        const v = await wd("POST", `/session/${this.id}/element`, { using: "xpath", value: xpath });
+        await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/click`, {});
+        return;
       } catch (e) {
-        if (Date.now() > end || !String(e.message).includes("no such element")) throw e;
+        if (Date.now() > end || !/no such element|stale element reference/.test(String(e.message))) throw e;
         await sleep(100);
       }
     }
-    await wd("POST", `/session/${this.id}/element/${Object.values(v)[0]}/click`, {});
   }
   /** Runs pointer actions; `release` then lets go of anything pressed, as a later call can't. */
   async pointer(actions, { release = false } = {}) {

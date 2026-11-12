@@ -20,6 +20,9 @@ with Unreleased's notes and leaves them where they are.
   passed over, whichever way it goes. Dragging anticlockwise used to select nearly the
   whole plasmid and shrink it as you went.
 
+- **Primers tab**: clicking another primer in the sequence panel moves the panel to that
+  primer, with its Tm, checks and handles, as clicking it in the list does.
+
 - **Pasting a sequence**: text copied from a database or another program can be pasted
   whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.
   Letters that aren't bases used to be pasted as DNA; now Strandivo says the clipboard

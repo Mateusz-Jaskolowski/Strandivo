@@ -107,13 +107,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (`src/lib/genetics.ts`), never `featurePositions`, which is every base the feature covers.
 - **Where things go**: the app bar holds what is about the app (Home, a tab per open file,
   the primer and enzyme libraries, Settings and, in a browser, the menu); the bar under it is the file's own (its five views,
-  search, editing tools). Views show the document (Map, Sequence, Primers, Reads, Info), and
+  search, editing tools, and each side panel's button on its own side, with split view
+  beside the views it shows). Views show the document (Map, Sequence, Primers, Reads, Info), and
   there are five; a task with a start and an end (design primers, a PCR product, adding
   from the library) is a dialog (`openDialog` in `src/ui/modal.ts`, see
   `src/views/primerDialogs.ts`); something not tied to one file gets its own window, like
   Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
-  selected. This keeps windows from getting crowded.
+  selected. This keeps windows from getting crowded. On the map, what is drawn is chosen
+  from the chips and the menus beside them (Cut sites, Regions); the floating bar only
+  moves the drawing (rotate, zoom, label size).
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
   base on either strand, written as the top strand, plus each end (blunt, 5′ or 3′
   overhang). Two ends ligate when kind and bases match; joining writes the shared bases

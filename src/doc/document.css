@@ -62,7 +62,7 @@
   align-items: center;
   gap: 14px;
   min-height: 52px;
-  padding: 8px 12px 8px 16px;
+  padding: 8px 10px;
   background: var(--side);
   border-bottom: 1px solid var(--line);
   user-select: none;
@@ -89,8 +89,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sv-tabs {
+/* The views, and split view beside them as it chooses which of them show. */
+.sv-views {
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sv-tabs {
   display: flex;
   gap: 2px;
   padding: 3px;
@@ -195,9 +201,45 @@
   pointer-events: none;
 }
 .sv-search .sv-search-input {
-  width: 240px;
+  width: 180px;
   height: 30px;
   padding: 0 46px 0 30px;
+}
+/* The window can be 820 px wide: the toolbar tightens rather than pushing buttons off. */
+@media (max-width: 1180px) {
+  .sv-toolbar {
+    gap: 10px;
+  }
+  .sv-tab {
+    padding: 0 10px;
+  }
+  .sv-tool-sep {
+    margin: 0 3px;
+  }
+  .sv-search .sv-search-input {
+    width: 120px;
+    padding-right: 9px;
+  }
+  .sv-search .sv-kbd {
+    display: none;
+  }
+}
+@media (max-width: 940px) {
+  .sv-toolbar {
+    gap: 6px;
+  }
+  .sv-tab {
+    padding: 0 8px;
+  }
+  .sv-search .sv-search-input {
+    width: 84px;
+  }
+  .sv-toolbar .sv-icon-btn {
+    width: 29px;
+  }
+  .sv-tool-sep {
+    margin: 0 1px;
+  }
 }
 .sv-kbd {
   position: absolute;
@@ -362,7 +404,8 @@
   font-size: 11.5px;
   cursor: pointer;
 }
-.sv-segmented > button[aria-pressed="true"] {
+.sv-segmented > button[aria-pressed="true"],
+.sv-segmented > button[aria-checked="true"] {
   background: var(--panel);
   color: var(--text);
   font-weight: 600;
@@ -1260,6 +1303,58 @@
   border-radius: 12px;
   background: var(--panel);
   box-shadow: var(--shadow);
+}
+.sv-map-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sv-map-fit {
+  font-size: 12px;
+}
+/* A chip with a menu beside it: Cut sites and Regions on the map (src/views/mapView.ts). */
+.sv-chip-group {
+  position: relative;
+  display: inline-flex;
+}
+.sv-chip-joined > .sv-chip:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.sv-chip-joined > .sv-chip-more {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.sv-chip-more {
+  gap: 3px;
+  padding: 0 7px 0 8px;
+  color: var(--text-2);
+}
+.sv-chip-more:hover,
+.sv-chip-more[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.sv-chip-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: 252px;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.sv-chip-menu-body {
+  display: grid;
+  gap: 10px;
+}
+.sv-chip-menu-body > .sv-enzyme-edit {
+  justify-self: start;
 }
 .sv-map-slider {
   display: flex;
@@ -2970,40 +3065,38 @@
 .sv-enzyme-grid td:first-child .sv-cell-input {
   min-width: 110px;
 }
-.sv-lab-enzymes-edit {
-  margin: 2px 8px 8px;
-}
-
-/* List membership and cut frequency are independent choices. */
+/* Which enzymes show (src/views/enzymeControls.ts): the list, then how often they cut. The
+   same controls are in the sidebar and in the map's Cut sites menu. */
 .sv-enzyme-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
+  display: grid;
+  gap: 8px;
   min-width: 0;
-}
-.sv-enzyme-controls > label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--text-2);
-  font-size: 11px;
-}
-.sv-enzyme-controls select {
-  min-width: 0;
-  max-width: 100%;
 }
 .sv-outline .sv-enzyme-controls {
-  flex-direction: column;
-  align-items: stretch;
-  padding: 4px 10px 10px;
+  padding: 2px 6px 10px 10px;
 }
-.sv-outline .sv-enzyme-controls > label {
-  justify-content: space-between;
+.sv-enzyme-source {
+  display: flex;
 }
-.sv-outline .sv-enzyme-controls > button {
-  align-self: flex-start;
+.sv-enzyme-source > button {
+  flex: 1 1 0;
+  height: 24px;
+  font-size: 12px;
+}
+.sv-enzyme-filter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.sv-enzyme-filter select {
+  width: 100%;
+}
+.sv-section-head .sv-enzyme-edit {
+  flex: 0 0 auto;
+  margin-right: 2px;
 }
 .sv-enzyme-library-body {
   display: flex;

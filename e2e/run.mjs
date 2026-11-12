@@ -833,18 +833,18 @@ async function main() {
 
       await s.closeWindow();
       await s.switchTo(mainHandle);
-      await s.exec(`const source = document.querySelector('select[aria-label="Which map enzymes to show"]'); source.value = 'personal'; source.dispatchEvent(new Event('change')); const filter = document.querySelector('select[aria-label="Map cut-site filter"]'); filter.value = 'all'; filter.dispatchEvent(new Event('change'));`);
+      await s.exec(`document.querySelector('[aria-label="Which map enzymes to show"] [data-value="personal"]').click(); const filter = document.querySelector('select[aria-label="Map cut-site filter"]'); filter.value = 'all'; filter.dispatchEvent(new Event('change'));`);
       check("My enzymes updates open maps without substituting KpnI", await s.waitFor("document.querySelectorAll('.sv-map-svgel text[data-id^=\"Acc65I@\"]').length === 1 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"PvuII@\"]').length === 2 && !document.querySelector('.sv-map-svgel text[data-id^=\"KpnI@\"]')", 5000));
       await s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; }; document.querySelector('.sv-enzyme-chip[data-id^="EcoRI@"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));`);
       check("A saved enzyme's context menu offers removal", await s.exec("return window.__e2eMenu?.some(e => e.label === 'Remove from My enzymes');"));
       await s.exec("window.__e2eMenu.find(e => e.label === 'Remove from My enzymes').run();");
       check("Removing a personal enzyme updates the map live", await s.waitFor("!document.querySelector('.sv-map-svgel text[data-id^=\"EcoRI@\"]')", 5000));
-      await s.exec(`const source = document.querySelector('select[aria-label="Which map enzymes to show"]'); source.value = 'common'; source.dispatchEvent(new Event('change'));`);
+      await s.exec(`document.querySelector('[aria-label="Which map enzymes to show"] [data-value="common"]').click();`);
       await s.waitFor("document.querySelector('.sv-enzyme-chip[data-id^=\"EcoRI@\"]')", 5000);
       await s.exec(`document.querySelector('.sv-enzyme-chip[data-id^="EcoRI@"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); window.__e2eMenu.find(e => e.label === 'Add to My enzymes').run();`);
-      await s.exec(`const set = document.querySelector('select[aria-label="Which map enzymes to show"]'); set.value = 'lab'; set.dispatchEvent(new Event('change', { bubbles: true })); const filter = document.querySelector('select[aria-label="Map cut-site filter"]'); filter.value = 'all'; filter.dispatchEvent(new Event('change'));`);
+      await s.exec(`document.querySelector('[aria-label="Which map enzymes to show"] [data-value="lab"]').click(); const filter = document.querySelector('select[aria-label="Map cut-site filter"]'); filter.value = 'all'; filter.dispatchEvent(new Event('change'));`);
       check("Lab enzymes updates the open map, including every PvuII site", await s.waitFor("document.querySelectorAll('.sv-map-svgel text[data-id^=\"PvuII@\"]').length === 2 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"EcoRI@\"]').length === 1", 5000));
-      check("The outline follows the map's lab enzyme choice", await s.exec("return document.querySelector('select[aria-label=\"Which enzymes to show\"]').value === 'lab'"));
+      check("The outline follows the map's lab enzyme choice", await s.exec("return document.querySelector('[aria-label=\"Which enzymes to show\"] [aria-checked=\"true\"]')?.dataset.value === 'lab'"));
       await s.exec(`const set = document.querySelector('select[aria-label="Map cut-site filter"]'); set.value = 'unique'; set.dispatchEvent(new Event('change', { bubbles: true }));`);
       check("Lab enzymes: unique cutters leaves out PvuII's two sites", await s.waitFor("document.querySelectorAll('.sv-map-svgel text[data-id^=\"PvuII@\"]').length === 0 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"EcoRI@\"]').length === 1", 5000));
       await s.exec(`const set = document.querySelector('select[aria-label="Map cut-site filter"]'); set.value = 'all'; set.dispatchEvent(new Event('change', { bubbles: true }));`);
@@ -854,7 +854,7 @@ async function main() {
     }
     // Restore the starting stock and view so later checks stay independent.
     await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('save_app_data', { name: 'enzyme-library', contents: arguments[0] }).then(() => done(true), e => done(String(e)));", typeof stockBefore === "string" && stockBefore.startsWith("{") ? stockBefore : JSON.stringify({ version: 1, entries: [] }));
-    await s.exec(`const set = document.querySelector('select[aria-label="Which map enzymes to show"]'); set.value = 'common'; set.dispatchEvent(new Event('change', { bubbles: true })); const filter = document.querySelector('select[aria-label="Map cut-site filter"]'); filter.value = 'unique6'; filter.dispatchEvent(new Event('change')); delete window.__strandivoMenu;`);
+    await s.exec(`document.querySelector('[aria-label="Which map enzymes to show"] [data-value="common"]').click(); const filter = document.querySelector('select[aria-label="Map cut-site filter"]'); filter.value = 'unique6'; filter.dispatchEvent(new Event('change')); delete window.__strandivoMenu;`);
 
     await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('save_app_data', { name: 'personal-enzymes', contents: arguments[0] }).then(done);", typeof personalBefore === "string" && personalBefore.startsWith("{") ? personalBefore : JSON.stringify({ version: 1, enzymes: [] }));
 
@@ -963,7 +963,7 @@ async function main() {
     await s.click("//button[normalize-space(.)='Add region']", "xpath");
     check("Nested regions stay within one document feature", (await s.exec(`${doc} return s.data.features.length;`)) === featuresForRegions);
     check("The outline shows both regions", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 2", 5000));
-    check("Nested region detail follows the map's enzyme selector", await s.exec("const detail = document.querySelector('[aria-label=\"Protein region detail\"]'); const enzymes = document.querySelector('[aria-label=\"Which map enzymes to show\"]'); return !detail.hidden && !!(enzymes.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING);"));
+    check("Nested region detail is in the map's Regions menu", await s.exec("const detail = document.querySelector('[aria-label=\"Protein region detail\"]'); const button = document.querySelector('[aria-label=\"Region options\"]'); return !detail.hidden && !button.hidden && !!detail.closest('.sv-chip-menu[aria-label=\"Region options\"]');"));
     const featureSwatchesAlign = () => s.exec("const swatches = Array.from(document.querySelectorAll('.sv-outline [data-kind=\"feature\"]:not([data-region]) .sv-swatch')); return swatches.length > 1 && swatches.every(el => Math.abs(el.getBoundingClientRect().left - swatches[0].getBoundingClientRect().left) < 1);");
     check("Features with regions align with other features", await featureSwatchesAlign());
     await s.click(".sv-outline-feature-head button[aria-expanded='true']");
@@ -979,6 +979,9 @@ async function main() {
     check("Showing map regions restores the previous detail level", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2 && !document.querySelector('[aria-label=\"Protein region detail\"]').disabled", 5000));
     await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     check("Top-level map detail keeps only the domain", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 1", 5000));
+    // The row can sit half under the status bar, and WebKit won't click an element whose
+    // middle is hidden, as it only scrolls one that is wholly out of view.
+    await s.exec("document.querySelector(\".sv-outline [data-region='1']\").scrollIntoView({ block: 'nearest' });");
     await s.click(".sv-outline [data-region='1']");
     await s.click("//button[normalize-space(.)='Edit region…']", "xpath");
     check("Editing a region keeps its colour", (await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;")) === secondRegionColour);
@@ -1110,6 +1113,7 @@ async function main() {
 
     const sidebarState = "return Array.from(document.querySelectorAll('.sv-outline-section')).map(e => e.dataset.section + (e.querySelector('.sv-list, .sv-enzyme-chips, .sv-list-empty') ? '' : ' folded'))";
     const sidebarStart = await s.exec(sidebarState);
+    await s.exec("document.querySelector(\".sv-section-toggle[data-section='features']\").scrollIntoView({ block: 'nearest' });");
     await s.click(".sv-section-toggle[data-section='features']");
     await sleep(300);
     const sidebarFolded = await s.exec(sidebarState);

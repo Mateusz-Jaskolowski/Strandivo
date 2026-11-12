@@ -359,29 +359,33 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   const inspectorButton = toolButton("inspector", "Show inspector", () => setInspector(!inspectorOpen), { "aria-pressed": "true" });
   const undoButton = toolButton("undo", "Undo", () => store.undo());
   const redoButton = toolButton("redo", "Redo", () => store.redo());
+  const sep = () => h("span", { class: "sv-tool-sep", "aria-hidden": "true" });
+  // Each panel's button sits on its side of the window; split view sits with the views it
+  // shows; the tools are grouped by what they do: editing, adding, reactions, export.
   const header = h(
     "header",
     { class: "sv-toolbar" },
+    sidebarButton,
     h("div", { class: "sv-doc-title" }, nameEl, metaEl),
-    h("nav", { class: "sv-tabs", role: "tablist", "aria-label": "Views" }, tabButtons),
+    h("div", { class: "sv-views" }, h("nav", { class: "sv-tabs", role: "tablist", "aria-label": "Views" }, tabButtons), splitButton),
     h(
       "div",
       { class: "sv-tools" },
       search.el,
-      h("span", { class: "sv-tool-sep", "aria-hidden": "true" }),
+      sep(),
       undoButton,
       redoButton,
+      sep(),
       toolButton("featureAdd", "Add feature for the selection", () => addFeature()),
-      toolButton("detect", "Detect common features…", () => openDetectDialog(ctx)),
       toolButton("primerAdd", "Add primer for the selection", () => addPrimer()),
+      toolButton("detect", "Detect common features…", () => openDetectDialog(ctx)),
+      sep(),
       toolButton("gel", "Digest…", () => openDigestDialog(ctx)),
       toolButton("clone", "Simulate cloning…", () => openCloningDialog(ctx)),
-      toolButton("export", "Export GenBank or FASTA", () => void exportMenu()),
-      h("span", { class: "sv-tool-sep", "aria-hidden": "true" }),
-      splitButton,
-      sidebarButton,
-      inspectorButton
-    )
+      sep(),
+      toolButton("export", "Export GenBank or FASTA", () => void exportMenu())
+    ),
+    inspectorButton
   );
 
   // ---------- status bar ----------
@@ -486,12 +490,15 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const sidePanels = tab === "map" || tab === "sequence" || tab === "primers";
     outline.el.hidden = !sidePanels || tab === "primers" || !sidebarOpen;
     inspector.el.hidden = !sidePanels || !inspectorOpen;
-    splitButton.setAttribute("aria-pressed", String(split));
-    splitButton.classList.toggle("sv-on", split);
-    sidebarButton.setAttribute("aria-pressed", String(sidebarOpen));
-    sidebarButton.classList.toggle("sv-on", sidebarOpen);
-    inspectorButton.setAttribute("aria-pressed", String(inspectorOpen));
-    inspectorButton.classList.toggle("sv-on", inspectorOpen);
+    // A button for something this view doesn't have is turned off, not shown as on.
+    const panelButton = (b: HTMLButtonElement, on: boolean, offered: boolean) => {
+      b.disabled = !offered;
+      b.setAttribute("aria-pressed", String(on && offered));
+      b.classList.toggle("sv-on", on && offered);
+    };
+    panelButton(splitButton, split, tab === "map" || tab === "sequence");
+    panelButton(sidebarButton, sidebarOpen, tab === "map" || tab === "sequence");
+    panelButton(inspectorButton, inspectorOpen, sidePanels);
     mapView.setVisible(!panes.map.hidden);
     seqView.setVisible(!panes.sequence.hidden);
     primersView.setVisible(!panes.primers.hidden);

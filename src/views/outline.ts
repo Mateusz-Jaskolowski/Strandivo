@@ -19,7 +19,6 @@ import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
 import { dropGap, moveSection, SIDEBAR_SECTIONS, type SidebarSection } from "../lib/sidebar.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
 import { personalEnzymes } from "../personalEnzymes.ts";
-import { openEnzymeLibrary } from "../platform.ts";
 
 /** How far the pointer moves on a heading before it is a drag rather than a click. */
 const DRAG_START = 4;
@@ -325,14 +324,13 @@ export class Outline {
         section(
           "enzymes",
           "Enzymes",
-          null,
-          null,
+          chips.length,
+          this.enzymeControls.edit,
           h("div", null,
             this.enzymeControls.el,
             chips.length
               ? h("div", { class: "sv-enzyme-chips" }, chips)
-              : empty(emptyEnzymes),
-            source === "lab" ? h("button", { class: "sv-btn sv-btn-small sv-btn-quiet sv-lab-enzymes-edit", type: "button", onclick: () => void openEnzymeLibrary("lab") }, "Edit lab enzymes…") : ""
+              : empty(emptyEnzymes)
           )
         )
     };

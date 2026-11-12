@@ -102,7 +102,8 @@ export class PrimerContextView {
       if (c.data) this.invalidate();
       else if (c.selection) {
         const f = ctx.store.selection.focus;
-        if (c.source !== SOURCE && f?.kind === "primer" && f.id !== this.primerId) this.invalidate();
+        // Another primer, wherever it was clicked (here too): the panel moves to it.
+        if (f?.kind === "primer" && f.id !== this.primerId) this.invalidate();
         else this.renderSelection();
       }
     });

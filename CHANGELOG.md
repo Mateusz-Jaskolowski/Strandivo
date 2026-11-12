@@ -16,6 +16,22 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **A tidier toolbar**: the sidebar's button is on the left and the inspector's on the
+  right, beside the panels they show, and split view sits next to the views. Buttons that
+  do nothing in the current view are greyed out.
+
+- **Choosing enzymes**: Common, Lab and Mine are one row of buttons in the sidebar, with
+  the list's Edit link in the Enzymes heading. On the map they are in a menu beside the
+  Cut sites button, which shows what is chosen, and the region detail is beside Regions,
+  so the bar at the bottom holds only rotate, zoom (with Fit) and label size.
+
+- **Selecting on the map**: dragging round a circular map selects the bases the pointer
+  passed over, whichever way it goes. Dragging anticlockwise used to select nearly the
+  whole plasmid and shrink it as you went.
+
+- **Primers tab**: clicking another primer in the sequence panel moves the panel to that
+  primer, with its Tm, checks and handles, as clicking it in the list does.
+
 - **Pasting a sequence**: text copied from a database or another program can be pasted
   whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.
   Letters that aren't bases used to be pasted as DNA; now Strandivo says the clipboard

@@ -6,7 +6,7 @@
 // annotations or dragging around the map.
 
 import { h } from "../ui/dom.ts";
-import { enzymeControls } from "./enzymeControls.ts";
+import { enzymeControls, enzymeSummary } from "./enzymeControls.ts";
 import { fontStack, s, textWidth } from "../ui/svg.ts";
 import { cutSiteById, cutSites, featureStyles, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -20,6 +20,7 @@ import { featureGaps, pieces as rangePieces, rangeLength, type Range, type SeqDa
 import { checkIcon, iconSvg } from "../ui/icons.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { selectedRanges } from "../lib/selection.ts";
+import { sweep, sweptRange } from "../lib/mapDrag.ts";
 
 
 interface LabelItem {
@@ -281,6 +282,9 @@ export class MapView {
   private rotateWrap: HTMLElement;
   private enzymeControls: ReturnType<typeof enzymeControls>;
   private proteinSelect: HTMLSelectElement;
+  /** The buttons beside the Cut sites and Regions chips that open their menus. */
+  private menuButtons: { cutsites: HTMLButtonElement; regions: HTMLButtonElement };
+  private closeMenu: (() => void) | null = null;
   private visible = false;
   private stale = true;
   private ctx: DocContext;
@@ -296,14 +300,21 @@ export class MapView {
       circular: h("button", { type: "button", onclick: () => ctx.setOptions({ linearMap: false }) }, "Circular"),
       linear: h("button", { type: "button", onclick: () => ctx.setOptions({ linearMap: true }) }, "Linear")
     };
+    this.enzymeControls = enzymeControls(ctx, true);
+    this.proteinSelect = h("select", { class: "sv-input sv-input-small", "aria-label": "Protein region detail", onchange: () => ctx.setOptions({ proteinDetail: this.proteinSelect.value as "domains" | "all" }) },
+      h("option", { value: "domains" }, "Top level"), h("option", { value: "all" }, "All regions")) as HTMLSelectElement;
+    // What a chip draws is chosen in a menu beside it, which says the choice while closed.
+    const cutsMenu = this.chipMenu("Cut site options", h("div", { class: "sv-chip-menu-body" }, this.enzymeControls.el, this.enzymeControls.edit));
+    const regionsMenu = this.chipMenu("Region options", h("label", { class: "sv-enzyme-filter" }, h("span", null, "Show"), this.proteinSelect));
+    this.menuButtons = { cutsites: cutsMenu.button, regions: regionsMenu.button };
     const header = h(
       "div",
       { class: "sv-pane-head" },
       chip("features", "Features"),
-      chip("mapRegions", "Regions"),
+      h("div", { class: "sv-chip-group" }, chip("mapRegions", "Regions"), regionsMenu.button, regionsMenu.menu),
       chip("primers", "Primers"),
       chip("orfs", "ORFs"),
-      chip("cutsites", "Cut sites"),
+      h("div", { class: "sv-chip-group sv-chip-joined" }, chip("cutsites", "Cut sites"), cutsMenu.button, cutsMenu.menu),
       chip("ruler", "Ruler"),
       h("div", { class: "sv-segmented sv-push" }, this.modeButtons.circular, this.modeButtons.linear)
     );
@@ -320,10 +331,13 @@ export class MapView {
     const lab = slider("Label size", "text", 3, 16, ctx.options.labelSize, v => ctx.setOptions({ labelSize: v }));
     this.sliders = { rotate: rot.input, zoom: zoom.input, label: lab.input };
     this.rotateWrap = rot.wrap;
-    this.enzymeControls = enzymeControls(ctx, true);
-    this.proteinSelect = h("select", { class: "sv-select-quiet", "aria-label": "Protein region detail", onchange: () => ctx.setOptions({ proteinDetail: this.proteinSelect.value as "domains" | "all" }) },
-      h("option", { value: "domains" }, "Regions: top level"), h("option", { value: "all" }, "Regions: all")) as HTMLSelectElement;
-    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, zoom.wrap, lab.wrap, this.enzymeControls.el, this.proteinSelect);
+    // Back to the whole map, which every map opens at.
+    const fit = h("button", { type: "button", class: "sv-link sv-map-fit", title: "Fit the map to the window", onclick: () => {
+      this.ctx.setOptions({ mapZoom: 1 });
+      this.area.scrollTo(0, 0);
+    } }, "Fit");
+    // Only what moves the drawing; what it draws is chosen in the chips above.
+    const controls = h("div", { class: "sv-map-controls" }, rot.wrap, h("div", { class: "sv-map-zoom" }, zoom.wrap, fit), lab.wrap);
     this.el = h("div", { class: "sv-map" }, header, this.area, controls);
 
     this.installPointer();
@@ -339,8 +353,44 @@ export class MapView {
 
   setVisible(v: boolean) {
     this.visible = v;
-    if (!v) this.hoverRegion(null);
+    if (!v) {
+      this.closeMenu?.();
+      this.hoverRegion(null);
+    }
     if (v && this.stale) this.render();
+  }
+
+  /** A button opening `body` under it; one menu is open at a time, and it closes on Escape or a click outside. */
+  private chipMenu(label: string, body: HTMLElement) {
+    const menu = h("div", { class: "sv-chip-menu", role: "dialog", "aria-label": label, hidden: true }, body);
+    const button = h("button", { type: "button", class: "sv-chip sv-chip-more", "aria-label": label, "aria-haspopup": "dialog", "aria-expanded": "false" }) as HTMLButtonElement;
+    const outside = (e: PointerEvent) => {
+      if (!menu.contains(e.target as Node) && !button.contains(e.target as Node)) close();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      close();
+      button.focus();
+    };
+    const close = () => {
+      menu.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+      document.removeEventListener("pointerdown", outside, true);
+      menu.removeEventListener("keydown", key);
+      if (this.closeMenu === close) this.closeMenu = null;
+    };
+    button.addEventListener("click", () => {
+      if (!menu.hidden) return close();
+      this.closeMenu?.();
+      menu.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      document.addEventListener("pointerdown", outside, true);
+      menu.addEventListener("keydown", key);
+      this.closeMenu = close;
+      menu.querySelector<HTMLElement>("[role=\"radio\"][aria-checked=\"true\"], select")?.focus();
+    });
+    return { button, menu };
   }
 
   private invalidate() {
@@ -386,6 +436,12 @@ export class MapView {
     const d = this.ctx.store.data;
     // Top-level/all only changes nested regions; independent overlaps stay in both.
     this.proteinSelect.hidden = !o.features || !o.mapRegions || !d.features.some(f => layoutRegions(regionsOf(f)).some(r => r.depth > 0));
+    const { cutsites, regions } = this.menuButtons;
+    cutsites.replaceChildren(enzymeSummary(o), iconSvg("chevronDown", 12));
+    regions.replaceChildren(o.proteinDetail === "all" ? "All" : "Top level", iconSvg("chevronDown", 12));
+    regions.hidden = this.proteinSelect.hidden;
+    regions.parentElement?.classList.toggle("sv-chip-joined", !regions.hidden);
+    if (regions.hidden && regions.getAttribute("aria-expanded") === "true") this.closeMenu?.();
     this.shapes.clear();
     this.focused = [];
     if (!d.sequence.length) {
@@ -1043,13 +1099,16 @@ export class MapView {
     let anchor: number | null = null;
     let moved = false;
     let target: Focus | null = null;
-    const rangeBetween = (a: number, b: number): Range | null => {
-      const n = store.length;
-      if (a === b) return null;
+    // On a circle: the boundary last under the pointer and the bases swept since the press.
+    let last = 0;
+    let swept = 0;
+    const rangeTo = (a: number, b: number): Range | null => {
       const g = this.geom;
-      if (g && !g.circular) return { start: Math.min(a, b), end: Math.max(a, b) - 1 };
-      // Clockwise from the anchor; wraps across the origin when needed.
-      return { start: a, end: (b - 1 + n) % n };
+      if (g && !g.circular) return a === b ? null : { start: Math.min(a, b), end: Math.max(a, b) - 1 };
+      // The way the pointer went round, so dragging anticlockwise selects what it passed over.
+      swept = sweep(swept, last, b, store.length);
+      last = b;
+      return sweptRange(a, swept, store.length);
     };
     this.svgHost.addEventListener("pointerdown", e => {
       this.hoverRegion(null);
@@ -1063,6 +1122,8 @@ export class MapView {
         return;
       }
       anchor = this.boundaryAt(e.clientX, e.clientY);
+      last = anchor ?? 0;
+      swept = 0;
       moved = false;
       this.svgHost.setPointerCapture(e.pointerId);
       e.preventDefault();
@@ -1076,8 +1137,8 @@ export class MapView {
       if (b === null) return;
       if (!moved && b === anchor) return;
       moved = true;
-      const r = rangeBetween(anchor, b);
-      if (r) store.select({ range: r, anchor, caret: b }, "map");
+      const r = rangeTo(anchor, b);
+      store.select(r ? { range: r, anchor, caret: b } : { range: null, caret: anchor }, "map");
     });
     const end = (e: PointerEvent) => {
       if (anchor === null) return;

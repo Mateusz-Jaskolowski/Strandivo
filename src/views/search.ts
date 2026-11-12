@@ -48,7 +48,7 @@ export class Search {
     this.input = h("input", {
       type: "search",
       class: "sv-input sv-search-input",
-      placeholder: "Find bases, features, primers",
+      placeholder: "Find",
       "aria-label": "Find bases, features, primers or enzymes",
       spellcheck: "false",
       autocomplete: "off"

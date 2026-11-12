@@ -193,7 +193,10 @@ export class TraceView {
       this.requestDraw();
       this.cb.viewChanged();
     }).observe(this.scroller);
-    new ResizeObserver(() => this.pin()).observe(this.body);
+    // The whole view, not the part that scrolls: showing the scroll bar under the rows
+    // (in the observer above) changes that part's height while observers run, which
+    // WebKit reports as an error.
+    new ResizeObserver(() => this.pin()).observe(this.el);
     // A shadow under the reference once reads pass under it.
     this.body.addEventListener("scroll", () => this.head.classList.toggle("sv-aln-head-over", this.body.scrollTop > 0), { passive: true });
     ctx.store.subscribe(c => {
@@ -435,6 +438,8 @@ export class TraceView {
     this.foot.style.paddingRight = `${this.body.offsetWidth - this.body.clientWidth}px`;
     this.barSpacer.style.width = `${s.scrollWidth}px`;
     this.bar.scrollLeft = s.scrollLeft;
+    // The bar takes room from the rows. Pinning changes no size, so no observer runs again.
+    this.pin();
   }
 
   /** Marks the columns where the read differs from the reference. */

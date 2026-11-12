@@ -70,5 +70,12 @@ export function addError(list: LoggedError[], text: string, now = new Date()): L
   return [...list, { at: now.toISOString(), text: line.slice(0, LIMITS.error) }].slice(-LIMITS.errors);
 }
 
+/**
+ * The browser's notice that a ResizeObserver's callback changed sizes again within one
+ * frame. The remaining notifications arrive in the next frame, so nothing failed, but
+ * Chromium and WebKit send it as an error event with no error behind it.
+ */
+export const isResizeObserverNotice = (message: string): boolean => /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/.test(message);
+
 /** "2026-11-06 09:30:12 TypeError: …", in UTC, as a report shows them. */
 export const errorLines = (list: LoggedError[]): string[] => list.map(e => `${e.at.slice(0, 10)} ${e.at.slice(11, 19)} ${e.text}`);

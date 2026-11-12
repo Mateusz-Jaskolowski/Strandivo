@@ -35,6 +35,8 @@ const MIN_TRACK_H = 38;
 const WHEEL_LINE = 16;
 /** The reference stays at the top while it takes no more than this share of the pane. */
 const PIN_SHARE = 0.4;
+/** Least height drawn above and below the pane, so a fast scroll doesn't outrun drawing. */
+const DRAW_MARGIN = 400;
 
 const TRACE_KEYS = [
   ["A", "aTrace"],
@@ -155,6 +157,8 @@ export class TraceView {
   private yRef = 0;
   /** Height of the top part; the reads' canvas and names start below it. */
   private headH = 0;
+  /** Where the reads' canvas starts in the layout: it covers only the rows near the pane. */
+  private readsTop = 0;
   private height = 0;
   private frame = 0;
   private visible = false;
@@ -193,9 +197,19 @@ export class TraceView {
       this.requestDraw();
       this.cb.viewChanged();
     }).observe(this.scroller);
-    new ResizeObserver(() => this.pin()).observe(this.body);
-    // A shadow under the reference once reads pass under it.
-    this.body.addEventListener("scroll", () => this.head.classList.toggle("sv-aln-head-over", this.body.scrollTop > 0), { passive: true });
+    new ResizeObserver(() => {
+      this.pin();
+      this.requestDraw();
+    }).observe(this.body);
+    this.body.addEventListener(
+      "scroll",
+      () => {
+        // A shadow under the reference once reads pass under it.
+        this.head.classList.toggle("sv-aln-head-over", this.body.scrollTop > 0);
+        this.requestDraw();
+      },
+      { passive: true }
+    );
     ctx.store.subscribe(c => {
       if (!c.selection) return;
       if (this.visible && this.layout && this.selectedOrf()?.id !== this.orfId) this.build();
@@ -538,7 +552,13 @@ export class TraceView {
       this.drawHead(head, L, c0, c1, X, w, col);
       this.drawMark(head, c0, c1, X, col);
     }
-    const g = this.canvasFor(this.canvas, w, this.headH, this.height);
+    // The reads' canvas covers the pane and a margin either side, never every read: a
+    // plate's worth of traces would take hundreds of megabytes, and WebKit stops drawing
+    // a canvas above 268 million pixels.
+    const [top, bottom] = this.readsSpan();
+    this.readsTop = top;
+    this.canvas.style.transform = `translateY(${top - this.headH}px)`;
+    const g = this.canvasFor(this.canvas, w, top, bottom);
     if (!g) return;
     this.drawSelection(g, L, X, w, col);
 
@@ -549,6 +569,7 @@ export class TraceView {
     let doublePeaks = 0;
     let readCodons = 0;
     for (const row of this.rows) {
+      if (row.bottom + 4 < top || row.top - GAP / 2 > bottom) continue;
       const t = row.track;
       const a = Math.max(c0, t.firstColumn);
       const z = Math.min(c1, t.lastColumn);
@@ -604,6 +625,15 @@ export class TraceView {
     this.el.dataset.traces = String(tracesDrawn);
     this.el.dataset.doublePeaks = String(doublePeaks);
     this.el.dataset.readCodons = String(readCodons);
+  }
+
+  /** The part of the layout under the reference that the reads' canvas covers. */
+  private readsSpan(): [number, number] {
+    const b = this.body;
+    const margin = Math.max(DRAW_MARGIN, b.clientHeight);
+    const top = Math.max(this.headH, b.scrollTop - margin);
+    const bottom = Math.min(this.height, b.scrollTop + b.clientHeight + margin);
+    return [top, Math.max(top + 1, bottom)];
   }
 
   /**
@@ -915,7 +945,7 @@ export class TraceView {
 
   private trackAt(e: PointerEvent): number | null {
     const r = this.canvas.getBoundingClientRect();
-    const y = e.clientY - r.top + this.headH;
+    const y = e.clientY - r.top + this.readsTop;
     const row = this.rows.find(x => y >= x.top - GAP / 2 && y <= x.bottom + 4);
     return row ? row.track.result : null;
   }

@@ -20,6 +20,9 @@ with Unreleased's notes and leaves them where they are.
   features, translation and reference stay at the top while you scroll down through the
   reads. In a pane too short for both, they scroll with the reads as before.
 
+- **Hundreds of reads**: the alignment draws only the reads near the view, so large sets
+  of reads with traces use far less memory, and on a Mac no longer leave the traces blank.
+
 - **GC content along the sequence**: a thin strip under the bases shows where GC leaves
   40–60%, teal where it is AT-rich and orange where it is GC-rich, so you can see where a
   primer will sit well before you draw it. It is on in the Primers tab's sequence panel

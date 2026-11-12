@@ -20,6 +20,14 @@ with Unreleased's notes and leaves them where they are.
   features, translation and reference stay at the top while you scroll down through the
   reads. In a pane too short for both, they scroll with the reads as before.
 
+- **Hundreds of reads**: the alignment draws only the reads near the view, so large sets
+  of reads with traces use far less memory, and on a Mac no longer leave the traces blank.
+
+- **Read names in the alignment**: reads from one plate leave out the start their names
+  share, such as the date, so the well and primer show. With traces on, a long name wraps
+  instead of being cut off. Drag the edge of the names column to resize it, or
+  double-click it to fit the names.
+
 - **Design primers a little away from the selection**: the Design primers dialog has a
   "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
   a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge

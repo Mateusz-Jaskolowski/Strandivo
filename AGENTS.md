@@ -152,6 +152,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   unsaved file's is kept once it is saved. Label size is a setting, the same for every
   file. Zoom is kept by nothing: every map opens fitted to the window, as a zoom without
   the place zoomed into would open a file on an arbitrary part of its map.
+- **Resizable parts** of a window use `splitter` (`src/ui/splitter.ts`): drag, arrow keys,
+  double-click to reset or fit. The caller limits the size and keeps it in local storage
+  for the whole app, not per file, like the alignment's names column.
+- **Canvases** never take the full height of what they draw: the alignment's reads draw
+  only the rows near the pane, as a canvas above 268 million pixels draws blank in WebKit
+  (the Mac app) and a plate of traces would take hundreds of megabytes.
 - **Map labels** say what they name by their colour, font and leader: a feature's name on a
   tint of its colour (solid leader), a primer's after an arrow pointing its way (dashed), an
   enzyme's in small grey monospace with no mark (dotted), darker when it cuts once. Marks on

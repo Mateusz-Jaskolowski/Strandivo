@@ -89,7 +89,11 @@ and CI checks that they exist.
   alignment's ruler, features, translation and reference are a strip with its own canvas,
   pinned over the rows (`pin`) unless it would take over 40% of the pane. Pinning watches
   the whole view, not the part that scrolls: `fitBar` changes that part's height inside a
-  resize observer, which WebKit reports as a loop.
+  resize observer, which WebKit reports as a loop. The reads' canvas covers only the rows
+  near the pane (`readsSpan`), as a plate of traces drawn whole took hundreds of megabytes
+  and WebKit draws a canvas above 268 million pixels blank. Read names leave out the
+  start every read shares, such as a date (`sharedPrefix` in `src/lib/readNames.ts`); the
+  full name is each row's tooltip and `data-name`, which tests read.
 - **Keeping a check**: the app remembers each file's reads by path (`src/readChecks.ts`,
   local storage) and adds them again when the file opens. A check file (`.svcheck`,
   `src/lib/readCheck.ts`) holds paths relative to itself. Both keep only the groups the

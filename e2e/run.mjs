@@ -1335,7 +1335,7 @@ async function main() {
     await sleep(300);
     const moved = await order();
     // A read crossing the origin has two rows, and one that didn't align has none.
-    const alnRows = await s.exec("return [...new Set([...document.querySelectorAll('.sv-aln-read .sv-aln-name-title')].map(e => e.textContent.slice(2).replace(/ \\(\\d+\\/\\d+\\)$/, '')))]");
+    const alnRows = await s.exec("return [...new Set([...document.querySelectorAll('.sv-aln-read')].map(e => e.dataset.name))]");
     check("Dragging reorders the list and the alignment, without aligning again", moved[0] === unmoved[3] && alnRows[0] === moved[0] && alnRows.join() === moved.filter(n => alnRows.includes(n)).join(), `${moved.join(", ")} / ${alnRows.join(", ")}`);
 
     // --- keeping a check: the app remembers the file's reads, and a check file shares them ---

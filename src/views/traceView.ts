@@ -7,6 +7,7 @@
 // place while the reads scroll under it, unless it would take too much of a short pane.
 
 import { h } from "../ui/dom.ts";
+import { splitter } from "../ui/splitter.ts";
 import { codons, featureStyles, isCds, orfFeature, orfs } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { selectedRanges } from "../lib/selection.ts";
@@ -14,6 +15,7 @@ import { firstAtOrAfter, refPosAtColumn, stackInLanes, type AlignedTrack, type A
 import { peakRatios } from "../lib/chromatogram.ts";
 import { continuesFrame, frameChains } from "../lib/genetics.ts";
 import { DOUBLE_PEAK } from "../lib/mixes.ts";
+import { nameParts, sharedPrefix } from "../lib/readNames.ts";
 import { indelColumns, translateTrack, type ReadFrame, type ReadTranslation } from "../lib/readTranslation.ts";
 import type { SeqFeature } from "../lib/seqdata.ts";
 import type { Chromatogram, Difference, ReadResult } from "../lib/types.ts";
@@ -35,6 +37,34 @@ const MIN_TRACK_H = 38;
 const WHEEL_LINE = 16;
 /** The reference stays at the top while it takes no more than this share of the pane. */
 const PIN_SHARE = 0.4;
+/** Least height drawn above and below the pane, so a fast scroll doesn't outrun drawing. */
+const DRAW_MARGIN = 400;
+/** Width of the names column, kept for the whole app. */
+const NAMES_KEY = "strandivo.alignmentNames";
+const NAMES_DEFAULT = 176;
+const NAMES_MIN = 112;
+const NAMES_MAX = 480;
+/** Room left for the traces when the names column is widened. */
+const TRACES_MIN = 160;
+/** Rows at least this tall (those with traces) let a read's name wrap. */
+const TALL_ROW = 64;
+
+function loadNamesWidth(): number {
+  try {
+    const w = Number(localStorage.getItem(NAMES_KEY));
+    return Number.isFinite(w) && w >= NAMES_MIN && w <= NAMES_MAX ? w : NAMES_DEFAULT;
+  } catch {
+    return NAMES_DEFAULT;
+  }
+}
+
+let measurer: CanvasRenderingContext2D | null = null;
+function textWidth(text: string, font: string): number {
+  measurer ??= document.createElement("canvas").getContext("2d");
+  if (!measurer) return 0;
+  measurer.font = font;
+  return measurer.measureText(text).width;
+}
 
 const TRACE_KEYS = [
   ["A", "aTrace"],
@@ -44,7 +74,12 @@ const TRACE_KEYS = [
 ] as const;
 
 export interface TrackLabel {
-  title: string;
+  /** The read's name, whole. */
+  name: string;
+  /** → or ←, the strand it read. */
+  arrow: string;
+  /** Which piece of a read across the origin, as " (1/2)", or nothing. */
+  piece: string;
   sub: string;
 }
 
@@ -129,6 +164,9 @@ export class TraceView {
   private headNames: HTMLElement;
   private headCanvas: HTMLCanvasElement;
   private names: HTMLElement;
+  /** Resizes the names column. */
+  private split: HTMLElement;
+  private namesWidth = loadNamesWidth();
   private scroller: HTMLElement;
   private spacer: HTMLElement;
   /** Scroll bar kept in view under the rows, standing in for the scroller's own. */
@@ -155,6 +193,8 @@ export class TraceView {
   private yRef = 0;
   /** Height of the top part; the reads' canvas and names start below it. */
   private headH = 0;
+  /** Where the reads' canvas starts in the layout: it covers only the rows near the pane. */
+  private readsTop = 0;
   private height = 0;
   private frame = 0;
   private visible = false;
@@ -178,7 +218,24 @@ export class TraceView {
     this.barSpacer = h("div", { class: "sv-aln-bar-spacer" });
     this.bar = h("div", { class: "sv-aln-bar" }, this.barSpacer);
     this.foot = h("div", { class: "sv-aln-foot", hidden: true }, this.bar);
-    this.el = h("div", { class: "sv-aln" }, this.note, this.body, this.foot);
+    this.split = splitter({
+      axis: "x",
+      label: "Resize read names",
+      class: "sv-aln-split",
+      size: () => this.namesWidth,
+      resize: px => this.setNamesWidth(px),
+      done: () => {
+        try {
+          localStorage.setItem(NAMES_KEY, String(this.namesWidth));
+        } catch {
+          /* storage unavailable: the width lasts until the window closes */
+        }
+      },
+      reset: () => this.fitNames()
+    });
+    this.split.title = "Drag to resize, double-click to fit the names";
+    this.el = h("div", { class: "sv-aln" }, this.note, this.body, this.foot, this.split);
+    this.el.style.setProperty("--sv-aln-names", `${this.namesWidth}px`);
 
     this.scroller.addEventListener("scroll", () => {
       this.bar.scrollLeft = this.scroller.scrollLeft;
@@ -196,9 +253,19 @@ export class TraceView {
     // The whole view, not the part that scrolls: showing the scroll bar under the rows
     // (in the observer above) changes that part's height while observers run, which
     // WebKit reports as an error.
-    new ResizeObserver(() => this.pin()).observe(this.el);
-    // A shadow under the reference once reads pass under it.
-    this.body.addEventListener("scroll", () => this.head.classList.toggle("sv-aln-head-over", this.body.scrollTop > 0), { passive: true });
+    new ResizeObserver(() => {
+      this.pin();
+      this.requestDraw();
+    }).observe(this.el);
+    this.body.addEventListener(
+      "scroll",
+      () => {
+        // A shadow under the reference once reads pass under it.
+        this.head.classList.toggle("sv-aln-head-over", this.body.scrollTop > 0);
+        this.requestDraw();
+      },
+      { passive: true }
+    );
     ctx.store.subscribe(c => {
       if (!c.selection) return;
       if (this.visible && this.layout && this.selectedOrf()?.id !== this.orfId) this.build();
@@ -228,6 +295,7 @@ export class TraceView {
     this.note.hidden = !!layout || !message;
     this.note.textContent = message;
     this.body.hidden = !layout;
+    this.split.hidden = !layout;
     this.el.dataset.columns = String(layout?.length ?? 0);
     this.build();
   }
@@ -422,6 +490,30 @@ export class TraceView {
     this.requestDraw();
   }
 
+  private setNamesWidth(px: number) {
+    const room = this.el.clientWidth ? this.el.clientWidth - TRACES_MIN : NAMES_MAX;
+    this.namesWidth = Math.round(Math.max(NAMES_MIN, Math.min(NAMES_MAX, room, px)));
+    this.el.style.setProperty("--sv-aln-names", `${this.namesWidth}px`);
+  }
+
+  /** Widens or narrows the names column to the longest name on one line. */
+  private fitNames() {
+    const font = (sel: string, fallback: string) => {
+      const el = this.el.querySelector(sel);
+      return el ? getComputedStyle(el).font : fallback;
+    };
+    const title = font(".sv-aln-name-title", "600 12px sans-serif");
+    const sub = font(".sv-aln-name-sub", "11px sans-serif");
+    const prefix = sharedPrefix(this.labels.map(l => l.name));
+    let widest = textWidth(this.ctx.store.data.name || "Reference", title);
+    for (const l of this.labels) {
+      const name = l.name.slice(prefix.length);
+      widest = Math.max(widest, textWidth(`${l.arrow} ${prefix ? "…" : ""}${name}${l.piece}`, title), textWidth(l.sub, sub));
+    }
+    // The name's padding and the column's border.
+    this.setNamesWidth(Math.ceil(widest) + 14 + 10 + 1 + 2);
+  }
+
   /** Keeps the reference at the top while the reads scroll, if the pane has room for both. */
   private pin() {
     this.head.classList.toggle("sv-aln-head-pinned", this.headH <= this.body.clientHeight * PIN_SHARE);
@@ -474,19 +566,26 @@ export class TraceView {
     this.headNames.replaceChildren(...heads);
     const items: Node[] = [];
     const active = this.cb.active();
+    // Reads from one plate share a start, such as a date: it is left out, so the part
+    // that tells them apart shows. The full name is the row's tooltip.
+    const prefix = sharedPrefix(this.labels.map(l => l.name));
     this.rows.forEach((row, i) => {
-      const l = this.labels[i] || { title: "", sub: "" };
+      const l = this.labels[i] || { name: "", arrow: "", piece: "", sub: "" };
+      const height = row.bottom - row.top;
+      // Breaks are offered after the separators in a name, used where a tall row lets it wrap.
+      const parts = nameParts(l.name.slice(prefix.length)).flatMap((p, k) => (k ? [h("wbr"), p] : [p]));
       const el = h(
         "button",
         {
           type: "button",
-          class: `sv-aln-name sv-aln-read${row.track.result === active ? " sv-active" : ""}`,
-          style: { top: `${row.top - this.headH}px`, height: `${row.bottom - row.top}px` },
-          title: "Show this read's details",
+          class: `sv-aln-name sv-aln-read${height >= TALL_ROW ? " sv-aln-read-tall" : ""}${row.track.result === active ? " sv-active" : ""}`,
+          style: { top: `${row.top - this.headH}px`, height: `${height}px` },
+          title: `${l.name}${l.piece}`,
+          "data-name": l.name,
           onclick: () => this.cb.activate(row.track.result),
           oncontextmenu: (e: MouseEvent) => this.cb.menu(row.track.result, e)
         },
-        h("span", { class: "sv-aln-name-title" }, l.title),
+        h("span", { class: "sv-aln-name-title" }, `${l.arrow} `, prefix ? h("span", { class: "sv-aln-name-cut" }, "…") : null, ...parts, l.piece),
         h("span", { class: "sv-aln-name-sub" }, l.sub)
       );
       items.push(el);
@@ -543,7 +642,13 @@ export class TraceView {
       this.drawHead(head, L, c0, c1, X, w, col);
       this.drawMark(head, c0, c1, X, col);
     }
-    const g = this.canvasFor(this.canvas, w, this.headH, this.height);
+    // The reads' canvas covers the pane and a margin either side, never every read: a
+    // plate's worth of traces would take hundreds of megabytes, and WebKit stops drawing
+    // a canvas above 268 million pixels.
+    const [top, bottom] = this.readsSpan();
+    this.readsTop = top;
+    this.canvas.style.transform = `translateY(${top - this.headH}px)`;
+    const g = this.canvasFor(this.canvas, w, top, bottom);
     if (!g) return;
     this.drawSelection(g, L, X, w, col);
 
@@ -554,6 +659,7 @@ export class TraceView {
     let doublePeaks = 0;
     let readCodons = 0;
     for (const row of this.rows) {
+      if (row.bottom + 4 < top || row.top - GAP / 2 > bottom) continue;
       const t = row.track;
       const a = Math.max(c0, t.firstColumn);
       const z = Math.min(c1, t.lastColumn);
@@ -609,6 +715,15 @@ export class TraceView {
     this.el.dataset.traces = String(tracesDrawn);
     this.el.dataset.doublePeaks = String(doublePeaks);
     this.el.dataset.readCodons = String(readCodons);
+  }
+
+  /** The part of the layout under the reference that the reads' canvas covers. */
+  private readsSpan(): [number, number] {
+    const b = this.body;
+    const margin = Math.max(DRAW_MARGIN, b.clientHeight);
+    const top = Math.max(this.headH, b.scrollTop - margin);
+    const bottom = Math.min(this.height, b.scrollTop + b.clientHeight + margin);
+    return [top, Math.max(top + 1, bottom)];
   }
 
   /**
@@ -920,7 +1035,7 @@ export class TraceView {
 
   private trackAt(e: PointerEvent): number | null {
     const r = this.canvas.getBoundingClientRect();
-    const y = e.clientY - r.top + this.headH;
+    const y = e.clientY - r.top + this.readsTop;
     const row = this.rows.find(x => y >= x.top - GAP / 2 && y <= x.bottom + 4);
     return row ? row.track.result : null;
   }

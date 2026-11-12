@@ -9,6 +9,8 @@ import { h, svg } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { sortHeader } from "../ui/sortHead.ts";
 import { naturalOrder, nextTableSort, parseTableSort, sortedBy, type TableSort } from "../lib/tableSort.ts";
+import { splitter } from "../ui/splitter.ts";
+import { panelSplitter } from "../panelWidths.ts";
 import type { DocContext } from "../doc/context.ts";
 import { featureStyles } from "../doc/analysis.ts";
 import { layoutAlignment, type AlignmentLayout } from "../lib/alignLayout.ts";
@@ -271,12 +273,11 @@ export class ReadsView {
     this.summaryPanel = new CloneSummaryPanel(ctx, { features: () => this.actions.legacyFeatures(), show: p => this.showPosition(p) });
     const list = h("aside", { class: "sv-reads-list", "aria-label": "Reads" }, this.listHead, this.listEl, h("div", { class: "sv-reads-drop" }, "Drop .ab1, .seq or FASTQ files on the window to add them"), this.listFoot);
     this.alignment = h("section", { class: "sv-reads-aln", "aria-label": "Alignment" }, this.alnHead, this.trace.el);
-    this.divider = h("div", { class: "sv-reads-divider", role: "separator", "aria-orientation": "horizontal", "aria-label": "Resize alignment", tabindex: "0" });
+    this.divider = this.makeDivider();
     this.top = h("section", { class: "sv-reads-cov", "aria-label": "Reads overview" }, this.covHead, this.overview, this.cloneTable, this.diffs, this.summaryPanel.el);
     this.main = h("div", { class: "sv-reads-main" }, this.top, this.divider, this.alignment);
-    this.installDivider();
     this.installDrag();
-    this.grid = h("div", { class: "sv-reads-grid" }, list, this.main, this.insp);
+    this.grid = h("div", { class: "sv-reads-grid" }, list, panelSplitter("sidebar", () => list), this.main, panelSplitter("inspector", () => this.insp), this.insp);
     this.empty = h(
       "div",
       { class: "sv-reads-empty" },
@@ -691,7 +692,9 @@ export class ReadsView {
       const q = r.meanQuality(t.result);
       const piece = t.pieces > 1 ? ` (${t.piece + 1}/${t.pieces})` : "";
       return {
-        title: `${res.strand === "forward" ? "→" : "←"} ${res.name}${piece}`,
+        name: res.name,
+        arrow: res.strand === "forward" ? "→" : "←",
+        piece,
         sub: [res.strand === "forward" ? "forward" : "reverse", q !== null ? `Q${Math.round(q)}` : r.reads[t.result]?.chromatogram ? "" : "no trace", `${(res.identity * 100).toFixed(1)}%`].filter(Boolean).join(" · ")
       };
     });
@@ -954,7 +957,8 @@ export class ReadsView {
     this.renderAlignmentHead();
   }
 
-  private installDivider() {
+  /** The divider between the overview and the alignment. */
+  private makeDivider(): HTMLElement {
     const set = (h: number) => {
       const coverage = this.topView() === "coverage";
       const most = this.main.clientHeight - 180;
@@ -970,25 +974,7 @@ export class ReadsView {
         /* storage unavailable */
       }
     };
-    const top = () => this.main.getBoundingClientRect().top;
-    this.divider.addEventListener("pointerdown", e => {
-      e.preventDefault();
-      this.divider.setPointerCapture(e.pointerId);
-      const move = (ev: PointerEvent) => set(ev.clientY - top());
-      const up = () => {
-        this.divider.removeEventListener("pointermove", move);
-        this.divider.removeEventListener("pointerup", up);
-        save();
-      };
-      this.divider.addEventListener("pointermove", move);
-      this.divider.addEventListener("pointerup", up);
-    });
-    this.divider.addEventListener("keydown", e => {
-      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-      e.preventDefault();
-      set(this.top.offsetHeight + (e.key === "ArrowUp" ? -24 : 24));
-      save();
-    });
+    return splitter({ axis: "y", label: "Resize alignment", class: "sv-reads-divider", step: 24, size: () => this.top.offsetHeight, resize: set, done: save });
   }
 
   // ---------- clones ----------

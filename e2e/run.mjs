@@ -1171,6 +1171,24 @@ async function main() {
     await sleep(300);
     const sidebarBack = await s.exec("return !document.querySelector('.sv-outline').hidden");
     check("The sidebar button hides and shows the sidebar", sidebarHidden && sidebarBack, JSON.stringify({ sidebarHidden, sidebarBack }));
+    // Both side panels resize from their inner edge, and a double-click gives back the usual width.
+    const panels = await s.exec(`
+      const side = document.querySelector('.sv-body > .sv-splitter-sidebar');
+      const insp = document.querySelector('.sv-body > .sv-splitter-inspector');
+      const w = () => [document.querySelector('.sv-outline'), document.querySelector('.sv-inspector')].map(e => Math.round(e.getBoundingClientRect().width));
+      const before = w();
+      side.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      insp.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      const wider = w();
+      const saved = JSON.parse(localStorage.getItem('strandivo.panels') || '{}');
+      side.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      insp.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      return { before, wider, saved, after: w() };`);
+    check(
+      "The sidebar and inspector resize from their edges, and a double-click resets them",
+      panels.wider[0] === panels.before[0] + 16 && panels.wider[1] === panels.before[1] + 16 && panels.saved.sidebar === panels.wider[0] && panels.after.join() === panels.before.join(),
+      JSON.stringify(panels)
+    );
 
     const sidebarState = "return Array.from(document.querySelectorAll('.sv-outline-section')).map(e => e.dataset.section + (e.querySelector('.sv-list, .sv-enzyme-chips, .sv-list-empty') ? '' : ' folded'))";
     const sidebarStart = await s.exec(sidebarState);
@@ -1220,6 +1238,18 @@ async function main() {
       body.scrollTop = 0;
       return { room, rows, moved };`);
     check("The wheel moves the rows and never sideways", (wheel.room < 1 || wheel.rows > 0) && wheel.moved === 0, JSON.stringify(wheel));
+    // The reference stays at the top while the reads scroll under it.
+    const pinned = await s.exec(`
+      const body = document.querySelector('.sv-aln-body');
+      const head = document.querySelector('.sv-aln-head');
+      const room = body.scrollHeight - body.clientHeight;
+      body.scrollTop = room;
+      const offset = head.getBoundingClientRect().top - body.getBoundingClientRect().top;
+      body.scrollTop = 0;
+      const errors = [...document.querySelectorAll('.ps-toast-error')].map(t => t.textContent);
+      return { room, offset, pinned: head.classList.contains('sv-aln-head-pinned'), share: head.offsetHeight / body.clientHeight, errors };`);
+    // A resize observer that changes what another observes is reported as an error in WebKit.
+    check("The reference stays at the top while the reads scroll, with no errors", (pinned.share > 0.4 ? !pinned.pinned : pinned.pinned && Math.abs(pinned.offset) < 1) && !pinned.errors.length, JSON.stringify(pinned));
     // The horizontal scroll bar stays in view whatever the rows do, and moves the traces.
     await s.exec("const b = document.querySelector('.sv-aln-bar'); b.scrollLeft += 120;");
     await sleep(300);
@@ -1323,7 +1353,7 @@ async function main() {
     await sleep(300);
     const moved = await order();
     // A read crossing the origin has two rows, and one that didn't align has none.
-    const alnRows = await s.exec("return [...new Set([...document.querySelectorAll('.sv-aln-read .sv-aln-name-title')].map(e => e.textContent.slice(2).replace(/ \\(\\d+\\/\\d+\\)$/, '')))]");
+    const alnRows = await s.exec("return [...new Set([...document.querySelectorAll('.sv-aln-read')].map(e => e.dataset.name))]");
     check("Dragging reorders the list and the alignment, without aligning again", moved[0] === unmoved[3] && alnRows[0] === moved[0] && alnRows.join() === moved.filter(n => alnRows.includes(n)).join(), `${moved.join(", ")} / ${alnRows.join(", ")}`);
 
     // --- keeping a check: the app remembers the file's reads, and a check file shares them ---

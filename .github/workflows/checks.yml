@@ -166,6 +166,9 @@ jobs:
         if: ${{ !cancelled() && steps.web.outcome == 'success' }}
         run: node e2e/web.mjs e2e-out/web
 
+      # Every run force-pushes the same branch, so two runs finishing together can race:
+      # the server rejects one push ("cannot lock ref"). Try again after a short random
+      # wait, and if it still fails, warn rather than fail a job whose checks all passed.
       - name: Publish screenshots and report
         if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         run: |
@@ -174,7 +177,11 @@ jobs:
           git init -q -b e2e-results
           git add -A
           git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "End-to-end results for ${GITHUB_SHA::7}"
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" e2e-results
+          for attempt in 1 2 3 4 5; do
+            git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" e2e-results && exit 0
+            [ "$attempt" -lt 5 ] && sleep $((attempt * 5 + RANDOM % 10))
+          done
+          echo "::warning title=Screenshots not published::Pushing to e2e-results failed 5 times; this run's screenshots and report are not on the branch."
 
       - name: Keep screenshots and report with the run (pull requests from forks)
         if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}

@@ -44,6 +44,12 @@ and CI checks that they exist.
   Visibility and detail are remembered separately. Nested
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
   whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
+  Both map modes give regions plain grey names at regular weight, with their colours on
+  their bands; circular-map region leaders are light and solid. Hovering a band or name
+  highlights every piece of that region and outlines its owning CDS, including for a
+  nested region. This is local map state, cleared on redraw or hiding the view, never a
+  store selection. Selection styling wins, and label weight stays fixed in every state
+  to match its measured width. Map tooltips name the owning CDS as well as region details.
   The detail choice follows enzymes in the map controls and only appears when regions
   are visible and a valid parent link makes top-level/all show different annotations.
   Independent overlaps alone do not need that choice. In the outline, all feature rows

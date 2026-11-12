@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { checkMapRegionDisplay } from "./mapRegions.mjs";
 
 const [binary, outDir = "e2e-out"] = process.argv.slice(2);
 if (!binary) {
@@ -93,6 +94,11 @@ class Session {
     const el = await this.find(css, using);
     await wd("POST", `/session/${this.id}/element/${el}/click`, {});
   }
+  /** Runs pointer actions; `release` then lets go of anything pressed, as a later call can't. */
+  async pointer(actions, { release = false } = {}) {
+    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions }] });
+    if (release) await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
+  }
   async doubleClick(css) {
     const el = await this.find(css);
     const actions = [
@@ -101,7 +107,7 @@ class Session {
       { type: "pause", duration: 50 },
       { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }
     ];
-    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions }] });
+    await this.pointer(actions);
     await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
   }
   async modifiedClick(css, keys) {
@@ -125,7 +131,7 @@ class Session {
   async drag(from, to) {
     const at = ([x, y], duration = 0) => ({ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport", duration });
     const actions = [at(from), { type: "pointerDown", button: 0 }, at([(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], 100), at(to, 100), { type: "pointerUp", button: 0 }];
-    await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions }] });
+    await this.pointer(actions);
     await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
   }
   async shot(name) {
@@ -883,6 +889,8 @@ async function main() {
     check("They show on the map", await s.waitFor("document.querySelectorAll('.sv-map-feature').length > 0", 5000));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes all of them back out again", await s.waitFor(`window.__strandivo.store.data.features.length === ${featuresBefore}`, 5000));
+
+    await checkMapRegionDisplay(s, check);
 
     // --- regions of a protein: a made-up entry for pUC19's AmpR, so no network is needed ---
     const featuresForRegions = await s.exec(`${doc} return s.data.features.length;`);

@@ -15,7 +15,7 @@ import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
-import { layoutRegions, regionColor, regionRange, regionSpans, regionsOf, regionTitle } from "../lib/regions.ts";
+import { layoutRegions, regionColor, regionRange, regionSpans, regionsOf, regionTitle, type ProteinRegion } from "../lib/regions.ts";
 import { featureGaps, pieces as rangePieces, rangeLength, type Range, type SeqData, type SeqFeature } from "../lib/seqdata.ts";
 import { checkIcon, iconSvg } from "../ui/icons.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
@@ -57,7 +57,7 @@ const CUT_SCALE = 0.92;
  * a map is read for, so they get the strongest mark. It starts at `x` and grows towards
  * `dir` over `textW` and its padding, centred on `y`.
  */
-function labelChip(l: Pick<LabelItem, "id" | "color" | "region">, x: number, y: number, textW: number, px: number, dir: 1 | -1): SVGElement {
+function labelChip(l: Pick<LabelItem, "id" | "color">, x: number, y: number, textW: number, px: number, dir: 1 | -1): SVGElement {
   const w = textW + 2 * chipPad(px);
   const hgt = px * 1.12;
   return s("rect", {
@@ -69,8 +69,7 @@ function labelChip(l: Pick<LabelItem, "id" | "color" | "region">, x: number, y: 
     class: "sv-map-chip",
     style: l.color ? `--lc:${l.color}` : undefined,
     "data-kind": "feature",
-    "data-id": l.id,
-    "data-region": l.region
+    "data-id": l.id
   });
 }
 
@@ -97,9 +96,12 @@ function labelGlyph(l: Pick<LabelItem, "kind" | "id" | "color" | "strand">, x: n
 /** An enzyme's tooltip: how often it cuts, which is what decides whether it is any use. */
 const cutTitle = (c: CutSite) => (c.cuts === 1 ? `${c.enzyme} · cuts once, at ${fmt(c.cut)}` : `${c.enzyme} · cuts ${fmt(c.cuts)} times · this cut at ${fmt(c.cut)}`);
 
+/** Map tooltips name the owning CDS, including for a region nested in another region. */
+const mapRegionTitle = (r: ProteinRegion, f: SeqFeature) => `${regionTitle(r)} · region of ${f.name}`;
+
 /** Class names of a label's text, by kind (and, for an enzyme, whether it cuts once). */
-const labelClass = (l: Pick<LabelItem, "kind" | "unique">) =>
-  l.kind === "cutsite" ? `sv-map-label sv-map-label-cut${l.unique ? " sv-map-unique" : ""}` : l.kind === "primer" ? "sv-map-label sv-map-label-primer" : "sv-map-label sv-map-label-feature";
+const labelClass = (l: Pick<LabelItem, "kind" | "unique" | "region">) =>
+  l.kind === "cutsite" ? `sv-map-label sv-map-label-cut${l.unique ? " sv-map-unique" : ""}` : l.kind === "primer" ? "sv-map-label sv-map-label-primer" : l.region !== undefined ? "sv-map-label sv-map-region-label" : "sv-map-label sv-map-label-feature";
 
 interface Geometry {
   n: number;
@@ -271,6 +273,9 @@ export class MapView {
   private geom: Geometry | null = null;
   private shapes = new Map<string, SVGElement[]>();
   private focused: SVGElement[] = [];
+  private hoveredKey: string | null = null;
+  private hovered: SVGElement[] = [];
+  private hoveredParents: SVGElement[] = [];
   private chips: Record<string, HTMLButtonElement> = {};
   private modeButtons: { circular: HTMLButtonElement; linear: HTMLButtonElement };
   private sliders: { rotate: HTMLInputElement; zoom: HTMLInputElement; label: HTMLInputElement };
@@ -348,7 +353,10 @@ export class MapView {
 
   setVisible(v: boolean) {
     this.visible = v;
-    if (!v) this.closeMenu?.();
+    if (!v) {
+      this.closeMenu?.();
+      this.hoverRegion(null);
+    }
     if (v && this.stale) this.render();
   }
 
@@ -405,6 +413,7 @@ export class MapView {
   }
 
   render() {
+    this.hoverRegion(null);
     this.stale = false;
     const o = this.ctx.options;
     for (const [k, b] of Object.entries(this.chips)) {
@@ -565,12 +574,12 @@ export class MapView {
         const bottom = r1 + lane * BAND / regionLanes;
         const top = bottom + BAND / regionLanes - 0.6;
         for (const span of regionSpans(f, region, n)) {
-          const path = s("path", { d: arcShape(ang(span.start), ang(span.end + 1), bottom, top, 0), fill: regionColor(region), class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, regionTitle(region)));
+          const path = s("path", { d: arcShape(ang(span.start), ang(span.end + 1), bottom, top, 0), fill: regionColor(region), class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, mapRegionTitle(region, f)));
           featureLayer.appendChild(path);
           this.addShape(`feature:${f.id}:region:${index}`, path);
         }
         const range = regionRange(f, region, n);
-        if (range) labels.push({ angle: ang(range.start) + rangeLength(range, n) / n * 180, r: top, text: region.name, kind: "feature", id: f.id, region: index, color: regionColor(region), title: regionTitle(region), width: textWidth(region.name, labelFont(600)), y: 0, ly: 0 });
+        if (range) labels.push({ angle: ang(range.start) + rangeLength(range, n) / n * 180, r: top, text: region.name, kind: "feature", id: f.id, region: index, color: regionColor(region), title: mapRegionTitle(region, f), width: textWidth(region.name, labelFont(400)), y: 0, ly: 0 });
       });
       const arcLen = (span / 360) * 2 * Math.PI * (r1 + BAND / 2);
       const tw = textWidth(f.name, labelFont(600));
@@ -678,7 +687,7 @@ export class MapView {
     const right = fit(labels.filter(l => l.angle < 180));
     const left = fit(labels.filter(l => l.angle >= 180));
     const leaders = s("g", { fill: "none", class: "sv-map-leader" });
-    // A feature's name sits on a tint of its colour, a primer's starts with an arrow.
+    // Features get a chip, regions plain text, and primers an arrow.
     const gs = glyphSize(labelPx);
     const gg = glyphGap(labelPx);
     const cp = chipPad(labelPx);
@@ -696,14 +705,14 @@ export class MapView {
         let x = sgn * Math.sqrt(Math.max(rLab * rLab - dy * dy, 34 * 34));
         x = sgn > 0 ? Math.max(x, k[0] + 6) : Math.min(x, k[0] - 6);
         const colour = l.color ? `--lc:${l.color}` : undefined;
-        const leader = s("polyline", { points: `${P(p0)} ${P(k)} ${f1(x)},${f1(dy)}`, class: `sv-map-leader-${l.kind}`, style: colour });
+        const shapeKey = `${l.kind}:${l.id}${l.region === undefined ? "" : `:region:${l.region}`}`;
+        const leader = s("polyline", { points: `${P(p0)} ${P(k)} ${f1(x)},${f1(dy)}`, class: `sv-map-leader-${l.region !== undefined ? "region" : l.kind}`, style: colour });
         leaders.appendChild(leader);
-        if (l.kind === "cutsite") this.addShape(`cutsite:${l.id}`, leader);
+        if (l.kind === "cutsite" || l.region !== undefined) this.addShape(shapeKey, leader);
         const gx = x + sgn * 4;
-        const chip = l.kind === "feature" ? labelChip(l, gx, dy, l.width, labelPx, sgn) : null;
+        const chip = l.kind === "feature" && l.region === undefined ? labelChip(l, gx, dy, l.width, labelPx, sgn) : null;
         const mark = chip ?? labelGlyph(l, gx, dy, gs, sgn);
         if (mark) texts.appendChild(mark);
-        const shapeKey = `${l.kind}:${l.id}${l.region === undefined ? "" : `:region:${l.region}`}`;
         if (chip) this.addShape(shapeKey, chip);
         const tx = chip ? gx + sgn * cp : mark ? gx + sgn * (gs + gg) : gx;
         const t = s(
@@ -815,10 +824,10 @@ export class MapView {
       const rows = layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none").flatMap(row => {
         const range = regionRange(f, row.region, n);
         if (!range) return [];
-        const x = Math.max(2, Math.min(X(range.start), width - textWidth(row.region.name, labelFont(500)) - 8));
+        const x = Math.max(2, Math.min(X(range.start), width - textWidth(row.region.name, labelFont(400)) - 8));
         let lane = row.lane;
         while (ends[lane] !== undefined && ends[lane] > x) lane++;
-        ends[lane] = Math.max(X(range.end + 1), x + textWidth(row.region.name, labelFont(500))) + 8;
+        ends[lane] = Math.max(X(range.end + 1), x + textWidth(row.region.name, labelFont(400))) + 8;
         return [{ ...row, lane, x }];
       });
       return [f.id, rows] as const;
@@ -904,12 +913,12 @@ export class MapView {
           for (const g of rangePieces(span, n)) {
             const gx1 = X(g.start);
             const gx2 = X(g.end + 1);
-            const rect = s("rect", { x: f1(gx1), y: ry, width: f1(gx2 - gx1), height: 5, rx: 1, fill: regionColor(region), class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, regionTitle(region)));
+            const rect = s("rect", { x: f1(gx1), y: ry, width: f1(gx2 - gx1), height: 5, rx: 1, fill: regionColor(region), class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, mapRegionTitle(region, f)));
             featureLayer.appendChild(rect);
             this.addShape(`feature:${f.id}:region:${index}`, rect);
           }
         }
-        const label = s("text", { x, y: ry + 5 + nameStep / 2, "font-size": labelPx, fill: regionColor(region), class: "sv-map-region-label", "data-kind": "feature", "data-id": f.id, "data-region": index }, region.name, s("title", null, regionTitle(region)));
+        const label = s("text", { x, y: ry + 5 + nameStep / 2, "font-size": labelPx, class: labelClass({ kind: "feature", region: index }), "data-kind": "feature", "data-id": f.id, "data-region": index }, region.name, s("title", null, mapRegionTitle(region, f)));
         featureLayer.appendChild(label);
         this.addShape(`feature:${f.id}:region:${index}`, label);
       });
@@ -1053,6 +1062,21 @@ export class MapView {
 
   // ---------- mouse ----------
 
+  /** Hover is local to the drawing: it never selects bases or changes the document. */
+  private hoverRegion(el: Element | null) {
+    const hit = this.visible ? el?.closest('[data-kind="feature"][data-region]') : null;
+    const id = hit?.getAttribute("data-id");
+    const key = hit && id ? `feature:${id}:region:${hit.getAttribute("data-region")}` : null;
+    if (key === this.hoveredKey) return;
+    for (const shape of this.hovered) shape.classList.remove("sv-map-region-hover");
+    for (const shape of this.hoveredParents) shape.classList.remove("sv-map-parent-hover");
+    this.hoveredKey = key;
+    this.hovered = key ? this.shapes.get(key) ?? [] : [];
+    this.hoveredParents = id ? (this.shapes.get(`feature:${id}`) ?? []).filter(shape => shape.classList.contains("sv-map-feature")) : [];
+    for (const shape of this.hovered) shape.classList.add("sv-map-region-hover");
+    for (const shape of this.hoveredParents) shape.classList.add("sv-map-parent-hover");
+  }
+
   /** Boundary (0…n) under a client point, from its angle (circular) or x (linear). */
   private boundaryAt(clientX: number, clientY: number): number | null {
     const g = this.geom;
@@ -1087,6 +1111,7 @@ export class MapView {
       return sweptRange(a, swept, store.length);
     };
     this.svgHost.addEventListener("pointerdown", e => {
+      this.hoverRegion(null);
       // Control-click is a right-click on a Mac.
       if (e.button !== 0 || (e.ctrlKey && isMac)) return;
       const el = (e.target as Element).closest("[data-kind]");
@@ -1104,7 +1129,10 @@ export class MapView {
       e.preventDefault();
     });
     this.svgHost.addEventListener("pointermove", e => {
-      if (anchor === null) return;
+      if (anchor === null) {
+        this.hoverRegion(e.buttons === 0 && e.pointerType !== "touch" ? e.target as Element : null);
+        return;
+      }
       const b = this.boundaryAt(e.clientX, e.clientY);
       if (b === null) return;
       if (!moved && b === anchor) return;
@@ -1126,7 +1154,11 @@ export class MapView {
       }
     };
     this.svgHost.addEventListener("pointerup", end);
-    this.svgHost.addEventListener("pointercancel", end);
+    this.svgHost.addEventListener("pointercancel", e => {
+      this.hoverRegion(null);
+      end(e);
+    });
+    this.svgHost.addEventListener("pointerleave", () => this.hoverRegion(null));
     this.svgHost.addEventListener("contextmenu", e => {
       e.preventDefault();
       const el = (e.target as Element).closest("[data-kind]");

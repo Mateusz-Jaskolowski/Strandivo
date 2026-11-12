@@ -85,8 +85,9 @@ them, count a little more, still only as fixed words and ranges.
   Select bases within a CDS and choose Add as region… in the inspector or right-click
   menu; the residue positions are filled in. The Sequence view's Regions button shows
   coloured bars with their names underneath, separately from the CDS's translation.
-  The Map view has a Regions button too, which remembers the chosen level of detail.
-  Regions also appear around the selected primer in the Primers tab, sharing the
+  The Map view has a Regions button too, which remembers the chosen level of detail;
+  there, region names are quieter than features', and hovering a region highlights the
+  CDS it belongs to. Regions also appear around the selected primer in the Primers tab, sharing the
   Sequence view's Regions setting.
   New regions get different, coordinated colours automatically, starting near their
   CDS's colour; colours you choose yourself are kept.

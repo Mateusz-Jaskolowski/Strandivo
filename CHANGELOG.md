@@ -16,6 +16,10 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Selecting on the map**: dragging round a circular map selects the bases the pointer
+  passed over, whichever way it goes. Dragging anticlockwise used to select nearly the
+  whole plasmid and shrink it as you went.
+
 - **Pasting a sequence**: text copied from a database or another program can be pasted
   whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.
   Letters that aren't bases used to be pasted as DNA; now Strandivo says the clipboard

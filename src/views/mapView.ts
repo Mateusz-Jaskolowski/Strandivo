@@ -20,6 +20,7 @@ import { featureGaps, pieces as rangePieces, rangeLength, type Range, type SeqDa
 import { checkIcon, iconSvg } from "../ui/icons.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { selectedRanges } from "../lib/selection.ts";
+import { sweep, sweptRange } from "../lib/mapDrag.ts";
 
 
 interface LabelItem {
@@ -1021,13 +1022,16 @@ export class MapView {
     let anchor: number | null = null;
     let moved = false;
     let target: Focus | null = null;
-    const rangeBetween = (a: number, b: number): Range | null => {
-      const n = store.length;
-      if (a === b) return null;
+    // On a circle: the boundary last under the pointer and the bases swept since the press.
+    let last = 0;
+    let swept = 0;
+    const rangeTo = (a: number, b: number): Range | null => {
       const g = this.geom;
-      if (g && !g.circular) return { start: Math.min(a, b), end: Math.max(a, b) - 1 };
-      // Clockwise from the anchor; wraps across the origin when needed.
-      return { start: a, end: (b - 1 + n) % n };
+      if (g && !g.circular) return a === b ? null : { start: Math.min(a, b), end: Math.max(a, b) - 1 };
+      // The way the pointer went round, so dragging anticlockwise selects what it passed over.
+      swept = sweep(swept, last, b, store.length);
+      last = b;
+      return sweptRange(a, swept, store.length);
     };
     this.svgHost.addEventListener("pointerdown", e => {
       // Control-click is a right-click on a Mac.
@@ -1040,6 +1044,8 @@ export class MapView {
         return;
       }
       anchor = this.boundaryAt(e.clientX, e.clientY);
+      last = anchor ?? 0;
+      swept = 0;
       moved = false;
       this.svgHost.setPointerCapture(e.pointerId);
       e.preventDefault();
@@ -1050,8 +1056,8 @@ export class MapView {
       if (b === null) return;
       if (!moved && b === anchor) return;
       moved = true;
-      const r = rangeBetween(anchor, b);
-      if (r) store.select({ range: r, anchor, caret: b }, "map");
+      const r = rangeTo(anchor, b);
+      store.select(r ? { range: r, anchor, caret: b } : { range: null, caret: anchor }, "map");
     });
     const end = (e: PointerEvent) => {
       if (anchor === null) return;

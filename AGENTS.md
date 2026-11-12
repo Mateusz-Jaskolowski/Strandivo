@@ -114,7 +114,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `src/views/primerDialogs.ts`); something not tied to one file gets its own window, like
   Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
-  selected. This keeps windows from getting crowded.
+  selected. This keeps windows from getting crowded. On the map, what is drawn is chosen
+  from the chips and the menus beside them (Cut sites, Regions); the floating bar only
+  moves the drawing (rotate, zoom, label size).
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
   base on either strand, written as the top strand, plus each end (blunt, 5′ or 3′
   overhang). Two ends ligate when kind and bases match; joining writes the shared bases

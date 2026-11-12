@@ -268,12 +268,13 @@ async function main(outDir) {
     await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input')); document.querySelector('[aria-label=\"Selected only\"]').click();");
     await s.shot("00a-my-enzymes");
     await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
-    const enzymeChoice = async (label, value) => s.exec("const el = document.querySelector('select[aria-label=\"' + arguments[0] + '\"]'); el.value = arguments[1]; el.dispatchEvent(new Event('change', { bubbles: true }));", label, value);
+    // The list is a row of buttons (Common, Lab, Mine); how often they cut is a select.
+    const enzymeChoice = async (label, value) => s.exec("const el = document.querySelector('[aria-label=\"' + arguments[0] + '\"]'); if (el.tagName === 'SELECT') { el.value = arguments[1]; el.dispatchEvent(new Event('change', { bubbles: true })); } else el.querySelector('[data-value=\"' + arguments[1] + '\"]').click();", label, value);
     await enzymeChoice("Which map enzymes to show", "personal");
     await enzymeChoice("Map cut-site filter", "all");
     check("The personal map shows every chosen site and keeps Acc65I's name", await s.waitFor("document.querySelectorAll('.sv-map-svgel text[data-id^=\"EcoRI@\"]').length === 1 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"Acc65I@\"]').length === 1 && document.querySelectorAll('.sv-map-svgel text[data-id^=\"PvuII@\"]').length === 2 && !document.querySelector('.sv-map-svgel text[data-id^=\"KpnI@\"]')", 5000));
     // Views and dialogs redraw on the next frame, so each choice is waited for, not read at once.
-    check("The outline shares both enzyme choices", await s.waitFor("document.querySelector('[aria-label=\"Which enzymes to show\"]')?.value === 'personal' && document.querySelector('[aria-label=\"Cut-site filter\"]')?.value === 'all'", 5000));
+    check("The outline shares both enzyme choices", await s.waitFor("document.querySelector('[aria-label=\"Which enzymes to show\"] [aria-checked=\"true\"]')?.dataset.value === 'personal' && document.querySelector('[aria-label=\"Cut-site filter\"]')?.value === 'all'", 5000));
     await enzymeChoice("Map cut-site filter", "unique");
     check("Unique cutters hides PvuII without changing the personal source", await s.waitFor("!document.querySelector('.sv-map-svgel text[data-id^=\"PvuII@\"]') && document.querySelectorAll('.sv-enzyme-chip').length === 2", 5000));
     await s.exec("window.__strandivo.setView('sequence'); window.__strandivo.store.select({ range: { start: 390, end: 420 } }, 'test');");
@@ -283,7 +284,7 @@ async function main(outDir) {
     check("Digest starts from My enzymes and offers a multi-cutter hidden on the map", await s.waitFor("document.querySelector('[aria-label=\"Digest enzyme list\"]')?.value === 'personal' && !!document.querySelector('input[data-enzyme=\"PvuII\"]')", 5000));
     await s.click("//input[@data-enzyme='Acc65I']");
     await enzymeChoice("Digest enzyme list", "common");
-    check("Changing Digest's source retains an explicitly chosen non-common enzyme", await s.waitFor("document.querySelector('[aria-label=\"Digest enzyme list\"]')?.value === 'common' && document.querySelector('input[data-enzyme=\"Acc65I\"]')?.checked && document.querySelector('[aria-label=\"Which map enzymes to show\"]').value === 'personal'", 5000));
+    check("Changing Digest's source retains an explicitly chosen non-common enzyme", await s.waitFor("document.querySelector('[aria-label=\"Digest enzyme list\"]')?.value === 'common' && document.querySelector('input[data-enzyme=\"Acc65I\"]')?.checked && document.querySelector('[aria-label=\"Which map enzymes to show\"] [aria-checked=\"true\"]')?.dataset.value === 'personal'", 5000));
     await s.click("//button[contains(@class,'sv-dialog-close')]");
     await s.exec("window.__strandivo.command('simulate-cloning');");
     await s.waitFor("document.querySelector('[aria-label=\"Cloning method\"]')", 5000);
@@ -303,11 +304,11 @@ async function main(outDir) {
     await s.waitFor("document.querySelector('.sv-enzyme-chip[data-id^=\"EcoRI@\"]')", 5000);
     await s.exec("document.querySelector('.sv-enzyme-chip[data-id^=\"EcoRI@\"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));");
     await s.click("//button[normalize-space()='Add to My enzymes']");
-    check("Adding from a site preserves the active source", await s.waitFor("document.querySelector('[aria-label=\"Which map enzymes to show\"]')?.value === 'common'", 5000));
+    check("Adding from a site preserves the active source", await s.waitFor("document.querySelector('[aria-label=\"Which map enzymes to show\"] [aria-checked=\"true\"]')?.dataset.value === 'common'", 5000));
     await enzymeChoice("Which map enzymes to show", "personal");
     await s.waitFor("document.querySelector('.sv-map-svgel text[data-id^=\"EcoRI@\"]')", 5000);
     await s.go(`${base}/?open=/testdata/e2e/pUC19-annotated.gb`);
-    check("The personal list, source and filter survive reopening", await s.waitFor("document.querySelector('[aria-label=\"Which map enzymes to show\"]')?.value === 'personal' && document.querySelector('[aria-label=\"Map cut-site filter\"]')?.value === 'unique' && document.querySelectorAll('.sv-enzyme-chip').length === 2", 15000));
+    check("The personal list, source and filter survive reopening", await s.waitFor("document.querySelector('[aria-label=\"Which map enzymes to show\"] [aria-checked=\"true\"]')?.dataset.value === 'personal' && document.querySelector('[aria-label=\"Map cut-site filter\"]')?.value === 'unique' && document.querySelectorAll('.sv-enzyme-chip').length === 2", 15000));
     await s.click("//button[@aria-label='Enzyme library']");
     await s.click("//button[normalize-space()='My enzymes']");
     await s.click("//input[@aria-label='Selected only']");

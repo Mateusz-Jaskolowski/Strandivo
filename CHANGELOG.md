@@ -20,6 +20,11 @@ with Unreleased's notes and leaves them where they are.
   right, beside the panels they show, and split view sits next to the views. Buttons that
   do nothing in the current view are greyed out.
 
+- **Choosing enzymes**: Common, Lab and Mine are one row of buttons in the sidebar, with
+  the list's Edit link in the Enzymes heading. On the map they are in a menu beside the
+  Cut sites button, which shows what is chosen, and the region detail is beside Regions,
+  so the bar at the bottom holds only rotate, zoom (with Fit) and label size.
+
 - **Selecting on the map**: dragging round a circular map selects the bases the pointer
   passed over, whichever way it goes. Dragging anticlockwise used to select nearly the
   whole plasmid and shrink it as you went.

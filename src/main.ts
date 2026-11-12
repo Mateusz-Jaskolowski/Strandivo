@@ -6,12 +6,14 @@ import "./styles.css";
 import { isDesktop, replaceContextMenus, sendMenuShortcut, windowInfo } from "./platform.ts";
 import { menuShortcut } from "./lib/shortcuts.ts";
 import { startErrorLog } from "./feedback.ts";
+import { isResizeObserverNotice } from "./lib/crash.ts";
 import { toast } from "./ui/dom.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
 import { useTmSettings } from "./lib/primers.ts";
 import { useAmberSuppression } from "./lib/genetics.ts";
 
 window.addEventListener("error", e => {
+  if (isResizeObserverNotice(e.message)) return;
   console.error(e.error || e.message);
   toast(`Unexpected error: ${e.message}`, "error", 8000);
 });

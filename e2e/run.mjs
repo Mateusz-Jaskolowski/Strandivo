@@ -453,6 +453,16 @@ async function main() {
     await s.click("//*[contains(@class,'sv-inspector')]//button[contains(., 'Design primers')]", "xpath");
     check("Designing primers for AmpR suggests a pair in a dialog", await s.waitFor("document.querySelector('.sv-dialog .sv-design-pair')", 5000));
     check("The pair waits for review before it is added", (await state()).primers.length === 0);
+    // Letting the ends move finds a better stretch a little outside the region, so the
+    // product grows while still covering it; back at 0 the primers sit on its edges again.
+    const setNum = (label, value) => s.exec(`const el = document.querySelector(".sv-dialog input[aria-label='${label}']"); el.value = '${value}'; el.dispatchEvent(new Event('change'));`);
+    const productBp = "Number((document.querySelector('.sv-dialog .sv-design-result-head')?.textContent.match(/([\\d,]+) bp product/) || [0, '0'])[1].replace(/,/g, ''))";
+    const pinnedBp = await s.exec(`return ${productBp};`);
+    await setNum("Bases each end may move outward", 20);
+    const grew = await s.waitFor(`${productBp} > ${pinnedBp} && ${productBp} <= ${pinnedBp} + 40`, 5000);
+    check("Moving the ends designs a longer product over the same region", grew, `${pinnedBp} bp with the ends pinned, ${await s.exec(`return ${productBp};`)} bp with 20 allowed`);
+    await setNum("Bases each end may move outward", 0);
+    check("Back at 0 the primers sit on the region's edges again", await s.waitFor(`${productBp} === ${pinnedBp}`, 5000));
     // AmpR runs right to left: NdeI at its start goes on the primer at its start codon.
     const choose = (label, value) => s.exec(`const el = document.querySelector(".sv-dialog select[aria-label='${label}']"); el.value = Array.from(el.options).find(o => o.value === '${value}' || o.textContent.startsWith('${value}'))?.value ?? ''; el.dispatchEvent(new Event('change'));`);
     await choose("Site added at the start", "NdeI");

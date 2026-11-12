@@ -1,6 +1,6 @@
 [package]
 name = "strandivo"
-version = "0.4.0-rc.1"
+version = "0.4.0-rc.2"
 description = "Free, open-source plasmid editor: maps, primers, cloning and sequence verification"
 edition = "2021"
 license = "GPL-3.0-or-later"

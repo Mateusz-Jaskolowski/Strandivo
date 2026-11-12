@@ -7,7 +7,7 @@
 // go nowhere unless the user ticks "Recent errors" in Help → Send Feedback…, which shows
 // them first with paths removed.
 
-import { addError, errorLines, parseErrorLog, type LoggedError } from "./lib/crash.ts";
+import { addError, errorLines, isResizeObserverNotice, parseErrorLog, type LoggedError } from "./lib/crash.ts";
 
 const KEY = "strandivo.recentErrors";
 /** Where errors are kept if local storage can't be used. */
@@ -53,6 +53,9 @@ let started = false;
 export function startErrorLog() {
   if (started || typeof window === "undefined") return;
   started = true;
-  window.addEventListener("error", e => recordError(e.error ? describe(e.error) : e.message, "uncaught"));
+  window.addEventListener("error", e => {
+    if (isResizeObserverNotice(e.message)) return;
+    recordError(e.error ? describe(e.error) : e.message, "uncaught");
+  });
   window.addEventListener("unhandledrejection", e => recordError(`Unhandled: ${describe(e.reason)}`, "rejection"));
 }

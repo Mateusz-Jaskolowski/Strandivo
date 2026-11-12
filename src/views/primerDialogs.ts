@@ -554,11 +554,11 @@ export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null =
       run();
       rerender(dlg, render);
     });
-    const num = (key: keyof DesignOptions, label: string) => {
-      const el = h("input", { class: "sv-input sv-input-small sv-input-num", type: "number", value: String(rules.options[key]), "aria-label": label }) as HTMLInputElement;
+    const num = (key: keyof DesignOptions, label: string, min = 1) => {
+      const el = h("input", { class: "sv-input sv-input-small sv-input-num", type: "number", min: String(min), value: String(rules.options[key] ?? min), "aria-label": label }) as HTMLInputElement;
       el.addEventListener("change", () => {
         const v = Number(el.value);
-        if (Number.isFinite(v) && v > 0) (rules.options[key] as number) = v;
+        if (Number.isFinite(v) && v >= min) (rules.options[key] as number) = Math.floor(v);
         run();
         rerender(dlg, render);
       });
@@ -593,6 +593,8 @@ export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null =
       h("span", { class: "sv-design-range" }, num("tmMin", "Minimum Tm"), "to", num("tmMax", "Maximum Tm"), "°C"),
       h("span", { class: "sv-design-label" }, "Length"),
       h("span", { class: "sv-design-range" }, num("minLength", "Minimum length"), "to", num("maxLength", "Maximum length"), "nt"),
+      h("span", { class: "sv-design-label" }, "Move ends"),
+      h("span", { class: "sv-design-range" }, "Up to", num("moveEnds", "Bases each end may move outward", 0), "nt outward"),
       h("span", { class: "sv-design-label" }, "5′ additions"),
       h("span", { class: "sv-design-range" }, "At the start", siteSelect("startSite", "Site added at the start"), "At the end", siteSelect("endSite", "Site added at the end"), "after", extra)
     );
@@ -629,6 +631,9 @@ export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null =
             : h("p", { class: "sv-small sv-text-ok" }, iconSvg("check", 13), ` ${[...new Set(names)].join(" and ")} ${names.length === 1 ? "doesn't" : "don't"} cut inside the product.`)
         );
       }
+      // The ends may move, but not an end whose site has to land on the region's edge.
+      if ((rules.options.moveEnds ?? 0) > 0 && names.length)
+        notes.push(h("p", { class: "sv-small sv-dim" }, "An end with a site stays where it is, so the site lands on the region's edge."));
       parts.push(
         h(
           "div",

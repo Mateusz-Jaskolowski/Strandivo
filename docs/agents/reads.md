@@ -85,7 +85,11 @@ and CI checks that they exist.
   (`installWheel` in `src/views/traceView.ts`); moving along it is for sideways scrolling,
   Shift or the scroll bar. A wheel that turned sideways at the last row was tried and
   found confusing. That scroll bar (`fitBar`) is a separate element under the rows, kept
-  in step with the traces' scroller, whose own bar would sit under the last row.
+  in step with the traces' scroller, whose own bar would sit under the last row. The
+  alignment's ruler, features, translation and reference are a strip with its own canvas,
+  pinned over the rows (`pin`) unless it would take over 40% of the pane. Pinning watches
+  the whole view, not the part that scrolls: `fitBar` changes that part's height inside a
+  resize observer, which WebKit reports as a loop.
 - **Keeping a check**: the app remembers each file's reads by path (`src/readChecks.ts`,
   local storage) and adds them again when the file opens. A check file (`.svcheck`,
   `src/lib/readCheck.ts`) holds paths relative to itself. Both keep only the groups the

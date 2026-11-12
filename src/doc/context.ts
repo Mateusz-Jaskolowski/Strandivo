@@ -20,6 +20,9 @@ export interface ViewOptions extends EnzymeOptions {
   proteinDetail: ProteinDetail;
   /** Labelled protein-region tracks in Sequence and the selected primer's context. */
   sequenceRegions: boolean;
+  /** GC content under the bases in Sequence (and along its overview strip), and in the primer's context. */
+  sequenceGc: boolean;
+  primerGc: boolean;
   primers: boolean;
   cutsites: boolean;
   /** Position marks and numbers on the map. */

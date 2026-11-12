@@ -8,7 +8,9 @@
 import { h, toast } from "../ui/dom.ts";
 import { fontStack, textWidth } from "../ui/svg.ts";
 import { checkIcon } from "../ui/icons.ts";
-import { codons, cutSites, featureStyles, isCds, orfs, orfTitle, primerAlignment, primerColors, primerTitle } from "../doc/analysis.ts";
+import { codons, cutSites, featureStyles, gcValues, isCds, orfs, orfTitle, primerAlignment, primerColors, primerTitle } from "../doc/analysis.ts";
+import { GC_WINDOW, overviewWindow } from "../lib/gc.ts";
+import { drawGcStrip, GC_STRIP_HEIGHT } from "./gcStrip.ts";
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
 import { aminoGroup } from "../lib/aminoAcids.ts";
@@ -91,6 +93,8 @@ interface RowLayout {
   yBot: number;
   yRuler: number;
   rev: PrimerLane[];
+  /** Top of the GC strip, if shown. */
+  yGc: number | null;
   yOrf: number;
   orfs: Bar<Orf>[];
   features: Bar<SeqFeature>[];
@@ -161,7 +165,7 @@ export class SequenceView {
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
-    const chip = (key: "complement" | "translations" | "aaColors" | "sequenceRegions" | "orfs" | "cutsites" | "primers", label: string) => {
+    const chip = (key: "complement" | "translations" | "aaColors" | "sequenceRegions" | "sequenceGc" | "orfs" | "cutsites" | "primers", label: string) => {
       const b = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ [key]: !ctx.options[key] }) }, checkIcon(), label);
       this.chips[key] = b;
       return b;
@@ -175,6 +179,7 @@ export class SequenceView {
       chip("aaColors", "Colour amino acids"),
       chip("sequenceRegions", "Regions"),
       chip("orfs", "ORFs"),
+      chip("sequenceGc", "GC"),
       chip("cutsites", "Cut sites"),
       chip("primers", "Primers"),
       h("span", { class: "sv-push" }),
@@ -437,6 +442,9 @@ export class SequenceView {
         return { ...l, y: top };
       });
       y += 4;
+      // GC content, after the reverse primers so they stay beside their strand.
+      const yGc = o.sequenceGc ? y : null;
+      if (o.sequenceGc) y += GC_STRIP_HEIGHT + 4;
       // ORFs, a lane each where they overlap, a base apart so arrowheads don't touch.
       const orfBars = laneAssign(orfPieces[r].map(x => ({ item: x.o, a: x.a - r0, b: x.b - r0, w: x.b - x.a + 2 })));
       const yOrf = y;
@@ -464,7 +472,7 @@ export class SequenceView {
         }
       }
       y += 12;
-      this.rows.push({ start: r0, end: r1, height: y, yEnz, enzymes, cutTails: cutTails[r], enzLevels, fwd, yTop, yBot, yRuler, rev, yOrf, orfs: orfBars, features, laneY, regions });
+      this.rows.push({ start: r0, end: r1, height: y, yEnz, enzymes, cutTails: cutTails[r], enzLevels, fwd, yTop, yBot, yRuler, rev, yGc, yOrf, orfs: orfBars, features, laneY, regions });
       this.offsets.push(this.offsets[r] + y);
     }
   }
@@ -597,6 +605,14 @@ export class SequenceView {
       const x = (p - 1 - row.start + 0.5) * k - label.length / 2;
       track.appendChild(abs(`left:${ch(x)};top:${row.yRuler}px`, "")).className = "sv-ruler";
       (track.lastChild as HTMLElement).textContent = label;
+    }
+
+    // GC around each base.
+    if (row.yGc !== null) {
+      const strip = abs(`left:0;top:${row.yGc}px;width:${ch(len)};height:${GC_STRIP_HEIGHT}px`);
+      strip.className = "sv-gc-strip";
+      strip.append(...drawGcStrip(gcValues(d, GC_WINDOW), len, c => row.start + c, ch));
+      track.appendChild(strip);
     }
 
     // ORFs: thin arrows, coloured by frame.
@@ -850,7 +866,9 @@ export class SequenceView {
         bars.push(el);
       }
     }
-    this.strip.replaceChildren(h("div", { class: "sv-strip-line" }), ...bars, this.stripSel, this.stripView);
+    // GC over a wider window, along the bottom edge.
+    const gc = this.ctx.options.sequenceGc && d.sequence.length ? drawGcStrip(gcValues(d, overviewWindow(n)), n, i => i, pct, "sv-strip-gc") : [];
+    this.strip.replaceChildren(h("div", { class: "sv-strip-line" }), ...bars, ...gc, this.stripSel, this.stripView);
     this.updateStripView();
     this.updateStripSelection();
   }

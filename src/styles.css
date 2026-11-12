@@ -45,6 +45,9 @@
   --orf-r1: #c99a7f;
   --orf-r2: #b8ae72;
   --orf-r3: #c98fa4;
+  /* GC content outside 40–60%: teal for AT-rich, orange for GC-rich (not blue, the selection's colour). */
+  --gc-at: #23968a;
+  --gc-gc: #d9772b;
   /* The simulated gel: dark in both themes, like a gel on a transilluminator. */
   --gel-bg: #1c2130;
   --gel-band: #e9efff;
@@ -111,6 +114,8 @@
   --orf-r1: #b2876e;
   --orf-r2: #a19961;
   --orf-r3: #b07c8f;
+  --gc-at: #3fb3a5;
+  --gc-gc: #f0954a;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 

@@ -93,6 +93,8 @@ and CI checks that they exist.
   path, so they are neither remembered nor saved.
 - **Order of reads**: `LoadedRead.rank` is the user's order; the list, the coverage map,
   the alignment and the clones follow it through `ReadSet.order()`, and check files keep it.
+  The Clones table does too until a heading sorts it (`sortedGroups` in
+  `src/views/readsView.ts`); ties keep the user's order, and a third click goes back to it.
   Read indices stay as they were: `results` and the clones hold them, and reordering
   shouldn't mean aligning again. So never loop over `reads` where the order shows. A check
   lists files, so reads from one FASTA file come back in the file's order.

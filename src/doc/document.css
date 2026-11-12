@@ -62,7 +62,7 @@
   align-items: center;
   gap: 14px;
   min-height: 52px;
-  padding: 8px 12px 8px 16px;
+  padding: 8px 10px;
   background: var(--side);
   border-bottom: 1px solid var(--line);
   user-select: none;
@@ -89,8 +89,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sv-tabs {
+/* The views, and split view beside them as it chooses which of them show. */
+.sv-views {
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sv-tabs {
   display: flex;
   gap: 2px;
   padding: 3px;
@@ -195,9 +201,45 @@
   pointer-events: none;
 }
 .sv-search .sv-search-input {
-  width: 240px;
+  width: 180px;
   height: 30px;
   padding: 0 46px 0 30px;
+}
+/* The window can be 820 px wide: the toolbar tightens rather than pushing buttons off. */
+@media (max-width: 1180px) {
+  .sv-toolbar {
+    gap: 10px;
+  }
+  .sv-tab {
+    padding: 0 10px;
+  }
+  .sv-tool-sep {
+    margin: 0 3px;
+  }
+  .sv-search .sv-search-input {
+    width: 120px;
+    padding-right: 9px;
+  }
+  .sv-search .sv-kbd {
+    display: none;
+  }
+}
+@media (max-width: 940px) {
+  .sv-toolbar {
+    gap: 6px;
+  }
+  .sv-tab {
+    padding: 0 8px;
+  }
+  .sv-search .sv-search-input {
+    width: 84px;
+  }
+  .sv-toolbar .sv-icon-btn {
+    width: 29px;
+  }
+  .sv-tool-sep {
+    margin: 0 1px;
+  }
 }
 .sv-kbd {
   position: absolute;

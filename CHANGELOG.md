@@ -16,6 +16,10 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **A tidier toolbar**: the sidebar's button is on the left and the inspector's on the
+  right, beside the panels they show, and split view sits next to the views. Buttons that
+  do nothing in the current view are greyed out.
+
 - **Selecting on the map**: dragging round a circular map selects the bases the pointer
   passed over, whichever way it goes. Dragging anticlockwise used to select nearly the
   whole plasmid and shrink it as you went.

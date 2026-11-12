@@ -16,6 +16,13 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Design primers a little away from the selection**: the Design primers dialog has a
+  "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
+  a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge
+  of what you selected. The product only grows, so it still covers the whole region, and
+  the pair nearest your selection wins when moving gains nothing. An end that gets a
+  restriction site stays where it is.
+
 - **Hide badly matched primer pairs**: the Primers tab's Pairs list hides pairs whose two
   Tms are more than 5 °C apart, and says how many it hid. Set your own limit beside the
   list, or choose Show all to see them, marked.

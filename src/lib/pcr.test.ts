@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { COMMON_SEQUENCING_PRIMERS, formatPrimerList, libraryHits, newEntries, parsePrimerList, type LibraryPrimer } from "./library.ts";
 import { allProducts, pcrProduct, productDocument, type PlacedPrimer } from "./pcr.ts";
 import { DEFAULT_DESIGN, designPairs, joinTail } from "./design.ts";
-import { meltingTemp } from "./primers.ts";
+import { gcContent, meltingTemp } from "./primers.ts";
 import { basesIn, reverseComplement, type SeqData, type SeqFeature } from "./seqdata.ts";
 
 const puc19 = (): string => {
@@ -178,4 +178,84 @@ test("design avoids a primer that binds twice, and reports one when it can't", (
   const stuck = designPairs(seq, false, at, at + 150, { ...DEFAULT_DESIGN, tmMin: 50, tmMax: 70, minLength: 18, maxLength: 24 });
   assert.equal(stuck[0].forward.sites, 2);
   assert.equal(stuck[0].reverse.sites, 1);
+});
+
+test("moving the ends outward finds a better-balanced stretch", () => {
+  const seq = puc19();
+  // Pinned to this region, the forward primer sits on a GC-rich stretch and runs hot.
+  const fixed = designPairs(seq, true, 74, 374)[0];
+  assert.equal(fixed.forward.start, 74);
+  assert.equal(fixed.forward.moved, 0);
+  assert.ok(gcContent(fixed.forward.bases) > 65, `${gcContent(fixed.forward.bases)}`);
+  assert.ok(fixed.forward.tm > 64, `${fixed.forward.tm}`);
+  const moved = designPairs(seq, true, 74, 374, { ...DEFAULT_DESIGN, moveEnds: 25 })[0];
+  assert.ok(moved.forward.moved > 0 && moved.forward.moved <= 25, `${moved.forward.moved}`);
+  assert.ok(moved.score < fixed.score, `${moved.score} vs ${fixed.score}`);
+  assert.ok(gcContent(moved.forward.bases) < 60, `${gcContent(moved.forward.bases)}`);
+  assert.ok(Math.abs(moved.forward.tm - 60) < 1, `${moved.forward.tm}`);
+  // Ends only move outward, so the region asked for is still amplified whole, and each
+  // binding part is the template where it says it is.
+  assert.equal(moved.forward.start, 74 - moved.forward.moved);
+  assert.equal(moved.reverse.end, 374 + moved.reverse.moved);
+  assert.equal(moved.forward.bases, seq.slice(moved.forward.start, moved.forward.end + 1));
+  assert.equal(moved.reverse.bases, reverseComplement(seq.slice(moved.reverse.start, moved.reverse.end + 1)));
+  // An end that gets a site stays on the region's edge, or the site would land away from it.
+  const tailed = designPairs(seq, true, 74, 374, { ...DEFAULT_DESIGN, moveEnds: 25, forwardTail: "GCGCGAATTC" })[0];
+  assert.equal(tailed.forward.moved, 0);
+  assert.equal(tailed.forward.start, 74);
+  // All else equal the pair nearest the region wins: where every stretch is the same one,
+  // a moved primer is the same primer, so neither end leaves the region's edges.
+  const flat = "A".repeat(200);
+  const tie = designPairs(flat, false, 80, 140, { ...DEFAULT_DESIGN, tmMin: 20, tmMax: 70, moveEnds: 10 })[0];
+  assert.equal(tie.forward.moved, 0);
+  assert.equal(tie.reverse.moved, 0);
+  assert.equal(tie.forward.start, 80);
+  assert.equal(tie.reverse.end, 140);
+});
+
+test("design with the ends pinned is what it has always been", () => {
+  const seq = puc19();
+  const pinned = designPairs(seq, true, 74, 374, { tmMin: 58, tmMax: 62, minLength: 18, maxLength: 30 });
+  assert.deepEqual(designPairs(seq, true, 74, 374, { ...DEFAULT_DESIGN, moveEnds: 0 }), pinned);
+  assert.ok(pinned.length > 1);
+  assert.ok(pinned.every(p => p.forward.start === 74 && p.forward.moved === 0 && p.reverse.end === 374 && p.reverse.moved === 0));
+});
+
+test("a moved end wraps across the origin of a circular sequence", () => {
+  const seq = puc19();
+  const n = seq.length;
+  const bases = (start: number, end: number) => (start <= end ? seq.slice(start, end + 1) : seq.slice(start) + seq.slice(0, end + 1));
+  // A region starting at the origin: the forward primer moves back over it.
+  const f = designPairs(seq, true, 0, 400, { ...DEFAULT_DESIGN, moveEnds: 30 })[0].forward;
+  assert.ok(f.moved > 0, `${f.moved}`);
+  assert.ok(f.start > f.end, `${f.start}–${f.end}`);
+  assert.equal(f.start, n - f.moved);
+  assert.equal(f.bases, bases(f.start, f.end));
+  // A region ending at the last base: the reverse primer moves forward over it.
+  const r = designPairs(seq, true, 2200, n - 1, { ...DEFAULT_DESIGN, moveEnds: 30 })[0].reverse;
+  assert.ok(r.moved > 0, `${r.moved}`);
+  assert.ok(r.start > r.end, `${r.start}–${r.end}`);
+  assert.equal(r.end, r.moved - 1);
+  assert.equal(r.bases, reverseComplement(bases(r.start, r.end)));
+});
+
+test("on a linear sequence a moved end stops at the sequence's own end", () => {
+  const lin = puc19().slice(60, 460);
+  const n = lin.length;
+  // Hard against both ends there is nowhere to move to: the pair with the ends pinned.
+  const edge = designPairs(lin, false, 0, n - 1, { ...DEFAULT_DESIGN, moveEnds: 30 })[0];
+  assert.deepEqual(edge, designPairs(lin, false, 0, n - 1)[0]);
+  assert.equal(edge.forward.moved, 0);
+  assert.equal(edge.reverse.moved, 0);
+  // Five bases in, the forward primer can move five and no further.
+  const near = designPairs(lin, false, 5, 300, { ...DEFAULT_DESIGN, moveEnds: 30 })[0];
+  assert.ok(near.forward.moved <= 5, `${near.forward.moved}`);
+  assert.equal(near.forward.start, 5 - near.forward.moved);
+  assert.ok(near.forward.start >= 0 && near.forward.end < n);
+  // Nothing wraps: a linear primer never crosses from one end to the other.
+  const far = designPairs(lin, false, 20, n - 6, { ...DEFAULT_DESIGN, moveEnds: 30 })[0];
+  assert.ok(far.reverse.moved <= 5, `${far.reverse.moved}`);
+  assert.ok(far.forward.start < far.forward.end && far.reverse.start < far.reverse.end);
+  assert.ok(far.reverse.end <= n - 1);
+  assert.equal(far.forward.bases, lin.slice(far.forward.start, far.forward.end + 1));
 });

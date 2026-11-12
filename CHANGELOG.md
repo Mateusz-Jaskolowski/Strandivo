@@ -23,6 +23,11 @@ with Unreleased's notes and leaves them where they are.
 - **Hundreds of reads**: the alignment draws only the reads near the view, so large sets
   of reads with traces use far less memory, and on a Mac no longer leave the traces blank.
 
+- **Read names in the alignment**: reads from one plate leave out the start their names
+  share, such as the date, so the well and primer show. With traces on, a long name wraps
+  instead of being cut off. Drag the edge of the names column to resize it, or
+  double-click it to fit the names.
+
 - **GC content along the sequence**: a thin strip under the bases shows where GC leaves
   40–60%, teal where it is AT-rich and orange where it is GC-rich, so you can see where a
   primer will sit well before you draw it. It is on in the Primers tab's sequence panel

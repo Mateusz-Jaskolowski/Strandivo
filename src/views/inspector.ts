@@ -20,6 +20,7 @@ import { translateCodon } from "../lib/genetics.ts";
 import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionLabel, regionRange, regionSpans, regionsOf, regionTitle, regionTree, withRegions, type ProteinRegion } from "../lib/regions.ts";
 import type { VariableDesign } from "../lib/types.ts";
 import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER } from "../lib/variable.ts";
+import { noteText, otherQualifiers, withNote } from "../lib/featureNotes.ts";
 import {
   basesIn,
   complement,
@@ -310,6 +311,9 @@ export class Inspector {
         this.viewOther({ start: f.start, end: f.end })
       )
     );
+    // A selected protein region shows its own details, not the CDS's note.
+    const ownFocus = this.ctx.store.selection.focus?.region === undefined;
+    if (ownFocus) out.push(this.noteSection(f));
     if (isCds(f)) out.push(this.regionsSection(f));
     if (isCds(f)) {
       const prot = protein(f, d.sequence);
@@ -328,7 +332,7 @@ export class Inspector {
         )
       );
     }
-    if (this.ctx.store.selection.focus?.region === undefined) out.push(this.variableSection(f, bases));
+    if (ownFocus) out.push(this.variableSection(f, bases));
     // What lies inside this feature.
     const inside: Node[] = [];
     const styles = featureStyles(d);
@@ -383,6 +387,53 @@ export class Inspector {
       )
     );
     return out;
+  }
+
+  /**
+   * The feature's /note, typed in place, and its other qualifiers from the file. The note
+   * applies as it is typed (one undo step while typing goes on), so saving never misses
+   * the last words, and keeps the selection, as the field is often left by a click
+   * elsewhere. A CDS's /translation is left out: Translation shows the protein.
+   */
+  private noteSection(f: SeqFeature): Node {
+    const note = h("textarea", { class: "sv-input sv-insp-note", rows: "2", placeholder: "Add a note", "aria-label": "Feature note", "data-keep": `feature-note:${f.id}` }) as HTMLTextAreaElement;
+    note.value = noteText(f.notes);
+    const fit = () => {
+      note.style.height = "auto";
+      note.style.height = `${note.scrollHeight + 2}px`;
+    };
+    requestAnimationFrame(fit);
+    let timer = 0;
+    const apply = (tidy: boolean) => {
+      clearTimeout(timer);
+      delete note.dataset.dirty;
+      const d = this.ctx.store.data;
+      const cur = d.features.find(x => x.id === f.id);
+      if (!cur) return;
+      const notes = withNote(cur.notes, note.value, tidy);
+      if (notes !== cur.notes) this.ctx.store.apply({ ...d, features: d.features.map(x => (x.id === f.id ? { ...x, notes } : x)) }, "Edit note", undefined, `feature-note:${f.id}`);
+    };
+    note.addEventListener("input", () => {
+      note.dataset.dirty = "1";
+      fit();
+      clearTimeout(timer);
+      timer = window.setTimeout(() => apply(false), 300);
+    });
+    note.addEventListener("change", () => apply(true));
+    const others = otherQualifiers(f.notes).filter(q => !(isCds(f) && q.name === "translation"));
+    return h(
+      "section",
+      { class: "sv-insp-section" },
+      h("h3", { class: "sv-section-title" }, "Note"),
+      note,
+      others.length
+        ? h(
+            "dl",
+            { class: "sv-facts sv-qualifiers", "aria-label": "Qualifiers" },
+            others.flatMap(q => [h("dt", { title: `/${q.name}` }, q.name), h("dd", { title: q.values.join("\n") }, q.values.map(v => h("div", null, v)))])
+          )
+        : null
+    );
   }
 
   /** A protein's regions, kept inside the CDS (`src/lib/regions.ts`), and getting them. */

@@ -453,6 +453,16 @@ async function main() {
     await s.click("//*[contains(@class,'sv-inspector')]//button[contains(., 'Design primers')]", "xpath");
     check("Designing primers for AmpR suggests a pair in a dialog", await s.waitFor("document.querySelector('.sv-dialog .sv-design-pair')", 5000));
     check("The pair waits for review before it is added", (await state()).primers.length === 0);
+    // Letting the ends move finds a better stretch a little outside the region, so the
+    // product grows while still covering it; back at 0 the primers sit on its edges again.
+    const setNum = (label, value) => s.exec(`const el = document.querySelector(".sv-dialog input[aria-label='${label}']"); el.value = '${value}'; el.dispatchEvent(new Event('change'));`);
+    const productBp = "Number((document.querySelector('.sv-dialog .sv-design-result-head')?.textContent.match(/([\\d,]+) bp product/) || [0, '0'])[1].replace(/,/g, ''))";
+    const pinnedBp = await s.exec(`return ${productBp};`);
+    await setNum("Bases each end may move outward", 20);
+    const grew = await s.waitFor(`${productBp} > ${pinnedBp} && ${productBp} <= ${pinnedBp} + 40`, 5000);
+    check("Moving the ends designs a longer product over the same region", grew, `${pinnedBp} bp with the ends pinned, ${await s.exec(`return ${productBp};`)} bp with 20 allowed`);
+    await setNum("Bases each end may move outward", 0);
+    check("Back at 0 the primers sit on the region's edges again", await s.waitFor(`${productBp} === ${pinnedBp}`, 5000));
     // AmpR runs right to left: NdeI at its start goes on the primer at its start codon.
     const choose = (label, value) => s.exec(`const el = document.querySelector(".sv-dialog select[aria-label='${label}']"); el.value = Array.from(el.options).find(o => o.value === '${value}' || o.textContent.startsWith('${value}'))?.value ?? ''; el.dispatchEvent(new Event('change'));`);
     await choose("Site added at the start", "NdeI");
@@ -632,6 +642,26 @@ async function main() {
     check("Copy for ordering lists the primers the file has now", await s.waitFor(`document.querySelectorAll('.sv-dialog .sv-order-row:not(.sv-order-all)').length === ${before - 1}`, 3000));
     await s.press(ESCAPE);
     await s.exec(`${doc} s.undo();`);
+    // The Tm limit beside Pairs hides pairs whose Tms are further apart, and is remembered.
+    const setTmLimit = v => s.exec(`const i = document.querySelector('.sv-primers-limit input'); i.value = '${v}'; i.dispatchEvent(new Event('change', { bubbles: true }));`);
+    const pairRows = () => s.exec("return document.querySelectorAll('.sv-primer-table tbody tr').length;");
+    await setTmLimit(30);
+    await sleep(200);
+    const allPairs = await pairRows();
+    await setTmLimit(0);
+    check(
+      "Pairs with Tms further apart than the limit are hidden and counted",
+      await s.waitFor("/over 0 °C apart · Show all/.test(document.querySelector('.sv-primers-note')?.textContent || '')", 3000) &&
+        (await pairRows()) < allPairs &&
+        /"tmLimit":0/.test(await s.exec("return localStorage.getItem('strandivo.primers') || '';")),
+      `${await pairRows()} of ${allPairs}`
+    );
+    await s.click("//*[contains(@class,'sv-primers-note')]//button[contains(., 'Show all')]", "xpath");
+    check("Show all lists them again, marked", await s.waitFor(`document.querySelectorAll('.sv-primer-table tbody tr').length === ${allPairs} && document.querySelectorAll('.sv-primer-table tbody .sv-text-warn').length >= 1`, 3000));
+    await s.shot("04c-primer-pairs-tm-limit");
+    await s.click("//*[contains(@class,'sv-primers-note')]//button[contains(., 'Hide them')]", "xpath");
+    await setTmLimit(5);
+    await sleep(200);
     await s.click("//*[contains(@class,'sv-primers')]//*[contains(@class,'sv-segmented')]//button[normalize-space(text())='List']", "xpath");
     await sleep(200);
 
@@ -675,6 +705,16 @@ async function main() {
     const keySaved = await s.waitFor("window.__strandivo.isDirty() === false", 5000);
     check("Ctrl+S saves the file", keySaved && readFileSync(savedPath, "utf8").includes("Saved with Ctrl+S"));
     check("The note is saved as GenBank writes it", readFileSync(savedPath, "utf8").includes('/note="Says ""stop"" here'));
+    // Saved straight after typing, before the note applies on its own, it is saved whole,
+    // and the field keeps the caret.
+    const quickNote = `${typedNote}\nAdded just before saving`;
+    const quickSave = await s.execAsync(
+      "const done = arguments[arguments.length - 1]; const note = document.querySelector('[aria-label=\"Feature note\"]'); note.focus(); note.value = arguments[1]; note.dispatchEvent(new Event('input')); window.__strandivo.saveAs(arguments[0]).then(() => done(document.activeElement?.getAttribute('aria-label') === 'Feature note' ? 'ok' : 'focus lost'), e => done(String(e)));",
+      savedPath,
+      quickNote
+    );
+    check("Saving straight after typing a note saves all of it", quickSave === "ok" && readFileSync(savedPath, "utf8").includes('/note="Added just before saving"'), quickSave);
+    await s.exec("document.activeElement?.blur();");
     const docSummary = `${doc} return { len: s.data.sequence.length, features: s.data.features.map(f => f.name + ' ' + f.start + '-' + f.end), primers: s.data.primers.map(p => p.name + ' ' + p.start + '-' + p.end) };`;
     const savedDoc = await s.exec(docSummary);
     // The saved file is now this tab's file, so opening it again would just show this tab:
@@ -690,7 +730,7 @@ async function main() {
     const reopened = await s.exec(docSummary);
     check("The saved file reopens with the same sequence, features and primers", JSON.stringify(reopened) === JSON.stringify(savedDoc), JSON.stringify(reopened).slice(0, 200));
     await s.exec(`${doc} const f = s.data.features[0]; s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
-    check("The reopened file shows the note in the inspector", await s.waitFor(`document.querySelector('[aria-label="Feature note"]')?.value === ${JSON.stringify(typedNote)}`, 5000));
+    check("The reopened file shows the note in the inspector", await s.waitFor(`document.querySelector('[aria-label="Feature note"]')?.value === ${JSON.stringify(quickNote)}`, 5000));
     check("Only the shown file's views are in the page", (await s.exec("return document.querySelectorAll('.sv-app').length")) === 1);
     await s.press(PAGE_UP, [CTRL]);
     check("Ctrl+Page Up goes back to the first file", await s.waitFor("window.__strandivo.activeTab() === 0", 3000));

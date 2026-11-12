@@ -56,3 +56,31 @@ export function primerPairs(inputs: PairInput[], sequence: string, circular: boo
   }
   return out.sort((a, b) => a.length - b.length || a.forward.start - b.forward.start);
 }
+
+/** The most the Pairs view's limit can be set to; past this any two primers would do. */
+export const TM_APART_MAX = 30;
+
+/**
+ * The Pairs view's limit as it was kept, or `TM_APART` if it is missing or can't be one.
+ * Whole and half degrees only, as the field steps by them.
+ */
+export function parseTmLimit(v: unknown): number {
+  const n = typeof v === "string" && v.trim() ? Number(v) : v;
+  if (typeof n !== "number" || !Number.isFinite(n) || n < 0) return TM_APART;
+  return Math.min(TM_APART_MAX, Math.round(n * 2) / 2);
+}
+
+/**
+ * Whether a pair's Tms are further apart than `limit`. The difference is taken as the list
+ * shows it, to a tenth of a degree, so a pair shown as 5.0 °C apart is within 5 °C. A pair
+ * with an unknown Tm is never over it, as there is nothing to say it is badly matched.
+ */
+export function overTmLimit(pair: PrimerPair, limit: number): boolean {
+  return pair.tmApart !== null && Math.round(pair.tmApart * 10) / 10 > limit;
+}
+
+/** The pairs within `limit`, in their order, and how many are over it. */
+export function withinTmLimit(pairs: PrimerPair[], limit: number): { within: PrimerPair[]; over: number } {
+  const within = pairs.filter(p => !overTmLimit(p, limit));
+  return { within, over: pairs.length - within.length };
+}

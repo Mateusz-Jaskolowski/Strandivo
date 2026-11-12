@@ -16,6 +16,17 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Design primers a little away from the selection**: the Design primers dialog has a
+  "Move ends" distance. Allow the ends a few bases and each primer can slide outward onto
+  a stretch that suits it, instead of being stuck on an AT-rich or GC-rich one at the edge
+  of what you selected. The product only grows, so it still covers the whole region, and
+  the pair nearest your selection wins when moving gains nothing. An end that gets a
+  restriction site stays where it is.
+
+- **Hide badly matched primer pairs**: the Primers tab's Pairs list hides pairs whose two
+  Tms are more than 5 °C apart, and says how many it hid. Set your own limit beside the
+  list, or choose Show all to see them, marked.
+
 - **No more "ResizeObserver loop" errors**: the browser's harmless notice when a panel
   resizes as it is drawn no longer shows as an "Unexpected error" or goes into the recent
   errors a bug report can include.
@@ -47,6 +58,10 @@ with Unreleased's notes and leaves them where they are.
   such as gene and database links. Notes with quotes, or long enough to wrap, now open and
   save whole: a quote used to cut the rest of a line off, and words at a line break were
   run together.
+
+- **Saving right after typing**: a primer's bases edited in the inspector are saved with
+  every last keystroke, even when you save straight away. The last letters used to be
+  left out of the file.
 
 - **Pasting a sequence**: text copied from a database or another program can be pasted
   whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.

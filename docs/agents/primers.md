@@ -51,6 +51,11 @@ and CI checks that they exist.
   product is built, as a primer only shortens a product by template its own site covers.
   The pairs are worked out once per document, like each primer's report, and both are
   dropped when Settings change, as the document is then the same but the Tms are not.
+  Pairs whose Tms are further apart than the limit beside the list (`withinTmLimit`, 5 °C
+  until changed, kept with the list's sort) are hidden, never dropped from the cache, and
+  the note says how many with Show all; a pair with an unknown Tm always shows. The
+  difference is compared as the list rounds it, so a pair shown 5.0 °C apart is within
+  5 °C. The PCR product dialog's warning keeps the fixed `TM_APART`, as it judges one pair.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.
@@ -80,6 +85,18 @@ and CI checks that they exist.
 
 ## Decisions (and why)
 
+- **Designed ends move outward, never inward** (`moveEnds` in `src/lib/design.ts`, the
+  dialog's "Move ends"): a primer pinned to the region's own edge may be stuck on an
+  AT-rich or GC-rich stretch, with nothing to do but grow longer. With a distance it may
+  start up to that many bases outside the region instead, which only lengthens the product,
+  so the region asked for is amplified either way. Each base moved costs a little, so the
+  pair on the edges wins whenever a moved one is no better, and GC outside 40–60% costs a
+  little too, on the thresholds `primerReport` warns at. An end with a 5′ addition never
+  moves: a site is added to land on that edge (NdeI on a start codon), and bases between
+  the two would undo it. Assembly keeps the default of 0 for the same reason — its tails
+  are the neighbour's own end bases. Looking for mispriming is a scan of the template, so
+  with the ends moving only the best candidates at each end are scanned, never the hundreds
+  of positions tried.
 - **The lab primer library** is kept by the app, not in documents (`src/primerLibrary.ts`,
   in local storage like the settings, with an app event so every window sees changes).
   Export/Import of a tab-separated list is the backup and the way to share it.

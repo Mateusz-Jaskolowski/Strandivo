@@ -1,6 +1,6 @@
 # GC content along the sequence
 
-Planned and built 12 November 2026. The desktop end-to-end checks await CI.
+Planned and built 12 November 2026; merged with its end-to-end checks passing in CI.
 
 ## Summary
 

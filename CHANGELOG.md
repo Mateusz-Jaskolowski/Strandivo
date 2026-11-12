@@ -48,6 +48,10 @@ with Unreleased's notes and leaves them where they are.
   save whole: a quote used to cut the rest of a line off, and words at a line break were
   run together.
 
+- **Saving right after typing**: a primer's bases edited in the inspector are saved with
+  every last keystroke, even when you save straight away. The last letters used to be
+  left out of the file.
+
 - **Pasting a sequence**: text copied from a database or another program can be pasted
   whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.
   Letters that aren't bases used to be pasted as DNA; now Strandivo says the clipboard

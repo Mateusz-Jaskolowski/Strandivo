@@ -27,6 +27,10 @@ with Unreleased's notes and leaves them where they are.
   Tms are more than 5 °C apart, and says how many it hid. Set your own limit beside the
   list, or choose Show all to see them, marked.
 
+- **No more "ResizeObserver loop" errors**: the browser's harmless notice when a panel
+  resizes as it is drawn no longer shows as an "Unexpected error" or goes into the recent
+  errors a bug report can include.
+
 - **GC content along the sequence**: a thin strip under the bases shows where GC leaves
   40–60%, teal where it is AT-rich and orange where it is GC-rich, so you can see where a
   primer will sit well before you draw it. It is on in the Primers tab's sequence panel

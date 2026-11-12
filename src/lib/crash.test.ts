@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addError, ERROR_DAYS, errorLines, parseCrash, parseErrorLog } from "./crash.ts";
+import { addError, ERROR_DAYS, errorLines, isResizeObserverNotice, parseCrash, parseErrorLog } from "./crash.ts";
 import { buildReport, crashLines, LIMITS, reportProblem, reportText } from "./feedback.ts";
 
 // As src-tauri/src/crash.rs writes it.
@@ -82,4 +82,11 @@ test("recent errors are kept for a week, the last 20, across launches", () => {
   assert.deepEqual(parseErrorLog(stored, now.getTime()), list);
   assert.deepEqual(parseErrorLog(stored, now.getTime() + (ERROR_DAYS + 1) * 86_400_000), []);
   for (const bad of [null, "", "{", "{}", "7"]) assert.deepEqual(parseErrorLog(bad, now.getTime()), []);
+});
+
+test("the browser's ResizeObserver notice is told apart from real errors", () => {
+  assert.ok(isResizeObserverNotice("ResizeObserver loop completed with undelivered notifications."));
+  assert.ok(isResizeObserverNotice("ResizeObserver loop limit exceeded"));
+  assert.ok(!isResizeObserverNotice("TypeError: undefined is not an object"));
+  assert.ok(!isResizeObserverNotice("Uncaught ResizeObserver loop completed with undelivered notifications."));
 });

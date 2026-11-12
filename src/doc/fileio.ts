@@ -9,6 +9,7 @@ import { Buffer as PolyfillBuffer } from "buffer/index.js";
 import { compactChromatogram } from "../lib/chromatogram.ts";
 import { basename, extension, stripExtension } from "../lib/files.ts";
 import { snapgenePrimers, snapgeneSegmentGaps } from "../lib/snapgene.ts";
+import { fixQualifiers, formatQualifier, readFeatureTables } from "../lib/genbankQualifiers.ts";
 import type { SaveFormat } from "../lib/files.ts";
 import type { Chromatogram } from "../lib/types.ts";
 
@@ -46,6 +47,14 @@ export async function parseSequenceFile(bytes: Uint8Array, path: string): Promis
     if (typeof s.description === "string") s.description = htmlToText(s.description);
     return s;
   });
+  // The generic parser misreads quotes and wrapped lines in GenBank qualifier values.
+  if (extension(path) !== "dna") {
+    const text = new TextDecoder().decode(bytes);
+    if (/^\s*LOCUS\b/.test(text)) {
+      const tables = readFeatureTables(text);
+      if (tables.length === sequences.length) sequences.forEach((s, i) => fixQualifiers([listOf(s.features), listOf(s.primers), listOf(s.parts)], tables[i]));
+    }
+  }
   // The generic parser skips primers stored in SnapGene files.
   if (extension(path) === "dna" && sequences.length === 1) {
     const primers = snapgenePrimers(bytes).map(p => ({
@@ -82,9 +91,33 @@ export async function parseSequenceFile(bytes: Uint8Array, path: string): Promis
   return { sequences, warnings };
 }
 
+const listOf = (v: unknown): any[] => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : []);
+
 export function serialize(seq: any, format: SaveFormat): string {
-  // By default the GenBank writer deletes web addresses from notes and the definition.
-  return format === "fasta" ? jsonToFasta(seq) : jsonToGenbank(seq, { doNotMangleOrStripUrls: true });
+  if (format === "fasta") return jsonToFasta(seq);
+  // The writer wraps qualifier values mid-word and doesn't double their quotes, so it is
+  // handed a short stand-in for each value, which `formatQualifier` then writes.
+  const values: string[] = [];
+  let mark = "SVQ";
+  const all = JSON.stringify(seq);
+  while (all.includes(mark)) mark += "Q";
+  const stand = (f: any) => {
+    if (!f?.notes || typeof f.notes !== "object" || Array.isArray(f.notes)) return f;
+    const notes: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(f.notes)) {
+      notes[k] = Array.isArray(v) && k.length <= 40 && k !== "color" && k !== "labelColor"
+        ? v.map(x => (typeof x === "string" ? `${mark}${values.push(x) - 1}${mark}` : x))
+        : v;
+    }
+    return { ...f, notes };
+  };
+  const swapped = { ...seq, features: listOf(seq.features).map(stand), primers: listOf(seq.primers).map(stand) };
+  // By default the writer deletes web addresses from notes and the definition.
+  const text: string = jsonToGenbank(swapped, { doNotMangleOrStripUrls: true });
+  const line = new RegExp(`^ {21}/([^\\s=]+)="${mark}(\\d+)${mark}"(\\r?)$`, "gm");
+  const out = text.replace(line, (_, name: string, i: string, cr: string) => formatQualifier(name, values[Number(i)]).join(`${cr}\n`) + cr);
+  // A stand-in the writer wrapped (a very long name) would be lost: write as it did.
+  return out.includes(mark) ? jsonToGenbank(seq, { doNotMangleOrStripUrls: true }) : out;
 }
 
 export interface ReadFileData {

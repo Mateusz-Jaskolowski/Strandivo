@@ -392,6 +392,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **SnapGene files** need fixing up after the generic parser (`src/doc/fileio.ts` with
   `src/lib/snapgene.ts`): it skips primers (whose binding sites, unlike features, are
   0-based), and it keeps a feature's `type="gap"` segments (introns) as parts of it.
+- **GenBank qualifier values** are put right after the generic parser and written by us
+  (`src/lib/genbankQualifiers.ts`, called from `src/doc/fileio.ts`): it cut a value at its
+  first quote, joined wrapped lines with no space, and wrote values wrapped mid-word with
+  quotes not doubled. Features are matched to the file's table by their first and last
+  base. Lines join with a space, as GenBank's do, except in `/translation` and the app's
+  own `/strandivo_…` values, which have no spaces and are cut to the width.
 - **Saving** must not lose anything: `src/lib/saving.test.ts` saves and reopens every file
   in `testdata/`, also after edits. Add a file there when you meet one that breaks.
 - **HTTPS in the shell**: reqwest is built without a TLS provider (the updater's

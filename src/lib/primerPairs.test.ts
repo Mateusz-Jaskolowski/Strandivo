@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { primerPairs, type PairInput } from "./primerPairs.ts";
+import { overTmLimit, parseTmLimit, primerPairs, TM_APART, TM_APART_MAX, withinTmLimit, type PairInput } from "./primerPairs.ts";
 import { MAX_PRODUCT, pcrProduct } from "./pcr.ts";
 import { reverseComplement, type SeqPrimer } from "./seqdata.ts";
 
@@ -116,4 +116,30 @@ test("the Tms are reported as they came, and how far apart they are", () => {
   assert.equal(pair.tmApart!.toFixed(1), "7.1");
   // A primer whose Tm can't be worked out leaves the difference unknown.
   assert.equal(primerPairs([input(f, null), input(r, 57.1)], seq, true)[0].tmApart, null);
+});
+
+test("pairs whose Tms are further apart than the limit are counted out, unknown Tms kept", () => {
+  const f1 = primer("F1", 100, 119, 1);
+  const f2 = primer("F2", 300, 319, 1);
+  const f3 = primer("F3", 400, 419, 1);
+  const r = primer("R", 700, 719, -1);
+  // F1 is 5.04 °C from R, shown as 5.0 °C, so within 5; F2 is 5.06 °C, shown as 5.1, so over.
+  const pairs = primerPairs([input(f1, 65.04), input(f2, 65.06), input(f3, null), input(r, 60)], seq, true);
+  const { within, over } = withinTmLimit(pairs, 5);
+  assert.deepEqual(within.map(x => x.forward.name), ["F3", "F1"]);
+  assert.equal(over, 1);
+  assert.equal(overTmLimit(pairs.find(x => x.forward.name === "F2")!, 5), true);
+  assert.equal(overTmLimit(pairs.find(x => x.forward.name === "F3")!, 0), false);
+  // A limit of nothing keeps only pairs of the same Tm, and a wide one keeps them all.
+  assert.equal(withinTmLimit(pairs, 0).over, 2);
+  assert.equal(withinTmLimit(pairs, 30).over, 0);
+});
+
+test("a kept limit is read back, or the usual 5 °C if it can't be one", () => {
+  assert.equal(parseTmLimit(3), 3);
+  assert.equal(parseTmLimit("2.5"), 2.5);
+  assert.equal(parseTmLimit(2.3), 2.5);
+  assert.equal(parseTmLimit(0), 0);
+  assert.equal(parseTmLimit(99), TM_APART_MAX);
+  for (const bad of [undefined, null, "", "abc", -1, NaN, Infinity, {}]) assert.equal(parseTmLimit(bad), TM_APART);
 });

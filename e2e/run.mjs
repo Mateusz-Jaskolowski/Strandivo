@@ -662,9 +662,19 @@ async function main() {
     // Outside macOS the page passes a menu item's key on to the shell, as Windows' menu never
     // hears it (#32); here GTK's may hear it too, and the shell still saves once.
     await s.exec(`${doc} s.apply({ ...s.data, features: s.data.features.map((f, i) => i === 0 ? { ...f, name: "Saved with Ctrl+S" } : f) }, "Rename");`);
+    // A feature's note is typed in the inspector and saved as its /note, quotes and all.
+    const typedNote = 'Says "stop" here, and goes on long enough to wrap onto another line of the file';
+    await s.exec(`${doc} const f = s.data.features[0]; s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+    await s.waitFor("document.querySelector('[aria-label=\"Feature note\"]')", 5000);
+    // Cleared without an event, so the first key press replaces any note the feature had.
+    await s.exec("const note = document.querySelector('[aria-label=\"Feature note\"]'); note.value = ''; note.scrollIntoView({ block: 'nearest' });");
+    await s.keys("[aria-label='Feature note']", typedNote);
+    check("A feature's note applies as it is typed", await s.waitFor(`window.__strandivo.store.data.features[0].notes.note?.join('\\n') === ${JSON.stringify(typedNote)}`, 5000), JSON.stringify(await s.exec(`${doc} return s.data.features[0].notes;`)));
+    await s.exec("document.activeElement?.blur();");
     await s.press("s", [CTRL]);
     const keySaved = await s.waitFor("window.__strandivo.isDirty() === false", 5000);
     check("Ctrl+S saves the file", keySaved && readFileSync(savedPath, "utf8").includes("Saved with Ctrl+S"));
+    check("The note is saved as GenBank writes it", readFileSync(savedPath, "utf8").includes('/note="Says ""stop"" here'));
     const docSummary = `${doc} return { len: s.data.sequence.length, features: s.data.features.map(f => f.name + ' ' + f.start + '-' + f.end), primers: s.data.primers.map(p => p.name + ' ' + p.start + '-' + p.end) };`;
     const savedDoc = await s.exec(docSummary);
     // The saved file is now this tab's file, so opening it again would just show this tab:
@@ -679,6 +689,8 @@ async function main() {
     check("Opening another file adds a tab and shows it", newTab, JSON.stringify(await s.exec("return window.__strandivo.tabs()")));
     const reopened = await s.exec(docSummary);
     check("The saved file reopens with the same sequence, features and primers", JSON.stringify(reopened) === JSON.stringify(savedDoc), JSON.stringify(reopened).slice(0, 200));
+    await s.exec(`${doc} const f = s.data.features[0]; s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+    check("The reopened file shows the note in the inspector", await s.waitFor(`document.querySelector('[aria-label="Feature note"]')?.value === ${JSON.stringify(typedNote)}`, 5000));
     check("Only the shown file's views are in the page", (await s.exec("return document.querySelectorAll('.sv-app').length")) === 1);
     await s.press(PAGE_UP, [CTRL]);
     check("Ctrl+Page Up goes back to the first file", await s.waitFor("window.__strandivo.activeTab() === 0", 3000));

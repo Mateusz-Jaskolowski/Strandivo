@@ -32,6 +32,12 @@ with Unreleased's notes and leaves them where they are.
 - **Primers tab**: clicking another primer in the sequence panel moves the panel to that
   primer, with its Tm, checks and handles, as clicking it in the list does.
 
+- **Notes on features**: the inspector has a Note field for the selected feature, saved
+  in the file as its GenBank note, and lists the feature's other details from the file,
+  such as gene and database links. Notes with quotes, or long enough to wrap, now open and
+  save whole: a quote used to cut the rest of a line off, and words at a line break were
+  run together.
+
 - **Pasting a sequence**: text copied from a database or another program can be pasted
   whole — a FASTA header, a GenBank record, numbered lines — and only its bases go in.
   Letters that aren't bases used to be pasted as DNA; now Strandivo says the clipboard

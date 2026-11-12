@@ -26,7 +26,9 @@ and CI checks that they exist.
   them short, HGVS-style: W163R, W163*, L54=, L54fs, G50_S52del, T7_L8insYLG, …delins…
   (amino acids an in-frame change leaves alone are trimmed from both ends); outside a CDS
   they are the app's DNA changes (A2000G). Identical clones share a key made of their DNA
-  changes and flags, so TGA and TAG are different clones though both are W163*.
+  changes and flags, so TGA and TAG are different clones though both are W163*, and of
+  the bases of each variable region read whole, in place of its differences: a vector with
+  Ns in its CDRs gives none there, and a longer CDR3 is only "ins 18 bp".
 - **Variable regions**: a feature with a `/strandivo_variable` qualifier (anything, a pattern
   such as NNK, or named versions; `src/lib/variable.ts`) is a part a library varies. The
   core aligns reads with these regions as N, so their edges come out right, but calls

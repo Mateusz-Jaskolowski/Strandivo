@@ -45,6 +45,10 @@ with Unreleased's notes and leaves them where they are.
 - **Mutagenic primers**: a primer whose change sits close to its 3′ end is no longer
   reported as not binding the sequence.
 
+- **Library clones**: clones with different CDRs are no longer counted as identical in
+  the Clones table when the vector has Ns in its CDRs, or when two CDR3s have the same
+  length.
+
 - **Amino-acid changes from reads**: two or three changes in one codon are now read
   together, so a codon swapped whole is reported as one change, such as A2W.
 

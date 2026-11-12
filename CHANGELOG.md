@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Sort more tables**: click a heading to sort Home's constructs by name, length or date
+  changed (within each folder), the Clones table by clone, how often it was seen, status
+  or mutations, and the primer library by name, length, Tm or GC. A second click turns
+  the order round; in the Clones table a third goes back to the order of your reads.
+
 - **Hide badly matched primer pairs**: the Primers tab's Pairs list hides pairs whose two
   Tms are more than 5 °C apart, and says how many it hid. Set your own limit beside the
   list, or choose Show all to see them, marked.

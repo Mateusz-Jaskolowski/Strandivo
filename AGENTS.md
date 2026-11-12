@@ -160,6 +160,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   colours stay on their bands. Hovering a region's band or name highlights its pieces and
   outlines the owning CDS without changing selection. Hover and selection keep region
   text at its measured weight, so names never widen into their neighbours.
+- **Sortable tables** use `sortHeader` (`src/ui/sortHead.ts`) and `src/lib/tableSort.ts`,
+  each keeping its sort in local storage. A column sorts its useful way first (newest,
+  most clones, worst status). Where the table's own order means something, as in the
+  Clones table, which follows the list of reads, a third click goes back to it.
 - **Right-click menus**: `src/lib/contextMenu.ts` decides what each menu offers (as data,
   unit-tested) and `src/doc/contextMenu.ts` runs it with the inspector's and toolbar's own
   functions. A view selects what was clicked first (`menuTargetAt`), then calls

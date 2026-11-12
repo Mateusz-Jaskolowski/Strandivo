@@ -7,6 +7,8 @@
 
 import { h, svg } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
+import { sortHeader } from "../ui/sortHead.ts";
+import { naturalOrder, nextTableSort, parseTableSort, sortedBy, type TableSort } from "../lib/tableSort.ts";
 import type { DocContext } from "../doc/context.ts";
 import { featureStyles } from "../doc/analysis.ts";
 import { layoutAlignment, type AlignmentLayout } from "../lib/alignLayout.ts";
@@ -40,6 +42,23 @@ export interface ReadsActions {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
 const OPTIONS_KEY = "strandivo.reads";
+
+/** The Clones table's columns that sort, and how; with none, it follows the list of reads. */
+type CloneSortKey = "clone" | "seen" | "status" | "mutations";
+const CLONE_SORT_KEY = "strandivo.cloneSort";
+const CLONE_SORT_KEYS: CloneSortKey[] = ["clone", "seen", "status", "mutations"];
+/** The most clones and the worst status first; a third click goes back to the list's order. */
+const CLONE_SORT_RULES = { firstDescending: ["seen", "status"] as CloneSortKey[], canClear: true };
+/** How bad a status is, as its pill's colour says. */
+const FLAG_RANK: Record<CloneFlag, number> = { mixed: 3, stop: 3, frameshift: 3, unaligned: 2, design: 2, conflict: 2, poor: 2, partial: 1 };
+
+function loadCloneSort(): TableSort<CloneSortKey> | null {
+  try {
+    return parseTableSort(JSON.parse(localStorage.getItem(CLONE_SORT_KEY) || "null"), CLONE_SORT_KEYS, null);
+  } catch {
+    return null;
+  }
+}
 
 type TopView = "coverage" | "clones" | "differences" | "summary";
 const TOP_VIEWS: TopView[] = ["coverage", "clones", "differences", "summary"];
@@ -189,6 +208,7 @@ export class ReadsView {
   private actions: ReadsActions;
   private trace: TraceView;
   private options = loadOptions();
+  private cloneSort = loadCloneSort();
   private active: number | null = null;
   /** A clone of several reads, selected as a whole (its key). */
   private activeClone: string | null = null;
@@ -1044,6 +1064,58 @@ export class ReadsView {
     return [...byKey.values()];
   }
 
+  /**
+   * The table's rows in the order its headings ask for. Rows that tie, and every row with no
+   * sort, keep the order of the list of reads, which the user can rearrange.
+   */
+  private sortedGroups(): number[][] {
+    const groups = this.identicalGroups();
+    const by = this.groupRegion();
+    // Sorts that make no sense grouped by a region (its rows aren't single clones) do nothing.
+    const sort = by !== null && this.cloneSort?.key !== "seen" ? null : this.cloneSort;
+    const rank = (g: number[]) => Math.max(0, ...this.variants(g[0])!.flags.map(f => FLAG_RANK[f]));
+    return sortedBy(
+      groups,
+      sort,
+      (key, a, b) => {
+        const va = this.variants(a[0])!;
+        const vb = this.variants(b[0])!;
+        switch (key) {
+          case "clone":
+            return naturalOrder.compare(this.cloneName(a[0]), this.cloneName(b[0]));
+          case "seen":
+            return a.length - b.length;
+          case "status":
+            return rank(a) - rank(b) || va.flags.length - vb.flags.length;
+          case "mutations":
+            return va.mutations.length - vb.mutations.length;
+        }
+      },
+      undefined,
+      (key, g) => key === "mutations" && this.variants(g[0])!.flags.includes("unaligned")
+    );
+  }
+
+  private cloneSortHeader(label: string, key: CloneSortKey, cls?: string, title?: string): HTMLTableCellElement {
+    return sortHeader({
+      label,
+      key,
+      cls,
+      title,
+      sort: this.cloneSort,
+      onSort: k => {
+        this.cloneSort = nextTableSort(this.cloneSort, k, CLONE_SORT_RULES);
+        try {
+          if (this.cloneSort) localStorage.setItem(CLONE_SORT_KEY, JSON.stringify(this.cloneSort));
+          else localStorage.removeItem(CLONE_SORT_KEY);
+        } catch {
+          /* storage unavailable: the sort lasts until the window closes */
+        }
+        this.renderCloneTable();
+      }
+    });
+  }
+
   /** The variable regions' names, the same for every clone. */
   private regionNames(): string[] {
     return this.reads.clones.length ? this.variants(0)!.regions.map(r => r.feature) : [];
@@ -1142,7 +1214,7 @@ export class ReadsView {
     const regions = this.regionNames();
     const common = this.commonContents();
     const by = this.groupRegion();
-    const rows = this.identicalGroups().map(group => {
+    const rows = this.sortedGroups().map(group => {
       const v = this.variants(group[0])!;
       const names = group.map(i => this.cloneName(i));
       const status = v.flags.length ? v.flags.map(f => h("span", { class: `sv-pill ${FLAG_CLASS[f]}` }, flagText(f, v))) : [h("span", { class: "sv-pill sv-pill-ok" }, "OK")];
@@ -1175,13 +1247,13 @@ export class ReadsView {
       h("th", { title: common[k] ? `Most common: ${common[k]}` : "" }, name, common[k] ? h("div", { class: "sv-clonetab-common sv-mono" }, common[k]) : "");
     const head =
       by !== null
-        ? [regionHead(regions[by], by), h("th", { class: "sv-num", title: "Clones with these contents" }, "Seen"), h("th", null, "Clones")]
+        ? [regionHead(regions[by], by), this.cloneSortHeader("Seen", "seen", "sv-num", "Clones with these contents"), h("th", null, "Clones")]
         : [
-            h("th", null, "Clone"),
-            h("th", { class: "sv-num", title: "Clones with the same mutations and status" }, "Seen"),
-            h("th", null, "Status"),
+            this.cloneSortHeader("Clone", "clone"),
+            this.cloneSortHeader("Seen", "seen", "sv-num", "Clones with the same mutations and status"),
+            this.cloneSortHeader("Status", "status"),
             ...regions.map(regionHead),
-            h("th", null, "Mutations"),
+            this.cloneSortHeader("Mutations", "mutations"),
             h("th", null, "Read")
           ];
     const groupBy = regions.length

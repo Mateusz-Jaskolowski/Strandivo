@@ -32,6 +32,8 @@ import { isBrowserKey, shownPath } from "./webFiles.ts";
 import { recentFiles } from "./recent.ts";
 import { basename, dirname, extension, LIBRARY_EXTENSIONS, stripExtension } from "./lib/files.ts";
 import { describeContents, matchesSearch, subfolder, type ConstructInfo } from "./lib/constructs.ts";
+import { nextTableSort, parseTableSort, sortedBy, type TableSort } from "./lib/tableSort.ts";
+import { sortHeader } from "./ui/sortHead.ts";
 import { parseComments } from "./lib/labinfo.ts";
 import {
   cacheConstructs,
@@ -98,6 +100,34 @@ const NO_FOLDERS = "This browser can't keep folders between visits: Home lists o
 const VERIFIED_CLASS: Record<string, string> = { Yes: "sv-home-ok", Partially: "sv-home-warn", No: "sv-home-bad", "Differences found": "sv-home-bad" };
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
+/** The columns Home sorts by, and the sort kept between visits. */
+type HomeSortKey = "name" | "length" | "changed";
+const HOME_SORT_KEY = "strandivo.homeSort";
+const HOME_SORT_KEYS: HomeSortKey[] = ["name", "length", "changed"];
+const BY_NAME: TableSort<HomeSortKey> = { key: "name", descending: false };
+/** The newest change first. */
+const HOME_SORT_RULES = { firstDescending: ["changed"] as HomeSortKey[] };
+
+function loadHomeSort(): TableSort<HomeSortKey> {
+  try {
+    return parseTableSort(JSON.parse(localStorage.getItem(HOME_SORT_KEY) || "null"), HOME_SORT_KEYS, BY_NAME) ?? BY_NAME;
+  } catch {
+    return BY_NAME;
+  }
+}
+
+/** Files in the order asked for, ties by name; a file that couldn't be read goes last by length or date. */
+function sortConstructs(list: ConstructInfo[], sort: TableSort<HomeSortKey>): ConstructInfo[] {
+  const name = (a: ConstructInfo, b: ConstructInfo) => byName(basename(a.path), basename(b.path));
+  return sortedBy(
+    list,
+    sort,
+    (key, a, b) => (key === "name" ? name(a, b) : key === "length" ? a.length - b.length : a.modified - b.modified),
+    name,
+    (key, i) => key !== "name" && !!i.error
+  );
+}
+
 export class Home {
   readonly el: HTMLElement;
   private host: HomeHost;
@@ -111,6 +141,7 @@ export class Home {
   private scanId = 0;
   private lastScan = 0;
   private query = "";
+  private sort = loadHomeSort();
   private renderLater = false;
   private search: HTMLInputElement;
   private list = h("div", { class: "sv-home-list" });
@@ -373,7 +404,7 @@ export class Home {
     // Where folders can't be kept, the files opened during the visit, by name.
     const rows: HTMLElement[] = [];
     const placed = new Set<string>();
-    if (!keepsFolders) rows.push(...shown.sort((a, b) => byName(basename(a.path), basename(b.path))).map(i => this.row(i)));
+    if (!keepsFolders) rows.push(...sortConstructs(shown, this.sort).map(i => this.row(i)));
     for (const folder of folders) {
       const mine = shown.filter(i => !placed.has(i.path) && subfolderOf(i.path, folder) !== null);
       const locked = this.locked.has(folder);
@@ -401,7 +432,7 @@ export class Home {
       }
       for (const sub of [...bySub.keys()].sort(byName)) {
         if (sub) rows.push(h("tr", { class: "sv-home-subgroup" }, h("th", { colspan: "5", scope: "colgroup" }, iconSvg("folder", 12), sub)));
-        for (const i of bySub.get(sub)!.sort((a, b) => byName(basename(a.path), basename(b.path)))) rows.push(this.row(i));
+        for (const i of sortConstructs(bySub.get(sub)!, this.sort)) rows.push(this.row(i));
       }
     }
     this.list.replaceChildren(
@@ -409,10 +440,41 @@ export class Home {
       h(
         "table",
         { class: "sv-table sv-home-table" },
-        h("thead", null, h("tr", null, ...["Name", "Length", "Contents", "Note", "Changed"].map(t => h("th", { scope: "col", class: t === "Length" ? "sv-num" : "" }, t)))),
+        h(
+          "thead",
+          null,
+          h(
+            "tr",
+            null,
+            this.sortHeader("Name", "name"),
+            this.sortHeader("Length", "length", "sv-num"),
+            h("th", { scope: "col" }, "Contents"),
+            h("th", { scope: "col" }, "Note"),
+            this.sortHeader("Changed", "changed")
+          )
+        ),
         h("tbody", null, rows)
       )
     );
+  }
+
+  /** A heading that sorts the files in each folder by its column. */
+  private sortHeader(label: string, key: HomeSortKey, cls?: string): HTMLTableCellElement {
+    return sortHeader({
+      label,
+      key,
+      cls,
+      sort: this.sort,
+      onSort: k => {
+        this.sort = nextTableSort(this.sort, k, HOME_SORT_RULES) ?? BY_NAME;
+        try {
+          localStorage.setItem(HOME_SORT_KEY, JSON.stringify(this.sort));
+        } catch {
+          /* storage unavailable: the sort lasts until the window closes */
+        }
+        this.renderList();
+      }
+    });
   }
 
   /** The note typed on Home, else the Notes field saved in the file. */

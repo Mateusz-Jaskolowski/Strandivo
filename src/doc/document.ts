@@ -695,7 +695,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   /** Writes the document to a file, which becomes the window's file. */
   async function saveTo(target: string, fmtOut: SaveFormat) {
     // What is written is what counts as saved: an edit made while the file is being written
-    // still needs saving afterwards.
+    // still needs saving afterwards. Typing that hasn't applied yet is part of it.
+    inspector.flush();
     const written = store.data;
     const text = serialize(fileJson(), fmtOut);
     const infoWas = infoDirty;
@@ -722,6 +723,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const suggestion = joinPath(path ? dirname(path) : "", includeRegions ? `${store.data.name}-regions.gb` : suggestedSaveName(path, store.data.name, fmtOut));
     const chosen = await chooseSavePath(suggestion, [fmtOut === "fasta" ? { name: "FASTA", extensions: ["fasta", "fa"] } : { name: "GenBank", extensions: ["gb", "gbk"] }]);
     if (!chosen) return;
+    inspector.flush();
     try {
       await saveText(chosen, serialize(fileJson(includeRegions), fmtOut));
       track("file_saved", { format: fmtOut, how: "export" });
@@ -1088,6 +1090,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   }
 
   async function confirmClose(): Promise<boolean> {
+    inspector.flush();
     if (!isDirty()) return true;
     const choice = await choose(
       `Save changes to “${path ? basename(path) : store.data.name}”?`,

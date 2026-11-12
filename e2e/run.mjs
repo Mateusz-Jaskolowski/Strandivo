@@ -675,6 +675,16 @@ async function main() {
     const keySaved = await s.waitFor("window.__strandivo.isDirty() === false", 5000);
     check("Ctrl+S saves the file", keySaved && readFileSync(savedPath, "utf8").includes("Saved with Ctrl+S"));
     check("The note is saved as GenBank writes it", readFileSync(savedPath, "utf8").includes('/note="Says ""stop"" here'));
+    // Saved straight after typing, before the note applies on its own, it is saved whole,
+    // and the field keeps the caret.
+    const quickNote = `${typedNote}\nAdded just before saving`;
+    const quickSave = await s.execAsync(
+      "const done = arguments[arguments.length - 1]; const note = document.querySelector('[aria-label=\"Feature note\"]'); note.focus(); note.value = arguments[1]; note.dispatchEvent(new Event('input')); window.__strandivo.saveAs(arguments[0]).then(() => done(document.activeElement?.getAttribute('aria-label') === 'Feature note' ? 'ok' : 'focus lost'), e => done(String(e)));",
+      savedPath,
+      quickNote
+    );
+    check("Saving straight after typing a note saves all of it", quickSave === "ok" && readFileSync(savedPath, "utf8").includes('/note="Added just before saving"'), quickSave);
+    await s.exec("document.activeElement?.blur();");
     const docSummary = `${doc} return { len: s.data.sequence.length, features: s.data.features.map(f => f.name + ' ' + f.start + '-' + f.end), primers: s.data.primers.map(p => p.name + ' ' + p.start + '-' + p.end) };`;
     const savedDoc = await s.exec(docSummary);
     // The saved file is now this tab's file, so opening it again would just show this tab:
@@ -690,7 +700,7 @@ async function main() {
     const reopened = await s.exec(docSummary);
     check("The saved file reopens with the same sequence, features and primers", JSON.stringify(reopened) === JSON.stringify(savedDoc), JSON.stringify(reopened).slice(0, 200));
     await s.exec(`${doc} const f = s.data.features[0]; s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
-    check("The reopened file shows the note in the inspector", await s.waitFor(`document.querySelector('[aria-label="Feature note"]')?.value === ${JSON.stringify(typedNote)}`, 5000));
+    check("The reopened file shows the note in the inspector", await s.waitFor(`document.querySelector('[aria-label="Feature note"]')?.value === ${JSON.stringify(quickNote)}`, 5000));
     check("Only the shown file's views are in the page", (await s.exec("return document.querySelectorAll('.sv-app').length")) === 1);
     await s.press(PAGE_UP, [CTRL]);
     check("Ctrl+Page Up goes back to the first file", await s.waitFor("window.__strandivo.activeTab() === 0", 3000));

@@ -50,6 +50,8 @@ const pickKeyName = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userA
 import { openMutagenesisDialog } from "./mutagenesisDialog.ts";
 
 const loc = (r: Range) => fmtRange(r.start + 1, r.end + 1);
+/** Event asking a field that applies after a pause to apply now (`Inspector.flush`). */
+const FLUSH = "sv-flush";
 
 export interface InspectorActions {
   /** `strand` is the region's direction, so F starts where a reverse-strand gene starts. */
@@ -93,6 +95,15 @@ export class Inspector {
     ctx.onOptions(() => this.schedule(true));
     this.offLibrary = primerLibrary.onChange(() => this.schedule(true));
     this.render();
+  }
+
+  /**
+   * Applies what was typed into a field that applies as it is typed but hasn't yet (it waits
+   * for a pause), so a save straight after typing has it all. The field keeps its caret and
+   * text as typed: it is tidied only when left.
+   */
+  flush() {
+    for (const field of this.el.querySelectorAll<HTMLElement>("[data-dirty='1']")) field.dispatchEvent(new Event(FLUSH));
   }
 
   /** Stops listening to the app's primer library (the document's tab closed). */
@@ -420,6 +431,7 @@ export class Inspector {
       timer = window.setTimeout(() => apply(false), 300);
     });
     note.addEventListener("change", () => apply(true));
+    note.addEventListener(FLUSH, () => apply(false));
     const others = otherQualifiers(f.notes).filter(q => !(isCds(f) && q.name === "translation"));
     return h(
       "section",
@@ -627,6 +639,7 @@ export class Inspector {
       clearTimeout(timer);
       timer = window.setTimeout(applyBases, 200);
     });
+    seq.addEventListener(FLUSH, applyBases);
     seq.addEventListener("change", () => {
       // Only a primer that couldn't be placed is worth a word: a site that was kept or
       // moved is what the user meant.

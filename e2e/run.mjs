@@ -632,6 +632,26 @@ async function main() {
     check("Copy for ordering lists the primers the file has now", await s.waitFor(`document.querySelectorAll('.sv-dialog .sv-order-row:not(.sv-order-all)').length === ${before - 1}`, 3000));
     await s.press(ESCAPE);
     await s.exec(`${doc} s.undo();`);
+    // The Tm limit beside Pairs hides pairs whose Tms are further apart, and is remembered.
+    const setTmLimit = v => s.exec(`const i = document.querySelector('.sv-primers-limit input'); i.value = '${v}'; i.dispatchEvent(new Event('change', { bubbles: true }));`);
+    const pairRows = () => s.exec("return document.querySelectorAll('.sv-primer-table tbody tr').length;");
+    await setTmLimit(30);
+    await sleep(200);
+    const allPairs = await pairRows();
+    await setTmLimit(0);
+    check(
+      "Pairs with Tms further apart than the limit are hidden and counted",
+      await s.waitFor("/over 0 °C apart · Show all/.test(document.querySelector('.sv-primers-note')?.textContent || '')", 3000) &&
+        (await pairRows()) < allPairs &&
+        /"tmLimit":0/.test(await s.exec("return localStorage.getItem('strandivo.primers') || '';")),
+      `${await pairRows()} of ${allPairs}`
+    );
+    await s.click("//*[contains(@class,'sv-primers-note')]//button[contains(., 'Show all')]", "xpath");
+    check("Show all lists them again, marked", await s.waitFor(`document.querySelectorAll('.sv-primer-table tbody tr').length === ${allPairs} && document.querySelectorAll('.sv-primer-table tbody .sv-text-warn').length >= 1`, 3000));
+    await s.shot("04c-primer-pairs-tm-limit");
+    await s.click("//*[contains(@class,'sv-primers-note')]//button[contains(., 'Hide them')]", "xpath");
+    await setTmLimit(5);
+    await sleep(200);
     await s.click("//*[contains(@class,'sv-primers')]//*[contains(@class,'sv-segmented')]//button[normalize-space(text())='List']", "xpath");
     await sleep(200);
 

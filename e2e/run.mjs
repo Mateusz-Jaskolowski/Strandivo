@@ -979,6 +979,9 @@ async function main() {
     check("Showing map regions restores the previous detail level", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2 && !document.querySelector('[aria-label=\"Protein region detail\"]').disabled", 5000));
     await s.exec("const select = document.querySelector('[aria-label=\"Protein region detail\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     check("Top-level map detail keeps only the domain", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 1", 5000));
+    // The row can sit half under the status bar, and WebKit won't click an element whose
+    // middle is hidden, as it only scrolls one that is wholly out of view.
+    await s.exec("document.querySelector(\".sv-outline [data-region='1']\").scrollIntoView({ block: 'nearest' });");
     await s.click(".sv-outline [data-region='1']");
     await s.click("//button[normalize-space(.)='Edit region…']", "xpath");
     check("Editing a region keeps its colour", (await s.exec("return document.querySelector('[aria-label=\"Region colour\"]').value;")) === secondRegionColour);
@@ -1110,6 +1113,7 @@ async function main() {
 
     const sidebarState = "return Array.from(document.querySelectorAll('.sv-outline-section')).map(e => e.dataset.section + (e.querySelector('.sv-list, .sv-enzyme-chips, .sv-list-empty') ? '' : ' folded'))";
     const sidebarStart = await s.exec(sidebarState);
+    await s.exec("document.querySelector(\".sv-section-toggle[data-section='features']\").scrollIntoView({ block: 'nearest' });");
     await s.click(".sv-section-toggle[data-section='features']");
     await sleep(300);
     const sidebarFolded = await s.exec(sidebarState);

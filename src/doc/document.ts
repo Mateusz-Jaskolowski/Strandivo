@@ -71,6 +71,7 @@ import { personalEnzymes } from "../personalEnzymes.ts";
 import { openDigestDialog } from "../views/digestDialog.ts";
 import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
+import { applyPanelWidths, panelSplitter } from "../panelWidths.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
@@ -400,7 +401,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   const offer = h("div", { class: "sv-offer", hidden: true });
   // Reads that wait on the browser: its permission, or for the user to choose them.
   const readsOffer = h("div", { class: "sv-offer sv-reads-offer", hidden: true });
-  const body = h("div", { class: "sv-body" }, outline.el, main, inspector.el);
+  applyPanelWidths();
+  const outlineSplit = panelSplitter("sidebar", () => outline.el);
+  const inspectorSplit = panelSplitter("inspector", () => inspector.el);
+  const body = h("div", { class: "sv-body" }, outline.el, outlineSplit, main, inspectorSplit, inspector.el);
   const app = h("div", { class: "sv-app" }, header, offer, readsOffer, body, status);
 
   function showOffer() {
@@ -492,6 +496,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const sidePanels = tab === "map" || tab === "sequence" || tab === "primers";
     outline.el.hidden = !sidePanels || tab === "primers" || !sidebarOpen;
     inspector.el.hidden = !sidePanels || !inspectorOpen;
+    outlineSplit.hidden = outline.el.hidden;
+    inspectorSplit.hidden = inspector.el.hidden;
     // A button for something this view doesn't have is turned off, not shown as on.
     const panelButton = (b: HTMLButtonElement, on: boolean, offered: boolean) => {
       b.disabled = !offered;

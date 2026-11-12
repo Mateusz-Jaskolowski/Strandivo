@@ -8,6 +8,7 @@
 import { h, svg } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { splitter } from "../ui/splitter.ts";
+import { panelSplitter } from "../panelWidths.ts";
 import type { DocContext } from "../doc/context.ts";
 import { featureStyles } from "../doc/analysis.ts";
 import { layoutAlignment, type AlignmentLayout } from "../lib/alignLayout.ts";
@@ -256,7 +257,7 @@ export class ReadsView {
     this.top = h("section", { class: "sv-reads-cov", "aria-label": "Reads overview" }, this.covHead, this.overview, this.cloneTable, this.diffs, this.summaryPanel.el);
     this.main = h("div", { class: "sv-reads-main" }, this.top, this.divider, this.alignment);
     this.installDrag();
-    this.grid = h("div", { class: "sv-reads-grid" }, list, this.main, this.insp);
+    this.grid = h("div", { class: "sv-reads-grid" }, list, panelSplitter("sidebar", () => list), this.main, panelSplitter("inspector", () => this.insp), this.insp);
     this.empty = h(
       "div",
       { class: "sv-reads-empty" },

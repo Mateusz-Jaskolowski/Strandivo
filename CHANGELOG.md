@@ -28,6 +28,10 @@ with Unreleased's notes and leaves them where they are.
   instead of being cut off. Drag the edge of the names column to resize it, or
   double-click it to fit the names.
 
+- **Resizable sidebar and inspector**: drag the inner edge of either panel to make it
+  wider or narrower, in every view that has them, Reads included. The widths are kept for
+  every file; double-click an edge for the usual width.
+
 - **Hide badly matched primer pairs**: the Primers tab's Pairs list hides pairs whose two
   Tms are more than 5 °C apart, and says how many it hid. Set your own limit beside the
   list, or choose Show all to see them, marked.

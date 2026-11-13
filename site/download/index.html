@@ -130,6 +130,13 @@
       <li>64-bit Linux with WebKitGTK 4.1.</li>
     </ul>
 
+    <h2 id="check">Checking a download</h2>
+    <p>From Strandivo 0.4.0, GitHub keeps a signed record of the source code and build that
+    made each installer. To check that a file is unchanged since that build, run this with
+    the <a href="https://cli.github.com">GitHub CLI</a>, signed in to any GitHub
+    account:</p>
+    <pre><code>gh attestation verify Strandivo_Windows_setup.exe --repo Mateusz-Jaskolowski/Strandivo</code></pre>
+
     <p>Older versions and source code are on
     <a href="https://github.com/Mateusz-Jaskolowski/Strandivo/releases">GitHub Releases</a>.</p>
   </main>

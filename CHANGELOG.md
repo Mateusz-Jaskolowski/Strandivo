@@ -16,6 +16,8 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+## 0.4.0
+
 Mark domains, linkers and CDRs in a coding sequence as protein regions, see them on the
 map, and copy or save them as a figure. The Reads tab copes with hundreds of reads and
 keeps the reference in view, and primer design can move ends onto better stretches. Ctrl+S

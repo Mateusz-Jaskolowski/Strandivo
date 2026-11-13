@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { designOf, formatDesign, inVariable, parseDesign, splitVariable, variableRanges, versionsFromText } from "./variable.ts";
+import { designOf, formatDesign, inVariable, parseDesign, splitVariable, variableRanges, versionStats, versionsFromText } from "./variable.ts";
 import type { Difference, Feature } from "./types.ts";
 
 test("a design is anything, a pattern or a few named versions", () => {
@@ -32,16 +32,31 @@ test("protein versions are saved with their amino acids", () => {
   assert.deepEqual(parseDesign("protein:ATG|two:TTT"), { kind: "alternatives", options: [{ name: "protein", bases: "ATG" }, { name: "two", bases: "TTT" }] });
 });
 
+test("a design that matches exact versions only says so first", () => {
+  const d = parseDesign("exact:protein:v1:GFTF|v2:GRTF");
+  assert.deepEqual(d, { kind: "alternatives", exact: true, protein: true, options: [{ name: "v1", bases: "GFTF" }, { name: "v2", bases: "GRTF" }] });
+  assert.equal(formatDesign(d), "exact:protein:v1:GFTF|v2:GRTF");
+  assert.deepEqual(parseDesign("exact:v1:ATG"), { kind: "alternatives", exact: true, options: [{ name: "v1", bases: "ATG" }] });
+  // A DNA version named "exact" is a version.
+  assert.deepEqual(parseDesign("exact:ATG|v2:TTT"), { kind: "alternatives", options: [{ name: "exact", bases: "ATG" }, { name: "v2", bases: "TTT" }] });
+  assert.deepEqual(versionsFromText("v1: GFTF", { protein: true, exact: true }), { kind: "alternatives", exact: true, protein: true, options: [{ name: "v1", bases: "GFTF" }] });
+});
+
+test("typed versions are counted with their letters, for how long matching takes", () => {
+  assert.deepEqual(versionStats("v1: GFTF SSYA\n\n  \nGRTF\nlong name 2: GG"), { count: 3, letters: 14 });
+  assert.deepEqual(versionStats(""), { count: 0, letters: 0 });
+});
+
 test("versions typed one per line are DNA bases or amino acids, as chosen", () => {
   // FLAG and His tags are all IUPAC letters, so only the choice says they are peptides.
-  assert.deepEqual(versionsFromText("flag: DYKDDDDK\n\nhis: hhhhhh\n", true), { kind: "alternatives", protein: true, options: [{ name: "flag", bases: "DYKDDDDK" }, { name: "his", bases: "HHHHHH" }] });
-  assert.deepEqual(versionsFromText("v1: atg gct\nTGG", false), { kind: "alternatives", options: [{ name: "v1", bases: "ATGGCT" }, { name: "2", bases: "TGG" }] });
-  assert.equal(versionsFromText("v1: MKVLE", false), "Version v1 looks like amino acids, not DNA bases.");
-  assert.equal(versionsFromText("v1: ATGNNK\nv2: ATG-GCT", false), "Version v2 has letters that aren’t DNA bases.");
-  assert.equal(versionsFromText("v1: MK+L", true), "Version v1 has letters that aren’t amino acids.");
-  assert.equal(versionsFromText("v1:", true), "Version v1 has no sequence.");
-  assert.equal(versionsFromText("a|b: MKV", true), "Version names can’t include “|”.");
-  assert.equal(versionsFromText(" \n", false), "Enter versions as name: DNA bases, one per line.");
+  assert.deepEqual(versionsFromText("flag: DYKDDDDK\n\nhis: hhhhhh\n", { protein: true }), { kind: "alternatives", protein: true, options: [{ name: "flag", bases: "DYKDDDDK" }, { name: "his", bases: "HHHHHH" }] });
+  assert.deepEqual(versionsFromText("v1: atg gct\nTGG"), { kind: "alternatives", options: [{ name: "v1", bases: "ATGGCT" }, { name: "2", bases: "TGG" }] });
+  assert.equal(versionsFromText("v1: MKVLE"), "Version v1 looks like amino acids, not DNA bases.");
+  assert.equal(versionsFromText("v1: ATGNNK\nv2: ATG-GCT"), "Version v2 has letters that aren’t DNA bases.");
+  assert.equal(versionsFromText("v1: MK+L", { protein: true }), "Version v1 has letters that aren’t amino acids.");
+  assert.equal(versionsFromText("v1:", { protein: true }), "Version v1 has no sequence.");
+  assert.equal(versionsFromText("a|b: MKV", { protein: true }), "Version names can’t include “|”.");
+  assert.equal(versionsFromText(" \n"), "Enter versions as name: DNA bases, one per line.");
 });
 
 test("the design is read from the feature's qualifier, as bio-parsers keeps it", () => {

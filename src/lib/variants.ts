@@ -14,6 +14,7 @@ import { deleteRange, insertBases, replaceRange, type Range, type SeqData } from
 import { regionKey, type ClonePeaks } from "./mixes.ts";
 import type { CloneDifference, CloneResult, Feature } from "./types.ts";
 import { inVariable, variableFeatures } from "./variable.ts";
+import { matchVersion, versionNames, type VersionSearch } from "./versionMatch.ts";
 
 export interface Mutation {
   /** "W163R", "W163*", "L54=", "L54fs", "G50_S52del", or a DNA change ("A2000G") outside a CDS. */
@@ -45,14 +46,19 @@ export interface RegionCall {
   /** Its amino acids, when it is coding or in a CDS; X for a codon with an uncertain base. */
   protein: string | null;
   read: "all" | "part" | "none";
-  /** The closest of the design's versions, if it has versions. */
+  /**
+   * The closest of the design's versions, if it has versions ("v2"), or those equally
+   * close ("v2 or v7"); with exact matching, the one the clone is, if any.
+   */
   alternative: string | null;
-  /** Differences from that version, named like mutations. */
+  /** Differences from that version, named like mutations, or how far several are. */
   mutations: Mutation[];
-  /** Bases the design doesn't allow: "T at 412 not allowed by NNK". */
+  /** Bases the design doesn't allow ("T at 412 not allowed by NNK"), or that the clone is none of its versions. */
   violations: string[];
   /** The clone is a mix and its reads have double peaks here: the bases aren't one plasmid's. */
   mixed: boolean;
+  /** The search for its version, left for later when versions aren't matched (`cloneVariants`). */
+  pending?: VersionSearch;
 }
 
 export interface CloneVariants {
@@ -281,9 +287,10 @@ function cdsChanges(chain: Feature[], reference: string, covered: (p: number) =>
 /**
  * Mutations, flags, coverage, region contents and identity of a clone (see the file
  * comment). Bases of a variable region below `minQuality` count as uncertain, and so do
- * `peaks.unreliable` positions anywhere.
+ * `peaks.unreliable` positions anywhere. With `matchVersions` false, regions' versions are
+ * left unmatched, which is everything but their names and changes from them, at once.
  */
-export function cloneVariants(clone: CloneResult, reference: string, circular: boolean, features: Feature[], minQuality = 20, peaks?: ClonePeaks): CloneVariants {
+export function cloneVariants(clone: CloneResult, reference: string, circular: boolean, features: Feature[], minQuality = 20, peaks?: ClonePeaks, matchVersions = true): CloneVariants {
   const n = reference.length;
   const covered = coveredRanges(clone, n, circular);
   const uncovered = uncoveredRanges(clone, n, circular);
@@ -344,7 +351,7 @@ export function cloneVariants(clone: CloneResult, reference: string, circular: b
   const calls: RegionCall[] = [];
   const readWhole: Feature[] = [];
   for (const f of [...regions].sort((a, b) => a.start - b.start)) {
-    const call = regionCall(clone, f, reference, coding, minQuality, peaks?.mixedRegions.has(regionKey(f)) ?? false);
+    const call = regionCall(clone, f, reference, coding, minQuality, peaks?.mixedRegions.has(regionKey(f)) ?? false, matchVersions);
     calls.push(call);
     if (call.read === "all") readWhole.push(f);
     for (const m of call.mutations) order.set(m, Math.min(f.start, f.end));
@@ -373,22 +380,6 @@ export function cloneVariants(clone: CloneResult, reference: string, circular: b
     unreliable,
     key
   };
-}
-
-/** Edit distance, for picking the closest version of a region; `wild` matches anything. */
-function distance(a: string, b: string, wild = ""): number {
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] || a[i - 1] === wild || b[j - 1] === wild ? 0 : 1));
-    prev = cur;
-  }
-  return prev[b.length];
-}
-
-/** The version closest to what a clone has; the first of equally close ones. */
-function closest(options: { name: string; bases: string }[], content: string, wild = "") {
-  return options.reduce((a, b) => (distance(b.bases, content, wild) < distance(a.bases, content, wild) ? b : a));
 }
 
 /**
@@ -447,7 +438,7 @@ export function degenerateCodons(f: Feature, reference: string, features: Featur
 }
 
 /** What a clone has in one variable region (see `RegionCall`). */
-function regionCall(clone: CloneResult, f: Feature, reference: string, coding: Feature[], minQuality: number, mixed: boolean): RegionCall {
+function regionCall(clone: CloneResult, f: Feature, reference: string, coding: Feature[], minQuality: number, mixed: boolean, matchVersions: boolean): RegionCall {
   const n = reference.length;
   const name = f.name || f.type || "Region";
   const { positions, forward, cds, offset } = regionFrame(f, coding, n);
@@ -505,31 +496,39 @@ function regionCall(clone: CloneResult, f: Feature, reference: string, coding: F
   if (mixed) return out;
   const design = f.variable!;
   const add = (label: string, kind: Mutation["kind"], refPos: number) => out.mutations.push({ label, feature: name, kind, refPos });
-  if (design.kind === "alternatives" && design.protein) {
-    // Versions in amino acids are matched to the region's translation, which a region
-    // outside a CDS's frame doesn't have. X in either is any amino acid. A frameshift
-    // garbles the translation, so no version is named; the CDS's reading reports it.
-    const residues = out.protein;
-    if (residues && (content.length - positions.length) % 3 === 0) {
-      const best = closest(design.options, residues, "X");
-      out.alternative = best.name;
-      const alt = best.bases;
-      if (alt.length !== residues.length) {
-        const change = residues.length - alt.length;
-        add(`${best.name} ${change > 0 ? "+" : ""}${change} aa`, "inframe", positions[0]);
-      } else {
-        // Numbered in the CDS, from the codon the region starts in.
-        const first = (offset - phase) / 3 + 1;
-        for (let i = 0; i < alt.length; i++) {
-          const A = alt[i];
-          const B = residues[i];
-          if (A === B || A === "X" || B === "X") continue;
-          add(`${A}${first + i}${B}`, B === "*" ? "nonsense" : "missense", positions[Math.min(Math.max(0, 3 * i - phase), positions.length - 1)]);
-        }
+  // Amino-acid versions are matched to the region's translation, which a region outside a
+  // CDS's frame doesn't have; X in either is any amino acid. A frameshift garbles the
+  // translation, so no version is named; the CDS's reading reports it.
+  const query = design.kind !== "alternatives" ? null : !design.protein ? content : out.protein !== null && (content.length - positions.length) % 3 === 0 ? out.protein : null;
+  const search = design.kind === "alternatives" && query !== null ? { versions: design.options, query, wild: design.protein ? "X" : "", exact: !!design.exact } : null;
+  if (search && !matchVersions) out.pending = search;
+  const match = search && matchVersions ? matchVersion(search.versions, search.query, search) : undefined;
+  if (match === null) out.violations.push("Not one of the versions");
+  else if (match && design.kind === "alternatives" && match.versions.length > 1) {
+    // As close to several: none of them is the clone's more than the others, so no changes
+    // are named from one.
+    out.alternative = versionNames(match.versions.map(i => design.options[i].name));
+    if (match.distance) add(`${match.distance} ${match.distance === 1 ? "change" : "changes"} from ${out.alternative}`, "dna", positions[0]);
+  } else if (match && design.kind === "alternatives" && design.protein) {
+    const residues = query!;
+    const best = design.options[match.versions[0]];
+    out.alternative = best.name;
+    const alt = best.bases;
+    if (alt.length !== residues.length) {
+      const change = residues.length - alt.length;
+      add(`${best.name} ${change > 0 ? "+" : ""}${change} aa`, "inframe", positions[0]);
+    } else {
+      // Numbered in the CDS, from the codon the region starts in.
+      const first = (offset - phase) / 3 + 1;
+      for (let i = 0; i < alt.length; i++) {
+        const A = alt[i];
+        const B = residues[i];
+        if (A === B || A === "X" || B === "X") continue;
+        add(`${A}${first + i}${B}`, B === "*" ? "nonsense" : "missense", positions[Math.min(Math.max(0, 3 * i - phase), positions.length - 1)]);
       }
     }
-  } else if (design.kind === "alternatives") {
-    const best = closest(design.options, content);
+  } else if (match && design.kind === "alternatives") {
+    const best = design.options[match.versions[0]];
     out.alternative = best.name;
     const alt = best.bases;
     if (alt.length !== content.length) {

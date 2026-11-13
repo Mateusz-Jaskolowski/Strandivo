@@ -1588,6 +1588,40 @@ async function main() {
       await openSummary();
       const librarySummary = await s.exec(summaryNow);
       check("The summary leaves the mixes out of its numbers and says so", librarySummary.tiles[0] === "1 of 1" && /2 mixed, of 3 clones/.test(librarySummary.note), JSON.stringify(librarySummary));
+      // Exact matching: with only v2 listed, C01's FR2, which is v1, is none of the versions.
+      await s.exec(`${doc} s.apply({ ...s.data, features: s.data.features.map(f => f.name === "FR2" ? { ...f, notes: { ...f.notes, strandivo_variable: [arguments[0]] } } : f) }, "Match exactly");`, `exact:v2:${fr2v2}`);
+      await s.exec('window.__strandivo.setView("map")');
+      await sleep(300);
+      await s.exec('window.__strandivo.setView("reads")');
+      // The edit makes the reads align again; the view takes no clicks until they have.
+      await s.waitFor(readsReady(3), 30000);
+      await s.click("//*[contains(@class,'sv-reads-cov')]//button[starts-with(normalize-space(.),'Clones')]", "xpath");
+      const exactRow = "Array.from(document.querySelectorAll('.sv-clonetab tbody tr')).find(r => /C01/.test(r.textContent))";
+      check(
+        "Matching exact versions only flags a clone that is none of them",
+        await s.waitFor(`/Not one of the versions/.test(${exactRow}?.textContent) && /Breaks design/.test(${exactRow}?.textContent)`, 30000),
+        await s.exec(`return ${exactRow}?.textContent ?? 'no row'`)
+      );
+      // A long list of versions: the inspector shows it by its count, and a dialog edits it.
+      await s.exec(
+        `${doc} window.__strandivo.setView("map");
+        const f = s.data.features.find(x => x.name === "cdr3");
+        s.apply({ ...s.data, features: s.data.features.map(x => x === f ? { ...x, notes: { ...x.notes, strandivo_variable: [arguments[0]] } } : x) }, "Many versions", { range: { start: f.start, end: f.end }, focus: { kind: "feature", id: f.id } });`,
+        Array.from({ length: 100 }, (_, i) => `v${i + 1}:${"GGT".repeat(10 + (i % 5))}`).join("|")
+      );
+      check(
+        "The inspector shows a long list of versions by its count",
+        await s.waitFor("/100 versions/.test(document.querySelector('.sv-versions-preview')?.parentElement?.textContent ?? '') && !document.querySelector('.sv-code-edit[aria-label=\"Versions, one per line\"]')", 5000)
+      );
+      await s.click("//button[contains(., 'Edit versions')]", "xpath");
+      const versionsShown = await s.waitFor("document.querySelector('.sv-versions-edit')?.value.split('\\n').length === 100", 5000);
+      await s.exec("document.querySelector('.sv-versions-edit').value = 'short: GGTGGT\\nlong: GGTGGTGGT';");
+      await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Save versions']", "xpath");
+      check(
+        "Edit versions… opens the whole list and saves it",
+        versionsShown && (await s.waitFor("window.__strandivo.store.data.features.find(x => x.name === 'cdr3').notes.strandivo_variable[0] === 'short:GGTGGT|long:GGTGGTGGT'", 5000)),
+        await s.exec("return window.__strandivo.store.data.features.find(x => x.name === 'cdr3').notes.strandivo_variable[0].slice(0, 80)")
+      );
       await s.exec("window.__strandivo.closeTab()");
       await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
       await s.waitFor("!window.__strandivo.tabs().includes('library-parent.gb')", 5000);

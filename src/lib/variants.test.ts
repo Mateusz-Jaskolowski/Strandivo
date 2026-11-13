@@ -400,6 +400,38 @@ test("a region with protein versions is matched by its amino acids", () => {
   assert.ok(shifted.mutations.some(m => m.kind === "frameshift"));
 });
 
+test("versions as close as each other are all named, and exact matching flags a clone that is none", () => {
+  const codons = LIB.slice(2201, 2243).match(/.../g)!;
+  const fr2v2 = codons.map((c, i) => ({ 1: "GTT", 9: "CTG", 11: "TGC" })[i] ?? c).join("");
+  const clone = libClone([{ start: 2201, end: 2242, bases: fr2v2 }]);
+  // WVRQAPGKELECVA is one residue from each: no changes are named from either alone.
+  const tie = { kind: "alternatives" as const, protein: true, options: [{ name: "a", bases: "WVRAAPGKELECVA" }, { name: "b", bases: "WVRQAPGKELEAVA" }] };
+  const v = libVariants(clone, { fr2: tie });
+  assert.equal(v.regions[0].alternative, "a or b");
+  assert.deepEqual(v.mutations.map(m => `${m.feature} ${m.label}`), ["FR2 1 change from a or b"]);
+  // Exact: the clone is v2, or it is flagged as none of them, with nothing named from one.
+  for (const protein of [true, false]) {
+    const exact = protein
+      ? { kind: "alternatives" as const, protein, exact: true, options: [{ name: "v1", bases: "WFRQAPGKERELVA" }, { name: "v2", bases: "WVRQAPGKELECVA" }] }
+      : { kind: "alternatives" as const, exact: true, options: [{ name: "v1", bases: LIB.slice(2201, 2243) }, { name: "v2", bases: fr2v2 }] };
+    const same = libVariants(clone, { fr2: exact });
+    assert.deepEqual([same.regions[0].alternative, same.flags, same.mutations], ["v2", [], []]);
+    const other = libVariants(libClone([{ start: 2201, end: 2242, bases: fr2v2.slice(0, 12) + "A" + fr2v2.slice(13) }]), { fr2: exact });
+    assert.deepEqual([other.regions[0].alternative, other.regions[0].violations, other.flags, other.mutations], [null, ["Not one of the versions"], ["design"], []]);
+  }
+});
+
+test("versions can be left unmatched, for the views to show the rest of a clone at once", () => {
+  const codons = LIB.slice(2201, 2243).match(/.../g)!;
+  const fr2v2 = codons.map((c, i) => ({ 1: "GTT", 9: "CTG", 11: "TGC" })[i] ?? c).join("");
+  const design = { kind: "alternatives" as const, exact: true, options: [{ name: "v1", bases: LIB.slice(2201, 2243) }] };
+  const v = cloneVariants(libClone([{ start: 2201, end: 2242, bases: fr2v2 }]), LIB, true, libFeatures({ fr2: design }), 20, undefined, false);
+  assert.deepEqual([v.regions[0].alternative, v.regions[0].violations, v.flags], [null, [], []]);
+  assert.equal(v.regions[0].protein, "WVRQAPGKELECVA");
+  // The search is left with the region, for whoever matches it later.
+  assert.deepEqual(v.regions[0].pending, { versions: design.options, query: fr2v2, wild: "", exact: true });
+});
+
 test("uncertain bases in a region are lower case, and X in its protein", () => {
   const v = libVariants(libClone([{ start: 2171, end: 2200, bases: A01_CDR1, quality: 12 }]), { cdr1: ANY });
   assert.equal(v.regions[0].bases, A01_CDR1.toLowerCase());

@@ -7,7 +7,10 @@ import type { DocContext } from "../doc/context.ts";
 import { featureStyles, protein } from "../doc/analysis.ts";
 import { newId, type Range, type SeqFeature } from "../lib/seqdata.ts";
 import { nextRegionColor, proteinRegionTargets, REGION_KINDS, regionColor, regionRange, regionsOf, selectedProteinResidues, withRegions, type ProteinRegion } from "../lib/regions.ts";
-import { designOf, parseDesign, versionsFromText } from "../lib/variable.ts";
+import { designOf, parseDesign, versionStats, versionsFromText } from "../lib/variable.ts";
+import { slowToMatch } from "../lib/versionMatch.ts";
+import { matchChoice } from "./versionMatchChoice.ts";
+import { fmt } from "../ui/format.ts";
 
 /** Amino-acid coordinates belong to this CDS, including on reverse and spliced sequences. */
 export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: number, selection = ctx.store.selection.range) {
@@ -41,27 +44,49 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
   const parent = h("select", { class: "sv-input", "aria-label": "Parent region" }, h("option", { value: "" }, "Whole protein"), regions.filter(r => r !== old).map(r => h("option", { value: r.id, selected: suggestedParent === r.id }, r.name))) as HTMLSelectElement;
   const variable = h("input", { type: "checkbox", checked: !!old?.variable, "aria-label": "Varies between clones" }) as HTMLInputElement;
   const oldDesign = old?.variable;
+  const isVersions = (v: string) => v === "alternatives" || v === "protein";
   const oldChoice = oldDesign?.kind === "alternatives" && oldDesign.protein ? "protein" : oldDesign?.kind;
   const design = h("select", { class: "sv-input", "aria-label": "Variable design" }, [ ["any", "Anything"], ["pattern", "Pattern"], ["alternatives", "DNA versions"], ["protein", "Protein versions"] ].map(([value, label]) => h("option", { value, selected: oldChoice === value }, label))) as HTMLSelectElement;
   const specification = h("textarea", { class: "sv-input sv-mono", rows: "3", "aria-label": "Variable pattern or versions", spellcheck: "false" }) as HTMLTextAreaElement;
-  specification.value = oldDesign?.kind === "pattern" ? oldDesign.pattern : oldDesign?.kind === "alternatives" ? oldDesign.options.map(o => `${o.name}: ${o.bases}`).join("\n") : "NNK";
-  const variableControls = h("div", { class: "sv-region-design" }, design, specification);
+  // A region's versions fill the box once the dialog is drawn (`loadVersions` below).
+  specification.value = oldDesign?.kind === "pattern" ? oldDesign.pattern : oldDesign?.kind === "alternatives" ? "" : "NNK";
+  // Closest or exact, and a word when the list is long enough for exact to suit it better.
+  let exact = oldDesign?.kind === "alternatives" && !!oldDesign.exact;
+  let typed = oldDesign?.kind === "alternatives" ? { count: oldDesign.options.length, letters: oldDesign.options.reduce((n, o) => n + o.bases.length, 0) } : versionStats(specification.value);
+  const match = h("div", { class: "sv-region-match" });
+  const showMatch = () => match.replaceChildren(...matchChoice(exact, { ...typed, protein: design.value === "protein" }, value => { exact = value; showMatch(); }));
+  showMatch();
+  const recount = () => {
+    const was = slowToMatch(typed.count, typed.letters);
+    typed = versionStats(specification.value);
+    if (was || slowToMatch(typed.count, typed.letters)) showMatch();
+  };
+  let counting = 0;
+  specification.addEventListener("input", () => {
+    clearTimeout(counting);
+    counting = window.setTimeout(recount, 200);
+  });
+  const variableControls = h("div", { class: "sv-region-design" }, design, specification, match);
   const hint = h("p", { class: "sv-small sv-dim sv-region-message" });
   const error = h("p", { class: "sv-small sv-text-warn sv-region-message", role: "alert" });
   const refresh = () => {
     variableControls.hidden = !variable.checked;
     specification.hidden = design.value === "any";
+    match.hidden = !isVersions(design.value);
     specification.placeholder = design.value === "pattern" ? "NNK" : design.value === "protein" ? "v1: GFTFSSYA…\nv2: GRTFSNYA…" : "v1: ATGGCT…\nv2: ATGGGT…";
     hint.textContent = !variable.checked ? "" : design.value === "any" ? "Each clone’s sequence is reported separately from mutations." : design.value === "pattern" ? "IUPAC codes repeated over the region, written in the CDS’s direction." : design.value === "protein" ? "One version per line, as name: amino acids." : "One version per line, as name: DNA bases in the CDS’s direction.";
   };
   variable.addEventListener("change", refresh);
   // Versions typed before choosing DNA or protein stay, so they can be read the other way.
-  const isVersions = (v: string) => v === "alternatives" || v === "protein";
   let chosen = design.value;
   design.addEventListener("change", () => {
-    if (!isVersions(chosen) || !isVersions(design.value)) specification.value = design.value === "pattern" ? "NNK" : "";
+    if (!isVersions(chosen) || !isVersions(design.value)) {
+      specification.value = design.value === "pattern" ? "NNK" : "";
+      recount();
+    }
     chosen = design.value;
     error.textContent = "";
+    showMatch();
     refresh();
   });
   const row = (label: string, control: HTMLElement) => h("label", { class: "sv-region-field" }, h("span", { class: "sv-design-label" }, label), control);
@@ -88,7 +113,7 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
         variableDesign = parseDesign(specification.value.split("\n").filter(l => l.trim()).join("|"));
         if (variableDesign.kind !== "pattern") { error.textContent = "Enter an IUPAC pattern, such as NNK."; specification.focus(); return; }
       } else {
-        const versions = versionsFromText(specification.value, design.value === "protein");
+        const versions = versionsFromText(specification.value, { protein: design.value === "protein", exact });
         if (typeof versions === "string") { error.textContent = versions; specification.focus(); return; }
         variableDesign = versions;
       }
@@ -102,9 +127,25 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     ctx.store.apply({ ...current, features: current.features.map(x => x.id === f.id ? feature : x) }, old ? "Edit protein region" : "Add protein region", { range: regionRange(feature, sorted.find(r => r.id === region.id)!, current.sequence.length), focus: { kind: "feature", id: f.id, region: sorted.findIndex(r => r.id === region.id) } });
     dlg.close();
   };
-  dlg.footer.append(h("button", { class: "sv-btn", type: "button", onclick: () => dlg.close() }, "Cancel"), h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: save }, old ? "Save region" : "Add region"));
+  const saveButton = h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: save }, old ? "Save region" : "Add region") as HTMLButtonElement;
+  dlg.footer.append(h("button", { class: "sv-btn", type: "button", onclick: () => dlg.close() }, "Cancel"), saveButton);
   dlg.body.addEventListener("keydown", e => { if (e.key === "Enter" && e.target instanceof HTMLInputElement && e.target.type !== "checkbox") { e.preventDefault(); save(); } });
   refresh();
+  // Laying out a long list of versions takes a moment: the dialog says so, then fills in.
+  if (oldDesign?.kind === "alternatives") {
+    const versions = oldDesign.options;
+    specification.readOnly = true;
+    specification.placeholder = `Loading ${fmt(versions.length)} ${versions.length === 1 ? "version" : "versions"}…`;
+    saveButton.disabled = true;
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        if (isVersions(design.value) && !specification.value) specification.value = versions.map(o => `${o.name}: ${o.bases}`).join("\n");
+        specification.readOnly = false;
+        saveButton.disabled = false;
+        refresh();
+      }, 0)
+    );
+  }
 }
 
 /** The selection stays unchanged until the user adds the named region. */

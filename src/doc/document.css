@@ -3980,6 +3980,16 @@
 .sv-region-field input[type=color] { height: 34px; padding: 3px; cursor: pointer; }
 .sv-region-design:not([hidden]) { display: grid; gap: 8px; margin-top: 10px; }
 .sv-region-design textarea { height: auto; min-height: 52px; padding: 6px 9px; line-height: 1.45; font-family: var(--mono); }
+.sv-region-match:not([hidden]) { display: grid; gap: 6px; }
+.sv-version-match { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sv-version-many { margin: 0; }
+.sv-version-many .sv-link { display: inline; padding: 0; font-size: inherit; }
+.sv-versions-preview > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-versions-edit { height: auto; min-height: 120px; padding: 6px 9px; line-height: 1.45; font-family: var(--mono); }
+.sv-reads-matching { display: grid; gap: 8px; max-width: 560px; padding: 16px 4px; }
+.sv-reads-matching-text { margin: 0; font-weight: 500; }
+.sv-reads-matching-fill { background: var(--accent); transition: width 0.2s; }
+.sv-reads-matching .sv-dim { margin: 0; }
 .sv-region {
   opacity: 0.55;
   cursor: pointer;

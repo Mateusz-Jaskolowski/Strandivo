@@ -14,9 +14,10 @@ export const VARIABLE_QUALIFIER = "strandivo_variable";
 
 const bases = (s: string) => s.toUpperCase().replace(/U/g, "T").replace(/[^ACGTRYSWKMBDHVN]/g, "");
 const residues = (s: string) => s.toUpperCase().replace(/[^ACDEFGHIKLMNPQRSTVWYX*]/g, "");
-// Written before a protein design's versions, each with a name. A DNA design whose first
-// version is named "protein" isn't one: that version has only one colon.
-const PROTEIN = "protein:";
+// Written before the versions, each followed by a colon: "exact" for a design whose clones
+// must be one of them, "protein" for amino acids. Every version has a name, so a design
+// whose first version is named "exact" or "protein" isn't one: that version has one colon.
+const FLAGS = ["exact", "protein"] as const;
 
 /** Versions as `name:sequence|name:sequence`; a version without a name is numbered. */
 function parseVersions(value: string, clean: (s: string) => string): { name: string; bases: string }[] {
@@ -32,15 +33,26 @@ function parseVersions(value: string, clean: (s: string) => string): { name: str
 }
 
 /**
- * Reads a design: `any`, a pattern (`NNK`), versions as `name:bases|name:bases`, or
- * protein versions as `protein:name:residues|name:residues`.
+ * Reads a design: `any`, a pattern (`NNK`), or versions as `name:bases|name:bases`, after
+ * `protein:` if they are amino acids and `exact:` if clones must be one of them.
  */
 export function parseDesign(value: string): VariableDesign {
   const v = value.trim();
   if (!v || v.toLowerCase() === "any") return { kind: "any" };
-  if (v.toLowerCase().startsWith(PROTEIN) && v.split("|")[0].split(":").length > 2) {
-    const options = parseVersions(v.slice(PROTEIN.length), residues);
-    if (options.length) return { kind: "alternatives", protein: true, options };
+  let rest = v;
+  const flags = new Set<string>();
+  for (;;) {
+    const bar = rest.indexOf("|");
+    const first = bar < 0 ? rest : rest.slice(0, bar);
+    const at = first.indexOf(":");
+    const word = first.slice(0, at).trim().toLowerCase();
+    if (at < 0 || !(FLAGS as readonly string[]).includes(word) || first.indexOf(":", at + 1) < 0) break;
+    flags.add(word);
+    rest = rest.slice(at + 1);
+  }
+  if (flags.size) {
+    const options = parseVersions(rest, flags.has("protein") ? residues : bases);
+    if (options.length) return { kind: "alternatives", ...(flags.has("exact") ? { exact: true } : {}), ...(flags.has("protein") ? { protein: true } : {}), options };
   }
   if (v.includes("|") || v.includes(":")) {
     const options = parseVersions(v, bases);
@@ -50,11 +62,39 @@ export function parseDesign(value: string): VariableDesign {
   return pattern ? { kind: "pattern", pattern } : { kind: "any" };
 }
 
+/** How many versions are typed, one per line, and their letters (after each name). */
+export function versionStats(text: string): { count: number; letters: number } {
+  let count = 0;
+  let letters = 0;
+  // In one pass, as a list can be a million lines: the line's letters, and those before a colon.
+  let line = 0;
+  let named = -1;
+  let filled = false;
+  for (let i = 0; i <= text.length; i++) {
+    const c = i < text.length ? text.charCodeAt(i) : 10;
+    if (c === 10) {
+      if (filled) {
+        count++;
+        letters += named < 0 ? line : line - named;
+      }
+      line = 0;
+      named = -1;
+      filled = false;
+    } else {
+      if (c > 32) filled = true;
+      if (c === 58 && named < 0) named = line;
+      else if (((c | 32) >= 97 && (c | 32) <= 122) || c === 42) line++;
+    }
+  }
+  return { count, letters };
+}
+
 /**
  * Versions typed one per line as `name: sequence`, DNA bases or amino acids, or a message
  * saying what is wrong with them.
  */
-export function versionsFromText(text: string, protein: boolean): VariableDesign | string {
+export function versionsFromText(text: string, o: { protein?: boolean; exact?: boolean } = {}): VariableDesign | string {
+  const protein = !!o.protein;
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   if (!lines.length) return protein ? "Enter versions as name: amino acids, one per line." : "Enter versions as name: DNA bases, one per line.";
   // Spaces and numbers, as in a pasted GenBank sequence, are left out.
@@ -74,20 +114,31 @@ export function versionsFromText(text: string, protein: boolean): VariableDesign
     }
   }
   const options = parseVersions(lines.join("|"), protein ? residues : bases);
-  return protein ? { kind: "alternatives", protein: true, options } : { kind: "alternatives", options };
+  return { kind: "alternatives", ...(o.exact ? { exact: true } : {}), ...(protein ? { protein: true } : {}), options };
 }
 
 export function formatDesign(d: VariableDesign): string {
   if (d.kind === "any") return "any";
   if (d.kind === "pattern") return d.pattern;
-  return (d.protein ? PROTEIN : "") + d.options.map(o => `${o.name}:${o.bases}`).join("|");
+  return (d.exact ? "exact:" : "") + (d.protein ? "protein:" : "") + d.options.map(o => `${o.name}:${o.bases}`).join("|");
 }
 
-/** The design in a feature's qualifiers (bio-parsers keeps each as a list), or null. */
+const designs = new WeakMap<object, VariableDesign | null>();
+
+/**
+ * The design in a feature's qualifiers (bio-parsers keeps each as a list), or null. Read
+ * once for each set of qualifiers, as a design can hold a million versions.
+ */
 export function designOf(notes: Record<string, unknown> | undefined): VariableDesign | null {
-  const raw = notes?.[VARIABLE_QUALIFIER];
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return value === undefined || value === null ? null : parseDesign(String(value));
+  if (!notes) return null;
+  let design = designs.get(notes);
+  if (design === undefined) {
+    const raw = notes[VARIABLE_QUALIFIER];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    design = value === undefined || value === null ? null : parseDesign(String(value));
+    designs.set(notes, design);
+  }
+  return design;
 }
 
 export const variableFeatures = (features: Feature[]) => features.filter(f => f.variable);

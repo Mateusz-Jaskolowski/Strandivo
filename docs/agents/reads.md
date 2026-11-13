@@ -43,6 +43,33 @@ and CI checks that they exist.
   Versions can be amino acids (`protein:` before them in the qualifier), matched to the
   region's translation. That is the user's choice, never guessed from the letters: a FLAG
   tag, DYKDDDDK, is all IUPAC base codes.
+- **Matching versions** (`src/lib/versionMatch.ts`): a clone has the closest version by
+  edit distance, or with `exact:` before the qualifier's versions only one it is letter
+  for letter (else "Not one of the versions", which breaks the design). Versions equally
+  close are all named and no changes are named from one of them, as the list's order
+  says nothing. A list of 64 versions or more is indexed once per list (a hash of the
+  sequences, the versions by length), so lookups find a clone that is a version or one
+  change from one, and comparisons by length nearest first, given up once they can't win,
+  find the rest; a randomised test holds it to comparing every version. Designs are kept
+  per set of qualifiers (`designOf`), and the features reads are checked against per
+  version of the document (`legacyFeatures` in `src/doc/document.ts`), so a million
+  versions are read and indexed once: never change a design or those lists in place.
+- **Matching takes time**: about versions × length² steps for a clone close to none. From
+  the work of 15,000 versions of 20 amino acids on (`slowToMatch`), the region dialog and
+  the inspector warn and offer exact matching; the cut-off scales with length², as 15,000
+  versions of 6 amino acids are a hundredth of the work of 15,000 of 60. The Reads tab
+  matches clones before its views ask (`matchVersions` in `src/views/readsView.ts`): a
+  list over the cut-off, or work over 150 ms, goes on between drawn frames, a few thousand
+  comparisons at a time (`searchVersion`), with a progress strip saying why. Meanwhile
+  the views get each clone without its versions matched (`cloneVariants` with
+  `matchVersions` false), whose regions carry the searches left to do; the clones and
+  summary views show the strip instead, and copying them waits.
+- **Long lists of versions are never laid out where they would be again**: the inspector
+  is built on every change, so past 50 versions or 20,000 letters it shows the count, the
+  first three and Copy, and Edit versions… opens the list in a dialog
+  (`src/views/versionsDialog.ts`). That dialog and the region dialog put a long list in
+  their box only after they are drawn, saying it is loading, as a box of a million lines
+  takes seconds to lay out.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
   the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
   start and strand don't matter; it starts at the first in-frame codon of 10 good matching

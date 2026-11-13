@@ -59,3 +59,27 @@ export function startErrorLog() {
   });
   window.addEventListener("unhandledrejection", e => recordError(`Unhandled: ${describe(e.reason)}`, "rejection"));
 }
+
+/**
+ * The name last sent with a report, to credit in its public issue, kept in local storage
+ * so a regular tester needn't type it again. Only a sent report changes it: one sent
+ * without a name forgets it.
+ */
+const NAME_KEY = "strandivo.feedbackName";
+
+export function rememberedName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function rememberName(name: string | undefined) {
+  try {
+    if (name) localStorage.setItem(NAME_KEY, name);
+    else localStorage.removeItem(NAME_KEY);
+  } catch {
+    /* typed again next time */
+  }
+}

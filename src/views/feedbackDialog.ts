@@ -5,15 +5,17 @@
 // issue through feedback.strandivo.com, so no GitHub account is needed. Everything sent
 // with it is shown in full first; recent errors and the open file are off until ticked.
 // The email address and the file go to the maintainer alone, never in the issue, which
-// anyone can read. If it can't be sent, the text stays, with Copy and Email instead.
+// anyone can read; a name to credit goes in it, and is remembered once sent. If it can't
+// be sent, the text stays, with Copy and Email instead. Post on GitHub instead opens the
+// issue on GitHub, filled in, for people who'd rather post from their own account.
 // Opened from "Strandivo quit unexpectedly" (src/crash.ts), it is a bug about that crash,
 // with what the app noted shown in full and ticked, as reporting it is why it opened.
 
 import { h, toast } from "../ui/dom.ts";
 import { openDialog } from "../ui/modal.ts";
-import { buildReport, crashForReport, crashLines, describeSystem, FEEDBACK_KINDS, LIMITS, reportProblem, reportText, type CrashReport, type FeedbackKind, type FeedbackReport, type SystemInfo } from "../lib/feedback.ts";
-import { copyText, emailFeedback, openIssue, sendFeedback, systemInfo } from "../platform.ts";
-import { recentErrors } from "../feedback.ts";
+import { buildReport, crashForReport, crashLines, creditName, describeSystem, FEEDBACK_KINDS, LIMITS, reportProblem, reportText, type CrashReport, type FeedbackKind, type FeedbackReport, type SystemInfo } from "../lib/feedback.ts";
+import { copyText, emailFeedback, openIssue, openNewIssue, sendFeedback, systemInfo } from "../platform.ts";
+import { recentErrors, rememberedName, rememberName } from "../feedback.ts";
 
 export interface FeedbackContext {
   /** Home, or the open file's view. */
@@ -47,7 +49,17 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
   const summary = h("input", { class: "sv-input", type: "text", maxlength: LIMITS.summary, "aria-label": "Summary", placeholder: PLACEHOLDERS[chosen] }) as HTMLInputElement;
   const details = h("textarea", { class: "sv-input sv-feedback-details", rows: 6, maxlength: LIMITS.details, "aria-label": "Details", placeholder: crashed ? "What you were doing when it quit, if you remember" : "What you did and what happened, or anything else that helps" }) as HTMLTextAreaElement;
   if (crashed) summary.value = "Strandivo quit unexpectedly";
+  const name = h("input", { class: "sv-input", type: "text", maxlength: LIMITS.name, "aria-label": "Your name", placeholder: "Name or initials", autocomplete: "name", value: rememberedName() }) as HTMLInputElement;
   const email = h("input", { class: "sv-input", type: "email", maxlength: LIMITS.email, "aria-label": "Your email", placeholder: "you@lab.org", autocomplete: "email" }) as HTMLInputElement;
+  // The name as the issue will show it, listed with the rest of what is sent.
+  const sentBy = h("li");
+  const showName = () => {
+    const shown = creditName(name.value);
+    sentBy.textContent = `Sent by: ${shown}`;
+    sentBy.hidden = !shown;
+  };
+  showName();
+  name.addEventListener("input", showName);
 
   const withErrors = h("input", { type: "checkbox", disabled: errors.length === 0 }) as HTMLInputElement;
   const withFile = h("input", { type: "checkbox" }) as HTMLInputElement;
@@ -65,6 +77,7 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
   const send = h("button", { type: "button", class: "sv-btn sv-btn-primary", disabled: true, onclick: () => void submit() }, "Send") as HTMLButtonElement;
   const copy = h("button", { type: "button", class: "sv-btn", hidden: true, onclick: () => void copyReport() }, "Copy");
   const byEmail = h("button", { type: "button", class: "sv-btn", hidden: true, onclick: () => void emailReport() }, "Email instead");
+  const onGitHub = h("button", { type: "button", class: "sv-link", title: "Opens a new issue on GitHub with what you've written, to post from your own account", onclick: () => void postOnGitHub() }, "Post on GitHub instead");
 
   function setKind(k: FeedbackKind) {
     chosen = k;
@@ -72,10 +85,11 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
     summary.placeholder = PLACEHOLDERS[k];
   }
 
-  const report = (): FeedbackReport => {
+  /** The report as the dialog shows it; `attach` false leaves out the file, which only the service takes. */
+  const report = (attach = true): FeedbackReport => {
     let file: FeedbackReport["file"] = null;
-    if (withFile.checked && context.file) file = { name: context.file.name, contents: context.file.contents() };
-    return buildReport({ kind: chosen, summary: summary.value, details: details.value, email: email.value, app, view: context.view, errors: withErrors.checked ? errors : null, file, crash: crashed && withCrash.checked ? crashed.crash : null });
+    if (attach && withFile.checked && context.file) file = { name: context.file.name, contents: context.file.contents() };
+    return buildReport({ kind: chosen, summary: summary.value, details: details.value, email: email.value, name: name.value, app, view: context.view, errors: withErrors.checked ? errors : null, file, crash: crashed && withCrash.checked ? crashed.crash : null });
   };
 
   const update = () => {
@@ -100,6 +114,7 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
     status.textContent = "Sending…";
     try {
       const sent = await sendFeedback(r);
+      rememberName(r.name);
       if (r.crash) crashed?.sent();
       sentView(sent.number, (r.email !== null || r.file !== null) && !sent.emailed);
     } catch (e) {
@@ -109,6 +124,16 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
       byEmail.hidden = false;
       send.textContent = "Try again";
       update();
+    }
+  }
+
+  /** The issue opens filled in on GitHub, to post as themselves; their email and file stay here. */
+  async function postOnGitHub() {
+    try {
+      await openNewIssue(report(false));
+      dlg.close();
+    } catch {
+      toast("Couldn't open GitHub in your browser. Copy the report instead.", "error", 6000);
     }
   }
 
@@ -151,12 +176,13 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
     h("div", { class: "sv-segmented sv-segmented-small", role: "group", "aria-label": "Kind" }, ...kindButtons),
     field("Summary", summary),
     field("Details", details),
+    field("Your name", name, "Optional, to credit you in the public issue."),
     field("Your email", email, "Optional, if you'd like a reply. Shared only with the maintainer, never in the public issue."),
     h(
       "section",
       { class: "sv-feedback-sent" },
       h("h3", { class: "sv-section-title" }, "Included with the report"),
-      h("ul", { class: "sv-small" }, h("li", null, describeSystem(app)), h("li", null, `Open view: ${context.view}`)),
+      h("ul", { class: "sv-small" }, h("li", null, describeSystem(app)), h("li", null, `Open view: ${context.view}`), sentBy),
       crash ? option(withCrash, "Crash details", "The crash log with file paths removed, shown below.", crashText) : "",
       option(withErrors, errors.length ? `Recent errors (${errors.length})` : "Recent errors (none)", "App errors from the past week, with file paths removed.", errorList),
       context.file
@@ -164,6 +190,6 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
         : ""
     )
   );
-  dlg.footer.replaceChildren(h("div", { class: "sv-foot-start" }, status), copy, byEmail, h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Cancel"), send);
+  dlg.footer.replaceChildren(h("div", { class: "sv-foot-start sv-feedback-foot" }, onGitHub, status), copy, byEmail, h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Cancel"), send);
   (crashed ? details : summary).focus();
 }

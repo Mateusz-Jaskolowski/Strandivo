@@ -1,3 +1,6 @@
+# The app's Post on GitHub instead fills in this form by its file name and field ids
+# (ISSUE_FORMS in src/lib/feedback.ts and the shell's src-tauri/src/feedback.rs), in every
+# copy already installed, so keep both.
 name: Bug report
 description: Something doesn't work as it should
 labels: [bug]

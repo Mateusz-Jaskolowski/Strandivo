@@ -80,8 +80,11 @@ send your report to `feedback.strandivo.com` only when you click Send. The dialo
 everything included with the report before you send it:
 
 - the report type (bug, idea or question), summary and details;
+- your name or initials, if you type one, to credit you in the public issue;
 - the app's version, operating system and processor;
 - which view was open, such as Home or Map.
+
+The app keeps the last name you sent on your computer, so you needn't type it again.
 
 Two optional items are included only if you tick them (both are unticked by default):
 
@@ -101,6 +104,12 @@ to hello@strandivo.com.
 
 If a report can't be sent, nothing leaves the app: you can copy the report text or email
 it to feedback@strandivo.com from your mail app instead.
+
+If you have a GitHub account, Post on GitHub instead sends nothing to
+`feedback.strandivo.com`: it opens a new issue on GitHub in your browser, filled in with
+your summary and details, and for a bug or a question with the app's version, operating
+system, open view and anything you ticked, but never your name, email address or the open
+file. Nothing is posted until you submit it on GitHub, from your own account.
 
 ## Reporting a crash
 

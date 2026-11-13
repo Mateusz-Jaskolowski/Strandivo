@@ -34,18 +34,33 @@ and CI checks that they exist.
   Help menu, `src/views/feedbackDialog.ts`): while Strandivo is young they are named
   buttons, not icons, so people see they can report things; a window under 1,000 px wide
   shows only their icons, keeping room for tabs. The page posts the report to `feedback.strandivo.com` (`services/feedback/`), which
-  files it as a GitHub issue with a token that can only write issues. Issues are public,
+  files it as a GitHub issue as a GitHub App's bot, with a token that can only write
+  issues. Issues are public,
   so **the reporter's email address and an attached file never go in one**: the Worker
   emails them to the maintainer alone (Email Routing, to a verified address kept as a
   secret), and what the reporter wrote is fenced as plain text, so it can't mention
-  anyone or link anywhere. What a report may hold is `src/lib/feedback.ts`, which the
-  Worker bundles too, so the two can't disagree; change it and deploy the Worker in the
-  same PR. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`:
+  anyone or link anywhere. A name to credit goes in the issue as inline code (`codeSpan`),
+  which does the same for one line; it is turned away if it holds an email or web address,
+  which typed in the wrong box would be published, but no list of words is kept (real
+  surnames would be turned away, and the summary is public too). The last name sent is
+  remembered in local storage (`src/feedback.ts`). What a report may hold is
+  `src/lib/feedback.ts`, which the Worker bundles too, so the two can't disagree; change
+  it and deploy the Worker in the same PR. The Worker turns down a field it doesn't know,
+  so a new optional field is left out of a report when empty, not sent as null: the app
+  then still works with the Worker before it, and the Worker must be deployed before a
+  release that fills it in. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`:
   uncaught errors, rejected promises and failed shell commands of the past week) and the
   open file are off until ticked, and errors lose their file paths (`scrubPaths`, which
   takes a path under a home or volume folder to the end of its line, as folder names have
   spaces). The shell opens only addresses it builds: an issue from its number, an email
-  to feedback@strandivo.com with the page's text as subject and body. e2e fakes the
+  to feedback@strandivo.com with the page's text as subject and body, and a new issue for
+  Post on GitHub instead, from the report's kind with the text only as the values of the
+  fields of that kind's issue form (`.github/ISSUE_TEMPLATE/`), each cut so the address
+  stays under GitHub's limit. A form, not `labels=`, labels these: GitHub adds a form's
+  labels for anyone, while `labels=` needs the right to label issues and fails without
+  it. The page builds the same address for the browser (`newIssueUrl`), and both tests
+  hold the two to one expected address; renaming a form or a field id there breaks the
+  link in every copy, so keep them. e2e fakes the
   service with `window.__strandivoFeedback`. In a browser, `systemInfo` gives the browser
   and its major version as `os`, "on" and the system as `osVersion`, and "web" as `arch`
   (`src/lib/browser.ts`), so the service, unchanged, shows "Chrome 142 on macOS · web". On a Mac, Welcome and Check for Updates stay

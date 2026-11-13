@@ -18,6 +18,8 @@ export const LIMITS = {
   summary: 150,
   details: 8000,
   email: 254,
+  /** A name or initials to credit in the public issue. */
+  name: 60,
   errors: 20,
   error: 600,
   fileName: 120,
@@ -59,6 +61,12 @@ export interface FeedbackReport {
   details: string;
   /** Only if the user would like an answer; it never goes in the public issue. */
   email: string | null;
+  /**
+   * A name or initials to credit in the public issue, if the user typed one. Left out
+   * rather than null when there is none, as a service that predates it turns down any
+   * field it doesn't know; older copies of the app send none.
+   */
+  name?: string;
   app: SystemInfo;
   /** Home, or the open file's view (Map, Sequence, …). */
   view: string;
@@ -107,6 +115,24 @@ export const isEmail = (s: string) => s.length <= LIMITS.email && /^[^\s@<>()",;
 /** Plain one-line text: no control characters, which a title or header mustn't carry. */
 const oneLine = (s: string) => s.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/**
+ * The name as it is sent and shown: one line, without invisible formatting characters
+ * (those that reverse the direction of text after them, or hide between letters).
+ */
+export const creditName = (s: string) => cut(oneLine(s.replace(/\p{Cf}+/gu, "")), LIMITS.name);
+
+/**
+ * Why a name can't be credited in the public issue as it is, or null. No list of words is
+ * kept: it would turn away real surnames and miss what it was meant for, and the summary
+ * and details are public too. Abuse is the maintainer's to edit out on GitHub. An email
+ * address typed in the wrong box would be published, though, so addresses are turned away.
+ */
+export function nameProblem(name: string): string | null {
+  if (!name.trim() || name !== name.trim() || name.length > LIMITS.name || /[\u0000-\u001f\u007f]|\p{Cf}/u.test(name)) return `Keep your name to one line of ${LIMITS.name} characters.`;
+  if (/@|:\/\/|\bwww\./i.test(name)) return "Your name is public: leave out email and web addresses.";
+  return null;
+}
 /** Lines kept, other control characters gone: for a crash's message. */
 const lines = (s: string) => s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]+/g, " ").trim();
 
@@ -127,6 +153,8 @@ export function buildReport(o: {
   summary: string;
   details: string;
   email: string;
+  /** A name to credit; none if empty. */
+  name?: string;
   app: SystemInfo;
   view: string;
   errors: string[] | null;
@@ -134,11 +162,13 @@ export function buildReport(o: {
   crash?: CrashReport | null;
 }): FeedbackReport {
   const email = o.email.trim();
+  const name = creditName(o.name ?? "");
   return {
     kind: o.kind,
     summary: cut(oneLine(o.summary), LIMITS.summary),
     details: cut(o.details.replace(/\r\n?/g, "\n").trim(), LIMITS.details),
     email: email ? email : null,
+    ...(name ? { name } : {}),
     app: o.app,
     view: oneLine(o.view),
     errors: o.errors ? o.errors.slice(-LIMITS.errors).map(e => cut(oneLine(scrubPaths(e)), LIMITS.error)) : null,
@@ -174,6 +204,11 @@ export function reportProblem(r: unknown): string | null {
   if ((o.summary as string).length > LIMITS.summary || /[\u0000-\u001f]/.test(o.summary as string)) return `Keep the summary to one line of ${LIMITS.summary} characters.`;
   if (!str(o.details) || (o.details as string).length > LIMITS.details) return `Keep the details under ${LIMITS.details} characters.`;
   if (o.email !== null && (!str(o.email) || !isEmail(o.email as string))) return "That email address doesn't look right.";
+  // Older copies send no name; null is taken as none too.
+  if (o.name !== undefined && o.name !== null) {
+    const problem = str(o.name) ? nameProblem(o.name as string) : "The name isn't text.";
+    if (problem) return problem;
+  }
   const app = o.app as Record<string, unknown> | null;
   if (!app || typeof app !== "object" || ![app.version, app.os, app.osVersion, app.arch].every(v => str(v) && SHORT.test(v as string))) return "The app's details are missing.";
   if (!str(o.view) || !SHORT.test(o.view as string)) return "The open view is missing.";
@@ -189,7 +224,7 @@ export function reportProblem(r: unknown): string | null {
     const problem = crashProblem(o.crash);
     if (problem) return problem;
   }
-  const known = new Set(["kind", "summary", "details", "email", "app", "view", "errors", "file", "crash"]);
+  const known = new Set(["kind", "summary", "details", "email", "name", "app", "view", "errors", "file", "crash"]);
   if (Object.keys(o).some(k => !known.has(k))) return "The report has something it shouldn't.";
   return null;
 }
@@ -211,9 +246,96 @@ export function reportText(r: FeedbackReport): string {
     "",
     describeSystem(r.app),
     `Open view: ${r.view}`,
+    ...(r.name ? [`Sent by: ${r.name}`] : []),
     ...(r.crash ? ["", "It quit unexpectedly:", ...crashLines(r.crash)] : []),
     ...(r.errors?.length ? ["", "Recent errors:", ...r.errors] : [])
   ]
     .filter((l, i) => i !== 1 || l)
     .join("\n");
+}
+
+// ---------- Markdown that what was typed can't break out of ----------
+
+const longestTicks = (text: string) => Math.max(0, ...[...text.matchAll(/`+/g)].map(m => m[0].length));
+
+/** A fence longer than any run of backticks in the text, so the text can't close it. */
+export function fenced(text: string, info = "text"): string {
+  const fence = "`".repeat(Math.max(3, longestTicks(text) + 1));
+  return `${fence}${info}\n${text}\n${fence}`;
+}
+
+/**
+ * One line as inline code: GitHub then makes nothing in it a mention, a link, an issue
+ * number or an emoji. Its backticks are longer than any run in the text, and a space
+ * pads text that starts or ends with one, which Markdown takes off again.
+ */
+export function codeSpan(text: string): string {
+  const ticks = "`".repeat(longestTicks(text) + 1);
+  const pad = text.startsWith("`") || text.endsWith("`") ? " " : "";
+  return `${ticks}${pad}${text}${pad}${ticks}`;
+}
+
+// ---------- Post on GitHub instead ----------
+
+/**
+ * The repository's issue form for each kind (.github/ISSUE_TEMPLATE/), and the ids of the
+ * fields the report fills. A form's labels are added for anyone, whereas an address with
+ * `labels=` needs the right to label issues, which the people it's for don't have.
+ * The shell builds the same address (`new_issue_url` in src-tauri/src/feedback.rs).
+ */
+export const ISSUE_FORMS: Record<FeedbackKind, { template: string; text: string; version: string | null; more: string | null }> = {
+  bug: { template: "bug_report.yml", text: "what", version: "version", more: "more" },
+  idea: { template: "feature_request.yml", text: "task", version: null, more: null },
+  question: { template: "question.yml", text: "question", version: null, more: "more" }
+};
+
+/** How much of each field the address holds, encoded: GitHub turns down an address of about 8,000 characters. */
+export const ISSUE_URL_LIMITS = { title: 900, text: 3600, version: 120, more: 2700 };
+
+/** What goes in a form's "Anything else": what the dialog lists, and what was ticked. */
+export function issueContext(r: FeedbackReport): string {
+  return [
+    describeSystem(r.app),
+    `Open view: ${r.view}`,
+    ...(r.crash ? ["", "It quit unexpectedly:", "", fenced(crashLines(r.crash).join("\n"))] : []),
+    ...(r.errors?.length ? ["", "Recent errors:", "", fenced(r.errors.join("\n"))] : [])
+  ].join("\n");
+}
+
+/** Characters an address keeps as they are; the shell's `encode` keeps the same. */
+const KEPT = /^[A-Za-z0-9\-._~]$/;
+const encodedLength = (c: string) => (KEPT.test(c) ? 1 : 3 * new TextEncoder().encode(c).length);
+const encode = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
+/** Text encoded for an address, cut short with "…" to fit `max` encoded characters. */
+function encodeWithin(text: string, max: number): string {
+  // Whole characters only, and a lone half of a pair (from a paste) as a replacement.
+  const chars = Array.from(text, c => (c.length === 1 && /[\uD800-\uDFFF]/.test(c) ? "�" : c));
+  if (chars.reduce((n, c) => n + encodedLength(c), 0) <= max) return encode(chars.join(""));
+  let kept = "";
+  let length = encodedLength("…");
+  for (const c of chars) {
+    if (length + encodedLength(c) > max) break;
+    length += encodedLength(c);
+    kept += c;
+  }
+  return encode(`${kept}…`);
+}
+
+/**
+ * A new issue on GitHub filled in with the report, for the user to post from their own
+ * account: the kind's form, the summary as the title and the rest in its fields. Nothing
+ * private goes: no email address, no file, no name, as GitHub shows who posted it.
+ */
+export function newIssueUrl(kind: FeedbackKind, title: string, text: string, more: string, version: string): string {
+  const form = ISSUE_FORMS[kind];
+  let url = `https://github.com/Mateusz-Jaskolowski/Strandivo/issues/new?template=${form.template}`;
+  const add = (id: string | null, value: string, max: number) => {
+    if (id && value.trim()) url += `&${id}=${encodeWithin(value, max)}`;
+  };
+  add("title", title.replace(/[\u0000-\u001f\u007f-\u009f]/g, ""), ISSUE_URL_LIMITS.title);
+  add(form.text, text, ISSUE_URL_LIMITS.text);
+  add(form.version, version, ISSUE_URL_LIMITS.version);
+  add(form.more, more, ISSUE_URL_LIMITS.more);
+  return url;
 }

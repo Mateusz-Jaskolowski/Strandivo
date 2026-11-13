@@ -81,9 +81,11 @@
     <p>Report a bug… and Send feedback… (at the top right of the window, and in the Help menu) send your report to <code>feedback.strandivo.com</code> only when you click Send. The dialog shows everything included with the report before you send it:</p>
     <ul>
       <li>the report type (bug, idea or question), summary and details;</li>
+      <li>your name or initials, if you type one, to credit you in the public issue;</li>
       <li>the app's version, operating system and processor;</li>
       <li>which view was open, such as Home or Map.</li>
     </ul>
+    <p>The app keeps the last name you sent on your computer, so you needn't type it again.</p>
     <p>Two optional items are included only if you tick them (both are unticked by default):</p>
     <ul>
       <li><strong>Recent errors</strong>: up to 20 app errors from the past week, with file paths removed and previewed in the dialog. They are stored locally on your computer for up to a week so a report after a crash can still include them.</li>
@@ -91,6 +93,7 @@
     </ul>
     <p>The service posts your report as a public issue on Strandivo's GitHub repository and returns the issue number. Your email address and any attached file are never included in the public issue — they are emailed privately to the maintainer with a link to the issue. The service keeps no logs or copies of its own, aside from a per-minute rate limit in Cloudflare to prevent spam. GitHub stores the issue under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>, and any email stays in the maintainer's mailbox. To have an issue or email removed, write to <a href="mailto:hello@strandivo.com">hello@strandivo.com</a>.</p>
     <p>If a report can't be sent, nothing leaves the app: you can copy the report text or email it to <a href="mailto:feedback@strandivo.com">feedback@strandivo.com</a> from your mail app instead.</p>
+    <p>If you have a GitHub account, Post on GitHub instead sends nothing to <code>feedback.strandivo.com</code>: it opens a new issue on GitHub in your browser, filled in with your summary and details, and for a bug or a question with the app's version, operating system, open view and anything you ticked, but never your name, email address or the open file. Nothing is posted until you submit it on GitHub, from your own account.</p>
     <h2 id="reporting-a-crash">Reporting a crash</h2>
     <p>If Strandivo quits unexpectedly, it writes a local crash log in its app data folder with the error message, code location, thread, app version, operating system, processor and timestamp. Nothing is sent automatically.</p>
     <p>On the next launch, Strandivo reads that file once, deletes it, and shows a banner: &quot;Strandivo quit unexpectedly last time.&quot; Clicking Dismiss clears it. Clicking Report it… opens the bug report dialog with <strong>Crash details</strong> ticked and previewed in full (with file paths removed). It is sent only if you click Send, and you can untick it first. Recent errors remain unticked unless you opt in.</p>

@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReport, describeSystem, isEmail, LIMITS, reportProblem, reportText, scrubPaths, type FeedbackReport } from "./feedback.ts";
+import { buildReport, codeSpan, describeSystem, fenced, issueContext, ISSUE_URL_LIMITS, isEmail, LIMITS, newIssueUrl, reportProblem, reportText, scrubPaths, type FeedbackReport } from "./feedback.ts";
 
 const app = { version: "0.2.1", os: "macos", osVersion: "15.1", arch: "aarch64" };
 const base = { kind: "bug" as const, summary: "Map is blank", details: "Opened pUC19.", email: "", app, view: "Map", errors: null, file: null };
@@ -60,9 +60,59 @@ test("email addresses", () => {
 });
 
 test("the copied text says what the report says, without the file", () => {
-  const r: FeedbackReport = { ...buildReport({ ...base, errors: ["Boom"] }), file: { name: "a.gb", contents: "LOCUS secret" } };
+  const r: FeedbackReport = { ...buildReport({ ...base, name: "JIB", errors: ["Boom"] }), file: { name: "a.gb", contents: "LOCUS secret" } };
   const text = reportText(r);
-  assert.match(text, /^Bug: Map is blank\nOpened pUC19\.\n\nStrandivo 0\.2\.1 · macOS 15\.1 · Apple silicon\nOpen view: Map\n\nRecent errors:\nBoom$/);
+  assert.match(text, /^Bug: Map is blank\nOpened pUC19\.\n\nStrandivo 0\.2\.1 · macOS 15\.1 · Apple silicon\nOpen view: Map\nSent by: JIB\n\nRecent errors:\nBoom$/);
   assert.doesNotMatch(text, /LOCUS/);
   assert.equal(describeSystem({ ...app, os: "windows", osVersion: "11", arch: "x86_64" }), "Strandivo 0.2.1 · Windows 11 · Intel or AMD");
+});
+
+test("a name to credit is one plain line, and goes only when typed", () => {
+  assert.equal(buildReport({ ...base, name: "  Jane\n I.\u202e Bloggs " }).name, "Jane I. Bloggs");
+  assert.equal(buildReport({ ...base, name: "x".repeat(100) }).name?.length, LIMITS.name);
+  // None is left out, not null: a service that predates names turns down fields it doesn't know.
+  assert.ok(!("name" in buildReport({ ...base, name: " \u200b " })));
+  assert.ok(!("name" in buildReport(base)));
+  const ok = buildReport({ ...base, name: "JIB" });
+  assert.equal(reportProblem(ok), null);
+  // Older copies send none, and null is taken as none.
+  assert.equal(reportProblem({ ...ok, name: null }), null);
+  const bad = (name: unknown) => reportProblem({ ...ok, name });
+  for (const name of ["", " JIB", "a\nb", "evil\u202eexe", "x".repeat(LIMITS.name + 1), 7]) assert.ok(bad(name), JSON.stringify(name));
+  // An address typed in the wrong box would be published.
+  for (const name of ["anna@lab.org", "@anna", "https://example.org", "www.example.org"]) assert.match(bad(name) ?? "", /public/, name);
+  // Real names aren't judged by their letters.
+  for (const name of ["Dikshit", "Ö. Çelik", "李小龙", "J. O'Neill-Smith (Cockburn lab)"]) assert.equal(bad(name), null, name);
+});
+
+test("typed text can't break out of its Markdown", () => {
+  assert.equal(fenced("a"), "```text\na\n```");
+  assert.equal(fenced("a ```` b"), "`````text\na ```` b\n`````");
+  assert.equal(codeSpan("JIB"), "`JIB`");
+  assert.equal(codeSpan("a`b"), "``a`b``");
+  assert.equal(codeSpan("`a"), "`` `a ``");
+});
+
+test("Post on GitHub instead fills in the kind's form, and the address stays short", () => {
+  // The shell builds the same address from the same text (src-tauri/src/feedback.rs).
+  assert.equal(
+    newIssueUrl("bug", "Map is blank*", "Opened pUC19 & saw (nothing)!\nNext: ?", "Strandivo 0.4.1 · macOS 15.1 · Apple silicon\nOpen view: Map", "0.4.1"),
+    "https://github.com/Mateusz-Jaskolowski/Strandivo/issues/new?template=bug_report.yml&title=Map%20is%20blank%2A&what=Opened%20pUC19%20%26%20saw%20%28nothing%29%21%0ANext%3A%20%3F&version=0.4.1&more=Strandivo%200.4.1%20%C2%B7%20macOS%2015.1%20%C2%B7%20Apple%20silicon%0AOpen%20view%3A%20Map"
+  );
+  // An idea's form has no place for the app's details; empty fields are left out.
+  assert.equal(newIssueUrl("idea", "Dark mode", "", "Strandivo 0.4.1", "0.4.1"), "https://github.com/Mateusz-Jaskolowski/Strandivo/issues/new?template=feature_request.yml&title=Dark%20mode");
+  assert.match(newIssueUrl("question", "Why?", "Białe tło 👀", "", "0.4.1"), /template=question\.yml&title=Why%3F&question=Bia%C5%82e%20t%C5%82o%20%F0%9F%91%80$/);
+  // Long text is cut by its encoded length, whole characters only.
+  const long = newIssueUrl("question", "x", "猫".repeat(5000), "a".repeat(9000), "0.4.1");
+  const field = (id: string) => new URL(long).searchParams.get(id) ?? "";
+  assert.equal(field("question"), `${"猫".repeat((ISSUE_URL_LIMITS.text - 9) / 9)}…`);
+  assert.equal(field("more").length, ISSUE_URL_LIMITS.more - 9 + 1);
+  assert.ok(long.length < 7500, `${long.length}`);
+  // A lone half of a surrogate pair, as a paste can hold, doesn't stop it.
+  assert.match(newIssueUrl("bug", "x", "a\ud800b", "", "1"), /what=a%EF%BF%BDb/);
+});
+
+test("the form's Anything else lists what the dialog lists, typed text fenced", () => {
+  const r = buildReport({ ...base, errors: ["Boom ```"] });
+  assert.equal(issueContext(r), "Strandivo 0.2.1 · macOS 15.1 · Apple silicon\nOpen view: Map\n\nRecent errors:\n\n````text\nBoom ```\n````");
 });

@@ -9,7 +9,7 @@
 // maintainer alone, with the issue's link. It keeps nothing and logs nothing
 // (wrangler.toml); how often one network sends is held back by Cloudflare's rate limiter.
 
-import { crashLines, describeSystem, FEEDBACK_KINDS, reportProblem } from "../../../src/lib/feedback.ts";
+import { codeSpan, crashLines, describeSystem, FEEDBACK_KINDS, fenced, reportProblem } from "../../../src/lib/feedback.ts";
 
 export const REPO = "Mateusz-Jaskolowski/Strandivo";
 /** A report with the largest file the app attaches, as JSON, and some room. */
@@ -29,21 +29,16 @@ const CORS = {
 
 const answer = (status, body) => new Response(JSON.stringify(body), { status, headers: { ...CORS, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 
-/** A fence longer than any run of backticks in the text, so the text can't close it. */
-function fenced(text, info = "text") {
-  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map(m => m[0].length));
-  const fence = "`".repeat(Math.max(3, longest + 1));
-  return `${fence}${info}\n${text}\n${fence}`;
-}
-
 /**
- * The issue's text. What the reporter wrote is fenced as plain text, so it can't
- * mention anyone, link anywhere or change how the issue looks; the rest is the app's own,
- * checked by reportProblem.
+ * The issue's text. What the reporter wrote is fenced as plain text, and the name to
+ * credit is inline code, so neither can mention anyone, link anywhere or change how the
+ * issue looks; the rest is the app's own, checked by reportProblem.
  */
 export function issueBody(r) {
   const kind = FEEDBACK_KINDS.find(k => k.id === r.kind)?.label ?? r.kind;
   const lines = [`**${kind}**, sent from the app.`, ""];
+  // Older copies send no name.
+  if (r.name) lines.push(`Sent by: ${codeSpan(r.name)}`, "");
   if (r.details) lines.push(fenced(r.details), "");
   lines.push("| | |", "| --- | --- |", `| App | ${describeSystem(r.app)} |`, `| Open view | ${r.view} |`, "");
   // Older copies send no crash; everything in it is fenced, though the app made it.

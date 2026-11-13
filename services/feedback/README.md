@@ -3,8 +3,9 @@
 The Cloudflare Worker behind Help → Send Feedback… in the app. It takes one report as
 JSON, checks it with the app's own rules (`src/lib/feedback.ts`), files it as an issue in
 this repository, labelled `from-app` and `bug`, `enhancement` or `question`, and answers
-with the issue's number. Issues are public, so the reporter's email address and any file
-they attach never go in one: they are emailed to the maintainer alone, with the issue's
+with the issue's number. A name the reporter typed to be credited goes in the issue as
+"Sent by:" and inline code, so it can't mention anyone or link anywhere. Issues are public,
+so the reporter's email address and any file they attach never go in one: they are emailed to the maintainer alone, with the issue's
 link, the address as Reply-To. See `src/index.mjs`, and part 4 of
 `docs/updates-feedback-usage-plan.md`.
 
@@ -38,6 +39,8 @@ reports a minute.
 Deploy again after changing `src/index.mjs` or `src/lib/feedback.ts`, which it bundles:
 the app and the Worker then agree on what a report may hold. A copy of the app checks a
 report before sending, so a stricter rule here only turns away reports from older copies.
+A new field must be deployed before a release that sends it, as the Worker turns down a
+report with a field it doesn't know.
 
 ## Checking it
 

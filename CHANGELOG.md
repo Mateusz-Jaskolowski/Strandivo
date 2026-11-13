@@ -16,6 +16,13 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Credit for feedback**: Report a bug and Send feedback take your name or initials to
+  credit you in the public issue, and remember them for next time. If you have a GitHub
+  account, Post on GitHub instead opens the issue on GitHub filled in with what you wrote,
+  to post as yourself.
+- **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
+  reports can now carry a name to credit.
+
 ## 0.4.0
 
 Mark domains, linkers and CDRs in a coding sequence as protein regions, see them on the

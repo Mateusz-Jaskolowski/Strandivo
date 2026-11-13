@@ -1712,11 +1712,12 @@ async function main() {
     // An error naming a file, as a failed read would: the report must not carry the path.
     await s.exec("setTimeout(() => { throw new Error(\"Couldn't read /Users/anna/Lab plasmids/pSecret.gb\"); });");
     await sleep(200);
-    await s.exec(`window.__e2eFeedback = { reports: [], issues: [], emails: [], fail: true };
+    await s.exec(`window.__e2eFeedback = { reports: [], issues: [], emails: [], newIssues: [], fail: true };
       window.__strandivoFeedback = {
         send: async r => { if (window.__e2eFeedback.fail) throw new Error("Couldn't reach Strandivo's feedback service."); window.__e2eFeedback.reports.push(r); return { number: 7, emailed: true }; },
         openIssue: n => window.__e2eFeedback.issues.push(n),
-        email: (subject, body) => window.__e2eFeedback.emails.push({ subject, body })
+        email: (subject, body) => window.__e2eFeedback.emails.push({ subject, body }),
+        newIssue: url => window.__e2eFeedback.newIssues.push(url)
       };`);
     // The app bar's two buttons, kept in view while Strandivo is young; Help has them too.
     await s.click("button.sv-appbar-feedback-idea");
@@ -1730,6 +1731,10 @@ async function main() {
     check("Send waits for a summary", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent === 'Send')?.disabled === true"));
     await s.keys("input[aria-label='Summary']", "Map stays blank");
     await s.keys("textarea[aria-label='Details']", "Opened a plasmid from Home.");
+    const sentList = () => s.exec("return document.querySelector('.sv-feedback-sent')?.innerText ?? ''");
+    check("No name is listed until one is typed", !/Sent by/.test(await sentList()));
+    await s.keys("input[aria-label='Your name']", "JIB");
+    check("A name to credit is listed with what is sent", /Sent by: JIB/.test(await sentList()), (await sentList()).slice(0, 200));
     await s.keys("input[aria-label='Your email']", "anna@lab.example.org");
     await s.click("//label[contains(., 'Recent errors')]/input", "xpath");
     const shown = await s.exec("return document.querySelector('.sv-feedback-errors')?.textContent ?? ''");
@@ -1744,12 +1749,28 @@ async function main() {
     await s.exec("window.__e2eFeedback.fail = false;");
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Try again']", "xpath");
     const sent = await s.waitFor("window.__e2eFeedback.reports.length === 1", 3000) ? await s.exec("return window.__e2eFeedback.reports[0]") : null;
-    check("The report holds what the dialog showed, and no path", sent?.kind === "bug" && sent.summary === "Map stays blank" && sent.email === "anna@lab.example.org" && sent.view === "Home" && sent.errors?.some(e => /<path>/.test(e)) && !/\/Users\/|pSecret/.test(JSON.stringify(sent)) && sent.file === null, JSON.stringify(sent)?.slice(0, 200));
+    check("The report holds what the dialog showed, and no path", sent?.kind === "bug" && sent.summary === "Map stays blank" && sent.email === "anna@lab.example.org" && sent.name === "JIB" && sent.view === "Home" && sent.errors?.some(e => /<path>/.test(e)) && !/\/Users\/|pSecret/.test(JSON.stringify(sent)) && sent.file === null, JSON.stringify(sent)?.slice(0, 200));
     check("It says which issue it became", await s.waitFor("/sent as #7/.test(document.querySelector('.sv-feedback-thanks')?.textContent)", 3000));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Open on GitHub']", "xpath");
     check("Open on GitHub asks for that issue by its number", await s.waitFor("window.__e2eFeedback.issues[0] === 7", 3000));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+
+    // --- the name is remembered, and Post on GitHub instead fills in the kind's form ---
+    await s.click("button.sv-appbar-feedback-idea");
+    await s.waitFor("document.querySelector('.sv-dialog-title')?.textContent === 'Send feedback'", 3000);
+    check("The name sent last time is filled in", (await s.exec("return document.querySelector('input[aria-label=\"Your name\"]')?.value")) === "JIB" && /Sent by: JIB/.test(await sentList()));
+    await s.keys("input[aria-label='Summary']", "Invert the selection");
+    await s.keys("textarea[aria-label='Details']", "With a key & a menu item.");
+    await s.keys("input[aria-label='Your email']", "anna@lab.example.org");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Post on GitHub instead']", "xpath");
+    const newIssue = await s.waitFor("window.__e2eFeedback.newIssues.length === 1", 3000) ? await s.exec("return window.__e2eFeedback.newIssues[0]") : "";
+    check(
+      "Post on GitHub instead opens the idea form filled in, without the email or name",
+      newIssue.startsWith("https://github.com/Mateusz-Jaskolowski/Strandivo/issues/new?template=feature_request.yml&title=Invert%20the%20selection&task=With%20a%20key%20%26%20a%20menu%20item.") && !/anna|JIB|labels=/.test(newIssue),
+      newIssue.slice(0, 220)
+    );
+    check("It closes the dialog, sending nothing", (await s.waitFor("!document.querySelector('.sv-dialog')", 3000)) && (await s.exec("return window.__e2eFeedback.reports.length")) === 1);
 
     // --- a crash last time: the strip, and the bug report it opens, shown before sending ---
     const crashFile = `window.__strandivoCrash = JSON.stringify({ format: 1, version: "0.4.0", os: "linux", arch: "x86_64", time: 1793957400, thread: "tokio-runtime-worker", location: "reqwest-0.13.0/src/async_impl/client.rs:2311:5", message: "Could not read /home/anna/Lab plasmids/pSecret.gb" });`;

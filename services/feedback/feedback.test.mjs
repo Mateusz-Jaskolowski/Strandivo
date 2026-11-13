@@ -109,6 +109,21 @@ test("a crash goes in the issue fenced, and older copies' reports still pass", a
   assert.equal(calls.github.length, 3);
 });
 
+test("a name to credit goes in the issue as inline code, and older copies send none", async () => {
+  const { calls, send } = service();
+  assert.equal((await send({ ...report, name: "JIB" })).status, 200);
+  const body = calls.github[0].body.body;
+  assert.match(body, /^\*\*Bug\*\*, sent from the app\.\n\nSent by: `JIB`\n\n````text\n/);
+  assert.equal((await send(report)).status, 200);
+  assert.doesNotMatch(calls.github[1].body.body, /Sent by/);
+  // Inline code can't mention, link or close itself early.
+  assert.match(issueBody({ ...report, name: "@maintainer [x](https://evil.example) #1 `a`" }), /\nSent by: `` @maintainer \[x\]\(https:\/\/evil\.example\) #1 `a` ``\n/);
+  for (const name of ["a\nb", "x".repeat(61), "anna@lab.example.org", "evil‮exe", 7]) {
+    assert.equal((await send({ ...report, name })).status, 400, JSON.stringify(name));
+  }
+  assert.equal(calls.github.length, 2);
+});
+
 test("the email's subject may be in any language", () => {
   const mail = maintainerEmail({ ...report, summary: "Mapa jest pusta – żółw" }, { number: 7, url: "u" }, "m@example.org", "B");
   const subject = /Subject: =\?UTF-8\?B\?([^?]+)\?=/.exec(mail)[1];

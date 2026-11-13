@@ -124,19 +124,28 @@ const BAND = 18;
 const LANE_STEP = 22;
 const PRIMER_R = 158;
 /**
- * A protein's regions are brackets just outside their CDS (in the linear map, under it):
- * a gap from its edge, ticks pointing back at it, and a step for each lane of nesting.
+ * A protein's regions are stripes in their colours along its CDS's outer edge (the bottom
+ * edge on the linear map), inside the band, where no tick, primer or leader is drawn. The
+ * first lane is at the edge; each further lane (nesting, overlaps) is a thinner stripe in
+ * from it. Neighbouring regions are a hair apart.
  */
-const BRACKET_GAP = 1.5;
-const BRACKET_TICK = 3.5;
-const BRACKET_STEP = 5;
-const bracketRoom = (lanes: number) => (lanes ? BRACKET_GAP + BRACKET_TICK + (lanes - 1) * BRACKET_STEP + 1.5 : 0);
-/** How far out a region's bracket is: the most nested nearest its CDS, top level outermost. */
-const bracketOffset = (lane: number, lanes: number) => BRACKET_GAP + BRACKET_TICK + (lanes - 1 - lane) * BRACKET_STEP;
+const STRIPE = 4;
+const STRIPE_INNER = 2;
+const STRIPE_GAP = 0.5;
+const STRIPE_HAIR = 0.45;
+/** How far in from the CDS's edge a lane's stripe starts and ends. */
+function stripeDepth(lane: number): [number, number] {
+  const from = lane ? STRIPE + STRIPE_GAP + (lane - 1) * (STRIPE_INNER + STRIPE_GAP) : 0;
+  return [from, from + (lane ? STRIPE_INNER : STRIPE)];
+}
+/** How much of its band a protein's stripes take; its name sits in the rest. */
+const stripeRoom = (lanes: number) => (lanes ? stripeDepth(lanes - 1)[1] : 0);
+/** Whether a name `px` high fits across a band beside its stripes (a stripe's edge needs less margin). */
+const fitsAcross = (px: number, band: number, room: number) => px <= band - (room ? room + 1 : 3);
 
-/** A region's bracket: what is drawn, under a wider invisible stroke that is easier to point at. */
-function bracketShape(d: string, f: SeqFeature, index: number, color: string, title: string): SVGGElement {
-  return s("g", { class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, title), s("path", { d, class: "sv-map-bracket", stroke: color }), s("path", { d, class: "sv-map-bracket-hit" }));
+/** A region's stripe, cut to its CDS's shape, under a wider clear stroke that is easier to point at. */
+function stripeShape(d: string, clip: string, f: SeqFeature, index: number, color: string, title: string): SVGGElement {
+  return s("g", { class: "sv-map-region", "data-kind": "feature", "data-id": f.id, "data-region": index }, s("title", null, title), s("path", { d, fill: color, "clip-path": `url(#${clip})`, class: "sv-map-stripe" }), s("path", { d, class: "sv-map-stripe-hit" }));
 }
 const PRIMER_STEP = 7;
 /** ORF arcs inside the features: thickness and lane step. */
@@ -503,13 +512,7 @@ export class MapView {
       0
     );
     const laneCount = Math.max(1, ...Array.from(lanes.values()).map(l => l + 1));
-    // Each lane leaves room outside it for its proteins' region brackets.
-    const regionRowsOf = new Map(feats.map(f => [f, layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none")]));
-    const regionLanesOf = (f: SeqFeature) => Math.max(0, ...regionRowsOf.get(f)!.map(r => r.lane + 1));
-    const roomOutside = (lane: number) => bracketRoom(Math.max(0, ...feats.filter(f => (lanes.get(f) ?? 0) === lane).map(regionLanesOf)));
-    const laneOut = [BAND_OUT];
-    for (let l = 1; l < laneCount; l++) laneOut.push(laneOut[l - 1] - BAND - Math.max(LANE_STEP - BAND, roomOutside(l)));
-    const innermost = laneOut[laneCount - 1] - BAND;
+    const innermost = BAND_OUT - (laneCount - 1) * LANE_STEP - BAND;
     // ORF lanes, going inwards from the features; the ruler sits inside them.
     const orfList = o.orfs ? orfs(d, o.orfOptions) : [];
     const oLanes = assignLanes(
@@ -528,8 +531,7 @@ export class MapView {
       pad
     );
     const pLaneCount = primers.length ? Math.max(...Array.from(pLanes.values())) + 1 : 0;
-    const primerR = Math.max(PRIMER_R, BAND_OUT + roomOutside(0) + 4);
-    const outer = pLaneCount ? primerR + (pLaneCount - 1) * PRIMER_STEP + 4 : BAND_OUT + roomOutside(0);
+    const outer = pLaneCount ? PRIMER_R + (pLaneCount - 1) * PRIMER_STEP + 4 : BAND_OUT;
     const tickOut = outer + 9;
     const knee = tickOut + 10;
     const rLab = knee + 21;
@@ -571,7 +573,7 @@ export class MapView {
     const headOf = (g: SeqFeature, r1: number, r2: number) => headAngle(((rangeLength(g, n) / n) * 360), (r1 + r2) / 2, g.strand);
     feats.forEach((f, i) => {
       const lane = lanes.get(f) ?? 0;
-      const r2 = laneOut[lane];
+      const r2 = BAND_OUT - lane * LANE_STEP;
       const r1 = r2 - BAND;
       const a0 = ang(f.start);
       const a1 = ang(f.end + 1);
@@ -581,31 +583,32 @@ export class MapView {
       const nb = touching.get(f);
       const notch: [number, number] = [nb?.before ? headOf(nb.before, r1, r2) : 0, nb?.after ? headOf(nb.after, r1, r2) : 0];
       const st = styles.get(f.id)!;
+      const shape = arcShape(a0, a1, r1, r2, f.strand, 9, notch);
       const path = s(
         "path",
-        { d: arcShape(a0, a1, r1, r2, f.strand, 9, notch), fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id },
+        { d: shape, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id },
         s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)} (${fmt(rangeLength(f, n))} bp)`)
       );
       featureLayer.appendChild(path);
       this.addShape(`feature:${f.id}`, path);
-      // Regions of the protein: brackets outside the CDS, which stays as it is.
-      const regionRows = regionRowsOf.get(f)!;
-      const regionLanes = regionLanesOf(f);
-      for (const { region, index, lane } of regionRows) {
-        const rb = r2 + bracketOffset(lane, regionLanes);
+      // Regions of the protein: stripes along the CDS's outer edge, cut to its shape.
+      const regionRows = layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none");
+      const room = stripeRoom(Math.max(0, ...regionRows.map(r => r.lane + 1)));
+      const clip = `sv-region-clip-${i}`;
+      if (regionRows.length) defs.appendChild(s("clipPath", { id: clip }, s("path", { d: shape })));
+      for (const { region, index, lane: regionLane } of regionRows) {
+        const [rOut, rIn] = stripeDepth(regionLane).map(v => r2 - v);
         const color = regionColor(region);
         for (const piece of regionSpans(f, region, n)) {
           const sweep = (rangeLength(piece, n) / n) * 360;
-          const inset = Math.min((0.9 / (2 * Math.PI * rb)) * 360, sweep * 0.2);
-          const from = ang(piece.start) + inset;
-          const to = from + sweep - 2 * inset;
-          const d = `M${P(pt(from, rb - BRACKET_TICK))} L${P(pt(from, rb))} A${rb},${rb} 0 ${to - from > 180 ? 1 : 0} 1 ${P(pt(to, rb))} L${P(pt(to, rb - BRACKET_TICK))}`;
-          const bracket = bracketShape(d, f, index, color, mapRegionTitle(region, f));
-          regionLayer.appendChild(bracket);
-          this.addShape(`feature:${f.id}:region:${index}`, bracket);
+          const hair = Math.min((STRIPE_HAIR / (2 * Math.PI * r2)) * 360, sweep * 0.2);
+          const stripe = stripeShape(arcShape(ang(piece.start) + hair, ang(piece.start) + sweep - hair, rIn, rOut, 0), clip, f, index, color, mapRegionTitle(region, f));
+          regionLayer.appendChild(stripe);
+          this.addShape(`feature:${f.id}:region:${index}`, stripe);
         }
+        // Its leader starts at its own stripe, crossing any stripe nearer the edge.
         const range = regionRange(f, region, n);
-        if (range) labels.push({ angle: ang(range.start) + rangeLength(range, n) / n * 180, r: rb, text: region.name, kind: "feature", id: f.id, region: index, color, title: mapRegionTitle(region, f), width: textWidth(region.name, labelFont(400)), y: 0, ly: 0 });
+        if (range) labels.push({ angle: ang(range.start) + rangeLength(range, n) / n * 180, r: rOut, text: region.name, kind: "feature", id: f.id, region: index, color, title: mapRegionTitle(region, f), width: textWidth(region.name, labelFont(400)), y: 0, ly: 0 });
       }
       // Bases a feature in parts skips (introns): a thin line instead of the band.
       for (const gap of featureGaps(f, n)) {
@@ -614,13 +617,15 @@ export class MapView {
         featureLayer.appendChild(s("path", { d: arcShape(g0, g1, r1 - 0.5, r2 + 0.5, 0), style: "fill:var(--panel)", "pointer-events": "none" }));
         featureLayer.appendChild(s("path", { d: arcPath(g0, g1, (r1 + r2) / 2, false), fill: "none", stroke: st.fill, "stroke-width": 2, "pointer-events": "none" }));
       }
-      const arcLen = (span / 360) * 2 * Math.PI * (r1 + BAND / 2);
+      // The name runs along the middle of what its regions' stripes leave of the band.
+      const rName = r1 + (BAND - room) / 2;
+      const arcLen = (span / 360) * 2 * Math.PI * rName;
       const tw = textWidth(f.name, labelFont(600));
-      if (arcLen > tw + 14 && labelPx <= BAND - 3) {
+      if (arcLen > tw + 14 && fitsAcross(labelPx, BAND, room)) {
         const mid = (a0 + span / 2) % 360;
         const flip = mid > 90 && mid < 270;
         const pid = `sv-arc-${i}`;
-        defs.appendChild(s("path", { id: pid, d: arcPath(a0, a1, r1 + BAND / 2, flip) }));
+        defs.appendChild(s("path", { id: pid, d: arcPath(a0, a1, rName, flip) }));
         arcLabels.appendChild(
           s(
             "text",
@@ -630,8 +635,7 @@ export class MapView {
         );
       } else {
         const text = shortLabel(f.name);
-        // From outside its regions' brackets, so its leader doesn't cross them.
-        labels.push({ angle: (a0 + span / 2) % 360, r: r2 + bracketRoom(regionLanes), text, kind: "feature", id: f.id, color: st.fill, width: textWidth(text, labelFont(600)), y: 0, ly: 0 });
+        labels.push({ angle: (a0 + span / 2) % 360, r: r2, text, kind: "feature", id: f.id, color: st.fill, width: textWidth(text, labelFont(600)), y: 0, ly: 0 });
       }
     });
     root.append(featureLayer, regionLayer);
@@ -655,7 +659,7 @@ export class MapView {
     const primerLayer = s("g");
     for (const p of primers) {
       const lane = pLanes.get(p) ?? 0;
-      const r = primerR + lane * PRIMER_STEP;
+      const r = PRIMER_R + lane * PRIMER_STEP;
       const a0 = ang(p.start);
       const a1 = ang(p.end + 1);
       const path = s(
@@ -836,8 +840,8 @@ export class MapView {
       0
     );
     const laneCount = Math.max(1, ...Array.from(lanes.values()).map(l => l + 1));
-    // Regions of a protein are brackets under its bar, named in rows under its lane's
-    // feature names; the lane makes room for the brackets of its most nested protein.
+    // Regions of a protein are stripes along the bottom of its bar, named in rows under its
+    // lane's feature names.
     const swatch = glyphSize(labelPx);
     const swatchGap = glyphGap(labelPx);
     const regionBands = new Map(feats.map(f => {
@@ -850,7 +854,6 @@ export class MapView {
       });
       return [f.id, { rows: drawn, lanes: Math.max(0, ...rows.map(r => r.lane + 1)) }] as const;
     }));
-    const roomUnder = Array.from({ length: laneCount }, (_, l) => bracketRoom(Math.max(0, ...feats.filter(f => (lanes.get(f.id) ?? 0) === l).map(f => regionBands.get(f.id)!.lanes))));
     // Region names go in rows under their lane, shared by the CDSs in it.
     const regionLabelRows = Array.from({ length: laneCount }, (_, l) => {
       const ends: number[] = [];
@@ -863,7 +866,9 @@ export class MapView {
       }
       return ends.length;
     });
-    const nameBelow = (f: SeqFeature) => X((f.end >= f.start ? f.end : n - 1) + 1) - X(f.start) <= textWidth(f.name, labelFont(600)) + 16;
+    // A name goes under its bar when it is too long for it, or too tall beside its stripes.
+    const room = (f: SeqFeature) => stripeRoom(regionBands.get(f.id)!.lanes);
+    const nameBelow = (f: SeqFeature) => X((f.end >= f.start ? f.end : n - 1) + 1) - X(f.start) <= textWidth(f.name, labelFont(600)) + 16 || (room(f) > 0 && !fitsAcross(labelPx, 16, room(f)));
     const nameRow = new Map<string, number>();
     const nameRowEnds: number[][] = Array.from({ length: laneCount }, () => []);
     // A name starts under its feature's start, moved left if it would run off the end.
@@ -882,7 +887,7 @@ export class MapView {
     // The ruler's numbers sit between the backbone and the features.
     const laneY: number[] = [baseY + (o.ruler ? 22 : 8)];
     for (let l = 0; l < laneCount; l++) {
-      laneY.push(laneY[l] + 16 + roomUnder[l] + Math.max(1, nameRowEnds[l].length) * nameStep + regionLabelRows[l] * nameStep);
+      laneY.push(laneY[l] + 16 + Math.max(1, nameRowEnds[l].length) * nameStep + regionLabelRows[l] * nameStep);
     }
     // ORFs in thin lanes under the features.
     const orfList = o.orfs ? orfs(d, o.orfOptions) : [];
@@ -912,6 +917,8 @@ export class MapView {
       root.append(ticks, tickLabels);
     }
 
+    const defs = s("defs");
+    root.appendChild(defs);
     const featureLayer = s("g", { "font-size": labelPx, "dominant-baseline": "central" });
     const regionLayer = s("g");
     // Features that touch meet: an arrowhead sits in a notch in its neighbour.
@@ -922,12 +929,13 @@ export class MapView {
       const w = g.strand === 1 ? X(g.end + 1) - X(g.start <= g.end ? g.start : 0) : X(g.start <= g.end ? g.end + 1 : n) - X(g.start);
       return Math.min(8, Math.max(1.5, w) * 0.5);
     };
-    for (const f of feats) {
+    feats.forEach((f, i) => {
       const lane = lanes.get(f.id) ?? 0;
       const y = laneY[lane];
       const st = styles.get(f.id)!;
       const nb = touching.get(f);
       const pieces = f.start <= f.end ? [[f.start, f.end + 1]] : [[f.start, n], [0, f.end + 1]];
+      const shapes: string[] = [];
       for (const [a, b] of pieces) {
         const x1 = X(a);
         const x2 = Math.max(X(b), x1 + 1.5);
@@ -945,21 +953,24 @@ export class MapView {
         const path = s("path", { d: dpath, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id }, s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`));
         featureLayer.appendChild(path);
         this.addShape(`feature:${f.id}`, path);
+        shapes.push(dpath);
       }
-      // Regions: brackets under the bar, the most nested nearest it, with names in rows below.
+      // Regions: stripes along the bottom of the bar, cut to its shape, with names in rows below.
       const bands = regionBands.get(f.id)!;
+      const clip = `sv-region-clip-${i}`;
+      if (bands.rows.length) defs.appendChild(s("clipPath", { id: clip }, ...shapes.map(d => s("path", { d }))));
       for (const { region, index, lane: regionLane, pieces: parts, x, labelRow } of bands.rows) {
         const key = `feature:${f.id}:region:${index}`;
-        const yb = y + 16 + bracketOffset(regionLane, bands.lanes);
+        const [yOut, yIn] = stripeDepth(regionLane).map(v => y + 16 - v);
         for (const g of parts) {
-          const inset = Math.min(0.9, (X(g.end + 1) - X(g.start)) * 0.2);
-          const bx1 = X(g.start) + inset;
-          const bx2 = Math.max(bx1 + 0.5, X(g.end + 1) - inset);
-          const bracket = bracketShape(`M${f1(bx1)},${f1(yb - BRACKET_TICK)} V${f1(yb)} H${f1(bx2)} V${f1(yb - BRACKET_TICK)}`, f, index, regionColor(region), mapRegionTitle(region, f));
-          regionLayer.appendChild(bracket);
-          this.addShape(key, bracket);
+          const hair = Math.min(STRIPE_HAIR, (X(g.end + 1) - X(g.start)) * 0.2);
+          const sx1 = X(g.start) + hair;
+          const sx2 = Math.max(sx1 + 0.5, X(g.end + 1) - hair);
+          const stripe = stripeShape(`M${f1(sx1)},${f1(yIn)} H${f1(sx2)} V${f1(yOut)} H${f1(sx1)} Z`, clip, f, index, regionColor(region), mapRegionTitle(region, f));
+          regionLayer.appendChild(stripe);
+          this.addShape(key, stripe);
         }
-        const ry = y + 16 + roomUnder[lane] + Math.max(1, nameRowEnds[lane].length) * nameStep + labelRow * nameStep + nameStep / 2;
+        const ry = y + 16 + Math.max(1, nameRowEnds[lane].length) * nameStep + labelRow * nameStep + nameStep / 2;
         const mark = labelGlyph({ kind: "feature", id: f.id, region: index, color: regionColor(region) }, x, ry, swatch, 1)!;
         const label = s("text", { x: f1(x + swatch + swatchGap), y: f1(ry), class: labelClass({ kind: "feature", region: index }), "data-kind": "feature", "data-id": f.id, "data-region": index }, region.name, s("title", null, mapRegionTitle(region, f)));
         featureLayer.append(mark, label);
@@ -977,9 +988,9 @@ export class MapView {
       const x1 = X(f.start);
       const x2 = X((f.end >= f.start ? f.end : n - 1) + 1);
       if (!nameBelow(f)) {
-        featureLayer.appendChild(s("text", { x: f1((x1 + x2) / 2), y: y + 8, "text-anchor": "middle", "font-weight": 600, fill: st.text, class: "sv-map-arctext", "data-kind": "feature", "data-id": f.id }, f.name));
+        featureLayer.appendChild(s("text", { x: f1((x1 + x2) / 2), y: f1(y + (16 - room(f)) / 2), "text-anchor": "middle", "font-weight": 600, fill: st.text, class: "sv-map-arctext", "data-kind": "feature", "data-id": f.id }, f.name));
       } else {
-        const ty = y + 16 + roomUnder[lane] + nameStep / 2 + (nameRow.get(f.id) ?? 0) * nameStep;
+        const ty = y + 16 + nameStep / 2 + (nameRow.get(f.id) ?? 0) * nameStep;
         const mark = { kind: "feature" as const, id: f.id, color: st.fill };
         const name = shortLabel(f.name);
         const nx = nameX(f);
@@ -988,7 +999,7 @@ export class MapView {
         this.addShape(`feature:${f.id}`, chip);
         featureLayer.appendChild(s("text", { x: f1(nx + cp), y: f1(ty), class: labelClass(mark), style: `--lc:${st.fill}`, "data-kind": "feature", "data-id": f.id }, name));
       }
-    }
+    });
     root.append(featureLayer, regionLayer);
 
     const orfLayer = s("g");

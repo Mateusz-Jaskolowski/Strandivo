@@ -1313,28 +1313,22 @@
   stroke: var(--accent);
   stroke-width: 1.25;
 }
-/* A protein's regions: a bracket in each one's colour just outside its CDS (under it on
-   the linear map), which stays as it is. The wider invisible stroke is what is pointed at. */
+/* A protein's regions: a stripe in each one's colour along the edge of its CDS, inside it,
+   where ticks and leaders don't reach. The clear stroke round it is what is pointed at. */
 .sv-map-region {
   cursor: pointer;
 }
-.sv-map-bracket {
-  fill: none;
-  stroke-width: 1.6px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.sv-map-bracket-hit {
-  fill: none;
+.sv-map-stripe-hit {
+  fill: transparent;
   stroke: transparent;
-  stroke-width: 7px;
+  stroke-width: 3px;
 }
-.sv-map-region.sv-map-region-hover .sv-map-bracket {
-  stroke-width: 2.4px;
+.sv-map-region.sv-map-region-hover .sv-map-stripe {
+  filter: brightness(0.85);
 }
-.sv-map-region.sv-focused .sv-map-bracket {
+.sv-map-region.sv-focused .sv-map-stripe {
   stroke: var(--accent);
-  stroke-width: 2.4px;
+  stroke-width: 1.5px;
 }
 .sv-map-swatch {
   stroke: color-mix(in srgb, var(--text) 22%, transparent);

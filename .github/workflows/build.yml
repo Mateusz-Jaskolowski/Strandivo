@@ -3,7 +3,8 @@ name: Build installers
 # A full set of installers takes most of an hour, so they are built only when asked for:
 #   - pushing a version tag like v0.2.0: every platform, signed, with the update files and
 #     latest.json, and a draft GitHub Release. Publishing the draft is what gives the update
-#     to installed copies, through updates.strandivo.com.
+#     to installed copies, through updates.strandivo.com. GitHub also keeps a signed record
+#     of the commit and run that built each published file, for `gh attestation verify`.
 #   - Actions tab → "Build installers" → "Run workflow": the platforms you pick, unsigned and
 #     without update files, for testing. Download them from the run page, under "Artifacts".
 #
@@ -27,7 +28,8 @@ on:
   push:
     tags: ["v*"]
 
-# Read-only unless a job says otherwise: only drafting the release writes.
+# Read-only unless a job says otherwise: only drafting the release, and recording how its
+# files were built, write.
 permissions:
   contents: read
 
@@ -124,6 +126,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    outputs:
+      digests: ${{ steps.digests.outputs.digests }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -142,6 +146,16 @@ jobs:
           node --experimental-strip-types .github/scripts/release.mjs name-files dist "$GITHUB_REF_NAME"
           node --experimental-strip-types .github/scripts/release.mjs latest-json dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > dist/latest.json
           node --experimental-strip-types .github/scripts/release.mjs release-notes "$GITHUB_REF_NAME" > notes.md
+      # The published files' SHA-256 fingerprints, which the attest job below signs.
+      - name: Take the files' fingerprints
+        id: digests
+        working-directory: dist
+        run: |
+          {
+            echo "digests<<EOF"
+            sha256sum *.dmg *.exe *.deb *.AppImage *.app.tar.gz latest.json
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
       # A release candidate (v0.4.0-rc.1) is drafted as a pre-release, which GitHub never
       # makes "latest": the updates Worker and the Download page follow "latest", so no copy
       # is offered it, even if it is published by mistake as it is.
@@ -157,3 +171,24 @@ jobs:
             dist/*.app.tar.gz
             dist/latest.json
           body_path: notes.md
+
+  # A signed record, kept by GitHub, of the commit and run that built each published file,
+  # so anyone can check a download with `gh attestation verify` (the Download page says how).
+  # A job of its own, as any step of a job allowed an id-token could sign any file as built
+  # here: this one runs only GitHub's own action, on the fingerprints the release job took.
+  # It comes after the draft, so its failure never stops a release; re-run it instead.
+  attest:
+    name: Record how the files were built
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - name: Write down the fingerprints
+        env:
+          DIGESTS: ${{ needs.release.outputs.digests }}
+        run: printf '%s\n' "$DIGESTS" > digests.txt
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: digests.txt

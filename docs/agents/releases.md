@@ -55,6 +55,16 @@ and CI checks that they exist.
   `releases/latest/download/…`, the newest published release, with no change per release. The script reads the changelog with
   `src/lib/changelog.ts`, so it runs with `--experimental-strip-types`. A release's
   section written by hand needs `npm run site` too, or the quick checks fail.
+- **Attestations**: after drafting, a tag's run has GitHub sign a record of the commit and
+  run that built each published file (the `attest` job), which `gh attestation verify`
+  checks and the Download page explains. It signs the fingerprints the release job took of
+  the renamed files, in a job of its own with nothing but GitHub's own action: any step of
+  a job allowed an `id-token` could sign any file as built by us, so never give one to a
+  job running a third-party action. Its failure doesn't stop the draft; re-run it before
+  publishing, or that release's files can't be checked. Immutable releases (a repository
+  setting) lock a published release's files and tag, and `gh release verify-asset`
+  checks a file against it: a broken installer then needs a new version, never a
+  replaced file.
 - **The website**, `strandivo.com`, is the plain files in `site/` on Cloudflare Pages (a
   project named `strandivo`), with no build step, so its Content Security Policy
   (`site/_headers`) allows only its own images, stylesheet and one script,

@@ -111,6 +111,13 @@ export function openDialog(o: { title: string; note?: string; width?: number; on
     body,
     footer
   );
+  // A textarea dragged taller grows only while the dialog has room, so the dialog never
+  // has to scroll its other fields out of sight.
+  body.addEventListener("pointerdown", e => {
+    if (!(e.target instanceof HTMLTextAreaElement)) return;
+    const room = parseFloat(getComputedStyle(el).maxHeight) - el.offsetHeight;
+    if (Number.isFinite(room)) e.target.style.maxHeight = `${e.target.offsetHeight + Math.max(0, room)}px`;
+  });
   const overlay = h("div", { class: "sv-dialog-overlay" }, el);
   document.body.appendChild(overlay);
   document.addEventListener("keydown", onKey, true);

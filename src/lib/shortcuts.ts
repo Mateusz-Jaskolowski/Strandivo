@@ -29,7 +29,7 @@ export const MENU_KEYS: readonly MenuKey[] = [
 /** Menu items whose keys an open file handles itself everywhere (`shortcutCommand` in
  *  src/doc/document.ts), as text fields keep their own undo and select-all. */
 export const DOCUMENT_KEYS: readonly string[] = [
-  "undo", "redo", "select-all", "find",
+  "undo", "redo", "select-all", "invert-selection", "find",
   "show-map", "show-sequence", "show-primers", "show-reads", "show-info",
 ];
 
@@ -68,6 +68,7 @@ const APP_SHORTCUTS: Record<string, Shortcut> = {
   "show-info": { key: "5" },
   undo: { key: "Z" },
   "select-all": { key: "A" },
+  "invert-selection": { key: "I", shift: true },
   find: { key: "F" },
   library: { key: "L", shift: true },
   settings: { key: "," }
@@ -78,6 +79,8 @@ const APP_SHORTCUTS: Record<string, Shortcut> = {
  * elsewhere) for themselves, ⇧⌘R reloads, and Safari's ⌥⌘W closes the other tabs, so New
  * Sequence moves to ⌥⌘N and the rest have only their buttons there. ⌘, and ⇧⌘L open
  * browser windows in some browsers, and Settings and the libraries have buttons in the bar.
+ * Ctrl+Shift+I opens developer tools outside a Mac and ⇧⌘I emails the page in Chrome on
+ * one, so Invert Selection is only in the menus there.
  */
 const WEB_SHORTCUTS: Record<string, Shortcut> = {
   new: { key: "N", alt: true },

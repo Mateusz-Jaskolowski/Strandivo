@@ -40,6 +40,7 @@ export type MenuAction =
   | "remove-protein-region"
   | "reverse-complement"
   | "delete-bases"
+  | "invert-selection"
   // Features, primers and cut sites.
   | "copy-dna"
   | "copy-protein"
@@ -124,12 +125,14 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
   const show = item("show-other", c.onMap ? "Show in sequence" : "Show on map");
   switch (target.kind) {
     case "selections":
-      return [item("copy", "Copy"), item("copy-revcomp", "Copy reverse complement"), "separator", item("delete-bases", "Delete bases")];
+      return [item("copy", "Copy"), item("copy-revcomp", "Copy reverse complement"), "separator", item("invert-selection", "Invert selection"), "separator", item("delete-bases", "Delete bases")];
     case "selection": {
       const len = rangeLength(target.range, n);
       return tidy([
         item("copy", "Copy"),
         item("copy-revcomp", "Copy reverse complement"),
+        "separator",
+        item("invert-selection", "Invert selection"),
         "separator",
         ...when(len >= PRIMER_BASES.min && len <= PRIMER_BASES.max, item("add-forward-primer", "Add forward primer"), item("add-reverse-primer", "Add reverse primer")),
         ...when(len > PRIMER_BASES.max, item("design-primers", "Design primers to amplify…")),

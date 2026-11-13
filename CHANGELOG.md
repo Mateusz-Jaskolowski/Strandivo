@@ -16,6 +16,13 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Invert selection**: choose Invert Selection in the Edit menu, or press ⇧⌘I on Mac or
+  Ctrl+Shift+I elsewhere, to select every base that wasn't selected. Select an insert and
+  invert, and a circular plasmid's backbone is selected as one stretch across the origin;
+  on a linear sequence, inverting a stretch in the middle selects both ends. It is also in
+  the right-click menu for selected bases. With nothing selected it selects everything,
+  and in the browser version it is in the menu only, as browsers keep that key.
+
 ## 0.4.0
 
 Mark domains, linkers and CDRs in a coding sequence as protein regions, see them on the

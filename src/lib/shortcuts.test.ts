@@ -75,7 +75,12 @@ test("a browser shows no key it keeps for itself", () => {
     assert.ok(!/^[NWTQ1-9]$/.test(s.key) || s.alt, `${id}: ${s.key} is the browser's`);
     assert.ok(!(s.key === "R" && s.shift), `${id}: Shift+R reloads`);
     assert.ok(!(s.key === "W" && s.alt), `${id}: Safari's ⌥⌘W closes the other tabs`);
+    assert.ok(!(s.key === "I" && s.shift), `${id}: Ctrl+Shift+I opens developer tools, ⇧⌘I emails the page in Chrome`);
   }
+  assert.equal(shortcutHint("invert-selection", { mac: true, browser: true }), "");
+  assert.equal(shortcutHint("invert-selection", { mac: false, browser: true }), "");
+  assert.equal(shortcutHint("invert-selection", { mac: true, browser: false }), " (⇧⌘I)");
+  assert.equal(shortcutHint("invert-selection", { mac: false, browser: false }), " (Ctrl+Shift+I)");
   assert.equal(shortcutHint("new", { mac: true, browser: true }), " (⌥⌘N)");
   assert.equal(shortcutHint("close", { mac: true, browser: true }), "");
   assert.equal(shortcutHint("show-map", { mac: false, browser: true }), "");

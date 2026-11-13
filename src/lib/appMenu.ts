@@ -42,6 +42,7 @@ export const APP_MENU: AppMenuGroup[] = [
       { id: "redo", label: "Redo", file: true },
       "separator",
       { id: "select-all", label: "Select All", file: true },
+      { id: "invert-selection", label: "Invert Selection", file: true },
       "separator",
       { id: "find", label: "Find…" },
       "separator",

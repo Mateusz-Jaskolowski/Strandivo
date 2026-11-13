@@ -379,9 +379,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   menu's accelerators never fire there. Outside macOS every window passes a menu item's
   key on to the shell (`MENU_KEYS` in `src/lib/shortcuts.ts`, `menu_shortcut` in
   `src-tauri/src/lib.rs`), which runs it once even where the menu hears it too. A new
-  accelerator goes in that list as well; a unit test reads the menu to check.
+  accelerator goes in that list as well, or in `DOCUMENT_KEYS` beside it when the open
+  file handles the key itself, as with Undo, Select All and Invert Selection; a unit test
+  reads the menu to check.
 - **Keys a browser keeps**: ⌘N, ⌘W, ⌘T and ⌘1–⌘9 (Ctrl elsewhere) never reach the page,
-  ⇧⌘R reloads and Safari's ⌥⌘W closes the other tabs. So in a browser New Sequence is
+  ⇧⌘R reloads, Safari's ⌥⌘W closes the other tabs, Ctrl+Shift+I opens developer tools
+  outside a Mac and Chrome's ⇧⌘I emails the page. So in a browser New Sequence is
   ⌥⌘N and some items have no key (`WEB_SHORTCUTS` in `src/lib/shortcuts.ts`). Tooltips and
   the menu show a key with `shortcutHint` or `shortcutFor`, which give the one that works
   where the user is, never a hard-coded one.

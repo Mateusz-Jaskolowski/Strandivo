@@ -424,6 +424,15 @@ async function main(outDir) {
     check("Open… opens the file the browser's picker gave", opened === true && (await s.waitFor("window.__strandivo.tabs().includes('pUC19-handle.gb') && window.__strandivo.store", 15000)), String(opened));
     const leaving = "const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented;";
     check("Leaving the page isn't asked about with nothing unsaved", !(await s.exec(leaving)));
+    // Invert Selection is in the menu with no key, as browsers keep Ctrl+Shift+I and ⇧⌘I.
+    const lac = await s.exec("const s = window.__strandivo.store; const f = s.data.features.find(x => x.name === 'lacZ-alpha'); s.selectRange({ start: f.start, end: f.end }, { kind: 'feature', id: f.id }, 'e2e'); return { start: f.start, end: f.end };");
+    await s.click("//button[@aria-label='Menu']");
+    await s.click("//*[contains(@class,'ps-context-menu')]/button[normalize-space()='Edit']");
+    const editItems = await s.exec("return Array.from(document.querySelectorAll('.ps-context-sub button')).map(b => ({ label: b.firstChild.textContent, key: b.querySelector('.ps-context-key')?.textContent ?? '' }))");
+    const editAt = label => editItems.findIndex(i => i.label === label);
+    check("The menu has Invert Selection after Select All, with no key in a browser", editAt("Invert Selection") === editAt("Select All") + 1 && editItems[editAt("Invert Selection")]?.key === "", JSON.stringify(editItems));
+    await s.click("//*[contains(@class,'ps-context-sub')]//button[normalize-space()='Invert Selection']");
+    check("Invert Selection selects the rest of the plasmid, across the origin", await s.waitFor(`window.__strandivo.store.selection.range?.start === ${lac.end + 1} && window.__strandivo.store.selection.range?.end === ${lac.start - 1}`, 3000), JSON.stringify(await s.exec("return window.__strandivo.store.selection.range")));
     await s.exec("const s = window.__strandivo.store; s.apply({ ...s.data, name: 'pUC19 from the browser' }, 'Rename');");
     check("With unsaved changes, the browser asks before leaving", await s.exec(leaving));
     await s.exec("window.__strandivo.command('save')");

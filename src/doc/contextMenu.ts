@@ -240,7 +240,8 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       }
       return;
     case "select-all":
-      return ctx.command("select-all");
+    case "invert-selection":
+      return ctx.command(action);
     case "set-origin":
       return ctx.command("set-origin");
   }

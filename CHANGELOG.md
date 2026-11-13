@@ -27,11 +27,11 @@ ever quits unexpectedly it offers to report the crash.
   positions are filled in; Get from UniProt… now offers domains, repeats and other regions
   too. New regions get colours of their own near their CDS's, and colours you choose are
   kept. Regions show in a protein diagram, in the outline, as coloured bars with their
-  names in the Sequence view and around the selected primer, and on the map, where the
-  Regions button chooses all of them, the top level or none, and hovering one highlights
-  its CDS. Expand… draws the protein as a figure, with crowded names on elbow leaders and
-  nested regions bracketed under their parts, to copy into a slide or save as a PNG or
-  SVG. A region can be marked to vary between clones of a library, with its known
+  names in the Sequence view and around the selected primer, and on the map as segments
+  of their CDS, named on them where they fit; the Regions button chooses all of them, the
+  top level or none, and hovering one highlights its CDS. Expand… draws the protein as a
+  figure, with crowded names on elbow leaders and nested regions bracketed under their
+  parts, to copy into a slide or save as a PNG or SVG. A region can be marked to vary between clones of a library, with its known
   versions written as DNA bases or as amino acids, and Export can include regions as
   ordinary annotations in a GenBank copy for other software.
 - **Library versions**: a clone can be matched to the closest of a region's versions, or

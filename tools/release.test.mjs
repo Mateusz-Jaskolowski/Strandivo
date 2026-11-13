@@ -7,7 +7,7 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compareVersions, pullRequestBody, wrap } from "./release.mjs";
+import { compareVersions, jobProgress, publishArgs, pullRequestBody, wrap } from "./release.mjs";
 import { setVersion } from "./set-version.mjs";
 
 test("versions are compared by number, a pre-release before its release", () => {
@@ -68,4 +68,15 @@ test("the version is set in all four files, and not without notes", () => {
 test("a commit's body is wrapped at spaces", () => {
   assert.equal(wrap("one two three", 7), "one two\nthree");
   assert.ok(wrap("word ".repeat(40)).split("\n").every(l => l.length <= 72));
+});
+
+test("publishing makes a release latest, and a candidate stays a pre-release", () => {
+  assert.deepEqual(publishArgs("0.5.0"), ["release", "edit", "v0.5.0", "--draft=false", "--latest"]);
+  // GitHub never makes a pre-release latest, so no installed copy is offered a candidate.
+  assert.deepEqual(publishArgs("0.5.0-rc.1"), ["release", "edit", "v0.5.0-rc.1", "--draft=false"]);
+});
+
+test("a build's progress counts its finished jobs", () => {
+  const jobs = [{ status: "completed" }, { status: "completed" }, { status: "in_progress" }, { status: "waiting" }];
+  assert.equal(jobProgress(jobs), "2 of 4 jobs done");
 });

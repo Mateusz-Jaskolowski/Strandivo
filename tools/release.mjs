@@ -11,7 +11,17 @@
 //     `npm run release -- 0.3.0 --no-push` stops after the commit (npm keeps flags before --).
 //   npm run release:tag
 //     Once that pull request is merged: brings main up to date, checks it is ready to
-//     release (the same check as the release build) and pushes the tag v0.3.0 on it.
+//     release (the same check as the release build), pushes the tag v0.3.0 on it and
+//     follows the release from there, as below.
+//   npm run release:follow [0.3.0]
+//     Takes a tagged release the rest of the way, from wherever it is (Ctrl+C leaves it as
+//     it is): asks you to approve its build in the release environment, waits for it,
+//     checks the draft (every file there, each update signed with the key every installed
+//     copy trusts, GitHub's record of how each was built), asks you to publish it, then
+//     waits for "Check the release" and shows what it found. A release candidate is
+//     published without asking, as no copy is offered one. Each yes is yours, at the
+//     terminal, through your own gh login. Without a terminal it waits for an approval
+//     given in the browser and stops before publishing a release.
 //   npm run release 0.4.0-rc.1
 //     A release candidate: the same steps, but Unreleased stays as it is and gives the
 //     candidate its notes, since the release proper needs them too. Its build drafts a
@@ -20,15 +30,20 @@
 //
 // The tag stays a person's step on purpose: only admins may create v* tags, and the build
 // it starts waits for a maintainer's approval before it may sign anything. This script
-// only saves typing. .github/scripts/release.mjs is the release build's own half.
+// only saves typing and checking: nothing here, and no token kept anywhere, can approve
+// or publish without a maintainer saying yes. .github/scripts/release.mjs is the release
+// build's own half, and .github/scripts/published.mjs checks a published release.
 // Run with --experimental-strip-types, as it reads the changelog with the app's own code.
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { isPrerelease, releaseNotesFor, releaseUnreleased, unreleasedProblem } from "../src/lib/changelog.ts";
-import { changelogProblem, versionProblems, versions } from "../.github/scripts/release.mjs";
+import { attestationProblems } from "../.github/scripts/published.mjs";
+import { changelogProblem, releaseFileProblems, updateKey, versionProblems, versions } from "../.github/scripts/release.mjs";
 import { setVersion, VERSION } from "./set-version.mjs";
 
 /**
@@ -71,8 +86,23 @@ export function pullRequestBody(version, notes) {
     "",
     "## After merging",
     "",
-    `Run \`npm run release:tag\` on main. It tags the merge commit, which starts the release build; approve it in the \`release\` environment, then publish the draft${candidate ? " (it is already marked a pre-release) and install it from its release page" : " release"}.`
+    `Run \`npm run release:tag\` on main. It tags the merge commit, which starts the release build, asks you to approve it, checks the draft and ${candidate ? "publishes it as a pre-release; then install it from its release page" : "asks you to publish it"}.`
   ].join("\n");
+}
+
+/** "3 of 8 jobs done", from a run's jobs as gh lists them. */
+export function jobProgress(jobs) {
+  return `${jobs.filter(j => j.status === "completed").length} of ${jobs.length} jobs done`;
+}
+
+/**
+ * How gh publishes the draft of `version`: a release is made latest, which is what
+ * installed copies and the Download page follow; a candidate can't be, so no copy is
+ * offered it.
+ */
+export function publishArgs(version) {
+  const args = ["release", "edit", `v${version}`, "--draft=false"];
+  return isPrerelease(version) ? args : [...args, "--latest"];
 }
 
 class Stop extends Error {}
@@ -165,7 +195,7 @@ function prepare(version, { push }) {
   console.log(`Opened ${url}\nOnce its checks pass, merge it, then run: npm run release:tag`);
 }
 
-function tag() {
+async function tag() {
   onCurrentMain({ pull: true });
   const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
   const name = `v${version}`;
@@ -185,21 +215,157 @@ function tag() {
 
   git("tag", "-a", name, "-m", `Strandivo ${version}`);
   run("git", ["push", "--quiet", "origin", name], { show: true });
-  const repo = run("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], { allowFail: true }) ?? "<owner>/<repo>";
-  const publish = isPrerelease(version)
-    ? "check the draft and publish it. It is marked a pre-release, so no copy is offered it; install it yourself from the release page"
-    : "check the draft and publish it";
-  console.log(`Pushed ${name} on ${sha.slice(0, 7)}. Next:
-  1. Approve the build in the release environment: https://github.com/${repo}/actions/workflows/build.yml
-  2. When it has finished, ${publish}: https://github.com/${repo}/releases`);
+  console.log(`Pushed ${name} on ${sha.slice(0, 7)}.`);
+  await follow(version);
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const gh = (...args) => run("gh", args);
+const ghJson = (...args) => JSON.parse(gh(...args));
+
+/** A yes from the person at the terminal: only an answer starting with y. */
+async function confirm(question) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y/i.test((await rl.question(`${question} [y/N] `)).trim());
+  } finally {
+    rl.close();
+  }
+}
+
+/** What `get` gives once it gives something, asking every `every` ms for up to `timeout`. */
+async function waitFor(what, get, { every, timeout }) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const found = get();
+    if (found) return found;
+    if (Date.now() >= deadline) throw new Stop(`Gave up waiting for ${what}. Run npm run release:follow again to pick it up.`);
+    await sleep(every);
+  }
+}
+
+/** Waits for the build of `tag`, which asks to be approved, until it has finished. */
+async function followBuild(tag, repo, terminal) {
+  const build = await waitFor(`the build of ${tag} to start`, () =>
+    ghJson("run", "list", "--workflow", "build.yml", "--branch", tag, "--event", "push", "--limit", "1", "--json", "databaseId,url")[0],
+  { every: 5_000, timeout: 5 * 60_000 });
+  console.log(`Build: ${build.url}`);
+  const id = String(build.databaseId);
+  const approvedIds = new Set();
+  let yes = false;
+  let told = false;
+  let shown = "";
+  const deadline = Date.now() + 3 * 3600_000;
+  for (;;) {
+    const r = ghJson("run", "view", id, "--json", "status,conclusion,jobs");
+    if (r.status === "completed") {
+      if (r.conclusion === "success") return;
+      const drafted = r.jobs.some(j => j.name === "Draft release" && j.conclusion === "success");
+      throw new Stop(drafted
+        ? `The release is drafted, but GitHub's record of how its files were built wasn't made. Re-run that job (gh run rerun ${id} --failed), then npm run release:follow.`
+        : `The build ended with "${r.conclusion}" before drafting the release: ${build.url}`);
+    }
+    const waiting = ghJson("api", `repos/${repo}/actions/runs/${id}/pending_deployments`)
+      .filter(d => d.environment?.name === "release" && !approvedIds.has(d.environment.id));
+    if (waiting.length && !yes) {
+      if (!waiting.every(d => d.current_user_can_approve)) throw new Stop(`Your GitHub account can't approve the release environment; a maintainer who can must, at ${build.url}`);
+      if (!terminal) {
+        if (!told) console.log(`Waiting for the signed build to be approved: ${build.url}`);
+        told = true;
+      } else if (await confirm(`Approve the signed build of ${tag}? Its jobs get the update signing key.`)) {
+        yes = true;
+      } else {
+        throw new Stop(`Not approved. The build waits up to 30 days: approve it at ${build.url}, then run npm run release:follow.`);
+      }
+    }
+    if (waiting.length && yes) {
+      const ids = [...new Set(waiting.map(d => d.environment.id))];
+      gh("api", "-X", "POST", `repos/${repo}/actions/runs/${id}/pending_deployments`,
+        ...ids.flatMap(e => ["-F", `environment_ids[]=${e}`]), "-f", "state=approved", "-f", "comment=Approved at the terminal (npm run release:follow).");
+      for (const e of ids) approvedIds.add(e);
+      console.log("Approved. The signed builds take about 25 minutes.");
+    }
+    const progress = jobProgress(r.jobs);
+    if (progress !== shown) console.log(`… ${progress}`);
+    shown = progress;
+    if (Date.now() >= deadline) throw new Stop(`The build is still running: ${build.url}. Run npm run release:follow again to pick it up.`);
+    await sleep(waiting.length ? 3_000 : 20_000);
+  }
+}
+
+/** Checks the draft of `tag` as installed copies will meet it; throws if anything is wrong. */
+function checkDraft(tag, repo, url) {
+  const dir = mkdtempSync(join(tmpdir(), `strandivo-${tag}-`));
+  try {
+    console.log("Checking the draft's files…");
+    gh("release", "download", tag, "--dir", dir);
+    const names = readdirSync(dir);
+    const latest = JSON.parse(readFileSync(join(dir, "latest.json"), "utf8"));
+    const key = updateKey(root);
+    const problems = [
+      ...releaseFileProblems({ latest, names, read: n => readFileSync(join(dir, n)), tag, repo, publicKey: key }),
+      ...attestationProblems({ dir, names, tag, repo })
+    ];
+    if (problems.length) throw new Stop(`The draft isn't right, so it stays a draft (${url}):\n  ${problems.join("\n  ")}`);
+    console.log(`✓ Every file is there, each update verifies against key ${key.id}, and GitHub's record of how each was built names build.yml at ${tag}.`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Takes the release of `version`, already tagged, the rest of the way (see the top). */
+async function follow(version) {
+  if (!VERSION.test(version ?? "")) throw new Stop("Usage: npm run release:follow [x.y.z]");
+  const tag = `v${version}`;
+  const candidate = isPrerelease(version);
+  const repo = gh("repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner");
+  const terminal = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  if (!tagExists(tag)) throw new Stop(`${tag} isn't tagged yet: npm run release:tag tags it.`);
+
+  await followBuild(tag, repo, terminal);
+  const release = ghJson("release", "view", tag, "--json", "isDraft,isPrerelease,url");
+  if (release.isPrerelease !== candidate) throw new Stop(`${tag} is ${candidate ? "not " : ""}marked a pre-release, unlike its version: ${release.url}`);
+  if (release.isDraft) {
+    checkDraft(tag, repo, release.url);
+    if (!candidate) {
+      if (!terminal) throw new Stop(`Checked and ready to publish: ${release.url}. "Check the release" runs once it is.`);
+      if (!(await confirm(`Publish ${tag}? Every installed copy will be offered it.`))) throw new Stop(`Not published. The draft is checked and waiting: ${release.url}`);
+    }
+    gh(...publishArgs(version));
+    console.log(candidate ? `Published ${tag} as a pre-release, which no installed copy is offered. Install it from ${release.url}` : `Published ${tag}.`);
+  } else {
+    console.log(`${tag} is already published: ${release.url}`);
+  }
+
+  const checkRun = () =>
+    ghJson("run", "list", "--workflow", "after-release.yml", "--event", "release", "--limit", "20", "--json", "databaseId,headBranch,url").find(r => r.headBranch === tag);
+  if (!release.isDraft && !checkRun()) {
+    console.log(`No "Check the release" ran when ${tag} was published. Run it from the Actions tab with the tag ${tag}.`);
+    return;
+  }
+  const check = await waitFor(`"Check the release" to start`, checkRun, { every: 10_000, timeout: 5 * 60_000 });
+  console.log(`Checking the published release: ${check.url}`);
+  const done = await waitFor("the check to finish", () => {
+    const r = ghJson("run", "view", String(check.databaseId), "--json", "status,conclusion");
+    return r.status === "completed" ? r : null;
+  }, { every: 20_000, timeout: 45 * 60_000 });
+  const log = run("gh", ["run", "view", String(check.databaseId), "--log"], { allowFail: true }) ?? "";
+  // Its findings, without the annotation run.sh repeats a failure in.
+  for (const line of log.split("\n")) {
+    const m = !line.includes("::error") && line.match(/[✓✗].*$/);
+    if (m) console.log(m[0]);
+  }
+  if (done.conclusion !== "success") throw new Stop(`"Check the release" found a problem: ${check.url}`);
+  console.log(`${tag} is out and checked.`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [command, ...args] = process.argv.slice(2);
   try {
     if (command === "prepare") prepare(args.find(a => !a.startsWith("--")), { push: !args.includes("--no-push") });
-    else if (command === "tag") tag();
-    else throw new Stop("Usage: release.mjs prepare <x.y.z> [--no-push] | tag");
+    else if (command === "tag") await tag();
+    else if (command === "follow") await follow(args[0] ?? JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version);
+    else throw new Stop("Usage: release.mjs prepare <x.y.z> [--no-push] | tag | follow [x.y.z]");
   } catch (e) {
     if (!(e instanceof Stop)) throw e;
     console.error(e.message);

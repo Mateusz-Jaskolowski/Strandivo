@@ -24,7 +24,8 @@
     "app:build": "tauri build --config src-tauri/tauri.unsigned.conf.json",
     "version": "node --experimental-strip-types tools/set-version.mjs",
     "release": "node --experimental-strip-types tools/release.mjs prepare",
-    "release:tag": "node --experimental-strip-types tools/release.mjs tag"
+    "release:tag": "node --experimental-strip-types tools/release.mjs tag",
+    "release:follow": "node --experimental-strip-types tools/release.mjs follow"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.0",

@@ -288,9 +288,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   check when you add something users do. It drives the window through `window.__strandivo`:
   the main window's own actions (open, tabs, Home's folders, `saveSettings`) plus those of
   the file in the current tab (store, `command()`, adding reads, saving and `saveCheck`
-  without a file dialog). It runs a debug build, where a real Ctrl+Shift+I opens
-  WebKitGTK's inspector over part of the window for the rest of the run, so that key is
-  dispatched in the page instead. Then `e2e/web.mjs` clicks through the browser version in
+  without a file dialog). It runs a debug build, where Ctrl+Shift+I opens WebKitGTK's
+  inspector over part of the window for the rest of the run, even sent from a script and
+  cancelled by the page, so it never sends that key; `documentShortcut` in
+  `src/lib/shortcuts.ts` is unit-tested instead. Then `e2e/web.mjs` clicks through the browser version in
   headless Chrome with no hooks, so alignment and detection run in the worker, and checks
   the worker answers after a panic (`trapCore`), then its menu, keys, opening, saving
   and dropping files, Home's folders, and reads and checks remembered across a reload. It

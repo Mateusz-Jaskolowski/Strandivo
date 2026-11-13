@@ -44,15 +44,16 @@ and CI checks that they exist.
   Visibility and detail are remembered separately. Nested
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
   whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
-  Both map modes draw regions as segments of their CDS's arrow: clipped to it, a hair of
-  the page between them and the arrow's outline drawn over them. Where no region is, the
-  CDS keeps its own colour: a tint there was tried, and made the feature seem to change
-  colour whenever regions were shown or hidden. Lanes split the band, top level outermost
-  (on top in the linear map). The CDS's name then goes beside the map (a chip, or under the bar). A
-  region's name goes on its longest piece where it fits, in `regionTextColor`; otherwise
-  in plain grey at regular weight after a square of its colour, beside the circular map
-  on a light solid leader from the band's outer edge, or in rows under the linear map's
-  lane, packed across the CDSs in it so neighbours' names never collide. Hovering a segment or name
+  Both map modes draw a region as a bracket in its colour just outside its CDS (under the
+  linear map's bar), its ticks pointing back at it, so the CDS keeps its colour and name.
+  Filling the arrow with segments was tried and hid both; a tint where no region was made
+  the CDS seem to change colour as regions were shown or hidden. Nesting stacks brackets
+  outwards, the most nested nearest the CDS, and each lane of features makes room outside
+  it for its proteins' brackets (the first lane by moving the primers out). A bracket is a
+  group of the line drawn and a wider invisible line the pointer finds. Region names are
+  plain grey at regular weight after a square of the region's colour: beside the circular
+  map on a light solid leader from the bracket, or in rows under the linear map's lane,
+  packed across the CDSs in it so neighbours' names never collide. Hovering a bracket or name
   highlights every piece of that region and outlines its owning CDS, including for a
   nested region. This is local map state, cleared on redraw or hiding the view, never a
   store selection. Selection styling wins, and label weight stays fixed in every state

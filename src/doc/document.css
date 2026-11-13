@@ -1310,27 +1310,28 @@
   stroke: var(--accent);
   stroke-width: 1.25;
 }
-/* A CDS showing its regions: their colours on segments of its arrow, a hair of the page
-   between them, and its outline over all. Where there are none it keeps its own colour,
-   so showing or hiding regions never seems to recolour the feature. */
-.sv-map-feature.sv-map-outline {
-  fill: none;
-}
+/* A protein's regions: a bracket in each one's colour just outside its CDS (under it on
+   the linear map), which stays as it is. The wider invisible stroke is what is pointed at. */
 .sv-map-region {
-  stroke: var(--panel);
-  stroke-width: 1px;
   cursor: pointer;
 }
-.sv-map-region.sv-map-region-hover {
-  filter: brightness(1.1) saturate(1.1);
+.sv-map-bracket {
+  fill: none;
+  stroke-width: 1.6px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.sv-map-region.sv-focused {
+.sv-map-bracket-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 7px;
+}
+.sv-map-region.sv-map-region-hover .sv-map-bracket {
+  stroke-width: 2.4px;
+}
+.sv-map-region.sv-focused .sv-map-bracket {
   stroke: var(--accent);
-  stroke-width: 2px;
-}
-/* A region's name on its own segment, in white or near-black to read on its colour. */
-.sv-map-region-name {
-  pointer-events: none;
+  stroke-width: 2.4px;
 }
 .sv-map-swatch {
   stroke: color-mix(in srgb, var(--text) 22%, transparent);

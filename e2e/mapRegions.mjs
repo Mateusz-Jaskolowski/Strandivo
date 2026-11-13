@@ -23,10 +23,8 @@ export function mapRegionFixture(n) {
 
 /** Runs on an open circular document, then undoes its fixture and restores map controls. */
 export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
-  // Protein A's nested regions are too thin to hold their names, which go beside the map.
   const label = (id = "a", index = 0) => `.sv-map-region-label[data-id="map-region-${id}"][data-region="${index}"]`;
-  // A region's name either way: beside the map, or on its own segment where it fits (Protein B's).
-  const regionName = (id = "a", index = 0) => `:is(.sv-map-region-label, .sv-map-region-name)[data-id="map-region-${id}"][data-region="${index}"]`;
+  // A region's bracket beside its CDS: a group of the line drawn and a wider one to point at.
   const band = (id = "a", index = 0) => `.sv-map-region[data-id="map-region-${id}"][data-region="${index}"]`;
   const noHover = "!document.querySelector('.sv-map-region-hover, .sv-map-parent-hover')";
   const pointerTo = ([x, y]) => ({ type: "pointerMove", origin: "viewport", x, y });
@@ -66,8 +64,8 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
     document.querySelectorAll('.sv-map-region[data-id="map-region-${id}"][data-region="${index}"]').length > 0 &&
     Array.from(document.querySelectorAll('.sv-map-region[data-id="map-region-${id}"][data-region="${index}"]'))
       .every(e => e.classList.contains('sv-map-region-hover') && getComputedStyle(e).opacity === '1') &&
-    document.querySelector('${regionName(id, index)}').classList.contains('sv-map-region-hover') &&
-    Array.from(document.querySelectorAll(':is(.sv-map-region-label, .sv-map-region-name).sv-map-region-hover')).length === 1
+    document.querySelector('${label(id, index)}').classList.contains('sv-map-region-hover') &&
+    Array.from(document.querySelectorAll('.sv-map-region-label.sv-map-region-hover')).length === 1
   `, 3000);
 
   await s.exec(`
@@ -99,7 +97,7 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
         document.body.appendChild(probe); const muted = getComputedStyle(probe).color; probe.remove();
         return cs.fontWeight === '400' && cs.fill === muted && cs.fontSize === getComputedStyle(feature).fontSize &&
           !document.querySelector('.sv-map-chip[data-region]') &&
-          getComputedStyle(el.previousElementSibling).fill === getComputedStyle(document.querySelector(arguments[1])).fill &&
+          getComputedStyle(el.previousElementSibling).fill === getComputedStyle(document.querySelector(arguments[1]).querySelector('.sv-map-bracket')).stroke &&
           el.previousElementSibling.matches('.sv-map-swatch[data-region="0"]') &&
           Array.from(document.querySelectorAll('.sv-map-label-feature')).every(e => getComputedStyle(e).fontWeight === '600') &&
           el.querySelector('title').textContent === 'Shared domain · Domain, predicted · 15–190 · region of Protein A' &&

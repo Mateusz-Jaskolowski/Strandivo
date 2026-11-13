@@ -17,9 +17,10 @@ with Unreleased's notes and leaves them where they are.
 ## Unreleased
 
 Mark domains, linkers and CDRs in a coding sequence as protein regions, see them on the
-map, and copy or save them as a figure. The Reads tab copes with hundreds of reads and keeps the reference in view, and primer
-design can move ends onto better stretches. Ctrl+S works again on Windows, and if Strandivo
-ever quits unexpectedly it offers to report the crash.
+map, and copy or save them as a figure. The Reads tab copes with hundreds of reads and
+keeps the reference in view, and primer design can move ends onto better stretches. Ctrl+S
+works again on Windows, and if Strandivo ever quits unexpectedly it offers to report the
+crash.
 
 - **Protein regions**: mark domains, helices, linkers, CDRs and frameworks within a CDS,
   nested if need be, from more kinds or categories of your own. Select bases within a CDS
@@ -27,13 +28,13 @@ ever quits unexpectedly it offers to report the crash.
   positions are filled in; Get from UniProt… now offers domains, repeats and other regions
   too. New regions get colours of their own near their CDS's, and colours you choose are
   kept. Regions show in a protein diagram, in the outline, as coloured bars with their
-  names in the Sequence view and around the selected primer, and on the map as segments
-  of their CDS, named on them where they fit; the Regions button chooses all of them, the
-  top level or none, and hovering one highlights its CDS. Expand… draws the protein as a
-  figure, with crowded names on elbow leaders and nested regions bracketed under their
-  parts, to copy into a slide or save as a PNG or SVG. A region can be marked to vary between clones of a library, with its known
-  versions written as DNA bases or as amino acids, and Export can include regions as
-  ordinary annotations in a GenBank copy for other software.
+  names in the Sequence view and around the selected primer, and on the map as brackets in
+  their colours beside their CDS; the Regions button chooses all of them, the top level or
+  none, and hovering one highlights its CDS. Expand… draws the protein as a figure, with
+  crowded names on elbow leaders and nested regions bracketed under their parts, to copy
+  into a slide or save as a PNG or SVG. A region can be marked to vary between clones of a
+  library, with its known versions written as DNA bases or as amino acids, and Export can
+  include regions as ordinary annotations in a GenBank copy for other software.
 - **Library versions**: a clone can be matched to the closest of a region's versions, or
   only to one it is exactly, which suits a large designed library; anything else is
   flagged. Versions equally close to a clone are all named instead of the first one

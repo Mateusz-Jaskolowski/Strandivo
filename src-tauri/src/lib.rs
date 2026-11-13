@@ -631,16 +631,54 @@ fn read_file(path: String) -> Result<tauri::ipc::Response, String> {
         .map_err(|e| format!("Could not read {path}: {e}"))
 }
 
-/// Writes via a temporary file so a crash mid-save never leaves a half-written file.
 #[tauri::command]
 fn write_file(path: String, contents: String) -> Result<(), String> {
-    let target = PathBuf::from(&path);
+    write_atomically(&path, contents.as_bytes())
+}
+
+/// Writes bytes (an image) sent as the request's body, so they needn't go through JSON;
+/// the path comes in a header, percent-encoded, as headers are ASCII.
+#[tauri::command]
+fn write_bytes(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Expected the file's bytes".into());
+    };
+    let path = request
+        .headers()
+        .get("path")
+        .and_then(|v| v.to_str().ok())
+        .and_then(percent_decode)
+        .ok_or("Expected where to save the file")?;
+    write_atomically(&path, bytes)
+}
+
+/// `%XX` escapes back to the text they stand for; None if they don't make UTF-8.
+fn percent_decode(s: &str) -> Option<String> {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            let hex = std::str::from_utf8(bytes.get(i + 1..i + 3)?).ok()?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+/// Writes via a temporary file so a crash mid-save never leaves a half-written file.
+fn write_atomically(path: &str, contents: &[u8]) -> Result<(), String> {
+    let target = PathBuf::from(path);
     let file_name = target
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "file".into());
     let tmp = target.with_file_name(format!(".{file_name}.saving"));
-    std::fs::write(&tmp, contents.as_bytes()).map_err(|e| format!("Could not write {path}: {e}"))?;
+    std::fs::write(&tmp, contents).map_err(|e| format!("Could not write {path}: {e}"))?;
     std::fs::rename(&tmp, &target).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
         format!("Could not save {path}: {e}")
@@ -732,6 +770,7 @@ pub fn run() {
             cancel_quit,
             read_file,
             write_file,
+            write_bytes,
             align_reads,
             detect_features,
             catalog_version,
@@ -823,4 +862,33 @@ pub fn run() {
         }
         _ => {}
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percent_decoding_gives_back_what_encodeuricomponent_encoded() {
+        // encodeURIComponent("/Users/Jaśkołowski/Mój plik 50%.png")
+        let encoded = "%2FUsers%2FJa%C5%9Bko%C5%82owski%2FM%C3%B3j%20plik%2050%25.png";
+        assert_eq!(percent_decode(encoded).as_deref(), Some("/Users/Jaśkołowski/Mój plik 50%.png"));
+        assert_eq!(percent_decode("C%3A%5Cfigures%5Cnb.svg").as_deref(), Some("C:\\figures\\nb.svg"));
+        assert_eq!(percent_decode("plain").as_deref(), Some("plain"));
+        assert_eq!(percent_decode("cut%2"), None);
+        assert_eq!(percent_decode("%zz"), None);
+        assert_eq!(percent_decode("%C5"), None);
+    }
+
+    #[test]
+    fn bytes_are_written_whole_and_nothing_is_left_beside_them() {
+        let dir = std::env::temp_dir().join(format!("strandivo-write-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("figure.png");
+        let png = [0x89u8, b'P', b'N', b'G', 0, 255];
+        write_atomically(path.to_str().unwrap(), &png).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), png);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

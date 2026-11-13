@@ -444,7 +444,7 @@ export async function readKey(key: string): Promise<Uint8Array> {
 let toldAboutDownloads = false;
 
 /** Writes over a handle's file; anything else is downloaded. Says which it did. */
-export async function saveKey(key: string, contents: string): Promise<"file" | "download"> {
+export async function saveKey(key: string, contents: string | Uint8Array): Promise<"file" | "download"> {
   const name = basename(key);
   if (isHandleKey(key)) {
     const file = await fileOf(key).catch(e => {
@@ -452,15 +452,15 @@ export async function saveKey(key: string, contents: string): Promise<"file" | "
     });
     if (!(await allowed(file, "readwrite"))) throw new Error(`Strandivo wasn't allowed to save ${name}.`);
     const out = await file.createWritable();
-    await out.write(contents);
+    await out.write(contents as string | BufferSource);
     await out.close();
     return "file";
   }
-  const bytes = new TextEncoder().encode(contents);
+  const bytes = typeof contents === "string" ? new TextEncoder().encode(contents) : contents;
   // Kept, so the saved file can be opened again during this visit.
   if (key.startsWith("upload:")) uploads.set(key, { bytes, modified: Date.now() });
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+  a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/octet-stream" }));
   a.download = name;
   a.hidden = true;
   document.body.appendChild(a);

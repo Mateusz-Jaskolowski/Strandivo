@@ -312,6 +312,9 @@ async function main() {
     check("Outline lists the file's features", start.features.length >= 3 && start.features.every(f => listed.includes(f)), listed.join(", "));
     const clipped = await s.exec(CLIPPED_LABELS);
     check("Map labels fit inside the map", clipped.length === 0, clipped.join(", ") || "none clipped");
+    // WebKit doesn't pass the baseline down to a name along its feature unless told to.
+    const arcBaselines = await s.exec("return Array.from(document.querySelectorAll('.sv-map-arctext textPath')).map(t => getComputedStyle(t).dominantBaseline)");
+    check("Names along features sit in the middle of them", arcBaselines.length > 0 && arcBaselines.every(b => b === "central"), arcBaselines.join(", "));
     const sizeOf = "return parseFloat(getComputedStyle(document.querySelector('.sv-map-label')).fontSize)";
     const sizeBefore = await s.exec(sizeOf);
     await s.keys("input[aria-label='Label size']", ARROW_RIGHT + ARROW_RIGHT);
@@ -1049,6 +1052,22 @@ async function main() {
     await s.click("//button[normalize-space(.)='Save region']", "xpath");
     check("A region's bounds and name can be edited", await s.waitFor("Array.from(document.querySelectorAll('.sv-outline [data-region]')).some(r => r.textContent.includes('CDR1 edited') && r.textContent.includes('9–19'))", 5000));
     await s.shot("11-protein-regions");
+
+    // Expand… draws the protein as a figure: a nested region is a bracket under its parts.
+    await s.click("//button[normalize-space(.)='Expand…']", "xpath");
+    const figureNames = `
+      const names = Array.from(document.querySelectorAll('.sv-figure text[data-region]')).map(t => t.getBoundingClientRect());
+      const apart = names.every((a, i) => names.every((b, j) => i <= j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));`;
+    check("Expand draws a block for the CDR and a bracket for its domain, all named apart", await s.waitFor(`(() => { ${figureNames}
+      return document.querySelectorAll('.sv-figure rect[data-region]').length === 1 && names.length === 2 && apart; })()`, 5000));
+    await s.shot("11-protein-figure");
+    await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
+    check("At top level the figure draws the domain as a block", await s.waitFor("document.querySelectorAll('.sv-figure rect[data-region]').length === 1 && document.querySelectorAll('.sv-figure text[data-region]').length === 1 && document.querySelector('.sv-figure rect[data-region]').dataset.region === '0'", 5000));
+    await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true }));");
+    await s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    check("Clicking a block in the figure selects its region", await s.waitFor("window.__strandivo.store.selection.focus?.region === 1 && document.querySelector('.sv-figure rect[data-region=\"1\"]').classList.contains('sv-selected')", 5000));
+    check("The figure can be copied or saved as PNG or SVG", await s.exec("const labels = Array.from(document.querySelectorAll('.sv-dialog-foot button')).map(b => b.textContent.trim()); return ['Copy image', 'Save as PNG…', 'Save as SVG…'].every(l => labels.includes(l));"));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
 
     await s.exec("window.__strandivo.command('show-sequence')");
     await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds);

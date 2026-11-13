@@ -165,8 +165,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   tint of its colour (solid leader), a primer's after an arrow pointing its way (dashed), an
   enzyme's in small grey monospace with no mark (dotted), darker when it cuts once. Marks on
   enzymes were tried and made the map busy; their positions are in the tooltip and outline.
-  Protein regions have plain, regular-weight grey names and light solid leaders; their
-  colours stay on their bands. Hovering a region's band or name highlights its pieces and
+  Protein regions are brackets in their colours just outside their CDS, which stays as it
+  is (`docs/agents/proteins.md` says why). Their names are plain, regular-weight grey with
+  a light solid leader, after a small square of the region's colour. Unlike enzymes,
+  regions got a mark (Nov 2026): a protein's many small regions fan their leaders out, and
+  names were hard to match to them. Hovering a region's bracket or name highlights its pieces and
   outlines the owning CDS without changing selection. Hover and selection keep region
   text at its measured weight, so names never widen into their neighbours.
 - **Sortable tables** use `sortHeader` (`src/ui/sortHead.ts`) and `src/lib/tableSort.ts`,

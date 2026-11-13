@@ -1,8 +1,12 @@
 # The feedback Worker at feedback.strandivo.com. Deploy from the repository's root with:
 #   npx wrangler@4 deploy --config services/feedback/wrangler.toml
-# It needs two secrets, set once (services/feedback/README.md):
-#   npx wrangler@4 secret put GITHUB_TOKEN --config services/feedback/wrangler.toml
+# Its secrets, set once (services/feedback/README.md): the GitHub App's three, which file
+# issues as its bot, and the maintainer's address:
+#   npx wrangler@4 secret put GITHUB_APP_CLIENT_ID --config services/feedback/wrangler.toml
+#   npx wrangler@4 secret put GITHUB_APP_INSTALLATION_ID --config services/feedback/wrangler.toml
+#   npx wrangler@4 secret put GITHUB_APP_PRIVATE_KEY --config services/feedback/wrangler.toml < key.pem
 #   npx wrangler@4 secret put MAINTAINER_EMAIL --config services/feedback/wrangler.toml
+# Until the App's are all set, a fine-grained token (GITHUB_TOKEN) files them instead.
 name = "strandivo-feedback"
 main = "src/index.mjs"
 compatibility_date = "2026-10-01"

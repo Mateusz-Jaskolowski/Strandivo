@@ -11,33 +11,87 @@ link, the address as Reply-To. See `src/index.mjs`, and part 4 of
 It keeps nothing and has no logs. Cloudflare's rate limiter holds each network to 5
 reports a minute.
 
+Issues are filed by a GitHub App, so they show its bot as their author rather than the
+maintainer: for each report the Worker signs a token request with the App's private key
+and gets a token that can only write this repository's issues.
+
 ## Setting it up, once
 
 1. **A label.** Add a `from-app` label to the repository (Issues → Labels → New label).
    `bug`, `enhancement` and `question` are GitHub's own and are there already.
-2. **A token that can only write issues.** On GitHub: Settings → Developer settings →
-   Fine-grained tokens → Generate new token. Resource owner: you. Repository access:
-   only `Mateusz-Jaskolowski/Strandivo`. Permissions: **Issues: Read and write**, nothing
-   else (Metadata: Read-only is added by itself). Pick an expiry and put a reminder in
-   your calendar: when it expires, reports fail until a new one is set.
-3. **Email to you.** In Cloudflare, `strandivo.com` → Email → Email Routing: it must be on,
+2. **Email to you.** In Cloudflare, `strandivo.com` → Email → Email Routing: it must be on,
    with your own address as a **verified destination address** (the one `hello@` already
    forwards to will do). The Worker sends from `noreply@strandivo.com` to that address
    alone.
-4. **Deploy and give it its two secrets**, from the repository's root:
+3. **Deploy, and give it your address**, from the repository's root:
 
    ```sh
    npx wrangler@4 deploy --config services/feedback/wrangler.toml
-   npx wrangler@4 secret put GITHUB_TOKEN --config services/feedback/wrangler.toml
    npx wrangler@4 secret put MAINTAINER_EMAIL --config services/feedback/wrangler.toml
    ```
 
-   Each `secret put` asks for the value: the token, then your verified address. Neither
-   is in this repository or in the app.
+   `secret put` asks for the value: your verified address. No secret is in this
+   repository or in the app.
+4. **A GitHub App that can only write issues**, and its three secrets (below).
 
 Deploy again after changing `src/index.mjs` or `src/lib/feedback.ts`, which it bundles:
 the app and the Worker then agree on what a report may hold. A copy of the app checks a
 report before sending, so a stricter rule here only turns away reports from older copies.
+
+### The GitHub App
+
+1. **Create it.** On GitHub: Settings → Developer settings → GitHub Apps → New GitHub App.
+   - GitHub App name: `Strandivo feedback` (issues will show `strandivo-feedback[bot]`;
+     if the name is taken, any other will do).
+   - Homepage URL: `https://strandivo.com`.
+   - Webhook: untick **Active**. The Worker only calls GitHub; GitHub never calls it.
+   - Repository permissions: **Issues: Read and write**, nothing else (Metadata:
+     Read-only is added by itself). No organization or account permissions, no events.
+   - Where can this GitHub App be installed: **Only on this account**.
+
+   Then Create GitHub App.
+2. **Note its Client ID**, at the top of the App's General page (it starts `Iv`).
+3. **Make a private key**: further down the same page, Private keys → Generate a private
+   key. GitHub downloads a `.pem` file. Keep it in your password manager; it doesn't
+   expire, and GitHub keeps no copy.
+4. **Install it on the repository**: Install App (in the App's menu on the left) → your
+   account → Install → **Only select repositories** → `Strandivo` → Install. The address
+   you land on ends in the installation's ID, a number:
+   `https://github.com/settings/installations/12345678`.
+5. **Give the Worker the three secrets**, from the repository's root:
+
+   ```sh
+   npx wrangler@4 secret put GITHUB_APP_CLIENT_ID --config services/feedback/wrangler.toml
+   npx wrangler@4 secret put GITHUB_APP_INSTALLATION_ID --config services/feedback/wrangler.toml
+   npx wrangler@4 secret put GITHUB_APP_PRIVATE_KEY --config services/feedback/wrangler.toml < ~/Downloads/strandivo-feedback.*.private-key.pem
+   ```
+
+   The first two ask for the value; the key is read from the file as GitHub gave it, as
+   a prompt would take only its first line. Then delete the downloaded file. The Worker
+   uses the App once all three are set, and the token below until then, so reports
+   keep working while you set them one by one.
+6. **Check it**: send a report from the app (below) and see that the issue's author is
+   the App's bot, then close the issue.
+
+### Until the App is set up: the old token
+
+Before the App, issues were filed with a fine-grained token of the maintainer's, so they
+showed the maintainer as their author. The Worker still uses it while any of the App's
+three secrets is missing. Once the App works:
+
+```sh
+npx wrangler@4 secret delete GITHUB_TOKEN --config services/feedback/wrangler.toml
+```
+
+and delete the token on GitHub (Settings → Developer settings → Fine-grained tokens), so
+nothing is left that writes issues as you. A later change takes this fallback out.
+
+To make such a token again, should the App ever fail: Fine-grained tokens → Generate new
+token. Resource owner: you. Repository access: only `Mateusz-Jaskolowski/Strandivo`.
+Permissions: **Issues: Read and write**, nothing else. Pick an expiry, as reports fail
+when it expires, and set it with
+`npx wrangler@4 secret put GITHUB_TOKEN --config services/feedback/wrangler.toml`; it is
+used only while the App's secrets are missing.
 
 ## Checking it
 
@@ -45,9 +99,11 @@ report before sending, so a stricter rule here only turns away reports from olde
 curl -i -X POST https://feedback.strandivo.com/report -H 'content-type: application/json' -d '{}'
 ```
 
-answers `400` with "Choose bug, idea or question.", without filing anything. To file a
+answers `400` with "Choose bug, idea or question.", without filing anything, and asks
+GitHub for no token. To file a
 real test report, use the app's Help → Send Feedback…, then close the issue.
 
 ## Tests
 
-`npm test` runs `feedback.test.mjs`, with GitHub and email replaced by stubs.
+`npm test` runs `feedback.test.mjs`, with GitHub and email replaced by stubs. The App's
+tests sign with a key made for the test and check the signature with Node's own crypto.

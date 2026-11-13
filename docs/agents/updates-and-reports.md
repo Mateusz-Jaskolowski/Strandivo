@@ -38,9 +38,16 @@ and CI checks that they exist.
   so **the reporter's email address and an attached file never go in one**: the Worker
   emails them to the maintainer alone (Email Routing, to a verified address kept as a
   secret), and what the reporter wrote is fenced as plain text, so it can't mention
-  anyone or link anywhere. What a report may hold is `src/lib/feedback.ts`, which the
-  Worker bundles too, so the two can't disagree; change it and deploy the Worker in the
-  same PR. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`:
+  anyone or link anywhere. A name to credit goes in the issue as inline code (`codeSpan`),
+  which does the same for one line; it is turned away if it holds an email or web address,
+  which typed in the wrong box would be published, but no list of words is kept (real
+  surnames would be turned away, and the summary is public too). The last name sent is
+  remembered in local storage (`src/feedback.ts`). What a report may hold is
+  `src/lib/feedback.ts`, which the Worker bundles too, so the two can't disagree; change
+  it and deploy the Worker in the same PR. The Worker turns down a field it doesn't know,
+  so a new optional field is left out of a report when empty, not sent as null: the app
+  then still works with the Worker before it, and the Worker must be deployed before a
+  release that fills it in. Everything sent is shown in the dialog first; recent errors (`src/feedback.ts`:
   uncaught errors, rejected promises and failed shell commands of the past week) and the
   open file are off until ticked, and errors lose their file paths (`scrubPaths`, which
   takes a path under a home or volume folder to the end of its line, as folder names have

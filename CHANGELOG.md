@@ -16,6 +16,9 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Credit for feedback**: Report a bug and Send feedback take your name or initials to
+  credit you in the public issue, and remember them for next time.
+
 ## 0.4.0
 
 Mark domains, linkers and CDRs in a coding sequence as protein regions, see them on the

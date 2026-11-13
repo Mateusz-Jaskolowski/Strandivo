@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReport, describeSystem, isEmail, LIMITS, reportProblem, reportText, scrubPaths, type FeedbackReport } from "./feedback.ts";
+import { buildReport, codeSpan, describeSystem, fenced, isEmail, LIMITS, reportProblem, reportText, scrubPaths, type FeedbackReport } from "./feedback.ts";
 
 const app = { version: "0.2.1", os: "macos", osVersion: "15.1", arch: "aarch64" };
 const base = { kind: "bug" as const, summary: "Map is blank", details: "Opened pUC19.", email: "", app, view: "Map", errors: null, file: null };
@@ -60,9 +60,35 @@ test("email addresses", () => {
 });
 
 test("the copied text says what the report says, without the file", () => {
-  const r: FeedbackReport = { ...buildReport({ ...base, errors: ["Boom"] }), file: { name: "a.gb", contents: "LOCUS secret" } };
+  const r: FeedbackReport = { ...buildReport({ ...base, name: "JIB", errors: ["Boom"] }), file: { name: "a.gb", contents: "LOCUS secret" } };
   const text = reportText(r);
-  assert.match(text, /^Bug: Map is blank\nOpened pUC19\.\n\nStrandivo 0\.2\.1 · macOS 15\.1 · Apple silicon\nOpen view: Map\n\nRecent errors:\nBoom$/);
+  assert.match(text, /^Bug: Map is blank\nOpened pUC19\.\n\nStrandivo 0\.2\.1 · macOS 15\.1 · Apple silicon\nOpen view: Map\nSent by: JIB\n\nRecent errors:\nBoom$/);
   assert.doesNotMatch(text, /LOCUS/);
   assert.equal(describeSystem({ ...app, os: "windows", osVersion: "11", arch: "x86_64" }), "Strandivo 0.2.1 · Windows 11 · Intel or AMD");
+});
+
+test("a name to credit is one plain line, and goes only when typed", () => {
+  assert.equal(buildReport({ ...base, name: "  Jane\n I.\u202e Bloggs " }).name, "Jane I. Bloggs");
+  assert.equal(buildReport({ ...base, name: "x".repeat(100) }).name?.length, LIMITS.name);
+  // None is left out, not null: a service that predates names turns down fields it doesn't know.
+  assert.ok(!("name" in buildReport({ ...base, name: " \u200b " })));
+  assert.ok(!("name" in buildReport(base)));
+  const ok = buildReport({ ...base, name: "JIB" });
+  assert.equal(reportProblem(ok), null);
+  // Older copies send none, and null is taken as none.
+  assert.equal(reportProblem({ ...ok, name: null }), null);
+  const bad = (name: unknown) => reportProblem({ ...ok, name });
+  for (const name of ["", " JIB", "a\nb", "evil\u202eexe", "x".repeat(LIMITS.name + 1), 7]) assert.ok(bad(name), JSON.stringify(name));
+  // An address typed in the wrong box would be published.
+  for (const name of ["anna@lab.org", "@anna", "https://example.org", "www.example.org"]) assert.match(bad(name) ?? "", /public/, name);
+  // Real names aren't judged by their letters.
+  for (const name of ["Dikshit", "Ö. Çelik", "李小龙", "J. O'Neill-Smith (Cockburn lab)"]) assert.equal(bad(name), null, name);
+});
+
+test("typed text can't break out of its Markdown", () => {
+  assert.equal(fenced("a"), "```text\na\n```");
+  assert.equal(fenced("a ```` b"), "`````text\na ```` b\n`````");
+  assert.equal(codeSpan("JIB"), "`JIB`");
+  assert.equal(codeSpan("a`b"), "``a`b``");
+  assert.equal(codeSpan("`a"), "`` `a ``");
 });

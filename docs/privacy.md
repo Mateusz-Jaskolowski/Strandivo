@@ -80,8 +80,11 @@ send your report to `feedback.strandivo.com` only when you click Send. The dialo
 everything included with the report before you send it:
 
 - the report type (bug, idea or question), summary and details;
+- your name or initials, if you type one, to credit you in the public issue;
 - the app's version, operating system and processor;
 - which view was open, such as Home or Map.
+
+The app keeps the last name you sent on your computer, so you needn't type it again.
 
 Two optional items are included only if you tick them (both are unticked by default):
 

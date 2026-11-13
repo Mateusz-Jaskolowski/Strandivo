@@ -1730,6 +1730,10 @@ async function main() {
     check("Send waits for a summary", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent === 'Send')?.disabled === true"));
     await s.keys("input[aria-label='Summary']", "Map stays blank");
     await s.keys("textarea[aria-label='Details']", "Opened a plasmid from Home.");
+    const sentList = () => s.exec("return document.querySelector('.sv-feedback-sent')?.innerText ?? ''");
+    check("No name is listed until one is typed", !/Sent by/.test(await sentList()));
+    await s.keys("input[aria-label='Your name']", "JIB");
+    check("A name to credit is listed with what is sent", /Sent by: JIB/.test(await sentList()), (await sentList()).slice(0, 200));
     await s.keys("input[aria-label='Your email']", "anna@lab.example.org");
     await s.click("//label[contains(., 'Recent errors')]/input", "xpath");
     const shown = await s.exec("return document.querySelector('.sv-feedback-errors')?.textContent ?? ''");
@@ -1744,11 +1748,18 @@ async function main() {
     await s.exec("window.__e2eFeedback.fail = false;");
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Try again']", "xpath");
     const sent = await s.waitFor("window.__e2eFeedback.reports.length === 1", 3000) ? await s.exec("return window.__e2eFeedback.reports[0]") : null;
-    check("The report holds what the dialog showed, and no path", sent?.kind === "bug" && sent.summary === "Map stays blank" && sent.email === "anna@lab.example.org" && sent.view === "Home" && sent.errors?.some(e => /<path>/.test(e)) && !/\/Users\/|pSecret/.test(JSON.stringify(sent)) && sent.file === null, JSON.stringify(sent)?.slice(0, 200));
+    check("The report holds what the dialog showed, and no path", sent?.kind === "bug" && sent.summary === "Map stays blank" && sent.email === "anna@lab.example.org" && sent.name === "JIB" && sent.view === "Home" && sent.errors?.some(e => /<path>/.test(e)) && !/\/Users\/|pSecret/.test(JSON.stringify(sent)) && sent.file === null, JSON.stringify(sent)?.slice(0, 200));
     check("It says which issue it became", await s.waitFor("/sent as #7/.test(document.querySelector('.sv-feedback-thanks')?.textContent)", 3000));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Open on GitHub']", "xpath");
     check("Open on GitHub asks for that issue by its number", await s.waitFor("window.__e2eFeedback.issues[0] === 7", 3000));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+
+    // --- the name sent last time is filled in ---
+    await s.click("button.sv-appbar-feedback-idea");
+    await s.waitFor("document.querySelector('.sv-dialog-title')?.textContent === 'Send feedback'", 3000);
+    check("The name sent last time is filled in", (await s.exec("return document.querySelector('input[aria-label=\"Your name\"]')?.value")) === "JIB" && /Sent by: JIB/.test(await sentList()));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Cancel']", "xpath");
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
 
     // --- a crash last time: the strip, and the bug report it opens, shown before sending ---

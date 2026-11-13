@@ -57,10 +57,13 @@ and CI checks that they exist.
 - **Matching takes time**: about versions × length² steps for a clone close to none. From
   the work of 15,000 versions of 20 amino acids on (`slowToMatch`), the region dialog and
   the inspector warn and offer exact matching; the cut-off scales with length², as 15,000
-  versions of 6 amino acids are a hundredth of the work of 15,000 of 60. A search can run
-  a few thousand comparisons at a time (`searchVersion`), and `cloneVariants` with
-  `matchVersions` false leaves each region's search with it, for a caller that keeps
-  drawing meanwhile.
+  versions of 6 amino acids are a hundredth of the work of 15,000 of 60. The Reads tab
+  matches clones before its views ask (`matchVersions` in `src/views/readsView.ts`): a
+  list over the cut-off, or work over 150 ms, goes on between drawn frames, a few thousand
+  comparisons at a time (`searchVersion`), with a progress strip saying why. Meanwhile
+  the views get each clone without its versions matched (`cloneVariants` with
+  `matchVersions` false), whose regions carry the searches left to do; the clones and
+  summary views show the strip instead, and copying them waits.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
   the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
   start and strand don't matter; it starts at the first in-frame codon of 10 good matching

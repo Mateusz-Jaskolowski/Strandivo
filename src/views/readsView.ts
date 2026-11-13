@@ -19,6 +19,7 @@ import { deleteRange, insertBases, replaceRange, type SeqFeature } from "../lib/
 import { variableFeatures } from "../lib/variable.ts";
 import { regionOfFeatureId } from "../lib/regions.ts";
 import { cloneSequence, cloneVariants, consensusPieces, type CloneFlag, type CloneVariants, type RegionCall } from "../lib/variants.ts";
+import { searchVersion, slowVersions } from "../lib/versionMatch.ts";
 import { cloneSummary, summaryText, type CloneSummary } from "../lib/cloneSummary.ts";
 import type { CloneResult, Conflict, Difference, Feature, ReadResult } from "../lib/types.ts";
 import { diffKey, type DiffSite, type ReadSet } from "../sanger/readSet.ts";
@@ -116,6 +117,22 @@ const FLAG_CLASS: Record<CloneFlag, string> = {
 function flagText(f: CloneFlag, v: CloneVariants): string {
   return f === "mixed" && v.mixed !== null ? `Mixed, about ${Math.round(v.mixed * 100)}%` : FLAG_TEXT[f];
 }
+
+/** How many versions a variable region's design has. */
+const versionCount = (f: Feature) => (f.variable?.kind === "alternatives" ? f.variable.options.length : 0);
+
+/** After the next frame is drawn, or a moment if none is (a hidden window draws none). */
+const nextFrame = () =>
+  new Promise<void>(resolve => {
+    let gone = false;
+    const go = () => {
+      if (gone) return;
+      gone = true;
+      setTimeout(resolve, 0);
+    };
+    requestAnimationFrame(go);
+    setTimeout(go, 100);
+  });
 
 /** "2 changes among double peaks left out", or nothing. */
 function leftOutText(v: CloneVariants): string {
@@ -240,6 +257,11 @@ export class ReadsView {
   private summaryPanel: CloneSummaryPanel;
   private summaryOf: { clones: CloneResult[]; summary: CloneSummary } | null = null;
   private variantCache = new WeakMap<CloneResult, CloneVariants>();
+  /** Clones whose regions' versions are being matched between frames (`matchVersions`). */
+  private matching: { clones: CloneResult[]; todo: number[]; done: number; region: string; versions: number } | null = null;
+  /** Each clone without its versions matched, for the views to show meanwhile. */
+  private unmatched = new WeakMap<CloneResult, CloneVariants>();
+  private matchStrip: { el: HTMLElement; text: HTMLElement; fill: HTMLElement; note: HTMLElement } | null = null;
   private alnHead = h("div", { class: "sv-reads-sec-head" });
   private diffs = h("div", { class: "sv-reads-diffs" });
   private alignment: HTMLElement;
@@ -305,6 +327,11 @@ export class ReadsView {
     this.refresh();
   }
 
+  /** Stops matching versions for a closed tab. */
+  dispose() {
+    this.matching = null;
+  }
+
   setVisible(v: boolean) {
     this.visible = v;
     this.trace.setVisible(v && this.alignmentShown());
@@ -320,6 +347,7 @@ export class ReadsView {
 
   /** Re-renders everything after the reads or their results changed. */
   refresh() {
+    this.matchVersions();
     const r = this.reads;
     if (this.active !== null && this.active >= r.reads.length) this.active = null;
     if (this.activeClone !== null && !r.groups().some(g => g.key === this.activeClone && g.reads.length > 1)) this.activeClone = null;
@@ -855,7 +883,8 @@ export class ReadsView {
     const groups = r.groups().length;
     const shown = this.topView();
     const view = (v: TopView, label: string) => h("button", { type: "button", "aria-pressed": String(shown === v), onclick: () => this.setView(v) }, label);
-    const unique = shown === "clones" ? this.identicalGroups().length : 0;
+    const matching = !!this.matching;
+    const unique = shown === "clones" && !matching ? this.identicalGroups().length : 0;
     const count = this.sites.length;
     const parts: (Node | false)[] = [
       h(
@@ -867,13 +896,14 @@ export class ReadsView {
         groups > 1 && view("summary", "Summary")
       ),
       aligned < r.count && h("span", { class: "sv-reads-summary" }, `${aligned} of ${plural(r.results.length || r.count, "read")} aligned`),
-      shown === "clones" && unique < groups && h("span", { class: "sv-pane-note" }, `${fmt(unique)} different`),
+      shown === "clones" && !matching && unique < groups && h("span", { class: "sv-pane-note" }, `${fmt(unique)} different`),
+      matching && this.matchingStrip().note,
       shown === "coverage" && !!cov && h("span", { class: "sv-pane-note" }, `${fmt(cov!.covered)} of ${fmt(n)} bp covered (${Math.floor((cov!.covered / n) * 100)}%)`),
       conflicts > 0 && h("span", { class: "sv-pane-note sv-text-warn" }, `Reads disagree at ${plural(conflicts, "place")}`),
       r.stale && h("span", { class: "sv-pane-note sv-text-warn" }, "Sequence edited since alignment"),
       h("span", { class: "sv-push" }),
-      h("button", { type: "button", class: "sv-btn sv-btn-small", title: this.copyTitle(shown), onclick: () => this.copySummary(shown) }, iconSvg("copy", 14), "Copy summary"),
-      groups > 1 && h("button", { type: "button", class: "sv-btn sv-btn-small", title: "Copy each different clone's sequence", onclick: (e: MouseEvent) => this.copyMenu(e) }, "Copy…"),
+      h("button", { type: "button", class: "sv-btn sv-btn-small", disabled: matching && shown !== "coverage" && shown !== "differences", title: this.copyTitle(shown), onclick: () => this.copySummary(shown) }, iconSvg("copy", 14), "Copy summary"),
+      groups > 1 && h("button", { type: "button", class: "sv-btn sv-btn-small", disabled: matching, title: "Copy each different clone's sequence", onclick: (e: MouseEvent) => this.copyMenu(e) }, "Copy…"),
       h("button", { type: "button", class: "sv-btn sv-btn-small", disabled: !aligned, title: "Fill in the verification fields on the Info tab", onclick: () => this.actions.recordInInfo() }, "Record result")
     ];
     this.covHead.replaceChildren(...(parts.filter(Boolean) as Node[]));
@@ -914,10 +944,11 @@ export class ReadsView {
     const shown = this.topView();
     const alignment = this.alignmentShown();
     const table = shown !== "coverage";
-    this.cloneTable.hidden = shown !== "clones";
+    const waiting = !!this.matching && (shown === "clones" || shown === "summary");
+    this.cloneTable.hidden = shown !== "clones" && !waiting;
     this.diffs.hidden = shown !== "differences";
     this.overview.hidden = shown !== "coverage";
-    this.summaryPanel.el.hidden = shown !== "summary";
+    this.summaryPanel.el.hidden = shown !== "summary" || waiting;
     this.alignment.hidden = !alignment;
     this.divider.hidden = !alignment;
     this.main.classList.toggle("sv-reads-table", table);
@@ -1004,12 +1035,108 @@ export class ReadsView {
     const c = this.reads.clones[index];
     if (!c) return null;
     let v = this.variantCache.get(c);
-    if (!v) {
-      const d = this.ctx.store.data;
-      v = cloneVariants(c, d.sequence, d.circular, this.actions.legacyFeatures(), this.reads.minQuality, this.reads.peaks(index) ?? undefined);
-      this.variantCache.set(c, v);
+    if (v) return v;
+    if (this.matching?.clones === this.reads.clones) {
+      // Everything but the versions, which are still being matched.
+      v = this.unmatched.get(c);
+      if (!v) this.unmatched.set(c, (v = this.computeVariants(index, false)));
+      return v;
     }
+    this.variantCache.set(c, (v = this.computeVariants(index, true)));
     return v;
+  }
+
+  private computeVariants(index: number, matchVersions: boolean): CloneVariants {
+    const d = this.ctx.store.data;
+    return cloneVariants(this.reads.clones[index], d.sequence, d.circular, this.actions.legacyFeatures(), this.reads.minQuality, this.reads.peaks(index) ?? undefined, matchVersions);
+  }
+
+  /**
+   * Matches every clone to its regions' versions before the views ask. Finding the closest
+   * of a long list of versions can take a second a clone, so what takes longer than a
+   * moment goes on between frames, with a progress strip saying why, and the views show
+   * the rest of each clone meanwhile. Exact matching is quick, and so is a short list.
+   */
+  private matchVersions() {
+    const clones = this.reads.clones;
+    if (this.matching?.clones === clones) return;
+    this.matching = null;
+    const todo = clones.flatMap((c, i) => (this.variantCache.has(c) ? [] : [i]));
+    if (!todo.length) return;
+    const designs = variableFeatures(this.actions.legacyFeatures()).filter(f => f.variable?.kind === "alternatives" && !f.variable.exact);
+    if (!designs.length) return;
+    // A list known to be slow shows the strip before the first clone; others get a moment.
+    let done = 0;
+    if (!designs.some(f => f.variable?.kind === "alternatives" && slowVersions(f.variable.options))) {
+      const until = performance.now() + 150;
+      while (done < todo.length && performance.now() < until) {
+        const i = todo[done++];
+        this.variantCache.set(clones[i], this.computeVariants(i, true));
+      }
+      if (done === todo.length) return;
+    }
+    const largest = designs.reduce((a, b) => (versionCount(b) > versionCount(a) ? b : a));
+    const job = { clones, todo, done, region: largest.name || largest.type || "the region", versions: versionCount(largest) };
+    this.matching = job;
+    this.matchStrip = null;
+    void (async () => {
+      // A frame is drawn every 40 ms, so the strip moves and the window answers: a clone
+      // close to no version can take seconds among a million.
+      let slice = 0;
+      const going = async () => {
+        if (performance.now() < slice) return true;
+        this.showMatching();
+        await nextFrame();
+        slice = performance.now() + 40;
+        return this.matching === job && this.reads.clones === clones;
+      };
+      while (job.done < todo.length) {
+        if (!(await going())) return;
+        const i = todo[job.done];
+        // Its searches a little at a time, then the clone, which finds their answers kept.
+        for (const r of this.variants(i)!.regions) {
+          if (!r.pending) continue;
+          const steps = searchVersion(r.pending);
+          while (!steps.next().done) if (!(await going())) return;
+        }
+        this.variantCache.set(clones[i], this.computeVariants(i, true));
+        job.done++;
+      }
+      this.matching = null;
+      this.matchStrip = null;
+      this.summaryOf = null;
+      this.refresh();
+      // The alignment's translations were worked out without the versions.
+      this.trace.setOptions(this.options);
+    })();
+  }
+
+  /** The progress strip for `matching`, made once and then only brought up to date. */
+  private matchingStrip(): { el: HTMLElement; text: HTMLElement; fill: HTMLElement; note: HTMLElement } {
+    if (!this.matchStrip) {
+      const job = this.matching!;
+      const text = h("p", { class: "sv-reads-matching-text" });
+      const fill = h("div", { class: "sv-meter-fill sv-reads-matching-fill" });
+      const el = h(
+        "div",
+        { class: "sv-reads-matching", role: "status" },
+        text,
+        h("div", { class: "sv-meter" }, fill),
+        h("p", { class: "sv-small sv-dim" }, `Each clone is compared with all ${fmt(job.versions)} versions of ${job.region}. Matching exact versions only, chosen where the region’s versions are edited, is much faster.`)
+      );
+      this.matchStrip = { el, text, fill, note: h("span", { class: "sv-pane-note" }) };
+      this.showMatching();
+    }
+    return this.matchStrip;
+  }
+
+  private showMatching() {
+    const job = this.matching;
+    if (!job || !this.matchStrip) return;
+    const { text, fill, note } = this.matchStrip;
+    text.textContent = `Finding each clone’s closest version… ${fmt(job.done)} of ${fmt(job.todo.length)} clones`;
+    fill.style.width = `${Math.round((job.done / job.todo.length) * 100)}%`;
+    note.textContent = `Matching versions… ${fmt(job.done)} of ${fmt(job.todo.length)}`;
   }
 
   private summary(): CloneSummary {
@@ -1190,6 +1317,11 @@ export class ReadsView {
   private renderCloneTable() {
     const shown = this.topView();
     this.applyLayout();
+    if (this.matching && (shown === "clones" || shown === "summary")) {
+      // Both are about what each clone has, versions and all.
+      this.cloneTable.replaceChildren(this.matchingStrip().el);
+      return;
+    }
     if (shown === "summary") this.summaryPanel.update(this.summary(), this.reads.running);
     if (shown !== "clones") {
       this.cloneTable.replaceChildren();

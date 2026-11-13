@@ -1185,6 +1185,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       offPersonalEnzymes();
       inspector.dispose();
       outline.dispose();
+      readsView.dispose();
     },
     testHook
   };

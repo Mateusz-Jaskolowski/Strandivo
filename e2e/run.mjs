@@ -312,6 +312,9 @@ async function main() {
     check("Outline lists the file's features", start.features.length >= 3 && start.features.every(f => listed.includes(f)), listed.join(", "));
     const clipped = await s.exec(CLIPPED_LABELS);
     check("Map labels fit inside the map", clipped.length === 0, clipped.join(", ") || "none clipped");
+    // WebKit doesn't pass the baseline down to a name along its feature unless told to.
+    const arcBaselines = await s.exec("return Array.from(document.querySelectorAll('.sv-map-arctext textPath')).map(t => getComputedStyle(t).dominantBaseline)");
+    check("Names along features sit in the middle of them", arcBaselines.length > 0 && arcBaselines.every(b => b === "central"), arcBaselines.join(", "));
     const sizeOf = "return parseFloat(getComputedStyle(document.querySelector('.sv-map-label')).fontSize)";
     const sizeBefore = await s.exec(sizeOf);
     await s.keys("input[aria-label='Label size']", ARROW_RIGHT + ARROW_RIGHT);

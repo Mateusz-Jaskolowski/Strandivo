@@ -1059,8 +1059,11 @@
   text-rendering: geometricPrecision;
 }
 /* `dominant-baseline` is set on groups of labels, and WebKit doesn't pass it on to their
-   text (SVG 1.1 didn't inherit it), so on a Mac every label sat a third of a line high. */
-.sv-map-svgel text {
+   text (SVG 1.1 didn't inherit it), so on a Mac every label sat a third of a line high.
+   Nor to a textPath: a name along its feature sat 3 px off the band's middle, outwards
+   or inwards as it reads. */
+.sv-map-svgel text,
+.sv-map-svgel textPath {
   dominant-baseline: inherit;
 }
 .sv-map-svg-linear {

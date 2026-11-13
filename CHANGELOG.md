@@ -92,8 +92,9 @@ crash.
 - **The map**: each file's map opens turned the way you last turned it. Dragging round a
   circular map selects the bases the pointer passed over, whichever way it goes; dragging
   anticlockwise used to select nearly the whole plasmid. A coding sequence keeps its
-  colour when another is added before it, and on a Mac labels sit in the middle of their
-  coloured backgrounds, with position numbers centred too.
+  colour when another is added before it. On a Mac, labels sit in the middle of their
+  coloured backgrounds, names written along a feature in the middle of it, and position
+  numbers are centred too.
 - **The Sequence tab stays where you are** when you turn on Translation, Both strands, ORFs,
   Cut sites or Primers, or resize the window; it used to jump, further the further down you
   were. An enzyme that cuts right at a row's edge is shown beside the rest of its site, and

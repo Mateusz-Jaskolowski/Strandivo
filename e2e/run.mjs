@@ -460,12 +460,14 @@ async function main() {
     await sleep(200);
     check("The status bar gives the inverted selection's length", (await s.exec(statusBp)) === lac.n - lacBp, `${await s.exec(statusBp)} bp`);
     // The page handles the key; where the native menu hears it too, it must not run again,
-    // or the two inversions cancel out.
-    await s.exec("document.activeElement?.blur();");
-    await s.press("i", [CTRL, SHIFT]);
-    await sleep(700);
+    // or the two inversions cancel out. The key is sent to the page and the menu's copy
+    // after it, as a real Ctrl+Shift+I opens WebKitGTK's inspector in this debug build,
+    // which takes up part of the window for the rest of the run.
+    await s.exec(`document.activeElement?.blur();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'I', code: 'KeyI', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+      window.__strandivo.menu('invert-selection');`);
     const pressed = await s.exec(`${doc} return s.selection.range;`);
-    check("Ctrl+Shift+I inverts the selection once", pressed?.start === lac.start && pressed?.end === lac.end, JSON.stringify(pressed));
+    check("Ctrl+Shift+I inverts the selection once, though the menu hears it too", pressed?.start === lac.start && pressed?.end === lac.end, JSON.stringify(pressed));
     const invertMenu = await s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
       const band = document.querySelector('.sv-sel-band');
       band.scrollIntoView({ block: 'center' });
@@ -474,7 +476,9 @@ async function main() {
       return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
     check("Right-clicking selected bases offers Invert selection", invertMenu.includes("Invert selection"), invertMenu.join(", "));
     await s.exec("window.__e2eMenu.find(e => e.label === 'Invert selection')?.run(); delete window.__strandivoMenu;");
-    check("Invert selection in the menu inverts it", await s.waitFor(`window.__strandivo.store.selection.range?.start === ${lac.end + 1} && window.__strandivo.store.selection.range?.end === ${lac.start - 1}`, 3000));
+    check("Invert selection in the right-click menu inverts it", await s.waitFor(`window.__strandivo.store.selection.range?.start === ${lac.end + 1} && window.__strandivo.store.selection.range?.end === ${lac.start - 1}`, 3000));
+    await s.exec("window.__strandivo.menu('invert-selection');");
+    check("Edit > Invert Selection inverts it", await s.waitFor(`window.__strandivo.store.selection.range?.start === ${lac.start} && window.__strandivo.store.selection.range?.end === ${lac.end}`, 3000), JSON.stringify(await s.exec(`${doc} return s.selection.range;`)));
 
     // --- primers: design a pair in its dialog ---
     await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR'); s.select({ range: { start: f.start, end: f.end }, caret: f.start, focus: { kind: 'feature', id: f.id } });`);

@@ -10,6 +10,7 @@ import { nextRegionColor, proteinRegionTargets, REGION_KINDS, regionColor, regio
 import { designOf, parseDesign, versionStats, versionsFromText } from "../lib/variable.ts";
 import { slowToMatch } from "../lib/versionMatch.ts";
 import { matchChoice } from "./versionMatchChoice.ts";
+import { fmt } from "../ui/format.ts";
 
 /** Amino-acid coordinates belong to this CDS, including on reverse and spliced sequences. */
 export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: number, selection = ctx.store.selection.range) {
@@ -47,10 +48,11 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
   const oldChoice = oldDesign?.kind === "alternatives" && oldDesign.protein ? "protein" : oldDesign?.kind;
   const design = h("select", { class: "sv-input", "aria-label": "Variable design" }, [ ["any", "Anything"], ["pattern", "Pattern"], ["alternatives", "DNA versions"], ["protein", "Protein versions"] ].map(([value, label]) => h("option", { value, selected: oldChoice === value }, label))) as HTMLSelectElement;
   const specification = h("textarea", { class: "sv-input sv-mono", rows: "3", "aria-label": "Variable pattern or versions", spellcheck: "false" }) as HTMLTextAreaElement;
-  specification.value = oldDesign?.kind === "pattern" ? oldDesign.pattern : oldDesign?.kind === "alternatives" ? oldDesign.options.map(o => `${o.name}: ${o.bases}`).join("\n") : "NNK";
+  // A region's versions fill the box once the dialog is drawn (`loadVersions` below).
+  specification.value = oldDesign?.kind === "pattern" ? oldDesign.pattern : oldDesign?.kind === "alternatives" ? "" : "NNK";
   // Closest or exact, and a word when the list is long enough for exact to suit it better.
   let exact = oldDesign?.kind === "alternatives" && !!oldDesign.exact;
-  let typed = versionStats(specification.value);
+  let typed = oldDesign?.kind === "alternatives" ? { count: oldDesign.options.length, letters: oldDesign.options.reduce((n, o) => n + o.bases.length, 0) } : versionStats(specification.value);
   const match = h("div", { class: "sv-region-match" });
   const showMatch = () => match.replaceChildren(...matchChoice(exact, { ...typed, protein: design.value === "protein" }, value => { exact = value; showMatch(); }));
   showMatch();
@@ -125,9 +127,25 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     ctx.store.apply({ ...current, features: current.features.map(x => x.id === f.id ? feature : x) }, old ? "Edit protein region" : "Add protein region", { range: regionRange(feature, sorted.find(r => r.id === region.id)!, current.sequence.length), focus: { kind: "feature", id: f.id, region: sorted.findIndex(r => r.id === region.id) } });
     dlg.close();
   };
-  dlg.footer.append(h("button", { class: "sv-btn", type: "button", onclick: () => dlg.close() }, "Cancel"), h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: save }, old ? "Save region" : "Add region"));
+  const saveButton = h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: save }, old ? "Save region" : "Add region") as HTMLButtonElement;
+  dlg.footer.append(h("button", { class: "sv-btn", type: "button", onclick: () => dlg.close() }, "Cancel"), saveButton);
   dlg.body.addEventListener("keydown", e => { if (e.key === "Enter" && e.target instanceof HTMLInputElement && e.target.type !== "checkbox") { e.preventDefault(); save(); } });
   refresh();
+  // Laying out a long list of versions takes a moment: the dialog says so, then fills in.
+  if (oldDesign?.kind === "alternatives") {
+    const versions = oldDesign.options;
+    specification.readOnly = true;
+    specification.placeholder = `Loading ${fmt(versions.length)} ${versions.length === 1 ? "version" : "versions"}…`;
+    saveButton.disabled = true;
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        if (isVersions(design.value) && !specification.value) specification.value = versions.map(o => `${o.name}: ${o.bases}`).join("\n");
+        specification.readOnly = false;
+        saveButton.disabled = false;
+        refresh();
+      }, 0)
+    );
+  }
 }
 
 /** The selection stays unchanged until the user adds the named region. */

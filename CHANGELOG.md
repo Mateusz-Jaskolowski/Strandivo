@@ -37,7 +37,8 @@ ever quits unexpectedly it offers to report the crash.
   flagged. Versions equally close to a clone are all named instead of the first one
   listed. Finding a clone among many thousands of versions is much faster, the region's
   settings warn when a long list would still be slow, and the Reads tab shows how far it
-  has got instead of stopping while it matches.
+  has got instead of stopping while it matches. A long list shows in the inspector by its
+  count, with Edit versions… for the whole list.
 - **Select codons from translation**: click an amino acid in the Sequence view or around
   a primer to select its DNA bases, or drag to select whole codons. Hold ⌘ on Mac or Ctrl
   elsewhere to pick separate amino acids, and Shift to select through the intervening

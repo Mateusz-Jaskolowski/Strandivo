@@ -21,6 +21,8 @@ import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionLabel
 import type { VariableDesign } from "../lib/types.ts";
 import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER, versionsFromText } from "../lib/variable.ts";
 import { matchChoice } from "./versionMatchChoice.ts";
+import { openVersionsDialog } from "./versionsDialog.ts";
+
 import { noteText, otherQualifiers, withNote } from "../lib/featureNotes.ts";
 import {
   basesIn,
@@ -49,6 +51,10 @@ import { deleteSelected, selectedBases } from "../lib/selection.ts";
 /** The key held to pick enzymes, as the interface names it. */
 const pickKeyName = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "Hold ⌘" : "Hold Ctrl";
 import { openMutagenesisDialog } from "./mutagenesisDialog.ts";
+
+/** Up to this many versions (and letters in all), the inspector lists them to edit in place. */
+const INLINE_VERSIONS = 50;
+const INLINE_LETTERS = 20_000;
 
 const loc = (r: Range) => fmtRange(r.start + 1, r.end + 1);
 /** Event asking a field that applies after a pause to apply now (`Inspector.flush`). */
@@ -585,19 +591,33 @@ export class Inspector {
             h("button", { type: "button", "aria-pressed": String(!!design.protein === inProtein), onclick: () => !!design.protein !== inProtein && set(inProtein ? parentProtein : fresh.alternatives, "Change variable design") }, label);
           body.push(h("div", { class: "sv-segmented sv-segmented-small", role: "group", "aria-label": "Versions as" }, as(false, "DNA bases"), as(true, "Amino acids")));
         }
-        const text = h("textarea", { class: "sv-code sv-code-edit", rows: String(Math.min(6, design.options.length + 1)), "aria-label": "Versions, one per line", spellcheck: "false" }) as HTMLTextAreaElement;
-        text.value = design.options.map(o => `${o.name}: ${o.bases}`).join("\n");
-        text.addEventListener("change", () => {
-          const d = versionsFromText(text.value, { protein: design.protein, exact: design.exact });
-          if (typeof d === "string") toast(d, "info");
-          else set(d, "Change variable design");
-        });
+        const line = (o: { name: string; bases: string }) => `${o.name}: ${o.bases}`;
+        const count = design.options.length;
         const letters = design.options.reduce((n, o) => n + o.bases.length, 0);
-        body.push(
-          text,
-          h("p", { class: "sv-small sv-dim" }, `One per line, as name: ${design.protein ? "amino acids" : "bases"}.`),
-          ...matchChoice(!!design.exact, { count: design.options.length, letters, protein: !!design.protein }, exact => set({ ...design, exact: exact || undefined }, exact ? "Match exact versions" : "Match closest versions"))
-        );
+        if (count <= INLINE_VERSIONS && letters <= INLINE_LETTERS) {
+          const text = h("textarea", { class: "sv-code sv-code-edit", rows: String(Math.min(6, count + 1)), "aria-label": "Versions, one per line", spellcheck: "false" }) as HTMLTextAreaElement;
+          text.value = design.options.map(line).join("\n");
+          text.addEventListener("change", () => {
+            const d = versionsFromText(text.value, { protein: design.protein, exact: design.exact });
+            if (typeof d === "string") toast(d, "info");
+            else set(d, "Change variable design");
+          });
+          body.push(text, h("p", { class: "sv-small sv-dim" }, `One per line, as name: ${design.protein ? "amino acids" : "bases"}.`));
+        } else {
+          // A long list by its count and first few: the inspector is built again on every
+          // change, and a box of all of them would take seconds each time.
+          body.push(
+            h(
+              "div",
+              { class: "sv-section-head" },
+              h("span", { class: "sv-small" }, `${fmt(count)} versions`),
+              h("button", { type: "button", class: "sv-link", onclick: () => this.actions.copy(design.options.map(line).join("\n"), `${fmt(count)} versions`) }, iconSvg("copy", 13), "Copy")
+            ),
+            h("div", { class: "sv-code sv-versions-preview" }, ...design.options.slice(0, 3).map(o => h("div", null, line(o))), h("div", { class: "sv-dim" }, `and ${fmt(count - 3)} more`)),
+            this.button("Edit versions…", () => openVersionsDialog(f.name || "This feature", design, d => set(d, "Change variable design")), { wide: true })
+          );
+        }
+        body.push(...matchChoice(!!design.exact, { count, letters, protein: !!design.protein }, exact => set({ ...design, exact: exact || undefined }, exact ? "Match exact versions" : "Match closest versions")));
       } else {
         body.push(h("p", { class: "sv-small sv-dim" }, "Clones can have any sequence or length here. Each clone's sequence is shown in its own column rather than called as mutations."));
       }

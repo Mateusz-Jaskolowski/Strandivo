@@ -64,6 +64,12 @@ and CI checks that they exist.
   the views get each clone without its versions matched (`cloneVariants` with
   `matchVersions` false), whose regions carry the searches left to do; the clones and
   summary views show the strip instead, and copying them waits.
+- **Long lists of versions are never laid out where they would be again**: the inspector
+  is built on every change, so past 50 versions or 20,000 letters it shows the count, the
+  first three and Copy, and Edit versions… opens the list in a dialog
+  (`src/views/versionsDialog.ts`). That dialog and the region dialog put a long list in
+  their box only after they are drawn, saying it is loading, as a box of a million lines
+  takes seconds to lay out.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
   the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
   start and strand don't matter; it starts at the first in-frame codon of 10 good matching

@@ -565,7 +565,7 @@ export class MapView {
       const title = `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)} (${fmt(rangeLength(f, n))} bp)`;
       const path = s(
         "path",
-        { d: shape, fill: st.fill, class: `sv-map-feature${banded ? " sv-map-banded" : ""}`, style: banded ? `--fc:${st.fill}` : undefined, "data-kind": "feature", "data-id": f.id },
+        { d: shape, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id },
         s("title", null, title)
       );
       featureLayer.appendChild(path);
@@ -958,7 +958,7 @@ export class MapView {
           { left: atStart && nb?.before ? headOf(nb.before) : 0, right: atEnd && nb?.after ? headOf(nb.after) : 0 }
         );
         shapes.push(dpath);
-        const path = s("path", { d: dpath, fill: st.fill, class: `sv-map-feature${isBanded ? " sv-map-banded" : ""}`, style: isBanded ? `--fc:${st.fill}` : undefined, "data-kind": "feature", "data-id": f.id }, s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`));
+        const path = s("path", { d: dpath, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id }, s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`));
         featureLayer.appendChild(path);
         this.addShape(`feature:${f.id}`, path);
       }

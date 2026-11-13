@@ -45,9 +45,10 @@ and CI checks that they exist.
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
   whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
   Both map modes draw regions as segments of their CDS's arrow: clipped to it, a hair of
-  the page between them, the arrow's outline drawn over them, and a tint of the CDS's
-  colour where no region is. Lanes split the band, top level outermost (on top in the
-  linear map). The CDS's name then goes beside the map (a chip, or under the bar). A
+  the page between them and the arrow's outline drawn over them. Where no region is, the
+  CDS keeps its own colour: a tint there was tried, and made the feature seem to change
+  colour whenever regions were shown or hidden. Lanes split the band, top level outermost
+  (on top in the linear map). The CDS's name then goes beside the map (a chip, or under the bar). A
   region's name goes on its longest piece where it fits, in `regionTextColor`; otherwise
   in plain grey at regular weight after a square of its colour, beside the circular map
   on a light solid leader from the band's outer edge, or in rows under the linear map's

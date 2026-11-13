@@ -33,14 +33,14 @@ import {
 
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+type Invoke = <T>(cmd: string, args?: Record<string, unknown> | Uint8Array, options?: { headers: Record<string, string> }) => Promise<T>;
 let invokeFn: Invoke | null = null;
 
-async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+async function invoke<T>(cmd: string, args?: Record<string, unknown> | Uint8Array, options?: { headers: Record<string, string> }): Promise<T> {
   if (!isDesktop) throw new Error(`"${cmd}" is only available in the desktop app.`);
   if (!invokeFn) invokeFn = (await import("@tauri-apps/api/core")).invoke as Invoke;
   try {
-    return await invokeFn<T>(cmd, args);
+    return await invokeFn<T>(cmd, args, options);
   } catch (e) {
     // Kept for a bug report's "Recent errors", which the user sees before sending.
     recordError(`${cmd} failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -549,6 +549,11 @@ export async function copyText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
+/** Puts a PNG on the clipboard, for pasting into a slide or a document. Call it from a click. */
+export async function copyImage(png: Uint8Array): Promise<void> {
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": new Blob([png as BlobPart], { type: "image/png" }) })]);
+}
+
 export type PageWindow = "settings" | "library" | "enzymes";
 export type EnzymeLibrarySection = "lab" | "personal";
 let showInPage: ((w: PageWindow, section?: EnzymeLibrarySection) => void) | null = null;
@@ -696,6 +701,15 @@ export async function chooseSavePath(defaultPath: string, filters: { name: strin
 export async function saveText(path: string, contents: string): Promise<void> {
   if (isDesktop) return writeFile(path, contents);
   await saveKey(path, contents);
+}
+
+/**
+ * Saves bytes (an image) as `saveText` saves text. The shell gets them as the request's
+ * body, not as JSON, with the path in a header, percent-encoded as headers are ASCII.
+ */
+export async function saveBytes(path: string, bytes: Uint8Array): Promise<void> {
+  if (isDesktop) return invoke<void>("write_bytes", bytes, { headers: { path: encodeURIComponent(path) } });
+  await saveKey(path, bytes);
 }
 
 export async function confirmDialog(message: string, opts: { title?: string; okLabel?: string; cancelLabel?: string; kind?: "info" | "warning" | "error" } = {}): Promise<boolean> {

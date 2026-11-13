@@ -16,8 +16,8 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
-Mark domains, linkers and CDRs in a coding sequence as protein regions, and see them on the
-map. The Reads tab copes with hundreds of reads and keeps the reference in view, and primer
+Mark domains, linkers and CDRs in a coding sequence as protein regions, see them on the
+map, and copy or save them as a figure. The Reads tab copes with hundreds of reads and keeps the reference in view, and primer
 design can move ends onto better stretches. Ctrl+S works again on Windows, and if Strandivo
 ever quits unexpectedly it offers to report the crash.
 
@@ -29,7 +29,9 @@ ever quits unexpectedly it offers to report the crash.
   kept. Regions show in a protein diagram, in the outline, as coloured bars with their
   names in the Sequence view and around the selected primer, and on the map, where the
   Regions button chooses all of them, the top level or none, and hovering one highlights
-  its CDS. A region can be marked to vary between clones of a library, with its known
+  its CDS. Expand… draws the protein as a figure, with crowded names on elbow leaders and
+  nested regions bracketed under their parts, to copy into a slide or save as a PNG or
+  SVG. A region can be marked to vary between clones of a library, with its known
   versions written as DNA bases or as amino acids, and Export can include regions as
   ordinary annotations in a GenBank copy for other software.
 - **Library versions**: a clone can be matched to the closest of a region's versions, or

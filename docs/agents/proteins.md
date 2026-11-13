@@ -59,6 +59,20 @@ and CI checks that they exist.
   translation is shown. They use `src/views/regionTracks.ts` to pack and draw both the
   bars and captions, so names do not collide or widen the scroller. The primer's panel
   shows all regions in its visible template window, including neighbouring boundaries.
+- **The protein figure** (Expand… in the inspector) is laid out once, as shapes with
+  concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
+  as SVG in the dialog, paints on a canvas for the PNG and writes as the SVG file, so all
+  three match. Painting from the shapes, not loading the SVG as an image, keeps `data:`
+  and `blob:` images out of the Content Security Policy, and lets Copy image make the PNG
+  within the click, which Safari's clipboard requires. Regions with drawn parts are
+  brackets under them; the rest are blocks, the longest on the protein's line and one
+  inside another in a lane under it. A name goes straight over its block where it can
+  without hiding a neighbour's leader, else on an elbow leader, a crowd of them rising to
+  a peak (left half pointing left) so no leader crosses a name; a randomised test holds
+  that no name overlaps a name, a block or a line. The PNG is three times the figure's
+  size and says so (`pngWithDpi`), so a slide places it at the size it was drawn. The
+  shell writes its bytes with `write_bytes`, which takes them as the request's body
+  rather than JSON, with the path in a header.
 - **Regions from a selection** use `selectedProteinResidues` for both the inspector and
   right-click menu: coordinates follow the CDS's direction and splicing, partial codons
   expand to whole residues, and a terminal stop is excluded. When several CDSs contain

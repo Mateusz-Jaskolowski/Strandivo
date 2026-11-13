@@ -3971,6 +3971,20 @@
 }
 .sv-protein-region:hover { filter: brightness(1.1); }
 .sv-protein-region.sv-selected { outline: 2px solid var(--text); outline-offset: 2px; z-index: 1; }
+/* Expand…: the protein as a figure (src/lib/proteinFigure.ts), on white as it is saved. */
+.sv-figure-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 12.5px; color: var(--text-2); }
+.sv-figure-control { display: inline-flex; align-items: center; gap: 7px; }
+.sv-figure-paper {
+  flex: none; overflow-x: auto; padding: 6px; border: 1px solid var(--line); border-radius: 10px;
+  background: #ffffff;
+}
+.sv-figure { display: block; width: 100%; min-width: 640px; height: auto; }
+.sv-figure-pick { cursor: pointer; }
+rect.sv-figure-pick:hover { filter: brightness(1.07); }
+text.sv-figure-pick:hover { fill: var(--accent-text); }
+rect.sv-figure-pick.sv-selected { stroke: var(--accent); stroke-width: 2.5px; }
+text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
+.sv-foot-group { display: flex; flex-wrap: wrap; gap: 8px; }
 .sv-region-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .sv-region-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .sv-region-kind { display: flex; flex-direction: column; gap: 6px; }

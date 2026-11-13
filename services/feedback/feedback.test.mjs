@@ -4,7 +4,8 @@
 // The feedback Worker, with GitHub and email replaced. Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { handle, issueBody, maintainerEmail, MAX_BYTES } from "./src/index.mjs";
+import { generateKeyPairSync, verify } from "node:crypto";
+import { appJwt, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, pkcs8 } from "./src/index.mjs";
 
 const report = {
   kind: "bug",
@@ -129,4 +130,89 @@ test("the email's subject may be in any language", () => {
   const subject = /Subject: =\?UTF-8\?B\?([^?]+)\?=/.exec(mail)[1];
   assert.equal(Buffer.from(subject, "base64").toString(), "Bug #7: Mapa jest pusta – żółw");
   assert.ok(mail.endsWith("--B--\r\n"));
+});
+
+// A GitHub App's key, as GitHub hands it out (PKCS#1), and the same key as PKCS#8.
+const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const pkcs1Pem = privateKey.export({ type: "pkcs1", format: "pem" });
+const pkcs8Pem = privateKey.export({ type: "pkcs8", format: "pem" });
+const appEnv = { GITHUB_APP_CLIENT_ID: "Iv23liExample", GITHUB_APP_INSTALLATION_ID: "12345678", GITHUB_APP_PRIVATE_KEY: pkcs1Pem };
+
+const part = s => JSON.parse(Buffer.from(s, "base64url").toString());
+/** `now`, when the token was made at a known time; otherwise just now. */
+function checkJwt(jwt, now = null) {
+  const [head, claims, signature] = jwt.split(".");
+  assert.deepEqual(part(head), { alg: "RS256", typ: "JWT" });
+  const c = part(claims);
+  assert.equal(c.iss, "Iv23liExample");
+  if (now !== null) assert.equal(c.iat, Math.floor(now / 1000) - 60);
+  else assert.ok(Math.abs(c.iat - (Date.now() / 1000 - 60)) < 5, `${c.iat}`);
+  // A minute back and nine ahead: GitHub takes at most ten minutes, by its own clock.
+  assert.equal(c.exp - c.iat, 600);
+  assert.ok(verify("RSA-SHA256", Buffer.from(`${head}.${claims}`), publicKey, Buffer.from(signature, "base64url")), "signature");
+}
+
+test("the App's key works as GitHub gives it, or as PKCS#8", async () => {
+  const now = Date.UTC(2026, 10, 13, 12);
+  checkJwt(await appJwt("Iv23liExample", pkcs1Pem, now), now);
+  checkJwt(await appJwt("Iv23liExample", pkcs8Pem, now), now);
+  // Pasted on one line, with "\n" for its line breaks.
+  checkJwt(await appJwt("Iv23liExample", pkcs1Pem.replace(/\n/g, "\\n"), now), now);
+  // The wrapped key is the same key Node writes as PKCS#8.
+  assert.deepEqual(Buffer.from(pkcs8(pkcs1Pem)), Buffer.from(pkcs8Pem.replace(/-----[^-]+-----|\s/g, ""), "base64"));
+  assert.throws(() => pkcs8("not a key"), /PEM/);
+});
+
+/** GitHub with an App: a token for the installation, then the issue. */
+function appService({ tokenStatus = 201 } = {}) {
+  const calls = [];
+  const deps = {
+    fetch: async (url, init) => {
+      calls.push({ url, init, body: JSON.parse(init.body) });
+      if (url.includes("/access_tokens")) return new Response(JSON.stringify(tokenStatus === 201 ? { token: "ghs_report" } : { message: "no" }), { status: tokenStatus });
+      return new Response(JSON.stringify({ number: 43, html_url: "https://github.com/o/r/issues/43" }), { status: 201 });
+    },
+    sendMail: async () => {}
+  };
+  const send = (env, body = report) =>
+    handle(new Request("https://feedback.strandivo.com/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { MAINTAINER_EMAIL: "m@example.org", ...env }, deps);
+  return { calls, send };
+}
+
+test("with the App set up, each report gets a token that can only write this repository's issues", async () => {
+  const { calls, send } = appService();
+  const res = await send({ ...appEnv, GITHUB_TOKEN: "old" });
+  assert.deepEqual(await res.json(), { number: 43, emailed: true });
+  const [token, issue] = calls;
+  assert.equal(token.url, "https://api.github.com/app/installations/12345678/access_tokens");
+  assert.deepEqual(token.body, { repositories: ["Strandivo"], permissions: { issues: "write" } });
+  checkJwt(token.init.headers.authorization.replace(/^Bearer /, ""));
+  // The issue goes in with that token, not the old one.
+  assert.equal(issue.url, "https://api.github.com/repos/Mateusz-Jaskolowski/Strandivo/issues");
+  assert.equal(issue.init.headers.authorization, "Bearer ghs_report");
+  assert.deepEqual(issue.body.labels, ["from-app", "bug"]);
+  // A token for each report: none is kept between them.
+  await send(appEnv);
+  assert.equal(calls.filter(c => c.url.includes("/access_tokens")).length, 2);
+});
+
+test("until all three of the App's secrets are set, the old token files issues", async () => {
+  for (const missing of ["GITHUB_APP_CLIENT_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY"]) {
+    const { calls, send } = appService();
+    assert.equal((await send({ ...appEnv, [missing]: "", GITHUB_TOKEN: "old" })).status, 200);
+    assert.equal(calls.length, 1, missing);
+    assert.equal(calls[0].init.headers.authorization, "Bearer old");
+  }
+  await assert.rejects(githubToken({}, async () => new Response("{}")), /No way to reach GitHub/);
+});
+
+test("if GitHub gives no token, nothing is filed and the app hears so", async () => {
+  const refused = appService({ tokenStatus: 401 });
+  assert.equal((await refused.send(appEnv)).status, 502);
+  assert.equal(refused.calls.length, 1);
+  for (const env of [{ ...appEnv, GITHUB_APP_INSTALLATION_ID: "../repos" }, { ...appEnv, GITHUB_APP_PRIVATE_KEY: "nonsense" }]) {
+    const s = appService();
+    assert.equal((await s.send(env)).status, 502);
+    assert.equal(s.calls.length, 0);
+  }
 });

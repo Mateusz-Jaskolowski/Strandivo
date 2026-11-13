@@ -17,7 +17,12 @@ and CI checks that they exist.
   else and logs nothing. Deploy it with
   `npx wrangler@4 deploy --config services/updates/wrangler.toml`.
 - **`feedback.strandivo.com`** is built into every copy from the release that adds it (`FEEDBACK_URL` in
-  `src/platform.ts`), so it must keep answering. Its Worker (`services/feedback/`) needs
-  a fine-grained token with only Issues: write on this repository and the maintainer's
-  address, both as Worker secrets, never in the repository; its README says how to set
-  it up. Deploy it with `npx wrangler@4 deploy --config services/feedback/wrangler.toml`.
+  `src/platform.ts`), so it must keep answering. Its Worker (`services/feedback/`) files
+  issues as a GitHub App's bot, so they don't show the maintainer as their author: for
+  each report it signs a JSON Web Token with the App's private key (RS256, WebCrypto,
+  which takes only PKCS#8, so GitHub's PKCS#1 key is wrapped in code) and swaps it for an
+  installation token narrowed to this repository's issues. Until all three of the App's
+  secrets are set it uses the maintainer's fine-grained token instead (`GITHUB_TOKEN`),
+  which is to be taken out once the App works. Those and the maintainer's address are
+  Worker secrets, never in the repository; its README says how to set them up. Deploy it
+  with `npx wrangler@4 deploy --config services/feedback/wrangler.toml`.

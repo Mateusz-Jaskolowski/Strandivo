@@ -20,6 +20,7 @@ import { translateCodon } from "../lib/genetics.ts";
 import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionLabel, regionRange, regionSpans, regionsOf, regionTitle, regionTree, withRegions, type ProteinRegion } from "../lib/regions.ts";
 import type { VariableDesign } from "../lib/types.ts";
 import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER, versionsFromText } from "../lib/variable.ts";
+import { matchChoice } from "./versionMatchChoice.ts";
 import { noteText, otherQualifiers, withNote } from "../lib/featureNotes.ts";
 import {
   basesIn,
@@ -587,11 +588,16 @@ export class Inspector {
         const text = h("textarea", { class: "sv-code sv-code-edit", rows: String(Math.min(6, design.options.length + 1)), "aria-label": "Versions, one per line", spellcheck: "false" }) as HTMLTextAreaElement;
         text.value = design.options.map(o => `${o.name}: ${o.bases}`).join("\n");
         text.addEventListener("change", () => {
-          const d = versionsFromText(text.value, !!design.protein);
+          const d = versionsFromText(text.value, { protein: design.protein, exact: design.exact });
           if (typeof d === "string") toast(d, "info");
           else set(d, "Change variable design");
         });
-        body.push(text, h("p", { class: "sv-small sv-dim" }, `One per line, as name: ${design.protein ? "amino acids" : "bases"}. Each clone is matched to the closest; differences from it are mutations.`));
+        const letters = design.options.reduce((n, o) => n + o.bases.length, 0);
+        body.push(
+          text,
+          h("p", { class: "sv-small sv-dim" }, `One per line, as name: ${design.protein ? "amino acids" : "bases"}.`),
+          ...matchChoice(!!design.exact, { count: design.options.length, letters, protein: !!design.protein }, exact => set({ ...design, exact: exact || undefined }, exact ? "Match exact versions" : "Match closest versions"))
+        );
       } else {
         body.push(h("p", { class: "sv-small sv-dim" }, "Clones can have any sequence or length here. Each clone's sequence is shown in its own column rather than called as mutations."));
       }

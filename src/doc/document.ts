@@ -217,8 +217,17 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   let sidebarOpen = true;
   let inspectorOpen = true;
   // Sequencing reads align against the current sequence; edits make the results stale.
-  const legacyFeatures = (d: SeqData): Feature[] =>
-    d.features.flatMap(f => [{ id: f.id, name: f.name, type: f.type, start: f.start, end: f.end, forward: f.strand !== -1, strand: f.strand === -1 ? -1 : 1, locations: f.locations, codonStart: codonOffset(f) + 1, variable: designOf(f.notes) ?? undefined }, ...variableProteinFeatures(f, d.sequence.length)]);
+  // Kept for each version of the document: a library's design can hold a million versions,
+  // and what matches them is indexed by the list (`src/lib/versionMatch.ts`).
+  const legacyCache = new WeakMap<SeqData, Feature[]>();
+  const legacyFeatures = (d: SeqData): Feature[] => {
+    let out = legacyCache.get(d);
+    if (!out) {
+      out = d.features.flatMap(f => [{ id: f.id, name: f.name, type: f.type, start: f.start, end: f.end, forward: f.strand !== -1, strand: f.strand === -1 ? -1 : 1, locations: f.locations, codonStart: codonOffset(f) + 1, variable: designOf(f.notes) ?? undefined }, ...variableProteinFeatures(f, d.sequence.length)]);
+      legacyCache.set(d, out);
+    }
+    return out;
+  };
   let dataVersion = 0;
   store.subscribe(c => c.data && dataVersion++);
 

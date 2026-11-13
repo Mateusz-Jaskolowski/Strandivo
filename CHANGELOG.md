@@ -32,6 +32,11 @@ ever quits unexpectedly it offers to report the crash.
   its CDS. A region can be marked to vary between clones of a library, with its known
   versions written as DNA bases or as amino acids, and Export can include regions as
   ordinary annotations in a GenBank copy for other software.
+- **Library versions**: a clone can be matched to the closest of a region's versions, or
+  only to one it is exactly, which suits a large designed library; anything else is
+  flagged. Versions equally close to a clone are all named instead of the first one
+  listed. Finding a clone among many thousands of versions is much faster, and the
+  region's settings warn when a long list would still be slow.
 - **Select codons from translation**: click an amino acid in the Sequence view or around
   a primer to select its DNA bases, or drag to select whole codons. Hold ⌘ on Mac or Ctrl
   elsewhere to pick separate amino acids, and Shift to select through the intervening

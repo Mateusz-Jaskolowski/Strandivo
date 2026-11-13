@@ -97,6 +97,14 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     enzymes: appButton("scissors", "Enzyme library", () => void openEnzymeLibrary()),
     settings: appButton("settings", "Settings", () => void openSettings())
   };
+  // Help has them too, but while Strandivo is young they are kept in view, with their names.
+  const feedbackButton = (kind: FeedbackKind, name: IconName, label: string, hint: string) =>
+    h(
+      "button",
+      { type: "button", class: `sv-appbar-feedback sv-appbar-feedback-${kind}`, "aria-label": label, title: `${label.replace("…", "")}: ${hint}`, onclick: () => void feedback(kind) },
+      iconSvg(name, 16),
+      h("span", null, label)
+    );
   const appBar = h(
     "header",
     // "deep": empty space in the bar moves the window (buttons don't).
@@ -105,6 +113,9 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     h(
       "div",
       { class: "sv-appbar-tools" },
+      feedbackButton("bug", "bug", "Report a bug…", "something went wrong or doesn't work as it should"),
+      feedbackButton("idea", "feedback", "Send feedback…", "suggest an idea, ask a question or say what you think"),
+      h("span", { class: "sv-tool-sep", "aria-hidden": "true" }),
       appButtons.library,
       appButtons.enzymes,
       appButtons.settings,
@@ -491,7 +502,7 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
   // A page can't wait as it closes: what is queued is posted with `keepalive`, which outlives it.
   if (!isDesktop) window.addEventListener("pagehide", () => void flushUsage());
 
-  /** Help → Send Feedback… (an idea, unless chosen) and Report a Bug…, about what is open. */
+  /** Send feedback… (an idea, unless chosen) and Report a bug…, about what is open. */
   async function feedback(kind: FeedbackKind, crashed?: { crash: CrashReport; sent(): void }) {
     const { openFeedback } = await import("./views/feedbackDialog.ts");
     await openFeedback(kind, active?.doc?.feedbackContext?.() ?? { view: "Home", file: null }, crashed);
@@ -517,8 +528,6 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     announceUpdate: () => updates.announce(),
     /** Help → Welcome…, as the menu does. */
     openWelcome: () => openWelcome(home, true),
-    /** Help → Send Feedback… or Report a Bug…, as the menu does. */
-    openFeedback: (kind: FeedbackKind = "idea") => feedback(kind),
     /** Takes a crash again, as at start: from `window.__strandivoCrash` in e2e. */
     checkCrash: () => crashes.check(),
     /** Sends queued usage events now, to `window.__strandivoTrack` in e2e. */

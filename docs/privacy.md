@@ -75,9 +75,9 @@ keeps.
 
 ## Sending feedback
 
-Help → Send Feedback… and Report a Bug… send your report to `feedback.strandivo.com` only
-when you click Send. The dialog shows everything included with the report before you send
-it:
+Report a bug… and Send feedback… (at the top right of the window, and in the Help menu)
+send your report to `feedback.strandivo.com` only when you click Send. The dialog shows
+everything included with the report before you send it:
 
 - the report type (bug, idea or question), summary and details;
 - the app's version, operating system and processor;

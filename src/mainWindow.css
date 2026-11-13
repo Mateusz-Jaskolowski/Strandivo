@@ -201,7 +201,51 @@
   flex: 0 0 auto;
   align-self: center;
   display: flex;
+  align-items: center;
   gap: 2px;
+}
+/* Report a bug and Send feedback: named, unlike the icons beside them, so they get seen. */
+.sv-appbar-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-right: 4px;
+  padding: 0 11px 0 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sv-appbar-feedback:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.sv-appbar-feedback-bug .sv-icon {
+  color: var(--bad);
+}
+.sv-appbar-feedback-idea .sv-icon {
+  color: var(--accent);
+}
+/* A narrow window keeps its room for tabs: the two become icons like their neighbours. */
+@media (max-width: 1000px) {
+  .sv-appbar-feedback {
+    width: 32px;
+    height: 32px;
+    margin-right: 0;
+    padding: 0;
+    justify-content: center;
+    border-color: transparent;
+    border-radius: 7px;
+    background: transparent;
+  }
+  .sv-appbar-feedback > span {
+    display: none;
+  }
 }
 
 /* ---------- Home: the construct library ---------- */

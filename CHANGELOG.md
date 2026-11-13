@@ -152,6 +152,10 @@ crash.
   there: Ctrl+Shift+S, Ctrl+N, Ctrl+O, Ctrl+W, Ctrl+, and the rest. The menu bar stays
   light, like the rest of the window, instead of turning dark when another window such as
   Settings opened.
+- **Report a bug and Send feedback** are now buttons at the top right of the window,
+  beside the libraries, instead of only in the Help menu. Strandivo is still young, and a
+  bug report, an idea or a question is the quickest way to shape what comes next. In a
+  narrow window they show as icons.
 - **Crash reports**: if Strandivo quits unexpectedly, it notes why on your computer, and
   the next time it opens a strip under the app bar offers to report it. Report it… opens
   Report a Bug with what it noted, shown in full and with file paths removed; nothing is

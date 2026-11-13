@@ -146,6 +146,11 @@ jobs:
           node --experimental-strip-types .github/scripts/release.mjs name-files dist "$GITHUB_REF_NAME"
           node --experimental-strip-types .github/scripts/release.mjs latest-json dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > dist/latest.json
           node --experimental-strip-types .github/scripts/release.mjs release-notes "$GITHUB_REF_NAME" > notes.md
+      # Installed copies install an update only if its signature verifies against the key
+      # they were built with, so a wrong key or password in the release environment would
+      # leave them all where they are. No draft until every update file verifies.
+      - name: Check every update against the app's key
+        run: node --experimental-strip-types .github/scripts/release.mjs verify dist "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY"
       # The published files' SHA-256 fingerprints, which the attest job below signs.
       - name: Take the files' fingerprints
         id: digests

@@ -1,11 +1,13 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Release helpers: the version check and latest.json. Run with: npm test
+// Release helpers: the version check, latest.json and checking a release's files. Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { changelogProblem, DOWNLOADS, latestJson, PLATFORMS, RELEASE_FILES, releaseNames, versionProblems, versions } from "./release.mjs";
+import { parsePublicKey, tauriPublicKey } from "./minisign.mjs";
+import { testKey } from "./minisign-fixture.mjs";
+import { changelogProblem, DOWNLOADS, latestJson, PLATFORMS, RELEASE_FILES, releaseFileProblems, releaseNames, UPDATE_KEY, updateKey, versionProblems, versions } from "./release.mjs";
 
 const files = {
   "Strandivo_Mac_Apple-silicon_update.app.tar.gz": "",
@@ -116,4 +118,49 @@ test("every update file and every download the website links to is a file the re
   const names = RELEASE_FILES.map(f => f.name);
   for (const p of PLATFORMS) assert.ok(names.includes(p.file), p.file);
   for (const d of DOWNLOADS) assert.ok(names.includes(d.file), d.file);
+});
+
+test("the app is built with the update key every installed copy has", () => {
+  // Changing tauri.conf.json's key would leave every copy unable to install an update.
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+  assert.equal(updateKey(root).id, "DE18055614E24CDD");
+  assert.equal(parsePublicKey(UPDATE_KEY).id, "DE18055614E24CDD");
+});
+
+/** A release's files, signed by `key`: each file's bytes are its name. */
+function signedRelease(key, tag = "v0.5.0", repo = "o/r") {
+  const bytes = Object.fromEntries(RELEASE_FILES.map(f => [f.name, Buffer.from(f.name)]));
+  const files = { ...Object.fromEntries(RELEASE_FILES.map(f => [f.name, ""])) };
+  for (const p of PLATFORMS) files[`${p.file}.sig`] = key.sign(bytes[p.file]);
+  const latest = latestJson({ files, tag, repo, notes: "Faster maps." });
+  return { latest, bytes, names: [...Object.keys(bytes), "latest.json"] };
+}
+
+test("a release's files must be signed with the app's key, for this version", () => {
+  const key = testKey();
+  const publicKey = tauriPublicKey(key.pubkey);
+  const { latest, bytes, names } = signedRelease(key);
+  const check = (over = {}) =>
+    releaseFileProblems({ latest, names, read: n => bytes[n], tag: "v0.5.0", repo: "o/r", publicKey, ...over });
+  assert.deepEqual(check(), []);
+
+  // Another key: what a wrong secret in the release environment would make.
+  const other = signedRelease(testKey());
+  const wrongKey = check({ latest: other.latest });
+  assert.equal(wrongKey.length, PLATFORMS.length);
+  assert.match(wrongKey[0], new RegExp(`^Strandivo_Mac_Apple-silicon_update\\.app\\.tar\\.gz \\(darwin-aarch64\\): signed with key [0-9A-F]{16}, not ${key.id}\\.$`));
+
+  // A file changed after signing, or swapped for another platform's.
+  const changed = { ...bytes, "Strandivo_Windows_setup.exe": Buffer.from("something else") };
+  assert.deepEqual(check({ read: n => changed[n] }), ["Strandivo_Windows_setup.exe (windows-x86_64): its signature doesn't match the file."]);
+
+  // Another version's manifest, or files that aren't all there.
+  assert.equal(check({ tag: "v0.5.1" })[0], "latest.json is for 0.5.0, not 0.5.1.");
+  assert.equal(check({ tag: "v0.5.1" }).length, 1 + PLATFORMS.length);
+  assert.deepEqual(check({ names: names.filter(n => !n.endsWith(".dmg")) }), ["The release has no Strandivo_Mac_Apple-silicon.dmg, Strandivo_Mac_Intel.dmg."]);
+  const noDeb = { ...latest, platforms: { ...latest.platforms } };
+  delete noDeb.platforms["linux-x86_64-deb"];
+  assert.deepEqual(check({ latest: noDeb }), ["latest.json has nothing for linux-x86_64-deb."]);
+  const badSig = { ...latest, platforms: { ...latest.platforms, "linux-x86_64": { ...latest.platforms["linux-x86_64"], signature: "not base64!" } } };
+  assert.deepEqual(check({ latest: badSig }), ["Strandivo_Linux.AppImage (linux-x86_64): The signature isn't base64."]);
 });

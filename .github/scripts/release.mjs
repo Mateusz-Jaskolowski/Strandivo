@@ -17,6 +17,10 @@
 //   node .github/scripts/release.mjs release-notes <tag>
 //     Prints the version's notes from CHANGELOG.md, for the GitHub release. A release
 //     candidate (v0.4.0-rc.1) has Unreleased's notes, as it has no section of its own.
+//   node .github/scripts/release.mjs verify <dir> <tag> <owner/repo>
+//     Fails unless <dir> holds every file a release carries and latest.json sends each
+//     platform to this release's file, signed with the key every installed copy trusts
+//     (UPDATE_KEY), as copies will check before installing it.
 //
 // Run with --experimental-strip-types, as it reads the changelog with the app's own code.
 
@@ -24,6 +28,15 @@ import { readFileSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { releaseNotesFor, summaryProblem } from "../../src/lib/changelog.ts";
+import { parsePublicKey, signatureProblem, tauriPublicKey, tauriSignature } from "./minisign.mjs";
+
+/**
+ * The public half of the update signing key (ID DE18055614E24CDD), which every installed
+ * copy holds and checks updates against. It can't change without stranding them all, so
+ * it is written here as well as in tauri.conf.json: a test fails when the two differ, and
+ * a release's files must verify against this one, whatever the app's file says.
+ */
+export const UPDATE_KEY = "RWTdTOIUVgUY3td30clrHm+OyTRwLfcZY+kyiH534tR11xMDRTmfTJxF";
 
 /**
  * The files a release carries: `built` ends the name the build gives a file, after
@@ -158,6 +171,49 @@ export function latestJson({ files, tag, repo, notes, date = new Date() }) {
   };
 }
 
+/**
+ * What is wrong with a release's files as installed copies will meet them, or nothing:
+ * latest.json must be this version's and send every platform to this release's file,
+ * whose signature verifies against `publicKey` (parsed), and every file a release
+ * carries must be there. `read(name)` gives a file's bytes; `names` are the files there.
+ */
+export function releaseFileProblems({ latest, names, read, tag, repo, publicKey }) {
+  const version = tag.replace(/^v/, "");
+  const problems = [];
+  if (latest.version !== version) problems.push(`latest.json is for ${latest.version}, not ${version}.`);
+  const missing = [...RELEASE_FILES.map(f => f.name), "latest.json"].filter(n => !names.includes(n));
+  if (missing.length) problems.push(`The release has no ${missing.join(", ")}.`);
+  for (const p of PLATFORMS) {
+    const entry = latest.platforms?.[p.key];
+    if (!entry) {
+      problems.push(`latest.json has nothing for ${p.key}.`);
+      continue;
+    }
+    const url = `https://github.com/${repo}/releases/download/${tag}/${encodeURIComponent(p.file)}`;
+    if (entry.url !== url) problems.push(`latest.json sends ${p.key} to ${entry.url}, not ${url}.`);
+    if (!names.includes(p.file)) continue;
+    let problem;
+    try {
+      problem = signatureProblem(publicKey, tauriSignature(entry.signature ?? ""), read(p.file));
+    } catch (e) {
+      problem = e.message;
+    }
+    if (problem) problems.push(`${p.file} (${p.key}): ${problem}.`);
+  }
+  return problems;
+}
+
+/** The key the app is built with (tauri.conf.json), when it is UPDATE_KEY; else it throws. */
+export function updateKey(root) {
+  const conf = JSON.parse(readFileSync(join(root, "src-tauri/tauri.conf.json"), "utf8"));
+  const app = tauriPublicKey(conf.plugins.updater.pubkey);
+  const pinned = parsePublicKey(UPDATE_KEY);
+  if (app.line !== pinned.line) {
+    throw new Error(`tauri.conf.json's update key is ${app.id}, not ${pinned.id}, which every installed copy checks updates against.`);
+  }
+  return pinned;
+}
+
 function main([command, ...args]) {
   const root = fileURLToPath(new URL("../..", import.meta.url));
   const changelog = () => readFileSync(join(root, "CHANGELOG.md"), "utf8");
@@ -188,8 +244,19 @@ function main([command, ...args]) {
       process.exit(1);
     }
     console.log([n.summary, n.details].filter(Boolean).join("\n\n"));
+  } else if (command === "verify") {
+    const [dir, tag, repo] = args;
+    const publicKey = updateKey(root);
+    const names = readdirSync(dir);
+    const latest = JSON.parse(readFileSync(join(dir, "latest.json"), "utf8"));
+    const problems = releaseFileProblems({ latest, names, read: n => readFileSync(join(dir, n)), tag, repo, publicKey });
+    if (problems.length) {
+      console.error(`${tag} isn't ready:\n  ${problems.join("\n  ")}`);
+      process.exit(1);
+    }
+    console.log(`Every file is there, and each platform's update verifies against key ${publicKey.id}.`);
   } else {
-    console.error("Usage: release.mjs check-version <tag> | name-files <dir> <tag> | latest-json <dir> <tag> <owner/repo> | release-notes <tag>");
+    console.error("Usage: release.mjs check-version <tag> | name-files <dir> <tag> | latest-json <dir> <tag> <owner/repo> | release-notes <tag> | verify <dir> <tag> <owner/repo>");
     process.exit(2);
   }
 }

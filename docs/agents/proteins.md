@@ -44,17 +44,20 @@ and CI checks that they exist.
   Visibility and detail are remembered separately. Nested
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
   whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
-  Both map modes draw a region as a bracket in its colour just outside its CDS (under the
-  linear map's bar), its ticks pointing back at it, so the CDS keeps its colour and name.
-  Filling the arrow with segments was tried and hid both; a tint where no region was made
-  the CDS seem to change colour as regions were shown or hidden. Nesting stacks brackets
-  outwards, the most nested nearest the CDS, and each lane of features makes room outside
-  it for its proteins' brackets (the first lane by moving the primers out). A bracket is a
-  group of the line drawn and a wider invisible line the pointer finds. Region names are
+  Both map modes draw a region as a stripe in its colour along its CDS's outer edge (the
+  linear map's bar's bottom edge), inside the band and cut to its shape, so the CDS keeps
+  its colour and its name in the rest of the band. Filling the arrow with segments was
+  tried and hid both; a tint where no region was made the CDS seem to change colour as
+  regions were shown or hidden; brackets just outside the CDS sat where cut sites' ticks
+  and primers are drawn, and on a busy map were covered by them. The first lane is a
+  4 px stripe at the edge and each further lane (nesting, overlaps) a 2 px one inside it;
+  the name stays inside while it fits what is left (`fitsAcross`), so with nesting it can
+  move outside at a large label size, and under its bar on the linear map. A stripe is a
+  group of the stripe drawn and a wider clear stroke the pointer finds. Region names are
   plain grey at regular weight after a square of the region's colour: beside the circular
-  map on a light solid leader from the bracket, or in rows under the linear map's lane,
-  packed across the CDSs in it so neighbours' names never collide. Hovering a bracket or name
-  highlights every piece of that region and outlines its owning CDS, including for a
+  map on a light solid leader from the stripe, or in rows under the linear map's lane,
+  packed across the CDSs in it so neighbours' names never collide. Hovering a stripe or
+  name highlights every piece of that region and outlines its owning CDS, including for a
   nested region. This is local map state, cleared on redraw or hiding the view, never a
   store selection. Selection styling wins, and label weight stays fixed in every state
   to match its measured width. Map tooltips name the owning CDS as well as region details.

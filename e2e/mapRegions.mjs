@@ -24,7 +24,7 @@ export function mapRegionFixture(n) {
 /** Runs on an open circular document, then undoes its fixture and restores map controls. */
 export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
   const label = (id = "a", index = 0) => `.sv-map-region-label[data-id="map-region-${id}"][data-region="${index}"]`;
-  // A region's bracket beside its CDS: a group of the line drawn and a wider one to point at.
+  // A region's stripe along its CDS: a group of the stripe drawn and a wider one to point at.
   const band = (id = "a", index = 0) => `.sv-map-region[data-id="map-region-${id}"][data-region="${index}"]`;
   const noHover = "!document.querySelector('.sv-map-region-hover, .sv-map-parent-hover')";
   const pointerTo = ([x, y]) => ({ type: "pointerMove", origin: "viewport", x, y });
@@ -97,13 +97,24 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
         document.body.appendChild(probe); const muted = getComputedStyle(probe).color; probe.remove();
         return cs.fontWeight === '400' && cs.fill === muted && cs.fontSize === getComputedStyle(feature).fontSize &&
           !document.querySelector('.sv-map-chip[data-region]') &&
-          getComputedStyle(el.previousElementSibling).fill === getComputedStyle(document.querySelector(arguments[1]).querySelector('.sv-map-bracket')).stroke &&
+          getComputedStyle(el.previousElementSibling).fill === getComputedStyle(document.querySelector(arguments[1]).querySelector('.sv-map-stripe')).fill &&
           el.previousElementSibling.matches('.sv-map-swatch[data-region="0"]') &&
           Array.from(document.querySelectorAll('.sv-map-label-feature')).every(e => getComputedStyle(e).fontWeight === '600') &&
           el.querySelector('title').textContent === 'Shared domain · Domain, predicted · 15–190 · region of Protein A' &&
           document.querySelector(arguments[1]).querySelector('title').textContent === el.querySelector('title').textContent;
       `, label(), band());
       check(`${name} map region labels are quiet, readable and name their owning protein`, styles);
+      // Inside the CDS, where cut sites' ticks and leaders never cover them.
+      check(`${name} region stripes lie within their CDS`, await s.exec(`
+        const stripes = Array.from(document.querySelectorAll('.sv-map-region .sv-map-stripe'));
+        return stripes.length > 2 && stripes.every(st => {
+          const b = st.getBBox(), id = st.closest('.sv-map-region').dataset.id;
+          return Array.from(document.querySelectorAll('.sv-map-feature[data-id="' + id + '"]')).some(p => {
+            const c = p.getBBox();
+            return b.x >= c.x - 0.5 && b.y >= c.y - 0.5 && b.x + b.width <= c.x + c.width + 0.5 && b.y + b.height <= c.y + c.height + 0.5;
+          });
+        });
+      `));
       await s.shot(`map-regions-${linear ? "linear" : "circular"}`);
       await s.exec(`
         const t = window.__mapRegionTest, store = window.__strandivo.store;

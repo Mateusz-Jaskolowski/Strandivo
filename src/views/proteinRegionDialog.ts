@@ -7,7 +7,7 @@ import type { DocContext } from "../doc/context.ts";
 import { featureStyles, protein } from "../doc/analysis.ts";
 import { newId, type Range, type SeqFeature } from "../lib/seqdata.ts";
 import { nextRegionColor, proteinRegionTargets, REGION_KINDS, regionColor, regionRange, regionsOf, selectedProteinResidues, withRegions, type ProteinRegion } from "../lib/regions.ts";
-import { designOf, formatDesign, parseDesign } from "../lib/variable.ts";
+import { designOf, parseDesign, versionsFromText } from "../lib/variable.ts";
 
 /** Amino-acid coordinates belong to this CDS, including on reverse and spliced sequences. */
 export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: number, selection = ctx.store.selection.range) {
@@ -40,20 +40,30 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     .sort((a, b) => (a.end - a.start) - (b.end - b.start))[0]?.id;
   const parent = h("select", { class: "sv-input", "aria-label": "Parent region" }, h("option", { value: "" }, "Whole protein"), regions.filter(r => r !== old).map(r => h("option", { value: r.id, selected: suggestedParent === r.id }, r.name))) as HTMLSelectElement;
   const variable = h("input", { type: "checkbox", checked: !!old?.variable, "aria-label": "Varies between clones" }) as HTMLInputElement;
-  const design = h("select", { class: "sv-input", "aria-label": "Variable design" }, [ ["any", "Anything"], ["pattern", "Pattern"], ["alternatives", "Versions"] ].map(([value, label]) => h("option", { value, selected: old?.variable?.kind === value }, label))) as HTMLSelectElement;
+  const oldDesign = old?.variable;
+  const oldChoice = oldDesign?.kind === "alternatives" && oldDesign.protein ? "protein" : oldDesign?.kind;
+  const design = h("select", { class: "sv-input", "aria-label": "Variable design" }, [ ["any", "Anything"], ["pattern", "Pattern"], ["alternatives", "DNA versions"], ["protein", "Protein versions"] ].map(([value, label]) => h("option", { value, selected: oldChoice === value }, label))) as HTMLSelectElement;
   const specification = h("textarea", { class: "sv-input sv-mono", rows: "3", "aria-label": "Variable pattern or versions", spellcheck: "false" }) as HTMLTextAreaElement;
-  specification.value = old?.variable && old.variable.kind !== "any" ? formatDesign(old.variable).replace(/\|/g, "\n") : "NNK";
+  specification.value = oldDesign?.kind === "pattern" ? oldDesign.pattern : oldDesign?.kind === "alternatives" ? oldDesign.options.map(o => `${o.name}: ${o.bases}`).join("\n") : "NNK";
   const variableControls = h("div", { class: "sv-region-design" }, design, specification);
   const hint = h("p", { class: "sv-small sv-dim sv-region-message" });
+  const error = h("p", { class: "sv-small sv-text-warn sv-region-message", role: "alert" });
   const refresh = () => {
     variableControls.hidden = !variable.checked;
     specification.hidden = design.value === "any";
-    specification.placeholder = design.value === "pattern" ? "NNK" : "v1: ATGGCT…\nv2: ATGGGT…";
-    hint.textContent = !variable.checked ? "" : design.value === "any" ? "Each clone’s sequence is reported separately from mutations." : design.value === "pattern" ? "IUPAC codes repeated over the region, written in the CDS’s direction." : "One version per line, as name: DNA bases in the CDS’s direction.";
+    specification.placeholder = design.value === "pattern" ? "NNK" : design.value === "protein" ? "v1: GFTFSSYA…\nv2: GRTFSNYA…" : "v1: ATGGCT…\nv2: ATGGGT…";
+    hint.textContent = !variable.checked ? "" : design.value === "any" ? "Each clone’s sequence is reported separately from mutations." : design.value === "pattern" ? "IUPAC codes repeated over the region, written in the CDS’s direction." : design.value === "protein" ? "One version per line, as name: amino acids." : "One version per line, as name: DNA bases in the CDS’s direction.";
   };
   variable.addEventListener("change", refresh);
-  design.addEventListener("change", () => { specification.value = design.value === "pattern" ? "NNK" : ""; refresh(); });
-  const error = h("p", { class: "sv-small sv-text-warn sv-region-message", role: "alert" });
+  // Versions typed before choosing DNA or protein stay, so they can be read the other way.
+  const isVersions = (v: string) => v === "alternatives" || v === "protein";
+  let chosen = design.value;
+  design.addEventListener("change", () => {
+    if (!isVersions(chosen) || !isVersions(design.value)) specification.value = design.value === "pattern" ? "NNK" : "";
+    chosen = design.value;
+    error.textContent = "";
+    refresh();
+  });
   const row = (label: string, control: HTMLElement) => h("label", { class: "sv-region-field" }, h("span", { class: "sv-design-label" }, label), control);
   dlg.body.replaceChildren(h("div", { class: "sv-region-form" }, row("Name", name), row("Kind", h("div", { class: "sv-region-kind" }, kind, customKind)), row("First residue", from), row("Last residue", to), row("Colour", color), row("Within", parent)),
     ...(!old && residues?.rounded ? [h("p", { class: "sv-small sv-dim" }, "The selection includes part of a codon, so the region includes the whole codon.")] : []),
@@ -73,8 +83,15 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     if (variable.checked) {
       if (designOf(f.notes)) { error.textContent = "This CDS already varies as a whole. Unmark it before choosing individual regions."; return; }
       if (regions.some(r => r !== old && r.variable && r.start <= b && r.end >= a)) { error.textContent = "Variable regions cannot overlap. Mark the individual parts that vary."; return; }
-      variableDesign = design.value === "any" ? { kind: "any" } : parseDesign(specification.value.split("\n").filter(l => l.trim()).join("|"));
-      if (variableDesign.kind !== design.value || !specification.value.trim() && design.value !== "any") { error.textContent = design.value === "pattern" ? "Enter an IUPAC pattern, such as NNK." : "Enter versions as name: DNA bases, one per line."; return; }
+      if (design.value === "any") variableDesign = { kind: "any" };
+      else if (design.value === "pattern") {
+        variableDesign = parseDesign(specification.value.split("\n").filter(l => l.trim()).join("|"));
+        if (variableDesign.kind !== "pattern") { error.textContent = "Enter an IUPAC pattern, such as NNK."; specification.focus(); return; }
+      } else {
+        const versions = versionsFromText(specification.value, design.value === "protein");
+        if (typeof versions === "string") { error.textContent = versions; specification.focus(); return; }
+        variableDesign = versions;
+      }
     }
     const current = ctx.store.data;
     if (current.features.find(x => x.id === f.id) !== f) { error.textContent = "The CDS changed while this dialog was open. Close it and open it again."; return; }

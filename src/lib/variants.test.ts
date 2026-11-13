@@ -373,6 +373,33 @@ test("a region with versions shows the closest one and differences from it", () 
   assert.deepEqual(v.mutations.map(m => `${m.feature} ${m.label}`), ["FR2 A5T"]);
 });
 
+test("a region with protein versions is matched by its amino acids", () => {
+  const codons = LIB.slice(2201, 2243).match(/.../g)!;
+  const fr2v2 = codons.map((c, i) => ({ 1: "GTT", 9: "CTG", 11: "TGC" })[i] ?? c).join("");
+  const parent = libVariants(libClone([]), { fr2: ANY }).regions[0].protein!;
+  const design = { kind: "alternatives" as const, protein: true, options: [{ name: "v1", bases: parent }, { name: "v2", bases: "WVRQAPGKELECVA" }] };
+  const same = libVariants(libClone([{ start: 2201, end: 2242, bases: fr2v2 }]), { fr2: design });
+  assert.equal(same.regions[0].alternative, "v2");
+  assert.deepEqual(same.mutations, []);
+  // A silent change is no change from a protein version.
+  const silent = libVariants(libClone([{ start: 2201, end: 2242, bases: fr2v2.slice(0, 26) + (fr2v2[26] === "A" ? "G" : "A") + fr2v2.slice(27) }]), { fr2: design });
+  assert.deepEqual([silent.regions[0].alternative, silent.mutations], ["v2", []]);
+  // v2 with A5T, numbered in FR2; X in a version is any amino acid.
+  const changed = fr2v2.slice(0, 12) + "A" + fr2v2.slice(13);
+  assert.deepEqual(libVariants(libClone([{ start: 2201, end: 2242, bases: changed }]), { fr2: design }).mutations.map(m => `${m.feature} ${m.label}`), ["FR2 A5T"]);
+  const open = { ...design, options: [...design.options, { name: "v2x", bases: "WVRQXPGKELECVA" }] };
+  const x = libVariants(libClone([{ start: 2201, end: 2242, bases: changed }]), { fr2: open });
+  assert.deepEqual([x.regions[0].alternative, x.mutations], ["v2x", []]);
+  // A codon more is an amino acid more. A base more garbles the protein, so it matches no
+  // version, and the frameshift is the CDS's.
+  const longer = libVariants(libClone([{ start: 2201, end: 2242, bases: "GGT" + fr2v2 }]), { fr2: design });
+  assert.deepEqual(longer.regions[0].mutations.map(m => `${m.label} ${m.kind}`), ["v2 +1 aa inframe"]);
+  const shifted = libVariants(libClone([{ start: 2201, end: 2242, bases: "G" + fr2v2 }]), { fr2: design });
+  assert.deepEqual([shifted.regions[0].alternative, shifted.regions[0].mutations], [null, []]);
+  assert.ok(shifted.flags.includes("frameshift"));
+  assert.ok(shifted.mutations.some(m => m.kind === "frameshift"));
+});
+
 test("uncertain bases in a region are lower case, and X in its protein", () => {
   const v = libVariants(libClone([{ start: 2171, end: 2200, bases: A01_CDR1, quality: 12 }]), { cdr1: ANY });
   assert.equal(v.regions[0].bases, A01_CDR1.toLowerCase());

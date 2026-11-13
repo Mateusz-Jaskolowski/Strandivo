@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { browserShortcut, DOCUMENT_KEYS, MENU_KEYS, menuShortcut, shortcutFor, shortcutHint, shortcutText } from "./shortcuts.ts";
+import { browserShortcut, DOCUMENT_KEYS, documentShortcut, MENU_KEYS, menuShortcut, shortcutFor, shortcutHint, shortcutText } from "./shortcuts.ts";
 
 const shell = readFileSync(new URL("../../src-tauri/src/lib.rs", import.meta.url), "utf8");
 
@@ -31,9 +31,29 @@ test("every key in the menu is handled by the page outside macOS", () => {
   assert.ok(menu.size > 10, "the menu's accelerators were found in lib.rs");
   for (const [id, accel] of menu) {
     if (id === "quit") continue; // macOS only: Windows has Alt+F4.
-    if (DOCUMENT_KEYS.includes(id)) continue;
-    assert.equal(menuShortcut(press(accel)), id, `${id} (${accel})`);
+    // An open file claims these itself, so it can skip the menu's copy of the press.
+    if (DOCUMENT_KEYS.includes(id)) assert.equal(documentShortcut(press(accel), { mac: false, browser: false }), id, `${id} (${accel})`);
+    else assert.equal(menuShortcut(press(accel)), id, `${id} (${accel})`);
   }
+});
+
+test("an open file's own keys, on a Mac and elsewhere", () => {
+  const app = { mac: false, browser: false };
+  const macApp = { mac: true, browser: false };
+  const ctrl = { ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+  const cmd = { ctrlKey: false, metaKey: true, altKey: false, shiftKey: false };
+  assert.equal(documentShortcut({ ...ctrl, key: "I", shiftKey: true }, app), "invert-selection");
+  assert.equal(documentShortcut({ ...cmd, key: "i", shiftKey: true }, macApp), "invert-selection");
+  assert.equal(documentShortcut({ ...ctrl, key: "i" }, app), null);
+  // A browser keeps it for developer tools, or to email the page.
+  assert.equal(documentShortcut({ ...ctrl, key: "I", shiftKey: true }, { mac: false, browser: true }), null);
+  assert.equal(documentShortcut({ ...cmd, key: "i", shiftKey: true }, { mac: true, browser: true }), null);
+  // Redo answers to both systems' keys; Ctrl on a Mac is not ⌘, and Ctrl+Alt is AltGr.
+  assert.equal(documentShortcut({ ...cmd, key: "z", shiftKey: true }, macApp), "redo");
+  assert.equal(documentShortcut({ ...cmd, key: "y" }, macApp), "redo");
+  assert.equal(documentShortcut({ ...ctrl, key: "a" }, macApp), null);
+  assert.equal(documentShortcut({ ...ctrl, key: "a", altKey: true }, app), null);
+  assert.equal(documentShortcut({ ...cmd, key: "3" }, macApp), "show-primers");
 });
 
 test("the page and the shell agree on which items it may run", () => {

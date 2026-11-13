@@ -73,7 +73,7 @@ import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
 import { applyPanelWidths, panelSplitter } from "../panelWidths.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
-import { shortcutFor, shortcutHint } from "../lib/shortcuts.ts";
+import { documentShortcut, shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -1029,19 +1029,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   }
   // Shortcuts that are also native menu items. Depending on the platform the page or the
   // menu sees the key first (or both do), so the menu skips a command the page just handled.
-  const shortcutCommand = (e: KeyboardEvent): string | null => {
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    if (!mod || e.altKey) return null;
-    const k = e.key.toLowerCase();
-    if (k === "z") return e.shiftKey ? "redo" : "undo";
-    if (k === "y") return "redo";
-    if (k === "a") return "select-all";
-    // Not in a browser, which keeps the key for itself (src/lib/shortcuts.ts).
-    if (k === "i" && e.shiftKey && shortcutFor("invert-selection", { mac: isMac, browser: !isDesktop })) return "invert-selection";
-    if (k === "f") return "find";
-    const t = TABS.find(x => x.key === e.key);
-    return t ? `show-${t.id}` : null;
-  };
+  const shortcutCommand = (e: KeyboardEvent) => documentShortcut(e, { mac: isMac, browser: !isDesktop });
   let lastShortcut: { id: string; at: number; handled: boolean } | null = null;
   const seqField = () => document.activeElement === seqView.el.querySelector(".sv-clipboard");
   const keydown = (e: KeyboardEvent) => {

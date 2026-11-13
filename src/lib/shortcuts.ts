@@ -26,8 +26,8 @@ export const MENU_KEYS: readonly MenuKey[] = [
   { id: "settings", key: ",", shift: false },
 ];
 
-/** Menu items whose keys an open file handles itself everywhere (`shortcutCommand` in
- *  src/doc/document.ts), as text fields keep their own undo and select-all. */
+/** Menu items whose keys an open file handles itself everywhere (`documentShortcut`), as
+ *  text fields keep their own undo and select-all. */
 export const DOCUMENT_KEYS: readonly string[] = [
   "undo", "redo", "select-all", "invert-selection", "find",
   "show-map", "show-sequence", "show-primers", "show-reads", "show-info",
@@ -103,6 +103,26 @@ export function shortcutFor(id: string, where: Where): Shortcut | null {
   // Redo follows each system's convention.
   if (id === "redo") return where.mac ? { key: "Z", shift: true } : { key: "Y" };
   return (where.browser ? WEB_SHORTCUTS : APP_SHORTCUTS)[id] ?? null;
+}
+
+/**
+ * The item of `DOCUMENT_KEYS` a key press stands for in an open file, which runs it itself
+ * (src/doc/document.ts). The native menu may hear the same press, and the file skips the
+ * menu's copy of one it claimed here, so a key left out would run twice: Invert Selection
+ * twice is no change at all. Redo answers to both systems' keys.
+ */
+export function documentShortcut(e: Keys, where: Where): string | null {
+  const mod = where.mac ? e.metaKey : e.ctrlKey;
+  if (!mod || e.altKey) return null;
+  const k = e.key.toLowerCase();
+  if (k === "z") return e.shiftKey ? "redo" : "undo";
+  if (k === "y") return "redo";
+  if (k === "a") return "select-all";
+  // A browser keeps Ctrl+Shift+I and ⇧⌘I for itself.
+  if (k === "i" && e.shiftKey && shortcutFor("invert-selection", where)) return "invert-selection";
+  if (k === "f") return "find";
+  const view = ["map", "sequence", "primers", "reads", "info"].find(v => APP_SHORTCUTS[`show-${v}`].key === e.key);
+  return view ? `show-${view}` : null;
 }
 
 /** "⌥⇧⌘N" on a Mac (Apple's order), "Ctrl+Alt+Shift+N" elsewhere. */

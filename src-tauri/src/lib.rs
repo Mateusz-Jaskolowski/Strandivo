@@ -783,6 +783,7 @@ pub fn run() {
             feedback::system_info,
             feedback::open_issue,
             feedback::email_feedback,
+            feedback::new_issue,
             feedback::open_project_page,
             usage::send_usage
         ])

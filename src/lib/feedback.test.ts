@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReport, codeSpan, describeSystem, fenced, isEmail, LIMITS, reportProblem, reportText, scrubPaths, type FeedbackReport } from "./feedback.ts";
+import { buildReport, codeSpan, describeSystem, fenced, issueContext, ISSUE_URL_LIMITS, isEmail, LIMITS, newIssueUrl, reportProblem, reportText, scrubPaths, type FeedbackReport } from "./feedback.ts";
 
 const app = { version: "0.2.1", os: "macos", osVersion: "15.1", arch: "aarch64" };
 const base = { kind: "bug" as const, summary: "Map is blank", details: "Opened pUC19.", email: "", app, view: "Map", errors: null, file: null };
@@ -91,4 +91,28 @@ test("typed text can't break out of its Markdown", () => {
   assert.equal(codeSpan("JIB"), "`JIB`");
   assert.equal(codeSpan("a`b"), "``a`b``");
   assert.equal(codeSpan("`a"), "`` `a ``");
+});
+
+test("Post on GitHub instead fills in the kind's form, and the address stays short", () => {
+  // The shell builds the same address from the same text (src-tauri/src/feedback.rs).
+  assert.equal(
+    newIssueUrl("bug", "Map is blank*", "Opened pUC19 & saw (nothing)!\nNext: ?", "Strandivo 0.4.1 · macOS 15.1 · Apple silicon\nOpen view: Map", "0.4.1"),
+    "https://github.com/Mateusz-Jaskolowski/Strandivo/issues/new?template=bug_report.yml&title=Map%20is%20blank%2A&what=Opened%20pUC19%20%26%20saw%20%28nothing%29%21%0ANext%3A%20%3F&version=0.4.1&more=Strandivo%200.4.1%20%C2%B7%20macOS%2015.1%20%C2%B7%20Apple%20silicon%0AOpen%20view%3A%20Map"
+  );
+  // An idea's form has no place for the app's details; empty fields are left out.
+  assert.equal(newIssueUrl("idea", "Dark mode", "", "Strandivo 0.4.1", "0.4.1"), "https://github.com/Mateusz-Jaskolowski/Strandivo/issues/new?template=feature_request.yml&title=Dark%20mode");
+  assert.match(newIssueUrl("question", "Why?", "Białe tło 👀", "", "0.4.1"), /template=question\.yml&title=Why%3F&question=Bia%C5%82e%20t%C5%82o%20%F0%9F%91%80$/);
+  // Long text is cut by its encoded length, whole characters only.
+  const long = newIssueUrl("question", "x", "猫".repeat(5000), "a".repeat(9000), "0.4.1");
+  const field = (id: string) => new URL(long).searchParams.get(id) ?? "";
+  assert.equal(field("question"), `${"猫".repeat((ISSUE_URL_LIMITS.text - 9) / 9)}…`);
+  assert.equal(field("more").length, ISSUE_URL_LIMITS.more - 9 + 1);
+  assert.ok(long.length < 7500, `${long.length}`);
+  // A lone half of a surrogate pair, as a paste can hold, doesn't stop it.
+  assert.match(newIssueUrl("bug", "x", "a\ud800b", "", "1"), /what=a%EF%BF%BDb/);
+});
+
+test("the form's Anything else lists what the dialog lists, typed text fenced", () => {
+  const r = buildReport({ ...base, errors: ["Boom ```"] });
+  assert.equal(issueContext(r), "Strandivo 0.2.1 · macOS 15.1 · Apple silicon\nOpen view: Map\n\nRecent errors:\n\n````text\nBoom ```\n````");
 });

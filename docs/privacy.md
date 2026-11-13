@@ -105,6 +105,12 @@ to hello@strandivo.com.
 If a report can't be sent, nothing leaves the app: you can copy the report text or email
 it to feedback@strandivo.com from your mail app instead.
 
+If you have a GitHub account, Post on GitHub instead sends nothing to
+`feedback.strandivo.com`: it opens a new issue on GitHub in your browser, filled in with
+your summary and details, and for a bug or a question with the app's version, operating
+system, open view and anything you ticked, but never your name, email address or the open
+file. Nothing is posted until you submit it on GitHub, from your own account.
+
 ## Reporting a crash
 
 If Strandivo quits unexpectedly, it writes a local crash log in its app data folder with

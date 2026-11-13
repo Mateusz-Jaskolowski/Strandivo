@@ -7,7 +7,7 @@
 import type { AlignResponse } from "./lib/types.ts";
 import type { DetectRequest, DetectResponse } from "./lib/detect.ts";
 import { changesUrl } from "./lib/changelog.ts";
-import type { FeedbackReport, SystemInfo } from "./lib/feedback.ts";
+import { issueContext, newIssueUrl, type FeedbackReport, type SystemInfo } from "./lib/feedback.ts";
 import { recordError } from "./feedback.ts";
 import { randomDigits, usageSession, validUsageKey, WEB_USAGE_ENDPOINT, webUsageBody, type UsageEvent } from "./lib/usage.ts";
 import { browserInfo } from "./lib/browser.ts";
@@ -405,6 +405,8 @@ export interface FeedbackHook {
   send(report: FeedbackReport): Promise<FeedbackSent>;
   openIssue?(number: number): void;
   email?(subject: string, body: string): void;
+  /** Post on GitHub instead: the address a browser would open. */
+  newIssue?(url: string): void;
 }
 
 const feedbackHook = () => (window as unknown as { __strandivoFeedback?: FeedbackHook }).__strandivoFeedback;
@@ -453,6 +455,19 @@ export async function openIssue(number: number): Promise<void> {
   if (hook) return hook.openIssue?.(number);
   if (isDesktop) return invoke<void>("open_issue", { number });
   window.open(`https://github.com/Mateusz-Jaskolowski/Strandivo/issues/${number}`, "_blank", "noopener");
+}
+
+/**
+ * Post on GitHub instead: a new issue on GitHub filled in with the report, to post from
+ * the user's own account. The shell builds the address from the kind, with the text only
+ * as the values of the form's fields, and fills in its own version.
+ */
+export async function openNewIssue(r: FeedbackReport): Promise<void> {
+  const more = issueContext(r);
+  const hook = feedbackHook();
+  if (hook) return hook.newIssue?.(newIssueUrl(r.kind, r.summary, r.details, more, r.app.version));
+  if (isDesktop) return invoke<void>("new_issue", { kind: r.kind, title: r.summary, text: r.details, more });
+  window.open(newIssueUrl(r.kind, r.summary, r.details, more, r.app.version), "_blank", "noopener");
 }
 
 /** The usage statistics' list on the website's Privacy page (Settings' "What is sent"). */

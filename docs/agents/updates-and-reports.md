@@ -52,7 +52,14 @@ and CI checks that they exist.
   open file are off until ticked, and errors lose their file paths (`scrubPaths`, which
   takes a path under a home or volume folder to the end of its line, as folder names have
   spaces). The shell opens only addresses it builds: an issue from its number, an email
-  to feedback@strandivo.com with the page's text as subject and body. e2e fakes the
+  to feedback@strandivo.com with the page's text as subject and body, and a new issue for
+  Post on GitHub instead, from the report's kind with the text only as the values of the
+  fields of that kind's issue form (`.github/ISSUE_TEMPLATE/`), each cut so the address
+  stays under GitHub's limit. A form, not `labels=`, labels these: GitHub adds a form's
+  labels for anyone, while `labels=` needs the right to label issues and fails without
+  it. The page builds the same address for the browser (`newIssueUrl`), and both tests
+  hold the two to one expected address; renaming a form or a field id there breaks the
+  link in every copy, so keep them. e2e fakes the
   service with `window.__strandivoFeedback`. In a browser, `systemInfo` gives the browser
   and its major version as `os`, "on" and the system as `osVersion`, and "web" as `arch`
   (`src/lib/browser.ts`), so the service, unchanged, shows "Chrome 142 on macOS · web". On a Mac, Welcome and Check for Updates stay

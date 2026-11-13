@@ -274,3 +274,68 @@ export function codeSpan(text: string): string {
   const pad = text.startsWith("`") || text.endsWith("`") ? " " : "";
   return `${ticks}${pad}${text}${pad}${ticks}`;
 }
+
+// ---------- Post on GitHub instead ----------
+
+/**
+ * The repository's issue form for each kind (.github/ISSUE_TEMPLATE/), and the ids of the
+ * fields the report fills. A form's labels are added for anyone, whereas an address with
+ * `labels=` needs the right to label issues, which the people it's for don't have.
+ * The shell builds the same address (`new_issue_url` in src-tauri/src/feedback.rs).
+ */
+export const ISSUE_FORMS: Record<FeedbackKind, { template: string; text: string; version: string | null; more: string | null }> = {
+  bug: { template: "bug_report.yml", text: "what", version: "version", more: "more" },
+  idea: { template: "feature_request.yml", text: "task", version: null, more: null },
+  question: { template: "question.yml", text: "question", version: null, more: "more" }
+};
+
+/** How much of each field the address holds, encoded: GitHub turns down an address of about 8,000 characters. */
+export const ISSUE_URL_LIMITS = { title: 900, text: 3600, version: 120, more: 2700 };
+
+/** What goes in a form's "Anything else": what the dialog lists, and what was ticked. */
+export function issueContext(r: FeedbackReport): string {
+  return [
+    describeSystem(r.app),
+    `Open view: ${r.view}`,
+    ...(r.crash ? ["", "It quit unexpectedly:", "", fenced(crashLines(r.crash).join("\n"))] : []),
+    ...(r.errors?.length ? ["", "Recent errors:", "", fenced(r.errors.join("\n"))] : [])
+  ].join("\n");
+}
+
+/** Characters an address keeps as they are; the shell's `encode` keeps the same. */
+const KEPT = /^[A-Za-z0-9\-._~]$/;
+const encodedLength = (c: string) => (KEPT.test(c) ? 1 : 3 * new TextEncoder().encode(c).length);
+const encode = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
+/** Text encoded for an address, cut short with "…" to fit `max` encoded characters. */
+function encodeWithin(text: string, max: number): string {
+  // Whole characters only, and a lone half of a pair (from a paste) as a replacement.
+  const chars = Array.from(text, c => (c.length === 1 && /[\uD800-\uDFFF]/.test(c) ? "�" : c));
+  if (chars.reduce((n, c) => n + encodedLength(c), 0) <= max) return encode(chars.join(""));
+  let kept = "";
+  let length = encodedLength("…");
+  for (const c of chars) {
+    if (length + encodedLength(c) > max) break;
+    length += encodedLength(c);
+    kept += c;
+  }
+  return encode(`${kept}…`);
+}
+
+/**
+ * A new issue on GitHub filled in with the report, for the user to post from their own
+ * account: the kind's form, the summary as the title and the rest in its fields. Nothing
+ * private goes: no email address, no file, no name, as GitHub shows who posted it.
+ */
+export function newIssueUrl(kind: FeedbackKind, title: string, text: string, more: string, version: string): string {
+  const form = ISSUE_FORMS[kind];
+  let url = `https://github.com/Mateusz-Jaskolowski/Strandivo/issues/new?template=${form.template}`;
+  const add = (id: string | null, value: string, max: number) => {
+    if (id && value.trim()) url += `&${id}=${encodeWithin(value, max)}`;
+  };
+  add("title", title.replace(/[\u0000-\u001f\u007f-\u009f]/g, ""), ISSUE_URL_LIMITS.title);
+  add(form.text, text, ISSUE_URL_LIMITS.text);
+  add(form.version, version, ISSUE_URL_LIMITS.version);
+  add(form.more, more, ISSUE_URL_LIMITS.more);
+  return url;
+}

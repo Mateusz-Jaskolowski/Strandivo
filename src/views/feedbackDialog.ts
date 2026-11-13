@@ -6,14 +6,15 @@
 // with it is shown in full first; recent errors and the open file are off until ticked.
 // The email address and the file go to the maintainer alone, never in the issue, which
 // anyone can read; a name to credit goes in it, and is remembered once sent. If it can't
-// be sent, the text stays, with Copy and Email instead.
+// be sent, the text stays, with Copy and Email instead. Post on GitHub instead opens the
+// issue on GitHub, filled in, for people who'd rather post from their own account.
 // Opened from "Strandivo quit unexpectedly" (src/crash.ts), it is a bug about that crash,
 // with what the app noted shown in full and ticked, as reporting it is why it opened.
 
 import { h, toast } from "../ui/dom.ts";
 import { openDialog } from "../ui/modal.ts";
 import { buildReport, crashForReport, crashLines, creditName, describeSystem, FEEDBACK_KINDS, LIMITS, reportProblem, reportText, type CrashReport, type FeedbackKind, type FeedbackReport, type SystemInfo } from "../lib/feedback.ts";
-import { copyText, emailFeedback, openIssue, sendFeedback, systemInfo } from "../platform.ts";
+import { copyText, emailFeedback, openIssue, openNewIssue, sendFeedback, systemInfo } from "../platform.ts";
 import { recentErrors, rememberedName, rememberName } from "../feedback.ts";
 
 export interface FeedbackContext {
@@ -76,6 +77,7 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
   const send = h("button", { type: "button", class: "sv-btn sv-btn-primary", disabled: true, onclick: () => void submit() }, "Send") as HTMLButtonElement;
   const copy = h("button", { type: "button", class: "sv-btn", hidden: true, onclick: () => void copyReport() }, "Copy");
   const byEmail = h("button", { type: "button", class: "sv-btn", hidden: true, onclick: () => void emailReport() }, "Email instead");
+  const onGitHub = h("button", { type: "button", class: "sv-link", title: "Opens a new issue on GitHub with what you've written, to post from your own account", onclick: () => void postOnGitHub() }, "Post on GitHub instead");
 
   function setKind(k: FeedbackKind) {
     chosen = k;
@@ -83,9 +85,10 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
     summary.placeholder = PLACEHOLDERS[k];
   }
 
-  const report = (): FeedbackReport => {
+  /** The report as the dialog shows it; `attach` false leaves out the file, which only the service takes. */
+  const report = (attach = true): FeedbackReport => {
     let file: FeedbackReport["file"] = null;
-    if (withFile.checked && context.file) file = { name: context.file.name, contents: context.file.contents() };
+    if (attach && withFile.checked && context.file) file = { name: context.file.name, contents: context.file.contents() };
     return buildReport({ kind: chosen, summary: summary.value, details: details.value, email: email.value, name: name.value, app, view: context.view, errors: withErrors.checked ? errors : null, file, crash: crashed && withCrash.checked ? crashed.crash : null });
   };
 
@@ -121,6 +124,16 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
       byEmail.hidden = false;
       send.textContent = "Try again";
       update();
+    }
+  }
+
+  /** The issue opens filled in on GitHub, to post as themselves; their email and file stay here. */
+  async function postOnGitHub() {
+    try {
+      await openNewIssue(report(false));
+      dlg.close();
+    } catch {
+      toast("Couldn't open GitHub in your browser. Copy the report instead.", "error", 6000);
     }
   }
 
@@ -177,6 +190,6 @@ export async function openFeedback(kind: FeedbackKind, context: FeedbackContext,
         : ""
     )
   );
-  dlg.footer.replaceChildren(h("div", { class: "sv-foot-start" }, status), copy, byEmail, h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Cancel"), send);
+  dlg.footer.replaceChildren(h("div", { class: "sv-foot-start sv-feedback-foot" }, onGitHub, status), copy, byEmail, h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Cancel"), send);
   (crashed ? details : summary).focus();
 }

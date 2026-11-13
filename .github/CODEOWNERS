@@ -9,6 +9,8 @@
 # What every build runs: npm scripts and Vite's config run in the signed builds too.
 /package.json                         @Mateusz-Jaskolowski
 /vite.config.ts                       @Mateusz-Jaskolowski
+# What approves the signed build and publishes a release, with the maintainer's own login.
+/tools/release.mjs                    @Mateusz-Jaskolowski
 
 # The shell's security settings: the Content Security Policy, the updater's public key
 # and address, and which shell commands the page may call.

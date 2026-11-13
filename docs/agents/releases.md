@@ -27,8 +27,22 @@ and CI checks that they exist.
   an up-to-date main (`tools/release.mjs`): it renames Unreleased to the version with a new
   empty one above, sets the version (`tools/set-version.mjs`, also `npm run version`),
   rebuilds the site, commits on `chore/release-<x.y.z>` and opens the pull request. Once
-  that is merged, `npm run release:tag` checks main as the release build will and pushes
-  the `v<x.y.z>` tag on it; then a maintainer approves the run and publishes the draft.
+  that is merged, `npm run release:tag` checks main as the release build will, pushes
+  the `v<x.y.z>` tag on it and follows the release to the end (`npm run release:follow`
+  picks it up again after Ctrl+C or a failure): it asks the maintainer at the terminal to
+  approve the build, checks the draft and asks again before publishing it. Both yeses go
+  through the maintainer's own `gh` login, and without a terminal it never gives them, so
+  an agent can follow a release but not approve or publish one; keep it that way, and
+  never keep a token that could. The build itself checks, before drafting, that every
+  update verifies against `UPDATE_KEY` (`.github/scripts/release.mjs`, with
+  `.github/scripts/minisign.mjs`, which checks signatures as the updater does), the key
+  every installed copy holds: a test holds `src-tauri/tauri.conf.json` to it, as changing
+  that key would strand every copy. Once published, "Check the release"
+  (`.github/workflows/after-release.yml`, running `.github/scripts/published.mjs`) checks
+  it from outside: the files again, GitHub's record of how each was built, that installed
+  copies are offered it (or, for a candidate, aren't), the Download page and What's new,
+  and the browser version's deployment. It asks the updates Worker only with HEAD, as a
+  GET counts as an installed copy checking for updates.
   Publishing also deploys the browser version (`.github/workflows/web.yml`) to
   Cloudflare Pages, in the project `strandivo-app`: a release to `app.strandivo.com`, a
   pre-release to the preview address `next.strandivo-app.pages.dev`, never a merge to
@@ -42,7 +56,8 @@ and CI checks that they exist.
   (`releaseNotesFor` in `src/lib/changelog.ts`), and its build drafts a pre-release. GitHub
   never makes a pre-release "latest", which is what the updates Worker and the Download page
   follow, so only people who download it get it; the website shows sections only, so it
-  never lists one. 0.3.0 is why: its crash happened only in a signed build, the one thing
+  never lists one. For the same reason `npm run release:follow` publishes a checked
+  candidate without asking. 0.3.0 is why: its crash happened only in a signed build, the one thing
   nothing ran before users had it. Use the candidate for a day with statistics on.
   Tagging stays a person's step: an Actions token that could push `v*` tags would get
   round the ruleset that keeps them to admins. `check-version` in

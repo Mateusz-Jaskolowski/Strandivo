@@ -1718,9 +1718,15 @@ async function main() {
         openIssue: n => window.__e2eFeedback.issues.push(n),
         email: (subject, body) => window.__e2eFeedback.emails.push({ subject, body })
       };`);
-    await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.openFeedback('bug').then(() => done(true), e => done(String(e)));");
+    // The app bar's two buttons, kept in view while Strandivo is young; Help has them too.
+    await s.click("button.sv-appbar-feedback-idea");
+    const ideaOpen = await s.waitFor("document.querySelector('.sv-dialog-title')?.textContent === 'Send feedback'", 3000);
+    check("Send feedback… in the app bar opens the feedback dialog with Idea chosen", ideaOpen && (await s.exec("return document.querySelector('.sv-feedback [aria-pressed=\"true\"]')?.textContent")) === "Idea");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Cancel']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.click("button.sv-appbar-feedback-bug");
     const feedbackOpen = await s.waitFor("document.querySelector('.sv-dialog-title')?.textContent === 'Send feedback'", 3000);
-    check("Report a Bug… opens the feedback dialog with Bug chosen", feedbackOpen && (await s.exec("return document.querySelector('.sv-feedback [aria-pressed=\"true\"]')?.textContent")) === "Bug");
+    check("Report a bug… in the app bar opens the feedback dialog with Bug chosen", feedbackOpen && (await s.exec("return document.querySelector('.sv-feedback [aria-pressed=\"true\"]')?.textContent")) === "Bug");
     check("Send waits for a summary", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent === 'Send')?.disabled === true"));
     await s.keys("input[aria-label='Summary']", "Map stays blank");
     await s.keys("textarea[aria-label='Details']", "Opened a plasmid from Home.");

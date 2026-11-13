@@ -106,7 +106,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   translates, numbers residues or maps them back to bases walks `codingPositions`
   (`src/lib/genetics.ts`), never `featurePositions`, which is every base the feature covers.
 - **Where things go**: the app bar holds what is about the app (Home, a tab per open file,
-  the primer and enzyme libraries, Settings and, in a browser, the menu); the bar under it is the file's own (its five views,
+  Report a bug and Send feedback, the primer and enzyme libraries, Settings and, in a
+  browser, the menu); the bar under it is the file's own (its five views,
   search, editing tools, and each side panel's button on its own side, with split view
   beside the views it shows). Views show the document (Map, Sequence, Primers, Reads, Info), and
   there are five; a task with a start and an end (design primers, a PCR product, adding

@@ -30,8 +30,10 @@ and CI checks that they exist.
   password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
   strip under the app bar, never a dialog. e2e fakes the shell with
   `window.__strandivoUpdate`, so it never reaches the server.
-- **Feedback** (Help → Send Feedback… and Report a Bug…, `src/views/feedbackDialog.ts`):
-  the page posts the report to `feedback.strandivo.com` (`services/feedback/`), which
+- **Feedback** (Report a bug… and Send feedback… in the app bar, and the same two in the
+  Help menu, `src/views/feedbackDialog.ts`): while Strandivo is young they are named
+  buttons, not icons, so people see they can report things; a window under 1,000 px wide
+  shows only their icons, keeping room for tabs. The page posts the report to `feedback.strandivo.com` (`services/feedback/`), which
   files it as a GitHub issue with a token that can only write issues. Issues are public,
   so **the reporter's email address and an attached file never go in one**: the Worker
   emails them to the maintainer alone (Email Routing, to a verified address kept as a

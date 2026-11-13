@@ -29,8 +29,9 @@ ever quits unexpectedly it offers to report the crash.
   kept. Regions show in a protein diagram, in the outline, as coloured bars with their
   names in the Sequence view and around the selected primer, and on the map, where the
   Regions button chooses all of them, the top level or none, and hovering one highlights
-  its CDS. A region can be marked to vary between clones of a library, and Export can
-  include regions as ordinary annotations in a GenBank copy for other software.
+  its CDS. A region can be marked to vary between clones of a library, with its known
+  versions written as DNA bases or as amino acids, and Export can include regions as
+  ordinary annotations in a GenBank copy for other software.
 - **Select codons from translation**: click an amino acid in the Sequence view or around
   a primer to select its DNA bases, or drag to select whole codons. Hold ⌘ on Mac or Ctrl
   elsewhere to pick separate amino acids, and Shift to select through the intervening

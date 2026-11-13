@@ -3381,6 +3381,11 @@
   font-family: inherit;
   color: inherit;
 }
+/* As wide as the dialog; taller only while it has room (`openDialog`). */
+.sv-dialog textarea {
+  box-sizing: border-box;
+  resize: vertical;
+}
 .sv-dialog :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -3974,6 +3979,7 @@
 .sv-region-field .sv-input { width: 100%; min-width: 0; }
 .sv-region-field input[type=color] { height: 34px; padding: 3px; cursor: pointer; }
 .sv-region-design:not([hidden]) { display: grid; gap: 8px; margin-top: 10px; }
+.sv-region-design textarea { height: auto; min-height: 52px; padding: 6px 9px; line-height: 1.45; font-family: var(--mono); }
 .sv-region {
   opacity: 0.55;
   cursor: pointer;

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { designOf, formatDesign, inVariable, parseDesign, splitVariable, variableRanges } from "./variable.ts";
+import { designOf, formatDesign, inVariable, parseDesign, splitVariable, variableRanges, versionsFromText } from "./variable.ts";
 import type { Difference, Feature } from "./types.ts";
 
 test("a design is anything, a pattern or a few named versions", () => {
@@ -22,6 +22,26 @@ test("a design is anything, a pattern or a few named versions", () => {
   // Versions without names are numbered.
   assert.deepEqual(parseDesign("TGG|TTT"), { kind: "alternatives", options: [{ name: "1", bases: "TGG" }, { name: "2", bases: "TTT" }] });
   for (const v of ["any", "NNK", "v1:TGGTTT|v2:TGGGTT"]) assert.equal(formatDesign(parseDesign(v)), v);
+});
+
+test("protein versions are saved with their amino acids", () => {
+  const d = parseDesign("protein:v1:GFTFSSYA|v2: grtf snya");
+  assert.deepEqual(d, { kind: "alternatives", protein: true, options: [{ name: "v1", bases: "GFTFSSYA" }, { name: "v2", bases: "GRTFSNYA" }] });
+  assert.equal(formatDesign(d), "protein:v1:GFTFSSYA|v2:GRTFSNYA");
+  // A DNA version that happens to be named "protein" stays DNA.
+  assert.deepEqual(parseDesign("protein:ATG|two:TTT"), { kind: "alternatives", options: [{ name: "protein", bases: "ATG" }, { name: "two", bases: "TTT" }] });
+});
+
+test("versions typed one per line are DNA bases or amino acids, as chosen", () => {
+  // FLAG and His tags are all IUPAC letters, so only the choice says they are peptides.
+  assert.deepEqual(versionsFromText("flag: DYKDDDDK\n\nhis: hhhhhh\n", true), { kind: "alternatives", protein: true, options: [{ name: "flag", bases: "DYKDDDDK" }, { name: "his", bases: "HHHHHH" }] });
+  assert.deepEqual(versionsFromText("v1: atg gct\nTGG", false), { kind: "alternatives", options: [{ name: "v1", bases: "ATGGCT" }, { name: "2", bases: "TGG" }] });
+  assert.equal(versionsFromText("v1: MKVLE", false), "Version v1 looks like amino acids, not DNA bases.");
+  assert.equal(versionsFromText("v1: ATGNNK\nv2: ATG-GCT", false), "Version v2 has letters that aren’t DNA bases.");
+  assert.equal(versionsFromText("v1: MK+L", true), "Version v1 has letters that aren’t amino acids.");
+  assert.equal(versionsFromText("v1:", true), "Version v1 has no sequence.");
+  assert.equal(versionsFromText("a|b: MKV", true), "Version names can’t include “|”.");
+  assert.equal(versionsFromText(" \n", false), "Enter versions as name: DNA bases, one per line.");
 });
 
 test("the design is read from the feature's qualifier, as bio-parsers keeps it", () => {

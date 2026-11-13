@@ -19,7 +19,7 @@ import { changesText, findBindingSites, placeEdited, primerReport, selectionTmTe
 import { translateCodon } from "../lib/genetics.ts";
 import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionLabel, regionRange, regionSpans, regionsOf, regionTitle, regionTree, withRegions, type ProteinRegion } from "../lib/regions.ts";
 import type { VariableDesign } from "../lib/types.ts";
-import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER } from "../lib/variable.ts";
+import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER, versionsFromText } from "../lib/variable.ts";
 import { noteText, otherQualifiers, withNote } from "../lib/featureNotes.ts";
 import {
   basesIn,
@@ -501,7 +501,7 @@ export class Inspector {
       "div",
       { class: "sv-region-detail" },
       h("p", { class: "sv-small sv-dim" }, `${r.kind} · ${here}${r.accession && isClipped(r) ? ` · length differs from UniProt ${fmt(r.sourceStart)}–${fmt(r.sourceEnd)}` : ""}`),
-      r.variable ? h("p", { class: "sv-small sv-dim" }, `Varies between clones · ${r.variable.kind === "any" ? "any sequence" : r.variable.kind === "pattern" ? r.variable.pattern : "named versions"}`) : null,
+      r.variable ? h("p", { class: "sv-small sv-dim" }, `Varies between clones · ${r.variable.kind === "any" ? "any sequence" : r.variable.kind === "pattern" ? r.variable.pattern : r.variable.protein ? "protein versions" : "DNA versions"}`) : null,
       h(
         "div",
         { class: "sv-region-actions" },
@@ -577,14 +577,21 @@ export class Inspector {
         input.addEventListener("keydown", e => e.key === "Enter" && input.blur());
         body.push(input, h("p", { class: "sv-small sv-dim" }, "IUPAC codes, repeated over the region (NNK: K is G or T). Bases the pattern doesn't allow are flagged."));
       } else if (design.kind === "alternatives") {
+        // A CDS's versions can be amino acids, starting from its own protein.
+        if (isCds(f)) {
+          const parentProtein: VariableDesign = { kind: "alternatives", protein: true, options: [{ name: "parent", bases: protein(f, this.ctx.store.data.sequence).replace(/\*$/, "") }] };
+          const as = (inProtein: boolean, label: string) =>
+            h("button", { type: "button", "aria-pressed": String(!!design.protein === inProtein), onclick: () => !!design.protein !== inProtein && set(inProtein ? parentProtein : fresh.alternatives, "Change variable design") }, label);
+          body.push(h("div", { class: "sv-segmented sv-segmented-small", role: "group", "aria-label": "Versions as" }, as(false, "DNA bases"), as(true, "Amino acids")));
+        }
         const text = h("textarea", { class: "sv-code sv-code-edit", rows: String(Math.min(6, design.options.length + 1)), "aria-label": "Versions, one per line", spellcheck: "false" }) as HTMLTextAreaElement;
         text.value = design.options.map(o => `${o.name}: ${o.bases}`).join("\n");
         text.addEventListener("change", () => {
-          const d = parseDesign(text.value.split("\n").map(l => l.trim()).filter(Boolean).join("|"));
-          if (d.kind === "alternatives") set(d, "Change variable design");
-          else toast("Write each version on its own line, as name: bases.", "info");
+          const d = versionsFromText(text.value, !!design.protein);
+          if (typeof d === "string") toast(d, "info");
+          else set(d, "Change variable design");
         });
-        body.push(text, h("p", { class: "sv-small sv-dim" }, "One per line, as name: bases. Each clone is matched to the closest; differences from it are mutations."));
+        body.push(text, h("p", { class: "sv-small sv-dim" }, `One per line, as name: ${design.protein ? "amino acids" : "bases"}. Each clone is matched to the closest; differences from it are mutations.`));
       } else {
         body.push(h("p", { class: "sv-small sv-dim" }, "Clones can have any sequence or length here. Each clone's sequence is shown in its own column rather than called as mutations."));
       }

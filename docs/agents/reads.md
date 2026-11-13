@@ -40,6 +40,9 @@ and CI checks that they exist.
   A protein region attached to a CDS can also carry a library design. The document projects
   it with `variableProteinFeatures` in `src/lib/regions.ts` into the same feature list,
   as a noncoding annotation in the parent's frame; never make it a second CDS.
+  Versions can be amino acids (`protein:` before them in the qualifier), matched to the
+  region's translation. That is the user's choice, never guessed from the letters: a FLAG
+  tag, DYKDDDDK, is all IUPAC base codes.
 - **Translation of reads** (`src/lib/readTranslation.ts`, the alignment's Translation chip):
   the frame comes from the reference's CDS (or a selected ORF), not the read, so a read's
   start and strand don't matter; it starts at the first in-frame codon of 10 good matching

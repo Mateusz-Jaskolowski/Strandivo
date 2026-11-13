@@ -41,12 +41,13 @@ export interface Feature {
  * What a library puts in a variable region: anything (`any`, as for CDRs that replace a
  * stuffer), bases an IUPAC pattern allows (NNK, repeated over the region), or one of a
  * few known versions. Patterns and versions are written in the direction the region is
- * read (its CDS's, if it is in one).
+ * read (its CDS's, if it is in one). Versions of a `protein` design are amino acids, held
+ * in `bases` all the same, and are matched to the clone's translation of the region.
  */
 export type VariableDesign =
   | { kind: "any" }
   | { kind: "pattern"; pattern: string }
-  | { kind: "alternatives"; options: { name: string; bases: string }[] };
+  | { kind: "alternatives"; options: { name: string; bases: string }[]; protein?: boolean };
 
 export type Strand = "forward" | "reverse";
 export type ReadStatus = "aligned" | "noMatch" | "lowQuality";

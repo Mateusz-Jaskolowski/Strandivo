@@ -200,6 +200,32 @@ test("nested and overlapping regions have separate lanes, and map detail keeps t
   assert.equal(regionTree([{ ...parent, parentId: "cdr1" }, { ...child, start: 1, end: 20 }]).length, 2, "a bad file cannot create an infinite tree");
 });
 
+test("a protein region's amino-acid versions are saved and matched to the clone's translation, on either strand", async () => {
+  // Residues 3–5 are CDE; the clone has TGT made AGT, so SDE.
+  const versions = { kind: "alternatives" as const, protein: true, options: [{ name: "parent", bases: "CDE" }, { name: "serine", bases: "SDE" }] };
+  for (const strand of [1, -1] as const) {
+    const d = doc({ strand, regions: [{ ...region("Loop", 3, 5), id: "loop", variable: versions }] });
+    const written = serialize(toParsed({ data: d, extra: {}, wholeSources: [] }, d), "genbank");
+    const loaded = fromParsed((await parseSequenceFile(new TextEncoder().encode(written), "loop.gb")).sequences[0]).data;
+    assert.deepEqual(regionsOf(cds(loaded))[0].variable, versions);
+    const check = (design: typeof versions) => {
+      const f = { ...cds(d), notes: withRegions(cds(d).notes, [{ ...regionsOf(cds(d))[0], variable: design }]) };
+      const projected = variableProteinFeatures(f, d.sequence.length);
+      const at = strand === 1 ? projected[0].start : projected[0].end;
+      const read = strand === 1 ? "A" : "T";
+      const difference: CloneDifference = { kind: "substitution", refPos: at, refBases: d.sequence[at], readBases: read, readPos: at, quality: 40, confident: true, reads: [0] };
+      const lists = splitVariable([difference], projected, d.sequence.length);
+      const clone: CloneResult = { key: "c", reads: [0], differences: lists.differences, variable: lists.variable, conflicts: [], pieces: [{ refFrom: 0, refTo: d.sequence.length, gappedReference: d.sequence, gappedConsensus: d.sequence.slice(0, at) + read + d.sequence.slice(at + 1), qualities: Array(d.sequence.length).fill(40), depth: Array(d.sequence.length).fill(1) }] };
+      return cloneVariants(clone, d.sequence, true, [f, ...projected]).regions[0];
+    };
+    const both = check(versions);
+    assert.deepEqual([both.protein, both.alternative, both.mutations], ["SDE", "serine", []]);
+    const parentOnly = check({ ...versions, options: [versions.options[0]] });
+    assert.equal(parentOnly.alternative, "parent");
+    assert.deepEqual(parentOnly.mutations.map(m => `${m.feature} ${m.label} ${m.kind}`), ["Loop C3S missense"]);
+  }
+});
+
 test("protein library regions use the CDS frame without adding another coding feature", () => {
   const r = { ...region("CDR1", 3, 5), id: "cdr1", variable: { kind: "any" as const } };
   const d = doc({ regions: [r] });

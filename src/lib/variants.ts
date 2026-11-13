@@ -375,15 +375,20 @@ export function cloneVariants(clone: CloneResult, reference: string, circular: b
   };
 }
 
-/** Edit distance, for picking the closest version of a region. */
-function distance(a: string, b: string): number {
+/** Edit distance, for picking the closest version of a region; `wild` matches anything. */
+function distance(a: string, b: string, wild = ""): number {
   let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
     const cur = [i];
-    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] || a[i - 1] === wild || b[j - 1] === wild ? 0 : 1));
     prev = cur;
   }
   return prev[b.length];
+}
+
+/** The version closest to what a clone has; the first of equally close ones. */
+function closest(options: { name: string; bases: string }[], content: string, wild = "") {
+  return options.reduce((a, b) => (distance(b.bases, content, wild) < distance(a.bases, content, wild) ? b : a));
 }
 
 /**
@@ -499,11 +504,34 @@ function regionCall(clone: CloneResult, f: Feature, reference: string, coding: F
   // Two plasmids' bases: neither a version nor the design can be told from them.
   if (mixed) return out;
   const design = f.variable!;
-  if (design.kind === "alternatives") {
-    const best = design.options.reduce((a, b) => (distance(b.bases, content) < distance(a.bases, content) ? b : a));
+  const add = (label: string, kind: Mutation["kind"], refPos: number) => out.mutations.push({ label, feature: name, kind, refPos });
+  if (design.kind === "alternatives" && design.protein) {
+    // Versions in amino acids are matched to the region's translation, which a region
+    // outside a CDS's frame doesn't have. X in either is any amino acid. A frameshift
+    // garbles the translation, so no version is named; the CDS's reading reports it.
+    const residues = out.protein;
+    if (residues && (content.length - positions.length) % 3 === 0) {
+      const best = closest(design.options, residues, "X");
+      out.alternative = best.name;
+      const alt = best.bases;
+      if (alt.length !== residues.length) {
+        const change = residues.length - alt.length;
+        add(`${best.name} ${change > 0 ? "+" : ""}${change} aa`, "inframe", positions[0]);
+      } else {
+        // Numbered in the CDS, from the codon the region starts in.
+        const first = (offset - phase) / 3 + 1;
+        for (let i = 0; i < alt.length; i++) {
+          const A = alt[i];
+          const B = residues[i];
+          if (A === B || A === "X" || B === "X") continue;
+          add(`${A}${first + i}${B}`, B === "*" ? "nonsense" : "missense", positions[Math.min(Math.max(0, 3 * i - phase), positions.length - 1)]);
+        }
+      }
+    }
+  } else if (design.kind === "alternatives") {
+    const best = closest(design.options, content);
     out.alternative = best.name;
     const alt = best.bases;
-    const add = (label: string, kind: Mutation["kind"], refPos: number) => out.mutations.push({ label, feature: name, kind, refPos });
     if (alt.length !== content.length) {
       const change = content.length - alt.length;
       add(`${best.name} ${change > 0 ? "+" : ""}${change} bp`, cds ? (change % 3 ? "frameshift" : "inframe") : "dna", positions[0]);

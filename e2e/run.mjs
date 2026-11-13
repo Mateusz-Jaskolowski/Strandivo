@@ -1593,6 +1593,8 @@ async function main() {
       await s.exec('window.__strandivo.setView("map")');
       await sleep(300);
       await s.exec('window.__strandivo.setView("reads")');
+      // The edit makes the reads align again; the view takes no clicks until they have.
+      await s.waitFor(readsReady(3), 30000);
       await s.click("//*[contains(@class,'sv-reads-cov')]//button[starts-with(normalize-space(.),'Clones')]", "xpath");
       const exactRow = "Array.from(document.querySelectorAll('.sv-clonetab tbody tr')).find(r => /C01/.test(r.textContent))";
       check(

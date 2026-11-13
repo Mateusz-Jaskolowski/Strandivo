@@ -1,0 +1,45 @@
+name: Check the release
+
+# Once a release is published, checks it as people and installed copies meet it
+# (.github/scripts/published.mjs): its files as published, signed with the key every copy
+# trusts; GitHub's record of how each was built; for a release, that installed copies are
+# offered it, the Download page leads to it and What's new lists it, and for a release
+# candidate that no copy is offered it; and that the browser version deployed. A failed
+# run is emailed like any other. `npm run release:follow` waits for this run and shows its
+# result. Actions tab → "Check the release" → "Run workflow" checks a release again.
+#
+# It holds no secret and writes nothing, so it can run at any time.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The published release to check, such as v0.4.0
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+
+jobs:
+  check:
+    name: Check the published release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      # The scripts read CHANGELOG.md's rules with the app's own TypeScript, so Node 22.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+      - name: Download the release's files
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir published
+      - name: Check the release
+        run: .github/scripts/run.sh "Check the published release" node --experimental-strip-types .github/scripts/published.mjs published "$TAG" "$GITHUB_REPOSITORY"

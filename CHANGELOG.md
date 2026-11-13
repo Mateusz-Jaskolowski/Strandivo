@@ -20,6 +20,8 @@ with Unreleased's notes and leaves them where they are.
   credit you in the public issue, and remember them for next time. If you have a GitHub
   account, Post on GitHub instead opens the issue on GitHub filled in with what you wrote,
   to post as yourself.
+- **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
+  reports can now carry a name to credit.
 
 ## 0.4.0
 

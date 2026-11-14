@@ -77,6 +77,7 @@ export function openFoldDialog(ctx: DocContext, cds: SeqFeature, only?: string) 
       { class: "sv-input sv-input-small", "aria-label": `Kind of ${name}`, disabled: !row.tickable || row.flags.includes("duplicate") },
       [...REGION_KINDS, ...(REGION_KINDS.includes(row.region.kind) ? [] : [row.region.kind])].map(k => h("option", { value: k, selected: k === row.region.kind }, k))
     ) as HTMLSelectElement;
+    kind.value = row.region.kind;
     kind.addEventListener("change", () => kinds.set(f.id, kind.value));
     const why = reasons(row);
     return h(

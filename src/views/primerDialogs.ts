@@ -15,7 +15,7 @@ import { primerLibrary } from "../primerLibrary.ts";
 import { serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { chooseSavePath, openFiles, openLibrary, saveText } from "../platform.ts";
-import { bindingTm, changesText, crossDimer, DIMER_BASES, findBindingSites } from "../lib/primers.ts";
+import { annealingTemp, bindingTm, changesText, crossDimer, DIMER_BASES, findBindingSites, tmBases } from "../lib/primers.ts";
 import { alignPrimer } from "../lib/primerAlign.ts";
 import { COMMON_SEQUENCING_PRIMERS, libraryHits, type LibraryHit } from "../lib/library.ts";
 import { allProducts, pcrProduct, productDocument, type PcrProduct, type PlacedPrimer } from "../lib/pcr.ts";
@@ -421,8 +421,16 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       result = [h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), d.circular ? " These primers don't make a product here." : " These primers point away from each other on this linear sequence, so they make no product.")];
     } else {
       // As the Primers tab gives it: the part that pairs, or a mutagenic primer's 3′ arm.
-      const tmF = bindingTm(alignPrimer(f, d.sequence));
-      const tmR = bindingTm(alignPrimer(r, d.sequence));
+      const alignF = alignPrimer(f, d.sequence);
+      const alignR = alignPrimer(r, d.sequence);
+      const tmF = bindingTm(alignF);
+      const tmR = bindingTm(alignR);
+      // Only with the NEB method, whose calculator has a rule for each polymerase. Shown in
+      // whole degrees, as NEB's calculator shows it.
+      const anneal = annealingTemp(tmBases(alignF), tmBases(alignR));
+      const annealRow: [string, Node][] = anneal
+        ? [["Anneal at", h("span", null, `${Math.round(anneal.ta)} °C`, h("span", { class: "sv-dim" }, ` · ${anneal.polymerase}: ${anneal.rule}`))]]
+        : [];
       // Products are told apart by where the primers' 3′ ends sit.
       const others = allProducts(d.sequence, d.circular, f, r).filter(p => !(p.forward.end === product.forward.end && p.reverse.start === product.reverse.start));
       const inside = d.features.filter(x => rangeWithin(x, product.span, n));
@@ -431,6 +439,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
         ["Size", h("strong", null, `${fmt(product.length)} bp`)],
         ["Template", `${fmt(product.span.start + 1)}–${fmt(product.span.end + 1)}${product.span.start > product.span.end ? " (across the origin)" : ""}`],
         ["Tm", tmF !== null && tmR !== null ? `${tmF.toFixed(1)} °C and ${tmR.toFixed(1)} °C · ${Math.abs(tmF - tmR).toFixed(1)} °C apart` : "—"],
+        ...annealRow,
         ["Contains", inside.length ? inside.map(x => x.name).join(", ") + (partly.length ? `; part of ${partly.map(x => x.name).join(", ")}` : "") : partly.length ? `Part of ${partly.map(x => x.name).join(", ")}` : "No features"]
       ];
       const warnings: string[] = [];

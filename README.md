@@ -26,7 +26,9 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
   from UniProt onto a CDS feature via protein alignment, handling tags, fusions and
   truncations automatically
 - **Primers & mutagenesis**: Primer3-compatible Tm calculations (SantaLucia 1998, Breslauer
-  1986, Wallace rule or basic GC, with adjustable salt/Mg²⁺/dNTP/oligo concentrations),
+  1986, Wallace rule or basic GC, with adjustable salt/Mg²⁺/dNTP/oligo concentrations), or
+  the same Tm and annealing temperature as NEB's Tm Calculator for Q5, Phusion, OneTaq, Taq,
+  LongAmp, Vent and NEB's other polymerases,
   GC/3′-clamp/homopolymer/dimer checks, primer design with optional 5′ restriction tails,
   PCR product previews, and whole-plasmid site-directed mutagenesis primer design (Q5
   back-to-back or QuikChange overlapping)
@@ -192,10 +194,15 @@ says how to take part.
 The full licence is in [`LICENSE`](LICENSE). Contact: hello@strandivo.com.
 
 Strandivo uses TeselaGen's bio-parsers and sequence-utils (MIT) and
-[Tauri](https://tauri.app) (MIT/Apache-2.0).
+[Tauri](https://tauri.app) (MIT/Apache-2.0). Its NEB polymerases and their annealing rules
+started from [polymerase-tm](https://github.com/Dioskurides/polymerase-tm) by Dioskurides
+(MIT), and were checked against New England Biolabs' public
+[Tm API](https://tmapi.neb.com/).
 
 ### Trademarks
 
-SnapGene is a registered trademark of GSL Biotech LLC, and other product names belong to
-their owners. They are named here only to say which files Strandivo reads and writes.
-Strandivo is an independent project, not affiliated with or endorsed by any of them.
+SnapGene is a registered trademark of GSL Biotech LLC; NEB, Q5, OneTaq, LongAmp, Vent and
+Deep Vent are trademarks of New England Biolabs, Inc.; Phusion is a trademark of Thermo
+Fisher Scientific; and other product names belong to their owners. They are named here only to say which files Strandivo reads and
+writes, and whose calculations it reproduces. Strandivo is an independent project, not
+affiliated with or endorsed by any of them.

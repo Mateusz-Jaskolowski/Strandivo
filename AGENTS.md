@@ -379,6 +379,17 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   primer3. Settings can choose Breslauer 1986 (primer3's older method), the Wallace rule or
   a basic GC formula, and the conditions. Each window applies the choice with `useTmSettings`
   (`src/main.ts`), so `meltingTemp` without arguments follows it; tests pass settings.
+- **NEB polymerases** (Nov 2026): the "neb" Tm method gives NEB's Tm Calculator's numbers
+  for a polymerase chosen in Settings (`src/lib/polymerases.ts`), as people compare with
+  it and primer3's conditions come out 3–8 °C below its Q5. Only then does the PCR product
+  dialog show an annealing temperature, as NEB's calculator has a rule for each
+  polymerase; other methods have none to follow. The polymerases and rules started from
+  polymerase-tm (MIT), whose numbers were in part wrong, so every salt and rule was fitted
+  to NEB's own Tm API instead and `src/lib/polymerases.test.ts` keeps its answers: change
+  them only from new answers of that API. The app never asks NEB: Tm is worked out here,
+  as sequences stay on the computer. Ta comes from the same bases as the Tms (`tmBases`),
+  as Vent's rule depends on their length. NEB rounds Ta to 0.1 °C, then its calculator
+  to a whole degree; rounding once gives a different degree near a half.
 - **Amber suppression** (TAG read as Q, for phage display in TG1 or XL1-Blue) is a setting
   applied the same way (`useAmberSuppression`), so everything that translates through
   `translateCodon` follows it. ORF stops get it in `OrfOptions`, and caches of

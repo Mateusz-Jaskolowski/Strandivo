@@ -749,6 +749,15 @@ export async function setWindowTitle(title: string): Promise<void> {
   await getCurrentWindow().setTitle(title);
 }
 
+/**
+ * The windows' title bars (and on Windows their menu bars) light or dark, or following the
+ * system with `theme: null`, and their background before a page draws, as `#rrggbb`. The
+ * app keeps it for its next launch; a browser has no title bar to change.
+ */
+export async function setWindowLook(look: { theme: "light" | "dark" | null; background: string | null }): Promise<void> {
+  if (isDesktop) await invoke("set_window_look", { look });
+}
+
 /** Closes this window (it still asks `onCloseRequested` first). */
 export async function closeWindow(): Promise<void> {
   if (!isDesktop) {

@@ -6,6 +6,7 @@
 
 import { loadSettings, onSettingsChanged } from "./settings.ts";
 import { themeFor, type ThemeName } from "./lib/themes.ts";
+import { setWindowLook } from "./platform.ts";
 
 const listeners = new Set<(theme: ThemeName) => void>();
 let started = false;
@@ -16,12 +17,24 @@ export function startTheme(): void {
   started = true;
   const media = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : null;
   let appearance = loadSettings().appearance;
+  let told = "";
   const apply = () => {
     const theme = themeFor(appearance, media?.matches ?? false);
     const root = document.documentElement;
-    if (root.dataset.theme === theme) return;
-    root.dataset.theme = theme;
-    for (const fn of [...listeners]) fn(theme);
+    if (root.dataset.theme !== theme) {
+      root.dataset.theme = theme;
+      for (const fn of [...listeners]) fn(theme);
+    }
+    // The shell styles what is outside the page as the theme's block says: its
+    // `color-scheme`, and its background for a window's first moment.
+    const style = getComputedStyle(root);
+    const look = {
+      theme: appearance === "system" ? null : style.colorScheme === "dark" ? ("dark" as const) : ("light" as const),
+      background: hexColor(getComputedStyle(document.body).backgroundColor)
+    };
+    if (JSON.stringify(look) === told) return;
+    told = JSON.stringify(look);
+    setWindowLook(look).catch(e => console.error(e));
   };
   apply();
   onSettingsChanged(s => {
@@ -29,6 +42,12 @@ export function startTheme(): void {
     apply();
   });
   media?.addEventListener?.("change", apply);
+}
+
+/** `rgb(15, 17, 20)` as `#0f1114`, or null for anything else (a transparent body). */
+function hexColor(css: string): string | null {
+  const m = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(css);
+  return m ? `#${m.slice(1).map(v => Number(v).toString(16).padStart(2, "0")).join("")}` : null;
 }
 
 /**

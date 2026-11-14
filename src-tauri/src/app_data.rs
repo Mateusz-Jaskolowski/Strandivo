@@ -34,7 +34,7 @@ fn load_at(path: &Path) -> Result<Option<String>, String> {
     }
 }
 
-fn save_at(path: &Path, contents: &str) -> Result<(), String> {
+pub(crate) fn save_at(path: &Path, contents: &str) -> Result<(), String> {
     let _guard = WRITE_LOCK.lock().map_err(|e| e.to_string())?;
     serde_json::from_str::<serde_json::Value>(contents).map_err(|e| format!("Invalid JSON: {e}"))?;
     let parent = path.parent().ok_or("No folder for the file")?;

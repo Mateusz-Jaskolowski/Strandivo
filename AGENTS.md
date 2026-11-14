@@ -400,9 +400,15 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   where the user is, never a hard-coded one.
 - **A new native menu item** goes in `src/lib/appMenu.ts` too, or the browser has no way
   to it; a unit test compares the two lists' ids and labels.
-- **Windows are light on Windows** (`app_window` in `src-tauri/src/lib.rs`), since the
-  interface is: a menu bar following the system's dark mode is drawn by hand and turned
-  light again when another window opened. Take that out when dark tokens get a setting.
+- **Title bars follow the page's theme only because the page says so**
+  (`src-tauri/src/appearance.rs`): `src/theme.ts` tells the shell light, dark or "follow the
+  system" (from the theme block's `color-scheme`) and its background, and the shell keeps it
+  in app data, so the next launch opens windows in it before any page has loaded. Build
+  every window through `app_window` in `src-tauri/src/lib.rs`, which applies it, or it opens
+  white. With System the shell must set no theme: the page sees the system's mode only
+  through `prefers-color-scheme`, which a theme set on the window overrides. On Windows the
+  menu library draws the menu bar by hand, and once turned it light again when another
+  window opened; check there after changing how windows are built or themed.
 - **macOS title bar**: the main window uses an overlay title bar, so the app bar is the drag
   area (`data-tauri-drag-region="deep"`; buttons and fields are excluded automatically).
   Mark other controls in it with `data-tauri-drag-region="false"`, as the file tabs are. On

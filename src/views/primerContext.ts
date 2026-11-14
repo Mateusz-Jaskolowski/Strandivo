@@ -12,7 +12,7 @@ import { fmt, fmtRange } from "../ui/format.ts";
 import { checkIcon } from "../ui/icons.ts";
 import { codons, featureStyles, gcValues, isCds, primerAlignment, primerColors, primerTitle, primerTm } from "../doc/analysis.ts";
 import { GC_WINDOW } from "../lib/gc.ts";
-import { drawGcStrip, GC_STRIP_HEIGHT } from "./gcStrip.ts";
+import { drawGcStrip, GC_CHIP_LABEL, GC_STRIP_HEIGHT, gcChipTitle } from "./gcStrip.ts";
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { boxTop, drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -94,7 +94,7 @@ export class PrimerContextView {
     this.ctx = ctx;
     this.rowCount = opts.rows;
     this.regionsToggle = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ sequenceRegions: !ctx.options.sequenceRegions }) }, checkIcon(), "Regions");
-    this.gcToggle = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ primerGc: !ctx.options.primerGc }) }, checkIcon(), "GC");
+    this.gcToggle = h("button", { type: "button", class: "sv-chip", title: gcChipTitle(`the ${GC_WINDOW} bases around each base`, true), onclick: () => ctx.setOptions({ primerGc: !ctx.options.primerGc }) }, checkIcon(), GC_CHIP_LABEL);
     this.el = h(
       "section",
       { class: "sv-ctx", "aria-label": "Sequence around the selected primer" },

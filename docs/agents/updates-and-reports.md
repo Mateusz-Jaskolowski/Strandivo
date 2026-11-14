@@ -109,7 +109,10 @@ and CI checks that they exist.
   lets the page send any text. The browser version posts each event itself
   (`sendUsage` in `src/platform.ts`) to Aptabase's single-event address, as Aptabase's web
   SDK does, without the language, so Aptabase reads the browser and system from the
-  request; the key is built in from `APTABASE_APP_KEY`, a variable of the `web`
+  request. Its version ends in " (web)" (`webUsageBody` in `src/lib/usage.ts`), as the
+  dashboard shows and filters by the version, not the SDK, and a browser's session
+  otherwise looks like a desktop one; sending a system instead would stop Aptabase
+  reading the real one. The key is built in from `APTABASE_APP_KEY`, a variable of the `web`
   environment that only `.github/workflows/web.yml` passes, and every deployment but a
   release's marks its events `isDebug` (`__USAGE_DEBUG__` in `vite.config.ts`). Its address
   is in the page's Content Security Policy, the only one statistics can go to. e2e

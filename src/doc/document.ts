@@ -101,6 +101,7 @@ function loadViewOptions(settings: Settings): ViewOptions {
     sequenceRegions: true,
     sequenceGc: false,
     primerGc: true,
+    mapGc: false,
     primers: settings.show.primers,
     ruler: settings.show.ruler,
     translations: settings.show.cdsFeatureTranslations,
@@ -207,7 +208,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // The map's rotation is the file's own (label size is a setting, and every map opens unzoomed).
   const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0 }, o => {
     try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSource: o.enzymeSource, enzymeFilter: o.enzymeFilter, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap, mapRegions: o.mapRegions, proteinDetail: o.proteinDetail, sequenceRegions: o.sequenceRegions, sequenceGc: o.sequenceGc, primerGc: o.primerGc }));
+      localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSource: o.enzymeSource, enzymeFilter: o.enzymeFilter, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap, mapRegions: o.mapRegions, proteinDetail: o.proteinDetail, sequenceRegions: o.sequenceRegions, sequenceGc: o.sequenceGc, primerGc: o.primerGc, mapGc: o.mapGc }));
     } catch {
       /* ignore */
     }

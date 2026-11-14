@@ -826,14 +826,28 @@ async function main() {
     await s.shot("09-orf-protein");
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
     await s.shot("09-orfs");
+    // GC content on the map: off until its button is on, then a ring inside the features, and a band on the linear map.
+    const mapGcChip = "//*[contains(@class,'sv-map')]//button[contains(@class,'sv-chip')][normalize-space()='GC%']";
+    check("The map shows no GC until its button is on", await s.exec("return !document.querySelector('.sv-map .sv-map-gc')"));
+    check("The map's GC% button says what its colours mean", await s.exec("const b = Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'GC%'); return /GC content of the [0-9,]+ bp around each position/.test(b?.title) && /AT-rich/.test(b.title) && /GC-rich/.test(b.title);"));
+    await s.click(mapGcChip, "xpath");
+    check("The GC% button draws GC as a ring inside the features", await s.waitFor("(() => { const ring = document.querySelector('.sv-map .sv-map-gc'); const backbone = document.querySelector('.sv-map .sv-map-backbone'); return ring?.children.length > 0 && ring.getBoundingClientRect().width < backbone.getBoundingClientRect().width; })()", 5000));
+    check("Each stretch of the ring says its GC and bases", await s.exec("return Array.from(document.querySelectorAll('.sv-map .sv-map-gc > *')).every(e => /^GC [0-9]+(–[0-9]+)?% around [0-9,]+–[0-9,]+$/.test(e.querySelector('title')?.textContent))"));
+    await s.shot("09-map-gc");
+    await s.click("//*[contains(@class,'sv-map')]//button[normalize-space()='Linear']", "xpath");
+    check("The linear map draws GC as a band", await s.waitFor("document.querySelector('.sv-map-svg-linear .sv-map-gc line')", 5000));
+    await s.click("//*[contains(@class,'sv-map')]//button[normalize-space()='Circular']", "xpath");
+    await s.click(mapGcChip, "xpath");
+    check("The map's GC% button hides it again", await s.waitFor("!document.querySelector('.sv-map-svg-linear') && !document.querySelector('.sv-map .sv-map-gc')", 3000));
     await s.exec("window.__strandivo.command('show-sequence')");
     check("ORFs show in the sequence too", await s.waitFor("document.querySelector('.sv-seq .sv-orf')", 5000));
     await s.click("//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='ORFs']", "xpath");
     check("The ORFs button hides them again", await s.waitFor("!document.querySelector('.sv-seq .sv-orf')", 3000));
     // GC content: off in Sequence until its button is on, then under the bases and along the overview strip.
-    const gcChip = "//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='GC']";
+    const gcChip = "//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='GC%']";
     check("Sequence shows no GC until its button is on", await s.exec("return !document.querySelector('.sv-seq .sv-gc') && !document.querySelector('.sv-strip-gc')"));
     await s.click(gcChip, "xpath");
+    check("The Sequence GC% button says what its colours mean", await s.exec("const b = Array.from(document.querySelectorAll('.sv-seq .sv-chip')).find(b => b.textContent.trim() === 'GC%'); return /GC content of the 21 bases around each base/.test(b?.title) && /best for primers/.test(b.title);"));
     check("The GC button draws GC under the bases and along the overview strip", await s.waitFor("document.querySelector('.sv-seq .sv-gc') && document.querySelector('.sv-strip-gc')", 5000));
     check("Each stretch of the GC strip says its GC and bases", await s.exec("return Array.from(document.querySelectorAll('.sv-seq .sv-gc')).every(e => /^GC [0-9]+(–[0-9]+)?% around [0-9,]+–[0-9,]+$/.test(e.title))"));
     await s.click(gcChip, "xpath");
@@ -1210,7 +1224,7 @@ async function main() {
       s.apply({ ...d, features: d.features.map(x => x.id === f.id ? { ...x, notes } : x), primers: [...d.primers, p] }, 'Test primer context', { range, focus: { kind: 'primer', id: p.id } });
       window.__strandivo.command('show-primers');`);
     check("Primer context shows the overlapping CDR and a neighbouring region", await s.waitFor("document.querySelector('.sv-ctx-primer') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'CDR1 edited') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'Nearby region')", 5000));
-    check("The primer's context shows GC under its bases without turning it on", await s.waitFor("document.querySelector('.sv-ctx .sv-gc') && Array.from(document.querySelectorAll('.sv-ctx .sv-chip')).find(b => b.textContent.trim() === 'GC')?.getAttribute('aria-pressed') === 'true'", 5000));
+    check("The primer's context shows GC under its bases without turning it on", await s.waitFor("document.querySelector('.sv-ctx .sv-gc') && Array.from(document.querySelectorAll('.sv-ctx .sv-chip')).find(b => b.textContent.trim() === 'GC%')?.getAttribute('aria-pressed') === 'true'", 5000));
     const primerWindowBeforeToggle = await s.exec("return document.querySelector('.sv-ctx-readout .sv-mono').textContent;");
     await s.click("//section[contains(@class,'sv-ctx')]//button[normalize-space(.)='Regions']", "xpath");
     check("Primer regions can be hidden without hiding the primer or its handles", await s.waitFor("document.querySelectorAll('.sv-ctx .sv-seq-region-bar').length === 0 && document.querySelector('.sv-ctx-primer') && document.querySelectorAll('.sv-ctx-handle').length === 2", 5000));
@@ -1957,6 +1971,8 @@ async function main() {
     if (await s.waitFor("window.__strandivo.tabs()[window.__strandivo.activeTab()] === 'library-parent.gb' && window.__strandivo.store", 20000)) {
       // A selected CDS and its amino acids, coloured by chemistry, on the map and in the sequence.
       await s.exec(`${doc} window.__strandivo.setView("map"); const f = s.data.features.find(x => x.name === "FR1"); s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+      // With the GC ring, to see its colours in dark.
+      await s.exec("const chip = Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'GC%'); if (chip && chip.getAttribute('aria-pressed') !== 'true') chip.click();");
       await sleep(1200);
       await s.shot("13-dark-map");
       await s.exec('window.__strandivo.setView("sequence")');

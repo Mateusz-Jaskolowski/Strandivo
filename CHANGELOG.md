@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **GC content on the map**: the map's new GC% button draws GC content as a ring inside
+  the features (a band under the ruler on the linear map), in the same colours as in the
+  Sequence tab: teal where it is AT-rich, orange where it is GC-rich. Hover over a stretch
+  to see its GC. The GC buttons in the Sequence and Primers tabs now read GC% too, and
+  each says what its colours mean when you hover over it.
 - **Credit for feedback**: Report a bug and Send feedback take your name or initials to
   credit you in the public issue, and remember them for next time. If you have a GitHub
   account, Post on GitHub instead opens the issue on GitHub filled in with what you wrote,

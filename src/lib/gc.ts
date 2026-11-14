@@ -96,6 +96,17 @@ export function gcRuns(count: number, valueAt: (i: number) => number): GcRun[] {
   return out;
 }
 
+/**
+ * Runs around a circle (the circular map), where the last run goes on into the first: when
+ * both are one level they become one run across the origin, with `a` after `b`.
+ */
+export function joinAtOrigin(runs: GcRun[], count: number): GcRun[] {
+  const first = runs[0];
+  const last = runs[runs.length - 1];
+  if (runs.length < 2 || first.a !== 0 || last.b !== count - 1 || first.level !== last.level) return runs;
+  return [...runs.slice(1, -1), { a: last.a, b: first.b, level: last.level, lo: Math.min(first.lo, last.lo), hi: Math.max(first.hi, last.hi) }];
+}
+
 /** A run's GC as text: "GC 52%", or "GC 61–64%" when it varies. */
 export function gcRunText(run: GcRun): string {
   const lo = Math.round(run.lo * 100);

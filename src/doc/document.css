@@ -2440,6 +2440,16 @@
   display: grid;
   grid-template-columns: min(var(--sv-sidebar, 264px), max(264px, 36vw)) 0 minmax(0, 1fr) 0 min(var(--sv-inspector, 300px), max(300px, 36vw));
 }
+/* A hidden panel takes its divider along, and its column with them. */
+.sv-reads-grid.sv-reads-no-list {
+  grid-template-columns: minmax(0, 1fr) 0 min(var(--sv-inspector, 300px), max(300px, 36vw));
+}
+.sv-reads-grid.sv-reads-no-insp {
+  grid-template-columns: min(var(--sv-sidebar, 264px), max(264px, 36vw)) 0 minmax(0, 1fr);
+}
+.sv-reads-grid.sv-reads-no-list.sv-reads-no-insp {
+  grid-template-columns: minmax(0, 1fr);
+}
 .sv-reads-list {
   display: flex;
   flex-direction: column;

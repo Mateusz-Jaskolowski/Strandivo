@@ -47,6 +47,9 @@ with Unreleased's notes and leaves them where they are.
   and Primers tabs and over the reads' alignment keep their width when turned on or off,
   so the ones beside them no longer shift. Over the alignment, a hidden track's button now
   loses its tick like the others.
+- **More room for traces**: the sidebar and inspector buttons now work in the Reads tab,
+  hiding the list of reads and the read details to widen the alignment. The Reads tab
+  remembers its own choice, so hiding the sidebar on the map leaves your reads in view.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

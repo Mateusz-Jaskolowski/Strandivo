@@ -7,6 +7,9 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { appJwt, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, pkcs8 } from "./src/index.mjs";
 
+/** The text of an email the Worker sent with one part, decoded. */
+const mailText = raw => Buffer.from(raw.split("\r\n\r\n")[1], "base64").toString();
+
 const report = {
   kind: "bug",
   summary: "Map is blank",
@@ -99,6 +102,7 @@ test("only a sound report is filed", async () => {
   assert.equal((await send(report, { "content-length": String(MAX_BYTES + 1) })).status, 413);
   assert.equal(calls.github.length, 0);
   assert.equal(calls.tokens.length, 0);
+  assert.equal(calls.mail.length, 0);
   assert.equal((await service({ limited: true }).send(report)).status, 429);
   assert.equal((await service({ github: { status: 401, body: {} } }).send(report)).status, 502);
   const get = await handle(new Request("https://feedback.strandivo.com/report"), {}, {});
@@ -136,6 +140,24 @@ test("a name to credit goes in the issue as inline code, and older copies send n
     assert.equal((await send({ ...report, name })).status, 400, JSON.stringify(name));
   }
   assert.equal(calls.github.length, 2);
+});
+
+test("when GitHub turns a report down, the maintainer is told why, with nothing from the report", async () => {
+  const { calls, send } = service({ github: { status: 403, body: { message: "Resource not accessible\nby integration" } } });
+  assert.equal((await send({ ...report, email: "anna@lab.example.org", name: "JIB" })).status, 502);
+  const [mail] = calls.mail;
+  assert.match(mail, /^From: Strandivo feedback <noreply@strandivo\.com>\r\nTo: <maintainer@example\.org>\r\nSubject: A report couldn't be filed\r\n/);
+  assert.match(mailText(mail), /\n\nGitHub answered 403 for the issue: Resource not accessible by integration\n\n/);
+  assert.doesNotMatch(mail + mailText(mail), /Map is blank|Opened a file|anna@|JIB|Reply-To|TypeError/);
+  // A token GitHub won't give says so too.
+  const refused = service({ tokenStatus: 401 });
+  await refused.send(report);
+  assert.match(mailText(refused.calls.mail[0]), /GitHub answered 401 for a token: no\n/);
+  // With no address, or the email failing, the app still hears it wasn't taken.
+  const noAddress = service({ github: { status: 500, body: {} }, env: { MAINTAINER_EMAIL: "" } });
+  assert.equal((await noAddress.send(report)).status, 502);
+  assert.equal(noAddress.calls.mail.length, 0);
+  assert.equal((await service({ github: { status: 500, body: {} }, mailFails: true }).send(report)).status, 502);
 });
 
 test("the email's subject may be in any language", () => {

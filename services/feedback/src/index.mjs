@@ -63,6 +63,43 @@ function base64(text) {
 const encodedWord = text => `=?UTF-8?B?${base64(text).replace(/\r\n/g, "")}?=`;
 
 /**
+ * The maintainer's email when GitHub turns a report down, saying why, as the Worker keeps
+ * no logs. Nothing from the report goes in: the reporter is told it wasn't taken and
+ * still has it to send another way.
+ */
+export function failureEmail(reason, to) {
+  const text = [
+    "A report sent from Strandivo couldn't be filed as an issue just now:",
+    "",
+    reason,
+    "",
+    "The reporter was told so and still has the report to send another way. Nothing from it is in this email.",
+    "",
+    `Setting up the GitHub App: https://github.com/${REPO}/blob/main/services/feedback/README.md#the-github-app`
+  ].join("\n");
+  return [
+    `From: Strandivo feedback <${FROM}>`,
+    `To: <${to}>`,
+    "Subject: A report couldn't be filed",
+    `Message-ID: <${crypto.randomUUID()}@strandivo.com>`,
+    `Date: ${new Date().toUTCString()}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    base64(text),
+    ""
+  ].join("\r\n");
+}
+
+/** Why GitHub turned a request down, in its own words, on one line and cut short. */
+async function refusal(res, what) {
+  const body = await res.json().catch(() => null);
+  const message = typeof body?.message === "string" ? `: ${body.message.replace(/\s+/g, " ").slice(0, 200)}` : "";
+  return new Error(`GitHub answered ${res.status} ${what}${message}`);
+}
+
+/**
  * The maintainer's email: the issue's link, the reporter's address as Reply-To, so
  * answering goes to them, and the file attached. Every value in a header has been checked
  * (an address has no spaces or line breaks; a file name no control characters).
@@ -157,7 +194,7 @@ export async function githubToken(env, fetchFn, now = Date.now()) {
     headers: { ...GITHUB_HEADERS, authorization: `Bearer ${jwt}`, "content-type": "application/json" },
     body: JSON.stringify({ repositories: [REPO.split("/")[1]], permissions: { issues: "write" } })
   });
-  if (!res.ok) throw new Error(`GitHub answered ${res.status} for a token`);
+  if (!res.ok) throw await refusal(res, "for a token");
   const { token } = await res.json();
   if (typeof token !== "string" || !token) throw new Error("GitHub gave no token.");
   return token;
@@ -170,7 +207,7 @@ async function createIssue(r, env, fetchFn) {
     headers: { ...GITHUB_HEADERS, authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ title: r.summary, body: issueBody(r), labels: ["from-app", LABELS[r.kind]] })
   });
-  if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
+  if (!res.ok) throw await refusal(res, "for the issue");
   const issue = await res.json();
   return { number: issue.number, url: issue.html_url };
 }
@@ -210,7 +247,15 @@ export async function handle(request, env, deps = {}) {
   let issue;
   try {
     issue = await createIssue(report, env, fetchFn);
-  } catch {
+  } catch (e) {
+    if (env.MAINTAINER_EMAIL) {
+      const reason = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 300);
+      try {
+        await sendMail(env, failureEmail(reason, env.MAINTAINER_EMAIL));
+      } catch {
+        // The reporter hears it wasn't taken either way.
+      }
+    }
     return answer(502, { error: "GitHub didn't take the issue just now." });
   }
 

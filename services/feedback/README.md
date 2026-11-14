@@ -10,7 +10,8 @@ link, the address as Reply-To. See `src/index.mjs`, and part 4 of
 `docs/updates-feedback-usage-plan.md`.
 
 It keeps nothing and has no logs. Cloudflare's rate limiter holds each network to 5
-reports a minute.
+reports a minute. When GitHub turns a report down, the reporter is told it wasn't taken,
+and you get an email with GitHub's reason and nothing from the report.
 
 Issues are filed by a GitHub App, so they show its bot as their author rather than the
 maintainer: for each report the Worker signs a token request with the App's private key
@@ -72,7 +73,7 @@ report with a field it doesn't know.
 
    The first two ask for the value; the key is read from the file as GitHub gave it, as
    a prompt would take only its first line. Then delete the downloaded file. Until all
-   three are set, a report fails and the app offers to copy or email it instead.
+   three are set, reports fail, and you get an email saying why for each.
 6. **Check it**: send a report from the app (below) and see that the issue's author is
    the App's bot, then close the issue.
 

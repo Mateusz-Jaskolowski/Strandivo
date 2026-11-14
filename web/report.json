@@ -1,0 +1,460 @@
+{
+  "checks": [
+    {
+      "name": "The web build opens a file in a tab with its map",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nothing stands in for the core: no shell and no test hooks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The page comes with the Content Security Policy it is deployed with",
+      "ok": true,
+      "detail": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'sel"
+    },
+    {
+      "name": "A first visit's welcome window asks nothing about updates",
+      "ok": true,
+      "detail": "Usage statistics, Your constructs, Primer library"
+    },
+    {
+      "name": "It says statistics are on in a browser, and offers to turn them off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Turn off says nothing is sent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Closing the window keeps them off",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The full enzyme catalogue renders only its visible rows",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The browser saves EcoRI in My enzymes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The browser saves Acc65I in My enzymes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The browser saves PvuII in My enzymes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The personal map shows every chosen site and keeps Acc65I's name",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The outline shares both enzyme choices",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Unique cutters hides PvuII without changing the personal source",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Sequence uses the same personal enzyme names and filter",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Digest starts from My enzymes and offers a multi-cutter hidden on the map",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Changing Digest's source retains an explicitly chosen non-common enzyme",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Restriction cloning starts with the personal source",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Restriction cloning keeps the selected enzyme through a source change",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Golden Gate retains its Type IIS choices",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Removing a personal enzyme updates the map immediately",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Adding from a site preserves the active source",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The personal list, source and filter survive reopening",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The reopened checklist keeps all personal selections",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Personal enzyme changes do not mark the sequence as edited",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular map region labels are quiet, readable and name their owning protein",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular region stripes lie within their CDS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular region label highlights its bands and only its own CDS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular a split region highlights every piece",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular overlapping proteins with identical region names stay distinct",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular nested region hover identifies the owning CDS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular hover changes neither document state nor label width",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular clicking a region label selects region zero at the measured weight",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Selected region leaders keep their stronger accent stroke",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Circular leaving the map clears hover",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear map region labels are quiet, readable and name their owning protein",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear region stripes lie within their CDS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear region label highlights its bands and only its own CDS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear a split region highlights every piece",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear overlapping proteins with identical region names stay distinct",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear nested region hover identifies the owning CDS",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear hover changes neither document state nor label width",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear clicking a region label selects region zero at the measured weight",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Linear leaving the map clears hover",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Detect features finds parts in the sequence",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "pUC19's origin is among them, and AmpR, already in the file, isn't",
+      "ok": true,
+      "detail": "ori, lac operator, CAP binding site"
+    },
+    {
+      "name": "A plate of reads aligns",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "Identical clones share a row, with their change",
+      "ok": true,
+      "detail": "[[\"A01_bla\",\"A02_bla\"],\"A01_bla +1\",\"2\",\"Partly covered\",\"AmpR W163R\",\"1,700–2,350\"]"
+    },
+    {
+      "name": "The clone table flags a stop and a frameshift",
+      "ok": true,
+      "detail": "[[[\"A03_bla\"],\"A03_bla\",\"1\",\"StopPartly covered\",\"AmpR W163*\",\"1,700–2,350\"],[[\"A05_bla\"],\"A05_bla\",\"1\",\"FrameshiftPartly covered\",\"AmpR D129fs\",\"1,700–2,350\"]]"
+    },
+    {
+      "name": "A panic in the core fails its request with the panic's message",
+      "ok": true,
+      "detail": "the core stopped unexpectedly (capacity overflow at alloc/src/raw_vec/mod.rs:29)"
+    },
+    {
+      "name": "After it, the core aligns the plate again (A06's amber stop as W163Q)",
+      "ok": true,
+      "detail": "[[\"A06_bla\"],\"A06_bla\",\"1\",\"Partly covered\",\"AmpR W163Q\",\"1,700–2,350\"]"
+    },
+    {
+      "name": "No alignment failed along the way",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home says the files never leave the computer, and links to how",
+      "ok": true,
+      "detail": "{\"href\":\"https://strandivo.com/privacy#the-browser-version\",\"text\":\"Runs in your browser. Your files never leave this computer. How?\"}"
+    },
+    {
+      "name": "Settings offers no update checks in a browser, and statistics stay as turned off",
+      "ok": true,
+      "detail": "{\"shared\":false,\"updates\":false}"
+    },
+    {
+      "name": "The app bar's menu has the menu bar's groups",
+      "ok": true,
+      "detail": "File,Edit,View,Tools,Window,Help"
+    },
+    {
+      "name": "It shows the keys that work in a browser, and greys out what needs a file",
+      "ok": true,
+      "detail": "[{\"key\":\"Ctrl+Alt+N\",\"label\":\"New Sequence\",\"on\":true},{\"key\":\"Ctrl+O\",\"label\":\"Open…\",\"on\":true},{\"key\":\"Ctrl+S\",\"label\":\"Save\",\"on\":false},{\"key\":\"Ctrl+Shift+S\",\"label\":\"Save As…\",\"on\":false},{\"key\":\"\",\"label\":\"Export GenBank…\",\"on\":false},{\"key\":\"\",\"label\":\"Export FASTA…\",\"on\":false},{\"key\":\"\",\"label\":\"Close Tab\",\"on\":false},{\"key\":\"\",\"label\":\"Settings…\",\"on\":true}]"
+    },
+    {
+      "name": "Ctrl+Alt+N makes a new sequence, as the browser keeps Ctrl+N",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Open… opens the file the browser's picker gave",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "Leaving the page isn't asked about with nothing unsaved",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The menu has Invert Selection after Select All, with no key in a browser",
+      "ok": true,
+      "detail": "[{\"key\":\"Ctrl+Z\",\"label\":\"Undo\"},{\"key\":\"Ctrl+Y\",\"label\":\"Redo\"},{\"key\":\"Ctrl+A\",\"label\":\"Select All\"},{\"key\":\"\",\"label\":\"Invert Selection\"},{\"key\":\"Ctrl+F\",\"label\":\"Find…\"},{\"key\":\"\",\"label\":\"Reverse Complement\"},{\"key\":\"\",\"label\":\"Set Origin at Cursor\"}]"
+    },
+    {
+      "name": "Invert Selection selects the rest of the plasmid, across the origin",
+      "ok": true,
+      "detail": "{\"end\":144,\"start\":469}"
+    },
+    {
+      "name": "With unsaved changes, the browser asks before leaving",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Save writes over the file it opened",
+      "ok": true,
+      "detail": "LOCUS       pUC19_from_the_browser      "
+    },
+    {
+      "name": "Save As writes the file chosen in the browser's save dialog, and the tab follows it",
+      "ok": true,
+      "detail": "LOCUS       pUC19_from_the_browser      "
+    },
+    {
+      "name": "Recent files keep files with a handle, shown by name",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Add folder… lists the sequence files in a folder and its subfolders",
+      "ok": true,
+      "detail": "true: pUC19.gb, pIB2-SEC13-mEGFP.dna"
+    },
+    {
+      "name": "Home shows the folder by its name, never its key",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Reads picked in the browser's picker are added",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "They are remembered, and come back when the file opens again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Save check… in the folder writes paths relative to it, and a read from elsewhere by name",
+      "ok": true,
+      "detail": "{\"strandivo\":\"read check\",\"version\":1,\"reference\":\"../pUC19.gb\",\"reads\":[{\"path\":\"sage-sample.ab1\",\"clone\":null},{\"path\":\"plate-bla.fasta\",\"clone\":null}],\"minQuality\":20,\"trimCutoff\":0.05}"
+    },
+    {
+      "name": "After a reload, Home lists the folder again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The file's reads come back too",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A check in the folder opens with its reads there, and asks for one from elsewhere",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "The read chosen is matched by name and added with the others",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Open… falls back to a file input",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The file input opens a SnapGene file",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The SnapGene file's primers come with it",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Save, which can't write over it, downloads a GenBank copy",
+      "ok": true,
+      "detail": "{\"name\":\"pIB2-SEC13-mEGFP.gb\",\"text\":\"LOCUS       \"}"
+    },
+    {
+      "name": "The first download says why",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The second doesn't say it again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Without folders, Home lists the files opened during the visit, and says why",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A file dragged over the window shows where it will go",
+      "ok": true,
+      "detail": "true"
+    },
+    {
+      "name": "A file dropped on Home opens in a tab",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A trace dropped on a file is added to its reads",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Held only for the visit, the reads aren't remembered, and the Reads tab says so",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Save check… downloads a check naming the files beside it",
+      "ok": true,
+      "detail": "{\n  \"strandivo\": \"read check\",\n  \"version\": 1,\n  \"reference\": \"dropped.gb\",\n  \"reads\": [\n    {\n      \"path\": \"sage-sample.ab1\",\n      \"clone\": null\n    }\n  ],\n  \"minQuality\": 20,\n  \"trimCutoff\": 0.05\n"
+    },
+    {
+      "name": "A check opened there finds its sequence among the open files, and asks for its reads",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "The read chosen is matched by name",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A check whose sequence isn't open asks for its files",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "They open matched by name, with the check's read",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Nothing the page did broke its Content Security Policy",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "date": "2026-11-14T19:20:43.796Z"
+}

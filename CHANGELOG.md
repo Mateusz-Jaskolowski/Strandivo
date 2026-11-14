@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **GC content on the map**: the map's new GC% button draws GC content as a ring inside
+  the features (a band under the ruler on the linear map), in the same colours as in the
+  Sequence tab: teal where it is AT-rich, orange where it is GC-rich. Hover over a stretch
+  to see its GC. The GC buttons in the Sequence and Primers tabs now read GC% too, and
+  each says what its colours mean when you hover over it.
 - **Credit for feedback**: Report a bug and Send feedback take your name or initials to
   credit you in the public issue, and remember them for next time. If you have a GitHub
   account, Post on GitHub instead opens the issue on GitHub filled in with what you wrote,
@@ -43,6 +48,10 @@ with Unreleased's notes and leaves them where they are.
   default, follows your computer's light or dark mode and changes along with it. Title
   bars, and the menu bar on Windows, follow your choice too. Figures you save or copy as
   images keep their usual colours, ready for slides.
+- **Steadier toggles**: the buttons that show or hide things on the map, in the Sequence
+  and Primers tabs and over the reads' alignment keep their width when turned on or off,
+  so the ones beside them no longer shift. Over the alignment, a hidden track's button now
+  loses its tick like the others.
 - **More room for traces**: the sidebar and inspector buttons now work in the Reads tab,
   hiding the list of reads and the read details to widen the alignment. The Reads tab
   remembers its own choice, so hiding the sidebar on the map leaves your reads in view.

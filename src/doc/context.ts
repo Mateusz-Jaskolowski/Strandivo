@@ -23,6 +23,8 @@ export interface ViewOptions extends EnzymeOptions {
   /** GC content under the bases in Sequence (and along its overview strip), and in the primer's context. */
   sequenceGc: boolean;
   primerGc: boolean;
+  /** GC content as a ring inside the features on the map (a band under the ruler on the linear map). */
+  mapGc: boolean;
   primers: boolean;
   cutsites: boolean;
   /** Position marks and numbers on the map. */

@@ -6,7 +6,7 @@
 // or clone on the right.
 
 import { h, svg } from "../ui/dom.ts";
-import { iconSvg } from "../ui/icons.ts";
+import { checkIcon, iconSvg } from "../ui/icons.ts";
 import { sortHeader } from "../ui/sortHead.ts";
 import { naturalOrder, nextTableSort, parseTableSort, sortedBy, type TableSort } from "../lib/tableSort.ts";
 import { splitter } from "../ui/splitter.ts";
@@ -1666,7 +1666,7 @@ export class ReadsView {
             this.renderAlignmentHead();
           }
         },
-        iconSvg("check", 12),
+        checkIcon(),
         label
       );
     const close = this.topView() !== "coverage" && h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": "Close alignment", title: "Close alignment", onclick: () => this.closeAlignment() }, iconSvg("x", 15));

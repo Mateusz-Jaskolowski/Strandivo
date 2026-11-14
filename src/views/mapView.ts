@@ -8,7 +8,7 @@
 import { h } from "../ui/dom.ts";
 import { enzymeControls, enzymeSummary } from "./enzymeControls.ts";
 import { fontStack, s, textWidth } from "../ui/svg.ts";
-import { cutSiteById, cutSites, featureStyles, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
+import { cutSiteById, cutSites, featureStyles, gcValues, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { type CutSite } from "../lib/enzymes.ts";
 import type { Focus } from "../doc/store.ts";
@@ -21,6 +21,8 @@ import { checkIcon, iconSvg } from "../ui/icons.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { selectedRanges } from "../lib/selection.ts";
 import { sweep, sweptRange } from "../lib/mapDrag.ts";
+import { gcRuns, joinAtOrigin, overviewWindow, type GcRun } from "../lib/gc.ts";
+import { GC_CHIP_LABEL, gcChipTitle, gcRunTitle, gcWindowText } from "./gcStrip.ts";
 
 
 interface LabelItem {
@@ -151,6 +153,26 @@ const PRIMER_STEP = 7;
 /** ORF arcs inside the features: thickness and lane step. */
 const ORF_BAND = 4;
 const ORF_STEP = 7;
+/**
+ * GC content: a ring inside the features and ORFs, outside the ruler (on the linear map, a
+ * band between the ruler and the features), in the Sequence tab's colours and over the
+ * window of its overview strip (docs/gc-content-plan.md). Its width, and the room either side.
+ */
+const GC_RING = 6;
+const GC_GAP = 3;
+
+/** The runs of GC levels along the whole sequence, at the overview's scale; around a circle, one across the origin is one run. */
+function gcRunsAlong(d: SeqData, around: boolean): GcRun[] {
+  const n = d.sequence.length;
+  const values = gcValues(d, overviewWindow(n));
+  const runs = gcRuns(n, i => values[i]);
+  return around ? joinAtOrigin(runs, n) : runs;
+}
+
+/** A run of the GC ring or band, drawn as a thick stroke along `d` (or a whole circle) and named in its tooltip. */
+function gcShape(tag: "path" | "circle" | "line", attrs: Record<string, string | number>, run: GcRun): SVGElement {
+  return s(tag, { ...attrs, class: `sv-map-gc-${run.level}` }, s("title", null, gcRunTitle(run)));
+}
 
 /** A "nice" ruler step giving roughly `count` ticks over `n`. */
 function niceStep(n: number, count: number): number {
@@ -320,7 +342,7 @@ export class MapView {
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
-    const chip = (key: "features" | "mapRegions" | "primers" | "orfs" | "cutsites" | "ruler", label: string) => {
+    const chip = (key: "features" | "mapRegions" | "primers" | "orfs" | "mapGc" | "cutsites" | "ruler", label: string) => {
       const b = h("button", { type: "button", class: "sv-chip", onclick: () => ctx.setOptions({ [key]: !ctx.options[key] }) }, checkIcon(), label);
       this.chips[key] = b;
       return b;
@@ -343,6 +365,7 @@ export class MapView {
       h("div", { class: "sv-chip-group" }, chip("mapRegions", "Regions"), regionsMenu.button, regionsMenu.menu),
       chip("primers", "Primers"),
       chip("orfs", "ORFs"),
+      chip("mapGc", GC_CHIP_LABEL),
       h("div", { class: "sv-chip-group sv-chip-joined" }, chip("cutsites", "Cut sites"), cutsMenu.button, cutsMenu.menu),
       chip("ruler", "Ruler"),
       h("div", { class: "sv-segmented sv-push" }, this.modeButtons.circular, this.modeButtons.linear)
@@ -463,6 +486,7 @@ export class MapView {
     this.proteinSelect.disabled = !o.mapRegions;
 
     const d = this.ctx.store.data;
+    this.chips.mapGc.title = gcChipTitle(`the ${gcWindowText(overviewWindow(d.sequence.length))} around each position`, false);
     // Top-level/all only changes nested regions; independent overlaps stay in both.
     this.proteinSelect.hidden = !o.features || !o.mapRegions || !d.features.some(f => layoutRegions(regionsOf(f)).some(r => r.depth > 0));
     const { cutsites, regions } = this.menuButtons;
@@ -521,7 +545,10 @@ export class MapView {
       pad
     );
     const oLaneCount = orfList.length ? Math.max(...Array.from(oLanes.values())) + 1 : 0;
-    const rulerOut = innermost - (oLaneCount ? oLaneCount * ORF_STEP + 3 : 0);
+    // GC inside the features and ORFs (whose last lane ends at `inner`), then the ruler.
+    const inner = innermost - oLaneCount * ORF_STEP;
+    const gcMid = inner - GC_GAP - GC_RING / 2;
+    const rulerOut = o.mapGc ? gcMid - GC_RING / 2 - GC_GAP + 1 : innermost - (oLaneCount ? oLaneCount * ORF_STEP + 3 : 0);
 
     // Primer lanes, going outwards.
     const primers = o.primers ? d.primers : [];
@@ -654,6 +681,15 @@ export class MapView {
       this.addShape(`orf:${x.id}`, path);
     }
     root.appendChild(orfLayer);
+
+    if (o.mapGc) {
+      const ring = s("g", { class: "sv-map-gc", fill: "none", "stroke-width": GC_RING });
+      for (const run of gcRunsAlong(d, true)) {
+        const whole = run.a === 0 && run.b === n - 1;
+        ring.appendChild(whole ? gcShape("circle", { cx: 0, cy: 0, r: gcMid }, run) : gcShape("path", { d: arcPath(ang(run.a), ang(run.b + 1), gcMid, false) }, run));
+      }
+      root.appendChild(ring);
+    }
 
     // Primers.
     const primerLayer = s("g");
@@ -884,8 +920,9 @@ export class MapView {
       nameRow.set(f.id, row);
     }
     const nameStep = Math.max(14, labelPx + 4);
-    // The ruler's numbers sit between the backbone and the features.
-    const laneY: number[] = [baseY + (o.ruler ? 22 : 8)];
+    // The ruler's numbers sit between the backbone and the features, and GC under them.
+    const gcTop = baseY + (o.ruler ? 22 : 8);
+    const laneY: number[] = [gcTop + (o.mapGc ? GC_RING + 2 * GC_GAP : 0)];
     for (let l = 0; l < laneCount; l++) {
       laneY.push(laneY[l] + 16 + Math.max(1, nameRowEnds[l].length) * nameStep + regionLabelRows[l] * nameStep);
     }
@@ -906,6 +943,12 @@ export class MapView {
     this.selLayer = sel;
 
     root.appendChild(s("line", { x1: X(0), y1: baseY, x2: X(n), y2: baseY, class: "sv-map-backbone" }));
+    if (o.mapGc) {
+      const band = s("g", { class: "sv-map-gc", "stroke-width": GC_RING });
+      const y = f1(gcTop + GC_RING / 2);
+      for (const run of gcRunsAlong(d, false)) band.appendChild(gcShape("line", { x1: f1(X(run.a)), x2: f1(Math.max(X(run.b + 1), X(run.a) + 0.5)), y1: y, y2: y }, run));
+      root.appendChild(band);
+    }
     if (o.ruler) {
       const step = niceStep(n, Math.max(4, Math.floor(width / 110)));
       const ticks = s("g", { class: "sv-map-tick" });

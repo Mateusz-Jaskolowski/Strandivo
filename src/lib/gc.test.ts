@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { gcLevel, gcProfile, gcRuns, gcRunText, overviewWindow } from "./gc.ts";
+import { gcLevel, gcProfile, gcRuns, gcRunText, joinAtOrigin, overviewWindow } from "./gc.ts";
 
 /** GC of bases a…b by counting, the slow way, for comparing. */
 function counted(seq: string, circular: boolean, i: number, window: number): number {
@@ -91,6 +91,22 @@ test("runs join values of one level and skip unknown ones", () => {
   assert.deepEqual(runs.map(r => [r.a, r.b, r.level]), [[0, 1, "mid"], [2, 3, "gc"], [5, 5, "at"], [6, 6, "mid"]]);
   assert.equal(gcRunText(runs[0]), "GC 45–50%");
   assert.equal(gcRunText(runs[2]), "GC 10%");
+});
+
+test("around a circle, a run across the origin is one run", () => {
+  const values = [0.7, 0.8, 0.5, 0.5, 0.1, 0.62, 0.66];
+  const runs = joinAtOrigin(gcRuns(values.length, i => values[i]), values.length);
+  assert.deepEqual(runs.map(r => [r.a, r.b, r.level]), [[2, 3, "mid"], [4, 4, "at"], [5, 5, "gc-light"], [6, 1, "gc"]]);
+  assert.equal(gcRunText(runs[3]), "GC 66–80%");
+});
+
+test("around a circle, other levels, a gap at the origin and a single run stay apart", () => {
+  const join = (values: number[]) => joinAtOrigin(gcRuns(values.length, i => values[i]), values.length).map(r => [r.a, r.b, r.level]);
+  assert.deepEqual(join([0.7, 0.5, 0.1]), [[0, 0, "gc"], [1, 1, "mid"], [2, 2, "at"]]);
+  assert.deepEqual(join([0.7, 0.5, NaN, 0.7]), [[1, 1, "mid"], [3, 0, "gc"]]);
+  assert.deepEqual(join([NaN, 0.7, 0.7]), [[1, 2, "gc"]]);
+  assert.deepEqual(join([0.5, 0.5, 0.5]), [[0, 2, "mid"]]);
+  assert.deepEqual(joinAtOrigin([], 0), []);
 });
 
 test("the overview window grows with the sequence and stays odd", () => {

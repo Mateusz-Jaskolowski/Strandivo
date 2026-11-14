@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { appJwt, DAILY_REPORTS, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, networkKey, pkcs8 } from "./src/index.mjs";
+import { appJwt, attachmentName, DAILY_REPORTS, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, networkKey, pkcs8 } from "./src/index.mjs";
 
 /** The text of an email the Worker sent with one part, decoded. */
 const mailText = raw => Buffer.from(raw.split("\r\n\r\n")[1], "base64").toString();
@@ -236,6 +236,18 @@ test("without a token from GitHub, nothing is filed and the app hears so", async
     assert.equal(s.calls.tokens.length + s.calls.github.length, 0, JSON.stringify(env));
   }
   await assert.rejects(githubToken({}, async () => new Response("{}")), /App's secrets/);
+});
+
+test("the open file is attached as .gb, whatever it was called", async () => {
+  assert.equal(attachmentName("pSecret.gb"), "pSecret.gb");
+  assert.equal(attachmentName("pUC19.GB"), "pUC19.GB");
+  // The app never sends another name, but anyone can send a report.
+  for (const [name, attached] of [["run.command", "run.command.gb"], ["page.html", "page.html.gb"], ['a"b\\c.svg', "a_b_c.svg.gb"]]) assert.equal(attachmentName(name), attached);
+  const { calls, send } = service();
+  await send({ ...report, file: { name: "invoice.html", contents: "<script>alert(1)</script>" } });
+  assert.match(calls.mail[0], /Content-Type: text\/plain; charset=utf-8; name="invoice\.html\.gb"\r\nContent-Disposition: attachment; filename="invoice\.html\.gb"\r\n/);
+  const text = maintainerEmail({ ...report, file: { name: "invoice.html", contents: "" } }, { number: 7, url: "u" }, "m@example.org", "B").split("--B\r\n")[1];
+  assert.match(mailText(text), /attached the open file, invoice\.html\.gb\./);
 });
 
 test("one network is an IPv4 address, or the first 64 bits of an IPv6 one", async () => {

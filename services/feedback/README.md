@@ -19,6 +19,8 @@ flood, as an app can't keep a secret and anyone can send a report:
   email with GitHub's reason and nothing from the report: the day's first only.
 - Cloudflare's rate limiter holds each network to 5 reports a minute, an IPv6 network
   being the first 64 bits of the address.
+- An attached file is named `.gb` in the email, whatever the report called it, so it never
+  opens as a web page or a script.
 
 Issues are filed by a GitHub App, so they show its bot as their author rather than the
 maintainer: for each report the Worker signs a token request with the App's private key

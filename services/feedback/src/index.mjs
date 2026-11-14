@@ -126,6 +126,16 @@ async function refusal(res, what) {
 }
 
 /**
+ * The attached file's name in the email. The app sends the open file as GenBank, named
+ * `<title>.gb`; any other name gets ".gb" added, so a mail client or the system never
+ * opens a file sent as `x.html` or `x.command` as a web page or a script.
+ */
+export function attachmentName(name) {
+  const safe = name.replace(/["\\]/g, "_");
+  return /\.gb$/i.test(safe) ? safe : `${safe}.gb`;
+}
+
+/**
  * The maintainer's email: the issue's link, the reporter's address as Reply-To, so
  * answering goes to them, and the file attached. Every value in a header has been checked
  * (an address has no spaces or line breaks; a file name no control characters).
@@ -137,7 +147,7 @@ export function maintainerEmail(r, issue, to, boundary = `sv-${crypto.randomUUID
     issue.url,
     "",
     r.email ? `The reporter would like an answer at ${r.email} (Reply-To). Their address is not in the issue.` : "The reporter left no email address.",
-    r.file ? `They attached the open file, ${r.file.name}. It is not in the issue.` : ""
+    r.file ? `They attached the open file, ${attachmentName(r.file.name)}. It is not in the issue.` : ""
   ].join("\n");
   const head = [
     `From: Strandivo feedback <${FROM}>`,
@@ -151,7 +161,7 @@ export function maintainerEmail(r, issue, to, boundary = `sv-${crypto.randomUUID
   ];
   const parts = [["Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", base64(text)].join("\r\n")];
   if (r.file) {
-    const name = r.file.name.replace(/["\\]/g, "_");
+    const name = attachmentName(r.file.name);
     parts.push([`Content-Type: text/plain; charset=utf-8; name="${name}"`, `Content-Disposition: attachment; filename="${name}"`, "Content-Transfer-Encoding: base64", "", base64(r.file.contents)].join("\r\n"));
   }
   return [...head, "", ...parts.map(p => `--${boundary}\r\n${p}`), `--${boundary}--`, ""].join("\r\n");

@@ -23,6 +23,12 @@ and CI checks that they exist.
   which takes only PKCS#8, so GitHub's PKCS#1 key is wrapped in code) and swaps it for an
   installation token narrowed to this repository's issues. With no logs to look in, a
   report GitHub turns down gets the maintainer an email with GitHub's reason and nothing
-  from the report (`failureEmail`). The App's three secrets and the maintainer's address
-  are Worker secrets, never in the repository; its README says how to set them up. Deploy
-  it with `npx wrangler@4 deploy --config services/feedback/wrangler.toml`.
+  from the report (`failureEmail`). As anyone can send reports, a D1 database
+  (`services/feedback/schema.sql`) keeps two numbers a day, reports and refusals, and
+  nothing else: past `DAILY_REPORTS` the Worker answers 503 and emails the maintainer
+  once (`limitEmail`), and only the day's first refusal is emailed. It answers 503, not
+  429, as every copy reads 429 as "wait a minute" but shows any other answer's reason as
+  it is. If the database fails, reports go through as before it. The App's three secrets
+  and the maintainer's address are Worker secrets, never in the repository; its README
+  says how to set them up. Deploy it with
+  `npx wrangler@4 deploy --config services/feedback/wrangler.toml`.

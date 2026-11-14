@@ -16,7 +16,8 @@ routes = [{ pattern = "feedback.strandivo.com", custom_domain = true }]
 [observability]
 enabled = false
 
-# How often one network may send: 5 a minute, counted by Cloudflare in each location.
+# How often one network may send: 5 a minute, counted by Cloudflare in each location. A
+# network is an IPv4 address, or the first 64 bits of an IPv6 one (networkKey).
 [[ratelimits]]
 name = "LIMITER"
 namespace_id = "2101"
@@ -24,6 +25,14 @@ namespace_id = "2101"
   [ratelimits.simple]
   limit = 5
   period = 60
+
+# Two numbers a day (schema.sql): the reports that came, which past DAILY_REPORTS in
+# src/index.mjs are turned away, and those GitHub turned down; nothing about a report or
+# its sender. Created in western Europe; the README says how and how to read it.
+[[d1_databases]]
+binding = "COUNTS"
+database_name = "strandivo-feedback-counts"
+database_id = "33898db5-9f02-4a16-a78d-7fcc239f53fe"
 
 # Email to the maintainer's address, which must be a verified destination of Email Routing
 # on strandivo.com. The address itself is the MAINTAINER_EMAIL secret, so it isn't public.

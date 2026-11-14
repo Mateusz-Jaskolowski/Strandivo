@@ -9,9 +9,18 @@ so the reporter's email address and any file they attach never go in one: they a
 link, the address as Reply-To. See `src/index.mjs`, and part 4 of
 `docs/updates-feedback-usage-plan.md`.
 
-It keeps nothing and has no logs. Cloudflare's rate limiter holds each network to 5
-reports a minute. When GitHub turns a report down, the reporter is told it wasn't taken,
-and you get an email with GitHub's reason and nothing from the report.
+It has no logs and keeps two numbers a day (`schema.sql`): how many reports came, and how
+many of them GitHub turned down, with nothing about a report or who sent it. That bounds a
+flood, as an app can't keep a secret and anyone can send a report:
+
+- Past 30 reports in a day, UTC (`DAILY_REPORTS` in `src/index.mjs`), it turns reports
+  away until midnight and emails you once, with a link to the day's issues.
+- When GitHub turns a report down, the reporter is told it wasn't taken, and you get an
+  email with GitHub's reason and nothing from the report: the day's first only.
+- Cloudflare's rate limiter holds each network to 5 reports a minute, an IPv6 network
+  being the first 64 bits of the address.
+- An attached file is named `.gb` in the email, whatever the report called it, so it never
+  opens as a web page or a script.
 
 Issues are filed by a GitHub App, so they show its bot as their author rather than the
 maintainer: for each report the Worker signs a token request with the App's private key
@@ -25,7 +34,15 @@ and gets a token that can only write this repository's issues.
    with your own address as a **verified destination address** (the one `hello@` already
    forwards to will do). The Worker sends from `noreply@strandivo.com` to that address
    alone.
-3. **Deploy, and give it your address**, from the repository's root:
+3. **Its counts.** A D1 database, made in western Europe; its id is in `wrangler.toml`.
+   It was made once, from the repository's root, with:
+
+   ```sh
+   npx wrangler@4 d1 create strandivo-feedback-counts --location weur
+   npx wrangler@4 d1 execute strandivo-feedback-counts --remote --file services/feedback/schema.sql
+   ```
+
+4. **Deploy, and give it your address**, from the repository's root:
 
    ```sh
    npx wrangler@4 deploy --config services/feedback/wrangler.toml
@@ -34,7 +51,7 @@ and gets a token that can only write this repository's issues.
 
    `secret put` asks for the value: your verified address. No secret is in this
    repository or in the app.
-4. **A GitHub App that can only write issues**, and its three secrets (below).
+5. **A GitHub App that can only write issues**, and its three secrets (below).
 
 Deploy again after changing `src/index.mjs` or `src/lib/feedback.ts`, which it bundles:
 the app and the Worker then agree on what a report may hold. A copy of the app checks a
@@ -73,7 +90,7 @@ report with a field it doesn't know.
 
    The first two ask for the value; the key is read from the file as GitHub gave it, as
    a prompt would take only its first line. Then delete the downloaded file. Until all
-   three are set, reports fail, and you get an email saying why for each.
+   three are set, reports fail, and you get an email a day saying why.
 6. **Check it**: send a report from the app (below) and see that the issue's author is
    the App's bot, then close the issue.
 
@@ -84,10 +101,24 @@ curl -i -X POST https://feedback.strandivo.com/report -H 'content-type: applicat
 ```
 
 answers `400` with "Choose bug, idea or question.", without filing anything, and asks
-GitHub for no token. To file a
-real test report, use the app's Help → Send Feedback…, then close the issue.
+GitHub for no token, and isn't counted. To file a real test report, use the app's Help →
+Send Feedback…, then close the issue.
+
+Read the counts with:
+
+```sh
+npx wrangler@4 d1 execute strandivo-feedback-counts --remote --command "SELECT * FROM days ORDER BY day DESC LIMIT 14"
+```
+
+## If it is flooded
+
+The day's reports stop at the limit on their own. To stop them all, suspend the App's
+installation: GitHub → Settings → Applications → Installed GitHub Apps → Configure →
+Suspend. Reports then fail, and reporters are offered another way to send them;
+Unsuspend there brings it back. Close the day's issues by their `from-app` label.
 
 ## Tests
 
-`npm test` runs `feedback.test.mjs`, with GitHub and email replaced by stubs. The App's
-tests sign with a key made for the test and check the signature with Node's own crypto.
+`npm test` runs `feedback.test.mjs`, with GitHub and email replaced by stubs, and D1 by
+Node's own SQLite running `schema.sql`. The App's tests sign with a key made for the test
+and check the signature with Node's own crypto.

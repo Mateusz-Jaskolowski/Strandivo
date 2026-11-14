@@ -60,6 +60,15 @@ export class InfoPanel {
     container.appendChild(this.root);
   }
 
+  /** Puts the cursor in the name field, with the name selected, once the tab shows. */
+  focusName() {
+    requestAnimationFrame(() => {
+      const input = this.root.querySelector<HTMLInputElement>(".ps-info-name");
+      input?.focus();
+      input?.select();
+    });
+  }
+
   /** Sets the verification fields from the reads aligned in this window. */
   fillFromSequencing() {
     const s = this.cb.sequencing();

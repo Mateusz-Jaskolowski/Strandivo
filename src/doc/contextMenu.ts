@@ -30,6 +30,8 @@ export interface ContextMenuHost {
   addPrimer(strand: 1 | -1): void;
   /** Puts the cursor in the inspector's name field for the selected annotation. */
   rename(): void;
+  /** Lets the user type a new name for the sequence: on the map's name, or in the Info tab. */
+  renameSequence(): void;
   /** Opens the system colour picker for the selected feature (the inspector's swatch). */
   pickColour(): void;
   /** Opens the Digest dialog with these enzymes chosen. */
@@ -226,6 +228,8 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       return;
     case "rename":
       return host.rename();
+    case "rename-sequence":
+      return host.renameSequence();
     case "set-colour":
     case "default-colour":
       if (feature) {

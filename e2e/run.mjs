@@ -163,6 +163,7 @@ const CTRL = "\uE009";
 const SHIFT = "\uE008";
 const ARROW_RIGHT = "\uE014";
 const ESCAPE = "\uE00C";
+const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
 const PAGE_UP = "\uE00E";
 
@@ -362,6 +363,30 @@ async function main() {
       const off = Math.abs(ringSel.caret - expected) % start.len;
       check("A click near the circle puts the cursor there", !ringSel.range && Math.min(off, start.len - off) <= 3, `caret ${ringSel.caret}, expected about ${expected}`);
     } else check("Empty points near and far from the map's circle were found", false, JSON.stringify(mapPoints));
+
+    // The name in the middle of the map is the sequence's, renamed in place; the file keeps its name.
+    const nameBefore = await s.exec(`${doc} return s.data.name;`);
+    const renameField = "document.activeElement?.classList.contains('sv-map-name-edit')";
+    await s.doubleClick(".sv-map-name");
+    const renameOpened = await s.waitFor(renameField, 3000) && await s.exec("const i = document.activeElement; return i.value === arguments[0] && i.selectionStart === 0 && i.selectionEnd === i.value.length;", nameBefore);
+    check("Double-clicking the map's name opens a field with the name selected", renameOpened);
+    await s.shot("01-rename");
+    await s.press(`pUC19 K45A${ENTER}`);
+    const renamed = await s.exec(`${doc} return { name: s.data.name, undo: s.undoLabel, shown: document.querySelector('.sv-map-name')?.textContent, title: document.querySelector('.sv-doc-name')?.textContent, tab: window.__strandivo.tabs()[window.__strandivo.activeTab()], field: !!document.querySelector('.sv-map-name-edit') };`);
+    check("Enter renames the sequence, not its file", renamed.name === "pUC19 K45A" && renamed.undo === "Rename" && renamed.shown === "pUC19 K45A" && renamed.title === "pUC19 K45A" && renamed.tab === "pUC19-annotated.gb" && !renamed.field, JSON.stringify(renamed));
+    await s.doubleClick(".sv-map-name");
+    await s.waitFor(renameField, 3000);
+    await s.press(`not this${ESCAPE}`);
+    check("Esc leaves the name as it was", await s.exec(`${doc} return s.data.name === 'pUC19 K45A' && !document.querySelector('.sv-map-name-edit');`));
+    const nameMenu = await s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
+      document.querySelector('.sv-map-name').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
+    check("Right-clicking the name offers to rename the sequence, and no origin", nameMenu[0] === "Rename sequence…" && !nameMenu.includes("Set origin here"), nameMenu.join(", "));
+    await s.exec("window.__e2eMenu.find(e => e.label === 'Rename sequence…')?.run(); delete window.__strandivoMenu;");
+    check("Rename sequence… opens the same field", await s.waitFor(renameField, 3000));
+    await s.press(ESCAPE);
+    await s.exec(`${doc} s.undo();`);
+    check("Undo brings the old name back", await s.exec(`${doc} return s.data.name === arguments[0] && document.querySelector('.sv-map-name')?.textContent === arguments[0];`, nameBefore));
 
     const lacId = await s.exec(addTouching);
     await sleep(400);

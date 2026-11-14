@@ -16,6 +16,10 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Rename a plasmid on its map**: double-click the name in the middle of the map, type a
+  new one and press Enter, or Esc to keep the old one. This renames the sequence, not its
+  file. Right-click the name, or empty space around the map, for Rename sequence…, Select
+  all and Reverse-complement sequence.
 - **Clicking beside the map**: a click on empty space away from the map now clears the
   selection, instead of putting the cursor at whatever base lay in that direction, even
   from the window's far corners. On or near the circle, and along the linear map's

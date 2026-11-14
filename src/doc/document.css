@@ -1406,6 +1406,25 @@
 }
 .sv-map-name {
   fill: var(--text);
+  cursor: text;
+}
+/* Over the name, in its font and size (`startRename`), as text in the middle of the map. */
+.sv-map-name-edit {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 0.4em;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--text);
+  text-align: center;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .sv-map-size {
   fill: var(--text-3);

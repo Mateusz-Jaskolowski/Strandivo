@@ -128,6 +128,8 @@ interface Geometry {
  * cursor or starts a selection, so a click needn't land exactly on the circle.
  */
 const NEAR_PX = 12;
+/** Two presses on the sequence's name within this many milliseconds rename it. */
+const DOUBLE_MS = 500;
 
 const BAND_OUT = 151;
 const BAND = 18;
@@ -344,6 +346,10 @@ export class MapView {
   /** The buttons beside the Cut sites and Regions chips that open their menus. */
   private menuButtons: { cutsites: HTMLButtonElement; regions: HTMLButtonElement };
   private closeMenu: (() => void) | null = null;
+  /** The sequence's name in the middle of a circular map, which a double-click renames. */
+  private nameEl: SVGTextElement | null = null;
+  /** The field typed into while renaming, over the name it hides. */
+  private renaming: { input: HTMLInputElement; nameEl: SVGTextElement } | null = null;
   private visible = false;
   private stale = true;
   private ctx: DocContext;
@@ -414,6 +420,7 @@ export class MapView {
   setVisible(v: boolean) {
     this.visible = v;
     if (!v) {
+      this.finishRename(true);
       this.closeMenu?.();
       this.hoverRegion(null);
     }
@@ -473,8 +480,11 @@ export class MapView {
   }
 
   render() {
+    // A redraw would leave the field over nothing: what was typed is kept.
+    this.finishRename(true);
     this.hoverRegion(null);
     this.stale = false;
+    this.nameEl = null;
     const o = this.ctx.options;
     for (const [k, b] of Object.entries(this.chips)) {
       const on = !!o[k as "features"];
@@ -820,9 +830,10 @@ export class MapView {
     }
     root.append(leaders, texts);
 
-    // Name in the middle.
+    // Name in the middle, renamed by a double-click (`startRename`).
     const nameSize = Math.min(18, Math.max(12, (innermost * 1.6) / Math.max(4, d.name.length)));
-    root.appendChild(s("text", { x: 0, y: -8, "text-anchor": "middle", "font-size": f1(nameSize), "font-weight": 600, class: "sv-map-name" }, d.name));
+    this.nameEl = s("text", { x: 0, y: -8, "text-anchor": "middle", "font-size": f1(nameSize), "font-weight": 600, class: "sv-map-name" }, d.name, s("title", null, "Double-click to rename"));
+    root.appendChild(this.nameEl);
     root.appendChild(s("text", { x: 0, y: 12, "text-anchor": "middle", "font-size": 11.5, class: "sv-map-size" }, `${fmt(n)} bp`));
 
     const m = 10;
@@ -1180,6 +1191,66 @@ export class MapView {
     layer.replaceChildren(...parts);
   }
 
+  // ---------- renaming ----------
+
+  /**
+   * Puts a field over the sequence's name in the middle of the map, with the name selected:
+   * Enter or clicking away renames the sequence (not its file), Esc leaves it. False when no
+   * name is drawn (the linear map, or the map isn't showing).
+   */
+  startRename(): boolean {
+    const nameEl = this.nameEl;
+    const m = this.svg?.getScreenCTM();
+    if (!this.visible || !nameEl?.isConnected || !m) return false;
+    if (this.renaming) {
+      this.renaming.input.focus();
+      return true;
+    }
+    const box = nameEl.getBoundingClientRect();
+    const host = this.svgHost.getBoundingClientRect();
+    // The name's size on screen, so the field reads as the name itself.
+    const px = Number(nameEl.getAttribute("font-size")) * Math.hypot(m.a, m.b);
+    const font = `600 ${px}px ${fontStack("sans")}`;
+    const cx = box.left + box.width / 2 - host.left;
+    const cy = box.top + box.height / 2 - host.top;
+    const input = h("input", { class: "sv-map-name-edit", value: this.ctx.store.data.name, spellcheck: "false", autocomplete: "off", "aria-label": "Sequence name" }) as HTMLInputElement;
+    input.style.font = font;
+    input.style.height = `${f1(px * 1.7)}px`;
+    input.style.top = `${f1(cy - px * 0.85)}px`;
+    const fit = () => {
+      const w = Math.min(Math.max(px * 6, textWidth(input.value, font) + px * 1.6), Math.max(px * 6, host.width - 16));
+      input.style.width = `${f1(w)}px`;
+      input.style.left = `${f1(cx - w / 2)}px`;
+    };
+    fit();
+    input.addEventListener("input", fit);
+    input.addEventListener("keydown", e => {
+      // Enter while composing (Japanese, Chinese) picks the characters, not the name.
+      if ((e.key !== "Enter" && e.key !== "Escape") || e.isComposing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.finishRename(e.key === "Enter");
+    });
+    input.addEventListener("blur", () => this.finishRename(true));
+    this.renaming = { input, nameEl };
+    nameEl.style.visibility = "hidden";
+    this.svgHost.appendChild(input);
+    input.focus();
+    input.select();
+    return true;
+  }
+
+  /** Takes the rename field away, renaming the sequence to what was typed if `save`. */
+  private finishRename(save: boolean) {
+    const r = this.renaming;
+    if (!r) return;
+    // First, as taking the field out of the page may blur it, which finishes again.
+    this.renaming = null;
+    r.input.remove();
+    r.nameEl.style.visibility = "";
+    if (save) this.ctx.renameSequence(r.input.value);
+  }
+
   // ---------- mouse ----------
 
   /** Hover is local to the drawing: it never selects bases or changes the document. */
@@ -1247,6 +1318,7 @@ export class MapView {
     // On a circle: the boundary last under the pointer and the bases swept since the press.
     let last = 0;
     let swept = 0;
+    let namePressed = -Infinity;
     const rangeTo = (a: number, b: number): Range | null => {
       const g = this.geom;
       if (g && !g.circular) return a === b ? null : { start: Math.min(a, b), end: Math.max(a, b) - 1 };
@@ -1256,10 +1328,25 @@ export class MapView {
       return sweptRange(a, swept, store.length);
     };
     this.svgHost.addEventListener("pointerdown", e => {
+      const on = e.target as Element;
+      // The rename field is a text field like any other.
+      if (on.closest(".sv-map-name-edit")) return;
+      // Any other press finishes renaming, also one whose default the map prevents below.
+      this.renaming?.input.blur();
       this.hoverRegion(null);
       // Control-click is a right-click on a Mac.
       if (e.button !== 0 || (e.ctrlKey && isMac)) return;
-      const el = (e.target as Element).closest("[data-kind]");
+      // The name selects nothing; pressed twice, it is renamed. Timed here rather than
+      // with dblclick, as the press below captures the pointer, moving the click elsewhere.
+      if (on.closest(".sv-map-name")) {
+        e.preventDefault();
+        if (e.timeStamp - namePressed < DOUBLE_MS) {
+          namePressed = -Infinity;
+          this.startRename();
+        } else namePressed = e.timeStamp;
+        return;
+      }
+      const el = on.closest("[data-kind]");
       target = el ? hitOf(el) : null;
       if (target?.kind === "cutsite" && isPickClick(e)) {
         pickSite(this.ctx, target.id, "map");
@@ -1318,11 +1405,17 @@ export class MapView {
       this.svgHost.classList.remove("sv-map-near");
     });
     this.svgHost.addEventListener("contextmenu", e => {
+      const on = e.target as Element;
+      if (on.closest(".sv-map-name-edit")) return;
       e.preventDefault();
-      const el = (e.target as Element).closest("[data-kind]");
+      const el = on.closest("[data-kind]");
       const hit = el ? hitOf(el) : null;
-      const b = hit || this.nearTrack(e.clientX, e.clientY) ? this.boundaryAt(e.clientX, e.clientY) : null;
-      const t = menuTargetAt(this.ctx, hit, b, f => this.selectAnnotation(f), "map");
+      // The name, and empty space away from the sequence, are about the whole sequence.
+      if (on.closest(".sv-map-name") || (!hit && !this.nearTrack(e.clientX, e.clientY))) {
+        this.ctx.contextMenu({ kind: "sequence" }, { x: e.clientX, y: e.clientY }, true);
+        return;
+      }
+      const t = menuTargetAt(this.ctx, hit, this.boundaryAt(e.clientX, e.clientY), f => this.selectAnnotation(f), "map");
       if (t) this.ctx.contextMenu(t, { x: e.clientX, y: e.clientY }, true);
     });
   }

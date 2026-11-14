@@ -47,6 +47,8 @@ import { openProteinDiagram, proteinDiagram } from "./proteinDiagram.ts";
 import { openDigestDialog } from "./digestDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
+import type { InspectorFold } from "../lib/inspectorFolds.ts";
+import { sectionFolded, toggleSection } from "../inspectorFolds.ts";
 
 /** The key held to pick enzymes, as the interface names it. */
 const pickKeyName = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "Hold ⌘" : "Hold Ctrl";
@@ -180,8 +182,57 @@ export class Inspector {
 
   // ---------- pieces ----------
 
-  private section(title: string | null, ...children: (Node | null | false)[]) {
-    return h("section", { class: "sv-insp-section" }, title ? h("h3", { class: "sv-section-title" }, title) : null, ...children);
+  /** A section without a heading; one with a heading folds (`foldSection`). */
+  private section(...children: (Node | null | false)[]) {
+    return h("section", { class: "sv-insp-section" }, ...children);
+  }
+
+  /**
+   * A section that folds to its heading when the heading is clicked, the same way in every
+   * file (`src/inspectorFolds.ts`). `actions` stay beside the heading while it is folded,
+   * and so do the children also listed in `keep` (what is selected, or a problem), as
+   * folding should never hide either.
+   */
+  private foldSection(
+    id: InspectorFold,
+    title: string,
+    opts: { count?: number; actions?: (Node | null | false)[]; keep?: (Node | null | false)[] },
+    ...children: (Node | null | false)[]
+  ) {
+    const open = !sectionFolded(id);
+    const actions = (opts.actions ?? []).filter((a): a is Node => !!a);
+    return h(
+      "section",
+      { class: `sv-insp-section${open ? "" : " sv-folded"}`, "data-section": id },
+      h(
+        "div",
+        { class: "sv-section-head" },
+        this.foldToggle(id, open, "sv-section-toggle", h("h3", { class: "sv-section-title" }, title, opts.count === undefined ? null : [" ", h("span", { class: "sv-count" }, fmt(opts.count))])),
+        actions.length ? h("div", { class: "sv-section-actions" }, actions) : null
+      ),
+      ...(open ? children : opts.keep ?? [])
+    );
+  }
+
+  /** The button that folds or unfolds `id`. It keeps the keyboard across the redraw. */
+  private foldToggle(id: InspectorFold, open: boolean, cls: string, label: Node) {
+    return h(
+      "button",
+      {
+        type: "button",
+        class: cls,
+        "data-fold": id,
+        "aria-expanded": String(open),
+        title: open ? "Fold" : "Unfold",
+        onclick: () => {
+          toggleSection(id);
+          this.refresh();
+          this.el.querySelector<HTMLElement>(`[data-fold="${id}"]`)?.focus();
+        }
+      },
+      iconSvg("chevronDown", 12),
+      label
+    );
   }
 
   private facts(rows: [string, Node | string][]) {
@@ -226,8 +277,10 @@ export class Inspector {
     const cov = this.ctx.coverage(r);
     if (!cov) return null;
     const pct = cov.total ? Math.round((cov.covered / cov.total) * 100) : 0;
-    return this.section(
+    return this.foldSection(
+      "sequencing",
       "Sequencing",
+      {},
       h("div", { class: "sv-cov-line" }, h("span", null, `${fmt(cov.covered)} of ${fmt(cov.total)} bp covered`), h("span", { class: "sv-dim" }, `${pct}%`)),
       h("div", { class: "sv-meter", "aria-hidden": "true" }, h("div", { class: "sv-meter-fill", style: { width: `${pct}%` } })),
       h(
@@ -271,6 +324,7 @@ export class Inspector {
     const bases = featureBases(d.sequence, f);
     const len = bases.length;
     const parts = f.locations && f.locations.length > 1 ? ` in ${f.locations.length} parts` : "";
+    const prot = isCds(f) ? protein(f, d.sequence) : "";
 
     const name = h("input", { class: "sv-insp-name", value: f.name, "aria-label": "Feature name", spellcheck: "false" }) as HTMLInputElement;
     name.addEventListener("change", () => {
@@ -323,30 +377,26 @@ export class Inspector {
         h("div", { class: "sv-insp-row" }, type, strand),
         this.facts([
           ["Location", location],
-          ["Length", isCds(f) ? `${fmt(len)} bp${parts} · ${fmt(Math.floor(len / 3) - (protein(f, d.sequence).endsWith("*") ? 1 : 0))} aa` : `${fmt(len)} bp${parts}`],
+          ["Length", isCds(f) ? `${fmt(len)} bp${parts} · ${fmt(Math.floor(len / 3) - (prot.endsWith("*") ? 1 : 0))} aa` : `${fmt(len)} bp${parts}`],
           ["GC", `${gcPercent(bases).toFixed(1)}%`]
         ]),
+        // Problems with the reading frame show here, as the translation is often folded.
+        isCds(f) && len % 3 !== 0 ? h("p", { class: "sv-small sv-text-warn" }, `Length isn't a multiple of 3 (${fmt(len)} bp).`) : null,
+        isCds(f) && !prot.startsWith("M") ? h("p", { class: "sv-small sv-dim" }, "Doesn't start with ATG.") : null,
         this.viewOther({ start: f.start, end: f.end })
       )
     );
     // A selected protein region shows its own details, not the CDS's note.
     const ownFocus = this.ctx.store.selection.focus?.region === undefined;
-    if (ownFocus) out.push(this.noteSection(f));
+    if (ownFocus) out.push(...this.noteSections(f));
     if (isCds(f)) out.push(this.regionsSection(f));
     if (isCds(f)) {
-      const prot = protein(f, d.sequence);
       out.push(
-        this.section(
-          null,
-          h(
-            "div",
-            { class: "sv-section-head" },
-            h("h3", { class: "sv-section-title" }, "Translation"),
-            h("button", { type: "button", class: "sv-link", onclick: () => this.actions.copy(prot, "protein sequence") }, iconSvg("copy", 13), "Copy")
-          ),
-          h("div", { class: "sv-code" }, prot),
-          len % 3 !== 0 ? h("p", { class: "sv-small sv-text-warn" }, `Length isn't a multiple of 3 (${fmt(len)} bp).`) : null,
-          !prot.startsWith("M") ? h("p", { class: "sv-small sv-dim" }, "Doesn't start with ATG.") : null
+        this.foldSection(
+          "translation",
+          "Translation",
+          { actions: [h("button", { type: "button", class: "sv-link", onclick: () => this.actions.copy(prot, "protein sequence") }, iconSvg("copy", 13), "Copy")] },
+          h("div", { class: "sv-code" }, prot)
         )
       );
     }
@@ -390,7 +440,9 @@ export class Inspector {
         )
       );
     }
-    if (inside.length) out.push(this.section("Inside this feature", h("div", { class: "sv-list sv-list-flush" }, inside)));
+    // Counted as things, not rows: one row stands for all the cut sites.
+    const things = inside.length + Math.max(0, cuts.length - 1);
+    if (inside.length) out.push(this.foldSection("inside", "Inside this feature", { count: things }, h("div", { class: "sv-list sv-list-flush" }, inside)));
     const cov = this.coverageBlock(f);
     if (cov) out.push(cov);
     out.push(
@@ -398,7 +450,7 @@ export class Inspector {
         "div",
         { class: "sv-insp-actions" },
         this.button("Copy DNA", () => this.actions.copy(f.strand === -1 ? reverseComplement(bases) : bases, `${f.name} (${fmt(len)} bp)`), { icon: "copy" }),
-        isCds(f) ? this.button("Copy protein", () => this.actions.copy(protein(f, d.sequence), "protein sequence"), { icon: "copy" }) : this.button("Delete", () => this.removeFeature(f), { icon: "trash", danger: true }),
+        isCds(f) ? this.button("Copy protein", () => this.actions.copy(prot, "protein sequence"), { icon: "copy" }) : this.button("Delete", () => this.removeFeature(f), { icon: "trash", danger: true }),
         this.button("Design primers to amplify", () => this.actions.designPrimers({ start: f.start, end: f.end }, f.name, f.strand), { primary: true, icon: "pcr", wide: true }),
         isCds(f) ? this.button("Mutagenesis primers…", () => openMutagenesisDialog(this.ctx, { cds: f.id, range: { start: f.start, end: f.end } }), { wide: true }) : null,
         isCds(f) ? this.button("Delete feature", () => this.removeFeature(f), { icon: "trash", danger: true, wide: true }) : null
@@ -413,7 +465,7 @@ export class Inspector {
    * the last words, and keeps the selection, as the field is often left by a click
    * elsewhere. A CDS's /translation is left out: Translation shows the protein.
    */
-  private noteSection(f: SeqFeature): Node {
+  private noteSections(f: SeqFeature): Node[] {
     const note = h("textarea", { class: "sv-input sv-insp-note", rows: "2", placeholder: "Add a note", "aria-label": "Feature note", "data-keep": `feature-note:${f.id}` }) as HTMLTextAreaElement;
     note.value = noteText(f.notes);
     const fit = () => {
@@ -440,19 +492,21 @@ export class Inspector {
     note.addEventListener("change", () => apply(true));
     note.addEventListener(FLUSH, () => apply(false));
     const others = otherQualifiers(f.notes).filter(q => !(isCds(f) && q.name === "translation"));
-    return h(
-      "section",
-      { class: "sv-insp-section" },
-      h("h3", { class: "sv-section-title" }, "Note"),
-      note,
-      others.length
-        ? h(
+    const out: Node[] = [this.foldSection("note", "Note", {}, note)];
+    if (others.length)
+      out.push(
+        this.foldSection(
+          "qualifiers",
+          "Qualifiers",
+          { count: others.length },
+          h(
             "dl",
             { class: "sv-facts sv-qualifiers", "aria-label": "Qualifiers" },
             others.flatMap(q => [h("dt", { title: `/${q.name}` }, q.name), h("dd", { title: q.values.join("\n") }, q.values.map(v => h("div", null, v)))])
           )
-        : null
-    );
+        )
+      );
+    return out;
   }
 
   /** A protein's regions, kept inside the CDS (`src/lib/regions.ts`), and getting them. */
@@ -485,18 +539,24 @@ export class Inspector {
         h("span", { class: "sv-list-meta sv-mono" }, regionLabel(r))
       )
     );
-    return this.section(
-      null,
-      h(
-        "div",
-        { class: "sv-section-head" },
-        h("h3", { class: "sv-section-title" }, "Protein regions"),
-        regions.length ? h("button", { type: "button", class: "sv-link", onclick: () => openProteinDiagram(this.ctx, f) }, "Expand…") : null,
-        h("button", { type: "button", class: "sv-link", onclick: () => openProteinRegionDialog(this.ctx, f) }, "Add region…")
-      ),
+    // The diagram shows and picks every region, so the list under it starts folded.
+    const listOpen = !sectionFolded("region-list");
+    const detail = picked ? this.regionDetail(f, picked) : null;
+    return this.foldSection(
+      "regions",
+      "Protein regions",
+      {
+        count: regions.length || undefined,
+        actions: [
+          regions.length ? h("button", { type: "button", class: "sv-link", onclick: () => openProteinDiagram(this.ctx, f) }, "Expand…") : null,
+          h("button", { type: "button", class: "sv-link", onclick: () => openProteinRegionDialog(this.ctx, f) }, "Add region…")
+        ],
+        keep: [detail]
+      },
       regions.length ? proteinDiagram(regions, protein(f, store.data.sequence).replace(/\*$/, "").length || 1, focus?.region, pick) : h("p", { class: "sv-small sv-dim" }, "Mark domains, helices, linkers or CDRs within this protein."),
-      regions.length ? h("div", { class: "sv-list sv-list-flush" }, rows) : null,
-      picked ? this.regionDetail(f, picked) : null,
+      regions.length ? this.foldToggle("region-list", listOpen, "sv-fold-link", h("span", null, listOpen ? "Hide list" : "Show list")) : null,
+      regions.length && listOpen ? h("div", { class: "sv-list sv-list-flush" }, rows) : null,
+      detail,
       h("button", { type: "button", class: "sv-link", onclick: () => openUniprotDialog(this.ctx, f) }, "Get from UniProt…"),
       accessions.length ? h("p", { class: "sv-small sv-dim" }, `From UniProtKB ${accessions.join(", ")}.`) : null
     );
@@ -622,7 +682,8 @@ export class Inspector {
         body.push(h("p", { class: "sv-small sv-dim" }, "Clones can have any sequence or length here. Each clone's sequence is shown in its own column rather than called as mutations."));
       }
     }
-    return this.section("Variable region", ...body);
+    // Unmarked, it is one line: most features never vary.
+    return design ? this.foldSection("variable", "Variable region", {}, ...body) : this.section(...body);
   }
 
   private removeFeature(f: SeqFeature) {
@@ -757,9 +818,11 @@ export class Inspector {
         h("div", { class: "sv-stats" }, stats),
         this.viewOther({ start: p.start, end: p.end })
       ),
-      this.section("Where it binds", alignment),
-      this.section(
+      this.foldSection("binding", "Where it binds", {}, alignment),
+      this.foldSection(
+        "checks",
         "Checks",
+        {},
         h(
           "ul",
           { class: "sv-checks" },
@@ -874,7 +937,7 @@ export class Inspector {
         ]),
         this.viewOther(o)
       ),
-      this.section("Protein", h("div", { class: "sv-code" }, prot)),
+      this.foldSection("translation", "Translation", {}, h("div", { class: "sv-code" }, prot)),
       h(
         "div",
         { class: "sv-insp-actions" },
@@ -902,14 +965,14 @@ export class Inspector {
       h("div", { class: "sv-insp-head" }, h("h2", { class: "sv-insp-heading" }, "Selection"), this.facts(rows), this.viewOther(r))
     ];
     const targets = proteinRegionTargets(d, r);
-    if (targets.length) out.push(this.section(null,
+    if (targets.length) out.push(this.section(
       this.button("Add as region…", () => openProteinRegionFromSelection(this.ctx, r), { icon: "featureAdd", primary: true, wide: true }),
       targets.length === 1 ? h("p", { class: "sv-small sv-dim" }, `${targets[0].feature.name} · residues ${fmt(targets[0].start)}–${fmt(targets[0].end)}`) : null
     ));
     if (len >= 3 && len <= 3000) {
       let prot = "";
       for (let i = 0; i + 2 < bases.length; i += 3) prot += translateCodon(bases.slice(i, i + 3));
-      out.push(this.section("Translation · frame 1", h("div", { class: "sv-code" }, prot)));
+      out.push(this.foldSection("frame-translation", "Translation · frame 1", {}, h("div", { class: "sv-code" }, prot)));
     }
     const cov = this.coverageBlock(r);
     if (cov) out.push(cov);
@@ -935,7 +998,7 @@ export class Inspector {
       h("div", { class: "sv-insp-head" }, h("h2", { class: "sv-insp-heading" }, "Selection"), this.facts([
         ["Stretches", String(ranges.length)], ["Length", `${fmt(bases.length)} bp`], ["GC", `${gcPercent(bases).toFixed(1)}%`]
       ])),
-      this.section("Locations", h("div", { class: "sv-code" }, ranges.map(loc).join(", "))),
+      this.foldSection("locations", "Locations", {}, h("div", { class: "sv-code" }, ranges.map(loc).join(", "))),
       h("div", { class: "sv-insp-actions" },
         this.button("Copy", () => this.actions.copy(bases, `${fmt(bases.length)} bp`), { icon: "copy" }),
         this.button("Copy rev-comp", () => this.actions.copy(reverseComplement(bases), `reverse complement (${fmt(bases.length)} bp)`), { icon: "copy" }),
@@ -978,7 +1041,6 @@ export class Inspector {
         ])
       ),
       this.section(
-        null,
         h(
           "p",
           { class: "sv-small sv-dim" },

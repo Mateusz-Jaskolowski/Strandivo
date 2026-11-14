@@ -26,6 +26,10 @@ with Unreleased's notes and leaves them where they are.
   on a linear sequence, inverting a stretch in the middle selects both ends. It is also in
   the right-click menu for selected bases. With nothing selected it selects everything,
   and in the browser version it is in the menu only, as browsers keep that key.
+- **A tidier inspector**: click a section's heading to fold or unfold it, and Strandivo
+  remembers it for every file. A CDS's translation, its qualifiers, what lies inside a
+  feature and the list of a protein's regions start folded, so the inspector is shorter;
+  Copy and Expand… stay beside their headings.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

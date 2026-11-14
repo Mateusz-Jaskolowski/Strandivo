@@ -881,6 +881,44 @@
 .sv-insp-section > .sv-section-head {
   padding: 0;
 }
+/* A heading folds its section (`foldSection` in src/views/inspector.ts); the chevron sits
+   in the section's margin, so the title stays close to the text under it. */
+.sv-insp-section > .sv-section-head > .sv-section-toggle {
+  margin-left: -10px;
+}
+.sv-insp-section.sv-folded {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.sv-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+/* The list of a protein's regions, folded under their diagram. */
+.sv-fold-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.sv-fold-link:hover {
+  color: var(--text-2);
+}
+.sv-fold-link > .sv-icon {
+  transition: transform 0.12s ease;
+}
+.sv-fold-link[aria-expanded="false"] > .sv-icon {
+  transform: rotate(-90deg);
+}
 .sv-code {
   padding: 9px 10px;
   border: 1px solid var(--line);

@@ -338,7 +338,11 @@ async function main() {
     await s.click(outlineRow("AmpR"), "xpath");
     await sleep(500);
     const insp = await s.exec("return { name: document.querySelector('.sv-inspector .sv-insp-name')?.value, text: document.querySelector('.sv-inspector')?.textContent || '' }");
-    check("Clicking a feature shows it in the inspector", insp.name === "AmpR" && /MSIQHFRV/.test(insp.text), `${insp.name}: ${insp.text.slice(0, 120)}`);
+    check("Clicking a feature shows it in the inspector", insp.name === "AmpR" && /\d aa/.test(insp.text), `${insp.name}: ${insp.text.slice(0, 120)}`);
+    check("A CDS's translation starts folded", await s.exec("return document.querySelector('.sv-inspector [data-fold=\"translation\"]')?.getAttribute('aria-expanded') === 'false' && !/MSIQHFRV/.test(document.querySelector('.sv-inspector').textContent);"));
+    // Unfolded here, it stays open in every file, which the ORF and region checks below rely on.
+    await s.click(".sv-inspector [data-fold='translation']");
+    check("Clicking its heading unfolds the translation", await s.waitFor("/MSIQHFRV/.test(document.querySelector('.sv-inspector')?.textContent) && document.querySelector('.sv-inspector [data-fold=\"translation\"]').getAttribute('aria-expanded') === 'true'", 3000));
     check("The feature is highlighted on the map", await s.exec("return !!document.querySelector('.sv-map-sel, .sv-map-wedge')"));
     await s.shot("02-feature");
 
@@ -1018,6 +1022,7 @@ async function main() {
     // The map only draws while it shows.
     await s.exec("window.__strandivo.command('show-map')");
     check("They are drawn inside the CDS", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
+    check("The inspector draws them with their list folded", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2 && document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'false'", 3000));
     check("Independent regions need no top-level/all choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     check("The entry goes in the file's cross-references", await s.exec(`${doc} return s.data.features.find(f => f.id === window.__strandivoCds).notes.db_xref.includes("UniProtKB/Swiss-Prot:P62593");`));
     await s.exec(`${doc} s.undo();`);

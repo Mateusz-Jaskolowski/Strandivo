@@ -5,7 +5,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
-import { appJwt, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, pkcs8 } from "./src/index.mjs";
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import { appJwt, DAILY_REPORTS, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, pkcs8 } from "./src/index.mjs";
 
 /** The text of an email the Worker sent with one part, decoded. */
 const mailText = raw => Buffer.from(raw.split("\r\n\r\n")[1], "base64").toString();
@@ -27,10 +29,21 @@ const pkcs1Pem = privateKey.export({ type: "pkcs1", format: "pem" });
 const pkcs8Pem = privateKey.export({ type: "pkcs8", format: "pem" });
 const appEnv = { GITHUB_APP_CLIENT_ID: "Iv23liExample", GITHUB_APP_INSTALLATION_ID: "12345678", GITHUB_APP_PRIVATE_KEY: pkcs1Pem };
 
+/** D1 as the Worker uses it, over SQLite in memory with the real schema. */
+function counts() {
+  const db = new DatabaseSync(":memory:");
+  db.exec(readFileSync(new URL("./schema.sql", import.meta.url), "utf8"));
+  return {
+    prepare: sql => ({ bind: (...args) => ({ first: async () => db.prepare(sql).get(...args) ?? null }) }),
+    rows: () => db.prepare("SELECT day, reports, failures FROM days ORDER BY day").all().map(r => ({ ...r }))
+  };
+}
+
 /** GitHub gives the App a token for each report (`tokens`), then files its issue (`github`). */
-function service({ github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } }, tokenStatus = 201, mailFails = false, limited = false, env = {} } = {}) {
+function service({ github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } }, tokenStatus = 201, mailFails = false, limited = false, env = {}, now } = {}) {
   const calls = { tokens: [], github: [], mail: [] };
   const deps = {
+    now,
     fetch: async (url, init) => {
       const call = { url, init, body: JSON.parse(init.body) };
       if (url.includes("/access_tokens")) {
@@ -219,4 +232,63 @@ test("without a token from GitHub, nothing is filed and the app hears so", async
     assert.equal(s.calls.tokens.length + s.calls.github.length, 0, JSON.stringify(env));
   }
   await assert.rejects(githubToken({}, async () => new Response("{}")), /App's secrets/);
+});
+
+const day1 = new Date("2026-11-14T23:59:00Z");
+const day2 = new Date("2026-11-15T00:01:00Z");
+
+test("past the day's limit, reports are turned away and the maintainer hears so once", async () => {
+  const db = counts();
+  const { calls, send } = service({ env: { COUNTS: db }, now: day1 });
+  for (let i = 0; i < DAILY_REPORTS; i++) assert.equal((await send(report)).status, 200);
+  assert.equal(calls.mail.length, 0);
+  // Not 429, which copies of the app read as "wait a minute"; they show this reason as it is.
+  for (let i = 0; i < 3; i++) {
+    const res = await send({ ...report, email: "anna@lab.example.org" });
+    assert.equal(res.status, 503);
+    assert.deepEqual(await res.json(), { error: "Too many reports today." });
+  }
+  assert.equal(calls.github.length, DAILY_REPORTS);
+  assert.equal(calls.tokens.length, DAILY_REPORTS);
+  const [mail] = calls.mail;
+  assert.equal(calls.mail.length, 1);
+  assert.match(mail, /^From: Strandivo feedback <noreply@strandivo\.com>\r\nTo: <maintainer@example\.org>\r\nSubject: Today's limit of reports was reached\r\n/);
+  assert.match(mailText(mail), new RegExp(`^${DAILY_REPORTS} reports reached the feedback service today \\(2026-11-14, UTC\\)`));
+  assert.match(mailText(mail), /issues\?q=is%3Aissue\+label%3Afrom-app\+created%3A2026-11-14\n/);
+  assert.doesNotMatch(mail + mailText(mail), /Map is blank|anna@|Reply-To/);
+  // A report turned away as unsound isn't counted.
+  assert.equal((await send({ ...report, summary: "" })).status, 400);
+  assert.deepEqual(db.rows(), [{ day: "2026-11-14", reports: DAILY_REPORTS + 3, failures: 0 }]);
+  // A new day (UTC) starts again.
+  const next = service({ env: { COUNTS: db }, now: day2 });
+  assert.equal((await next.send(report)).status, 200);
+  assert.deepEqual(db.rows()[1], { day: "2026-11-15", reports: 1, failures: 0 });
+});
+
+test("GitHub turning reports down emails the maintainer once a day", async () => {
+  const db = counts();
+  const refused = { github: { status: 403, body: { message: "Resource not accessible by integration" } }, env: { COUNTS: db } };
+  const s = service({ ...refused, now: day1 });
+  for (let i = 0; i < 3; i++) assert.equal((await s.send(report)).status, 502);
+  assert.equal(s.calls.mail.length, 1);
+  assert.match(mailText(s.calls.mail[0]), /GitHub answered 403 for the issue: Resource not accessible by integration\n/);
+  assert.match(mailText(s.calls.mail[0]), /Only the day's first is emailed/);
+  assert.deepEqual(db.rows(), [{ day: "2026-11-14", reports: 3, failures: 3 }]);
+  const next = service({ ...refused, now: day2 });
+  await next.send(report);
+  assert.equal(next.calls.mail.length, 1);
+});
+
+test("without a database, or when it fails, reports go through as before", async () => {
+  const broken = { prepare: () => ({ bind: () => ({ first: async () => { throw new Error("D1 down"); } }) }) };
+  for (const env of [{}, { COUNTS: broken }]) {
+    const ok = service({ env });
+    for (let i = 0; i <= DAILY_REPORTS; i++) assert.equal((await ok.send(report)).status, 200);
+    // And each refusal is emailed, with no count to say which is the day's first.
+    const refused = service({ env, github: { status: 500, body: {} } });
+    await refused.send(report);
+    await refused.send(report);
+    assert.equal(refused.calls.mail.length, 2);
+    assert.doesNotMatch(mailText(refused.calls.mail[0]), /day's first/);
+  }
 });

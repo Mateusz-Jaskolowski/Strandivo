@@ -96,8 +96,10 @@ Two optional items are included only if you tick them (both are unticked by defa
 The service posts your report as a public issue on Strandivo's GitHub repository and
 returns the issue number. Your email address and any attached file are never included in
 the public issue — they are emailed privately to the maintainer with a link to the issue.
-The service keeps no logs or copies of its own, aside from a per-minute rate limit in
-Cloudflare to prevent spam. GitHub stores the issue under
+The service keeps no logs or copies of its own. To prevent spam, Cloudflare limits how
+many reports one network can send a minute, and the service keeps two numbers a day,
+how many reports came and how many GitHub turned down, with nothing about a report or who
+sent it, so it can stop taking reports past a daily limit. GitHub stores the issue under
 [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement),
 and any email stays in the maintainer's mailbox. To have an issue or email removed, write
 to hello@strandivo.com.

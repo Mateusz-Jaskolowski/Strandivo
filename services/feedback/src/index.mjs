@@ -7,8 +7,10 @@
 // with a token made for that report that can only write issues, and answers with the
 // issue's number. The issue is public, so the
 // reporter's email address and any attached file never go in it: they are emailed to the
-// maintainer alone, with the issue's link. It keeps nothing and logs nothing
-// (wrangler.toml); how often one network sends is held back by Cloudflare's rate limiter.
+// maintainer alone, with the issue's link. It logs nothing (wrangler.toml) and keeps
+// only two numbers a day (schema.sql): the reports that came, which past DAILY_REPORTS
+// are turned away, and the ones GitHub turned down. How often one network sends is held
+// back by Cloudflare's rate limiter.
 
 import { codeSpan, crashLines, describeSystem, FEEDBACK_KINDS, fenced, reportProblem } from "../../../src/lib/feedback.ts";
 
@@ -19,6 +21,13 @@ export const MAX_BYTES = 2_600_000;
 /** GitHub's own labels where they fit, so the repository needs only "from-app" added. */
 export const LABELS = { bug: "bug", idea: "enhancement", question: "question" };
 const FROM = "noreply@strandivo.com";
+/**
+ * Reports taken in a day (UTC), from everyone together. An app can't keep a secret, so
+ * anyone can send reports; this caps the issues a flood makes in a day, and the emails
+ * about them. Past it, reports are turned away until the next day, and the maintainer
+ * hears so once.
+ */
+export const DAILY_REPORTS = 30;
 
 // Any origin: the app's page is tauri://localhost on a Mac and http://tauri.localhost on
 // Windows, and the service takes no cookies or credentials, so nothing is gained by naming them.
@@ -62,34 +71,51 @@ function base64(text) {
 /** A header value that may not be ASCII (RFC 2047). */
 const encodedWord = text => `=?UTF-8?B?${base64(text).replace(/\r\n/g, "")}?=`;
 
-/**
- * The maintainer's email when GitHub turns a report down, saying why, as the Worker keeps
- * no logs. Nothing from the report goes in: the reporter is told it wasn't taken and
- * still has it to send another way.
- */
-export function failureEmail(reason, to) {
-  const text = [
-    "A report sent from Strandivo couldn't be filed as an issue just now:",
-    "",
-    reason,
-    "",
-    "The reporter was told so and still has the report to send another way. Nothing from it is in this email.",
-    "",
-    `Setting up the GitHub App: https://github.com/${REPO}/blob/main/services/feedback/README.md#the-github-app`
-  ].join("\n");
+/** An email of the Worker's own to the maintainer: plain text, with an ASCII subject. */
+function noticeEmail(subject, lines, to) {
   return [
     `From: Strandivo feedback <${FROM}>`,
     `To: <${to}>`,
-    "Subject: A report couldn't be filed",
+    `Subject: ${subject}`,
     `Message-ID: <${crypto.randomUUID()}@strandivo.com>`,
     `Date: ${new Date().toUTCString()}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=utf-8",
     "Content-Transfer-Encoding: base64",
     "",
-    base64(text),
+    base64(lines.join("\n")),
     ""
   ].join("\r\n");
+}
+
+/**
+ * The maintainer's email when GitHub turns a report down, saying why, as the Worker keeps
+ * no logs. Nothing from the report goes in: the reporter is told it wasn't taken and
+ * still has it to send another way. With a database, only the day's first is sent
+ * (`firstToday`), so an outage or a flood GitHub holds back doesn't fill the inbox.
+ */
+export function failureEmail(reason, to, firstToday = false) {
+  return noticeEmail("A report couldn't be filed", [
+    "A report sent from Strandivo couldn't be filed as an issue just now:",
+    "",
+    reason,
+    "",
+    "The reporter was told so and still has the report to send another way. Nothing from it is in this email.",
+    ...(firstToday ? ["Only the day's first is emailed: reports later today may have been turned down too."] : []),
+    "",
+    `Setting up the GitHub App: https://github.com/${REPO}/blob/main/services/feedback/README.md#the-github-app`
+  ], to);
+}
+
+/** The maintainer's email when the day's reports reach DAILY_REPORTS: sent once a day. */
+export function limitEmail(day, to) {
+  return noticeEmail("Today's limit of reports was reached", [
+    `${DAILY_REPORTS} reports reached the feedback service today (${day}, UTC), its limit for a day. Until midnight UTC it turns reports away, and reporters are told to send theirs another way.`,
+    "",
+    `Today's issues from the app: https://github.com/${REPO}/issues?q=is%3Aissue+label%3Afrom-app+created%3A${day}`,
+    "",
+    "If they are spam, close them there. To stop the service, suspend the GitHub App's installation (GitHub, Settings, Applications). The limit is DAILY_REPORTS in services/feedback/src/index.mjs."
+  ], to);
 }
 
 /** Why GitHub turned a request down, in its own words, on one line and cut short. */
@@ -212,6 +238,39 @@ async function createIssue(r, env, fetchFn) {
   return { number: issue.number, url: issue.html_url };
 }
 
+// ---------- how much is sent ----------
+
+/** Adds one to the day's reports or failures (schema.sql) and gives the new count as `n`. */
+export const COUNT_SQL = {
+  reports: "INSERT INTO days (day, reports) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET reports = reports + 1 RETURNING reports AS n",
+  failures: "INSERT INTO days (day, failures) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET failures = failures + 1 RETURNING failures AS n"
+};
+
+/**
+ * Adds one to the day's count of `what` and answers the new count, or null without a
+ * database or when it fails. A report then goes through as it did before there was one:
+ * reports matter more than the limit, and the per-network limit still holds.
+ */
+async function countToday(db, what, day) {
+  if (!db) return null;
+  try {
+    const row = await db.prepare(COUNT_SQL[what]).bind(day).first();
+    return typeof row?.n === "number" ? row.n : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Sends an email of the Worker's own; one that fails changes nothing for the reporter. */
+async function notify(env, sendMail, email) {
+  if (!env.MAINTAINER_EMAIL) return;
+  try {
+    await sendMail(env, email(env.MAINTAINER_EMAIL));
+  } catch {
+    // The reporter's answer is the same either way.
+  }
+}
+
 async function sendWithBinding(env, raw) {
   const { EmailMessage } = await import("cloudflare:email");
   await env.MAILER.send(new EmailMessage(FROM, env.MAINTAINER_EMAIL, raw));
@@ -220,6 +279,7 @@ async function sendWithBinding(env, raw) {
 export async function handle(request, env, deps = {}) {
   const fetchFn = deps.fetch ?? fetch;
   const sendMail = deps.sendMail ?? sendWithBinding;
+  const day = (deps.now ?? new Date()).toISOString().slice(0, 10);
   const url = new URL(request.url);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (url.pathname !== "/report") return answer(404, { error: "Not found." });
@@ -244,18 +304,21 @@ export async function handle(request, env, deps = {}) {
   const problem = reportProblem(report);
   if (problem) return answer(400, { error: problem });
 
+  // Everyone's reports together, for the day. Not 429, which copies of the app take to
+  // mean "wait a minute": every copy shows any other answer's reason as it is.
+  const today = await countToday(env.COUNTS, "reports", day);
+  if (today !== null && today > DAILY_REPORTS) {
+    if (today === DAILY_REPORTS + 1) await notify(env, sendMail, to => limitEmail(day, to));
+    return answer(503, { error: "Too many reports today." });
+  }
+
   let issue;
   try {
     issue = await createIssue(report, env, fetchFn);
   } catch (e) {
-    if (env.MAINTAINER_EMAIL) {
-      const reason = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 300);
-      try {
-        await sendMail(env, failureEmail(reason, env.MAINTAINER_EMAIL));
-      } catch {
-        // The reporter hears it wasn't taken either way.
-      }
-    }
+    const reason = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 300);
+    const failures = await countToday(env.COUNTS, "failures", day);
+    if (failures === null || failures === 1) await notify(env, sendMail, to => failureEmail(reason, to, failures === 1));
     return answer(502, { error: "GitHub didn't take the issue just now." });
   }
 

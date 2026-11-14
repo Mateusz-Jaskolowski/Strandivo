@@ -75,6 +75,7 @@ import { applyPanelWidths, panelSplitter } from "../panelWidths.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { documentShortcut, shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
+import { nameToKeep, tidyName } from "../lib/sequenceName.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const VIEW_KEY = "strandivo.view";
@@ -304,6 +305,12 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
           designPrimers: (r, name, strand) => designPrimers(r, name, strand),
           addPrimer: strand => addPrimer(strand),
           rename: () => focusInspectorName(),
+          // The linear map draws no name: the Info tab's field is the other place to type it.
+          renameSequence: () => {
+            if (mapView.startRename()) return;
+            setTab("info");
+            infoPanel.focusName();
+          },
           pickColour: () => {
             if (!inspectorOpen) setInspector(true);
             // After the inspector shows the feature.
@@ -317,7 +324,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       ),
     openNew: data => host.openNew(data),
     otherSequences: () => host.sequences(),
-    noteEdit
+    noteEdit,
+    renameSequence
   };
 
   // ---------- views ----------
@@ -470,7 +478,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       const d = store.data;
       return { name: d.name, description: d.description, sequence: d.sequence, circular: d.circular, features: legacyFeatures(d), primerCount: d.primers.length };
     },
-    rename: name => store.apply({ ...store.data, name }, "Rename"),
+    rename: renameSequence,
     setDescription: description => store.apply({ ...store.data, description }, "Edit description"),
     changed: () => {
       infoDirty = true;
@@ -661,6 +669,12 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     focusInspectorName();
   }
 
+  /** The sequence's own name, from the map or the Info tab; its file keeps its name. */
+  function renameSequence(typed: string) {
+    const name = tidyName(typed);
+    if (name && name !== store.data.name) store.apply({ ...store.data, name }, "Rename");
+  }
+
   /** A primer from the selected bases: on the top strand, or the bottom one (`strand` -1). */
   function addPrimer(strand: 1 | -1 = 1) {
     const { range } = store.selection;
@@ -699,7 +713,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   function fileJson(includeRegions = false): Record<string, unknown> {
     const d = store.data;
     const json = toParsed(loaded, includeRegions ? { ...d, features: [...d.features, ...d.features.flatMap(f => proteinRegionFeatures(f, d.sequence.length))] } : d);
-    json.comments = formatComments(infoPanel.getFields(), otherComments);
+    json.comments = formatComments(infoPanel.getFields(), otherComments, nameToKeep(d.name));
     return json;
   }
 

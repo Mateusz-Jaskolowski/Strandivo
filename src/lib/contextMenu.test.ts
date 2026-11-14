@@ -134,6 +134,11 @@ test("primers: flipping only without a tail, and whether it is in the library", 
   assert.ok(!colours.some(c => c !== "separator" && "action" in c && c.action === "pick-colour"));
 });
 
+test("the whole sequence: rename it, but no origin to set", () => {
+  assert.deepEqual(labels({ kind: "sequence" }), ["Rename sequence…", "—", "Select all", "Reverse-complement sequence"]);
+  assert.deepEqual(labels({ kind: "sequence" }, { data: { ...data, circular: false } }), labels({ kind: "sequence" }));
+});
+
 test("the cursor: set origin only inside a circular sequence", () => {
   // No Invert selection: right-clicking outside the selection has already dropped it.
   assert.deepEqual(labels({ kind: "cursor", at: 50 }), ["Select all", "—", "Set origin here", "Reverse-complement sequence"]);

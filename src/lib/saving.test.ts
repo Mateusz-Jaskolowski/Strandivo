@@ -9,7 +9,8 @@ import { readFileSync } from "node:fs";
 
 import { parseSequenceFile, serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed, type LoadedDocument } from "../doc/convert.ts";
-import { formatComments, parseComments } from "./labinfo.ts";
+import { formatComments, NAME_KEY, parseComments } from "./labinfo.ts";
+import { nameToKeep } from "./sequenceName.ts";
 import { designOf, formatDesign, VARIABLE_QUALIFIER } from "./variable.ts";
 import { regionsOf, withRegions } from "./regions.ts";
 import { protein } from "../doc/analysis.ts";
@@ -170,6 +171,29 @@ test("lab fields survive saving, including several lines", async () => {
   const parsed = parseComments(again.extra.comments as string[]);
   assert.deepEqual(parsed.fields, fields);
   assert.deepEqual(parsed.otherComments, ["An original comment"]);
+});
+
+test("a name with spaces comes back with them; one with underscores stays as typed", async () => {
+  const doc = await open("testdata/e2e/pUC19-annotated.gb");
+  const fields: [string, string][] = [["Stored at", "Box 3, A4"]];
+  const saveNamed = (name: string) => save(doc, { ...doc.data, name }, { comments: formatComments(fields, [], nameToKeep(name)) });
+  const spaced = saveNamed("pUC19 K45A mutant");
+  assert.match(spaced, /^LOCUS {7}pUC19_K45A_mutant /);
+  const again = await reopen(spaced);
+  assert.equal(again.data.name, "pUC19 K45A mutant");
+  // Kept apart from the lab fields, which come back as they were.
+  assert.deepEqual(parseComments(again.extra.comments as string[]).fields, fields);
+  const underscored = saveNamed("pLKO.1_puro");
+  assert.ok(!underscored.includes(NAME_KEY));
+  assert.equal((await reopen(underscored)).data.name, "pLKO.1_puro");
+});
+
+test("a name changed elsewhere on the LOCUS line wins over the kept one", async () => {
+  const doc = await open("testdata/e2e/pUC19-annotated.gb");
+  const text = save(doc, { ...doc.data, name: "pUC19 K45A" }, { comments: formatComments([], [], nameToKeep("pUC19 K45A")) });
+  // Another program renames it, leaving our comment as it was.
+  const elsewhere = text.replace(/^LOCUS {7}pUC19_K45A/, "LOCUS       pUC19_v2  ");
+  assert.equal((await reopen(elsewhere)).data.name, "pUC19_v2");
 });
 
 test("a variable region's design is saved in its qualifier", async () => {

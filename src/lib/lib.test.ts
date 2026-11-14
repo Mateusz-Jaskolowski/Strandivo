@@ -23,7 +23,7 @@ import {
 } from "./genetics.ts";
 import { basename, extension, formatForPath, isTraceFile, suggestedSaveName } from "./files.ts";
 import { columnOfReferencePosition, rowSpan, stackAlignments } from "./msa.ts";
-import { BLOCK_END, BLOCK_START, detectFromFeatures, formatComments, gcPercent, parseComments } from "./labinfo.ts";
+import { BLOCK_END, BLOCK_START, detectFromFeatures, formatComments, gcPercent, NAME_KEY, parseComments } from "./labinfo.ts";
 import type { Chromatogram, Difference, Feature, ReadResult } from "./types.ts";
 
 const chrom: Chromatogram = {
@@ -256,6 +256,16 @@ test("lab fields round-trip through GenBank comments", () => {
     ["Notes", "line one\nline two with a \\ backslash :: and colons"]
   ]);
   assert.deepEqual(formatComments([], ["x"]), ["x"]);
+});
+
+test("the block keeps a name with spaces apart from the lab fields", () => {
+  const lines = formatComments([["Stored at", "box 3"], [NAME_KEY, "not a field"]], [], "pUC19 K45A");
+  assert.deepEqual(lines, [BLOCK_START, `${NAME_KEY} :: pUC19 K45A`, "Stored at        :: box 3", BLOCK_END]);
+  assert.deepEqual(parseComments(lines), { fields: [["Stored at", "box 3"]], otherComments: [], name: "pUC19 K45A" });
+  // A name alone still makes a block; no name and no fields, none.
+  assert.deepEqual(formatComments([], [], "a b"), [BLOCK_START, `${NAME_KEY} :: a b`, BLOCK_END]);
+  assert.deepEqual(formatComments([], ["x"], null), ["x"]);
+  assert.equal(parseComments(["x"]).name, undefined);
 });
 
 test("detects markers, origins and promoters from features", () => {

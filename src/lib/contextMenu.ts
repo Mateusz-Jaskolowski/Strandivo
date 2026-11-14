@@ -20,12 +20,16 @@ export function digestEnzymes(siteId: string, picked: string[] = []): string[] {
   return picked.includes(enzyme) ? picked : [enzyme];
 }
 
-/** What a menu is for: an annotation, the selected bases, or the cursor between bases. */
+/**
+ * What a menu is for: an annotation, the selected bases, the cursor between bases, or the
+ * whole sequence (its name on the map, or the map's empty space away from the sequence).
+ */
 export type MenuTarget =
   | { kind: "feature" | "primer" | "cutsite" | "orf"; id: string; region?: number }
   | { kind: "selection"; range: Range }
   | { kind: "selections"; ranges: Range[] }
-  | { kind: "cursor"; at: number };
+  | { kind: "cursor"; at: number }
+  | { kind: "sequence" };
 
 export type MenuAction =
   // Selected bases.
@@ -68,10 +72,11 @@ export type MenuAction =
   | "default-colour"
   | "delete-feature"
   | "delete-primer"
-  // The cursor.
+  // The cursor and the whole sequence.
   | "select-all"
   | "set-origin"
-  | "reverse-complement-all";
+  | "reverse-complement-all"
+  | "rename-sequence";
 
 export interface MenuItem {
   action: MenuAction;
@@ -227,6 +232,9 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
         ...when(d.circular && target.at > 0 && target.at < n, item("set-origin", "Set origin here")),
         item("reverse-complement-all", "Reverse-complement sequence")
       ]);
+    // No "Set origin here": away from the sequence, a direction names no base.
+    case "sequence":
+      return [item("rename-sequence", "Rename sequence…"), "separator", item("select-all", "Select all"), item("reverse-complement-all", "Reverse-complement sequence")];
   }
 }
 

@@ -78,6 +78,8 @@ export interface DocContext {
    * long as it is the last edit and the file's tab is showing.
    */
   noteEdit(message: string): void;
+  /** Renames the sequence (not its file) to what was typed, as one undo step; a blank name changes nothing. */
+  renameSequence(typed: string): void;
 }
 
 export function optionsStore(initial: ViewOptions, persist: (o: ViewOptions) => void) {

@@ -127,6 +127,10 @@ class Session {
     await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "key", id: "keyboard", actions: [...down, ...keys, ...up] }] });
     await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
   }
+  /** A real click at a point of the page (CSS pixels from its top left). */
+  async clickAt([x, y]) {
+    await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
+  }
   /** Drags the mouse between two points of the page (CSS pixels from its top left). */
   async drag(from, to) {
     const at = ([x, y], duration = 0) => ({ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport", duration });
@@ -159,6 +163,7 @@ const CTRL = "\uE009";
 const SHIFT = "\uE008";
 const ARROW_RIGHT = "\uE014";
 const ESCAPE = "\uE00C";
+const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
 const PAGE_UP = "\uE00E";
 
@@ -328,6 +333,62 @@ async function main() {
     const ticksAfter = await s.exec(tickCount);
     check("Ruler button hides the map's ruler", ticksBefore > 0 && ticksAfter === 0, `${ticksBefore} → ${ticksAfter} ticks`);
     await s.click(mapChip("Ruler"), "xpath");
+    await sleep(300);
+
+    // Only a press near the circle places the cursor; the far corners clear the selection.
+    const mapPoints = await s.exec(`
+      const host = document.querySelector('.sv-map-svg');
+      const m = document.querySelector('.sv-map-svgel').getScreenCTM();
+      const r = Number(document.querySelector('.sv-map-backbone').getAttribute('r'));
+      const rotation = Number(document.querySelector("input[aria-label='Rotate']").value);
+      const box = host.getBoundingClientRect();
+      const empty = ([x, y]) => { const el = document.elementFromPoint(x, y); return !!el && host.contains(el) && !el.closest('[data-kind]'); };
+      const at = (deg, radius) => { const t = deg * Math.PI / 180; const p = new DOMPoint(radius * Math.sin(t), -radius * Math.cos(t)).matrixTransform(m); return [p.x, p.y]; };
+      // Just inside the features, among the ruler's ticks.
+      let ring = null;
+      for (let deg = 3; deg < 360 && !ring; deg += 7) if (empty(at(deg, r - 14))) ring = { point: at(deg, r - 14), deg };
+      const corner = [[box.left + 8, box.top + 8], [box.right - 8, box.top + 8], [box.left + 8, box.bottom - 8], [box.right - 8, box.bottom - 8]].find(empty) || null;
+      return { ring, corner, rotation };`);
+    if (mapPoints.ring && mapPoints.corner) {
+      await s.exec(`${doc} const f = s.data.features.find(f => f.name === 'AmpR'); s.selectRange({ start: f.start, end: f.end }, { kind: 'feature', id: f.id }, 'e2e');`);
+      const caretBefore = (await state()).sel.caret;
+      await s.clickAt(mapPoints.corner);
+      await sleep(200);
+      const cornerSel = (await state()).sel;
+      check("A click far from the map's circle clears the selection and leaves the cursor", !cornerSel.range && !cornerSel.focus && cornerSel.caret === caretBefore, JSON.stringify({ caretBefore, ...cornerSel }));
+      await s.clickAt(mapPoints.ring.point);
+      await sleep(200);
+      const ringSel = (await state()).sel;
+      const expected = Math.round(((((mapPoints.ring.deg - mapPoints.rotation) % 360) + 360) % 360) / 360 * start.len) % start.len;
+      const off = Math.abs(ringSel.caret - expected) % start.len;
+      check("A click near the circle puts the cursor there", !ringSel.range && Math.min(off, start.len - off) <= 3, `caret ${ringSel.caret}, expected about ${expected}`);
+    } else check("Empty points near and far from the map's circle were found", false, JSON.stringify(mapPoints));
+
+    // The name in the middle of the map is the sequence's, renamed in place; the file keeps its name.
+    const nameBefore = await s.exec(`${doc} return s.data.name;`);
+    const renameField = "document.activeElement?.classList.contains('sv-map-name-edit')";
+    // The name's own text, without its tooltip (a <title> inside it).
+    const mapName = "document.querySelector('.sv-map-name')?.firstChild?.textContent";
+    await s.doubleClick(".sv-map-name");
+    const renameOpened = await s.waitFor(renameField, 3000) && await s.exec("const i = document.activeElement; return i.value === arguments[0] && i.selectionStart === 0 && i.selectionEnd === i.value.length;", nameBefore);
+    check("Double-clicking the map's name opens a field with the name selected", renameOpened);
+    await s.shot("01-rename");
+    await s.press(`pUC19 K45A${ENTER}`);
+    const renamed = await s.exec(`${doc} return { name: s.data.name, undo: s.undoLabel, shown: ${mapName}, title: document.querySelector('.sv-doc-name')?.textContent, tab: window.__strandivo.tabs()[window.__strandivo.activeTab()], field: !!document.querySelector('.sv-map-name-edit') };`);
+    check("Enter renames the sequence, not its file", renamed.name === "pUC19 K45A" && renamed.undo === "Rename" && renamed.shown === "pUC19 K45A" && renamed.title === "pUC19 K45A" && renamed.tab === "pUC19-annotated.gb" && !renamed.field, JSON.stringify(renamed));
+    await s.doubleClick(".sv-map-name");
+    await s.waitFor(renameField, 3000);
+    await s.press(`not this${ESCAPE}`);
+    check("Esc leaves the name as it was", await s.exec(`${doc} return s.data.name === 'pUC19 K45A' && !document.querySelector('.sv-map-name-edit');`));
+    const nameMenu = await s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
+      document.querySelector('.sv-map-name').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
+    check("Right-clicking the name offers to rename the sequence, and no origin", nameMenu[0] === "Rename sequence…" && !nameMenu.includes("Set origin here"), nameMenu.join(", "));
+    await s.exec("window.__e2eMenu.find(e => e.label === 'Rename sequence…')?.run(); delete window.__strandivoMenu;");
+    check("Rename sequence… opens the same field", await s.waitFor(renameField, 3000));
+    await s.press(ESCAPE);
+    await s.exec(`${doc} s.undo();`);
+    check("Undo brings the old name back", await s.exec(`${doc} return s.data.name === arguments[0] && ${mapName} === arguments[0];`, nameBefore));
 
     const lacId = await s.exec(addTouching);
     await sleep(400);

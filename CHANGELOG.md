@@ -16,6 +16,19 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Rename a plasmid on its map**: double-click the name in the middle of the map, type a
+  new one and press Enter, or Esc to keep the old one. This renames the sequence, not its
+  file. Right-click the name, or empty space around the map, for Rename sequence…, Select
+  all and Reverse-complement sequence.
+- **Names with spaces keep them**: a GenBank file's LOCUS line can't hold spaces, so a
+  sequence named “pUC19 K45A” came back as “pUC19_K45A” after saving and reopening. The
+  file now keeps the exact name too, and Strandivo shows it unless another program has
+  renamed the sequence since. Underscores you type stay as they are.
+- **Clicking beside the map**: a click on empty space away from the map now clears the
+  selection, instead of putting the cursor at whatever base lay in that direction, even
+  from the window's far corners. On or near the circle, and along the linear map's
+  tracks, the cursor still goes where you click, and the pointer turns into a crosshair
+  there.
 - **NEB's Tm and annealing temperature**: choose NEB polymerase as the Tm method in
   Settings, then your polymerase (Q5, Phusion, OneTaq, Taq, LongAmp, Vent and others), and
   primers show the same Tm as NEB's Tm Calculator. The PCR product dialog then says where

@@ -158,6 +158,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   unsaved file's is kept once it is saved. Label size is a setting, the same for every
   file. Zoom is kept by nothing: every map opens fitted to the window, as a zoom without
   the place zoomed into would open a file on an arbitrary part of its map.
+- **Clicks on the map**: a press on empty space places the cursor only near the drawn
+  sequence (`nearTrack` in `src/views/mapView.ts`: the circle's ring or the linear map's
+  tracks, give or take 12 px on screen); further away it clears the selection, as the far
+  corners name no base. A right-click there, or on the name in the middle, is about the
+  whole sequence (Rename sequence…). That name is the sequence's, not the file's, and a
+  double-click edits it in place, timed on presses, as the map captures the pointer.
 - **Resizable parts** of a window use `splitter` (`src/ui/splitter.ts`): drag, arrow keys,
   double-click to reset or fit. The caller limits the size and keeps it in local storage
   for the whole app, not per file, like the alignment's names column. The side panels'
@@ -202,7 +208,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Files** are read and written with TeselaGen's bio-parsers (`src/doc/fileio.ts`);
   `src/doc/convert.ts` turns them into `SeqData` and back, keeping fields we don't model
   in `raw`. SnapGene `.dna` is read but saved as GenBank. Lab fields from the Info tab live
-  in GenBank COMMENT lines (`src/lib/labinfo.ts`).
+  in GenBank COMMENT lines (`src/lib/labinfo.ts`). So does a sequence's name with spaces,
+  as the LOCUS line holds them as underscores; it is read back only while that line still
+  matches it, so a rename made in another program wins (`src/lib/sequenceName.ts`).
 - **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
   working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in
   IndexedDB, so it lasts between visits), `web:<id>/<folder>/<path>` for one in a folder

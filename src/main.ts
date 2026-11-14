@@ -11,6 +11,7 @@ import { toast } from "./ui/dom.ts";
 import { loadSettings, onSettingsChanged } from "./settings.ts";
 import { useTmSettings } from "./lib/primers.ts";
 import { useAmberSuppression } from "./lib/genetics.ts";
+import { startTheme } from "./theme.ts";
 
 window.addEventListener("error", e => {
   if (isResizeObserverNotice(e.message)) return;
@@ -35,6 +36,8 @@ if (isDesktop && !isMac) {
 
 async function boot() {
   const root = document.getElementById("app")!;
+  // Before anything listens for settings, so a change of theme is in place when views redraw.
+  startTheme();
   replaceContextMenus();
   // Every window works out Tm and translates the way Settings say; registered first, so
   // windows that redraw on a settings change already see the new choice.

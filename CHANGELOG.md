@@ -26,6 +26,9 @@ with Unreleased's notes and leaves them where they are.
   on a linear sequence, inverting a stretch in the middle selects both ends. It is also in
   the right-click menu for selected bases. With nothing selected it selects everything,
   and in the browser version it is in the menu only, as browsers keep that key.
+- **Dark mode**: choose System, Light or Dark under Appearance in Settings. System, the
+  default, follows your computer's light or dark mode and changes along with it. Figures
+  you save or copy as images keep their usual colours, ready for slides.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

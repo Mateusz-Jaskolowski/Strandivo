@@ -172,7 +172,6 @@ says how to take part.
 - Export maps and sequences as PDF, SVG or PNG
 - Signed and notarized installers
 - Write SnapGene `.dna` files
-- Dark mode setting
 
 ## Licence
 

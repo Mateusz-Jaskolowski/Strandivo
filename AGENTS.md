@@ -208,8 +208,15 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   names, and a check's files that can't be reached are chosen and matched by name.
 - **Styles**: design tokens are CSS variables in `src/styles.css`; document styles are
   `sv-*` classes in `src/doc/document.css`, the app bar's and Home's in `src/mainWindow.css`.
-  Older `ps-*` classes remain for the Settings and Info screens. Dark tokens exist but no
-  setting turns them on yet.
+  Older `ps-*` classes remain for the Settings and Info screens. Colours are tokens: a theme
+  is one block of them in `src/styles.css`, named by `data-theme`, and every theme block
+  names the same tokens; outside the blocks the CSS uses no colour literals. The themes are
+  listed in `src/lib/themes.ts`, and Settings' Appearance stores one's name or "system".
+  `src/themeBoot.ts`, a plain script in `<head>` (a module can run after the first paint),
+  sets the theme before anything is drawn; `src/theme.ts` keeps it to Settings and the
+  system. CSS follows by itself, but a canvas reads its colours as it draws, so it redraws on
+  `onThemeChanged`. The gel and what is saved or copied as an image (the protein figure)
+  keep their own colours in every theme.
 - **Interface text** is plain and short, sentence case, says what happens ("Add reads…",
   "Use read base"), with ranges as 1,700–2,400 and an ellipsis on commands that open a
   dialog. Write like a colleague in the lab, using standard everyday and wet-lab words

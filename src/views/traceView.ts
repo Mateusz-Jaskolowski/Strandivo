@@ -21,6 +21,7 @@ import type { SeqFeature } from "../lib/seqdata.ts";
 import type { Chromatogram, Difference, ReadResult } from "../lib/types.ts";
 import { designOf } from "../lib/variable.ts";
 import { fmt } from "../ui/format.ts";
+import { onThemeChanged } from "../theme.ts";
 
 /** Column width in px. */
 export const COLUMN = 12;
@@ -202,8 +203,12 @@ export class TraceView {
   private mark: { c0: number; c1: number } | null = null;
   private ratioCache = new WeakMap<Chromatogram, Float32Array>();
 
+  /** Stops redrawing on a change of theme (the canvases read their colours from it). */
+  private offTheme: () => void;
+
   constructor(ctx: DocContext, options: TraceOptions, cb: TraceViewCallbacks) {
     this.ctx = ctx;
+    this.offTheme = onThemeChanged(() => this.requestDraw());
     this.cb = cb;
     this.options = options;
     this.headNames = h("div", { class: "sv-aln-names sv-aln-head-names" });
@@ -273,6 +278,11 @@ export class TraceView {
     });
     this.installPointer();
     this.installWheel();
+  }
+
+  /** For a closed tab. */
+  dispose() {
+    this.offTheme();
   }
 
   setVisible(v: boolean) {

@@ -330,6 +330,7 @@ export class ReadsView {
   /** Stops matching versions for a closed tab. */
   dispose() {
     this.matching = null;
+    this.trace.dispose();
   }
 
   setVisible(v: boolean) {

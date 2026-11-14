@@ -623,7 +623,8 @@ export class TraceView {
       badSoft: v("--bad-soft", "rgba(195,59,50,.1)"),
       mono: v("--mono", "monospace"),
       sans: v("--sans", "sans-serif"),
-      trace: { A: "#1f9d55", C: "#2563eb", G: v("--text", "#15181e"), T: "#dc2626" } as Record<string, string>
+      onBad: v("--on-bad", "#ffffff"),
+      trace: { A: v("--trace-a", "#1f9d55"), C: v("--trace-c", "#2563eb"), G: v("--trace-g", "#15181e"), T: v("--trace-t", "#dc2626") } as Record<string, string>
     };
   }
 
@@ -907,7 +908,7 @@ export class TraceView {
     const x = line.forward || stop.past ? X(stop.column) : X(stop.column + 1) - w;
     g.fillStyle = stop.past ? col.badSoft : col.bad;
     g.fillRect(x, y + 1, w, AA_H - 2);
-    g.fillStyle = stop.past ? col.bad : "#fff";
+    g.fillStyle = stop.past ? col.bad : col.onBad;
     g.textAlign = "left";
     g.fillText(text, x + 6, y + AA_H / 2 + 0.5);
     g.textAlign = "center";

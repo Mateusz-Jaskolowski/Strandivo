@@ -8,6 +8,8 @@ declare const __APP_VERSION__: string;
 declare const __USAGE_KEY__: string;
 /** Whether the browser version's events are Debug ones (vite.config.ts). */
 declare const __USAGE_DEBUG__: boolean;
+/** The themes' names, in src/themeBoot.ts only (vite.config.ts). */
+declare const __THEMES__: readonly string[];
 
 declare module "@teselagen/bio-parsers" {
   export interface ParseResult {

@@ -6,6 +6,7 @@
 //! feature detection, updates (`updates.rs`) and what a crash leaves (`crash.rs`).
 
 mod app_data;
+mod appearance;
 mod crash;
 mod feedback;
 mod usage;
@@ -103,19 +104,14 @@ fn open_paths<R: Runtime>(app: &AppHandle<R>, paths: Vec<PathBuf>) {
     }
 }
 
-/// A window showing the app's page. Strandivo's interface is light only for now, so on
-/// Windows its windows are too: there the menu bar would otherwise follow the system's dark
-/// mode, which the menu library draws by hand and which turned light again, under a light
-/// page, once another window had opened.
+/// A window showing the app's page, its title bar (and on Windows its menu bar) and
+/// background in the look the page's theme last asked for (appearance.rs).
 fn app_window<'a, R: Runtime>(
     app: &'a AppHandle<R>,
     label: &str,
     title: &str,
 ) -> WebviewWindowBuilder<'a, R, AppHandle<R>> {
-    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into())).title(title);
-    #[cfg(windows)]
-    let builder = builder.theme(Some(tauri::Theme::Light));
-    builder
+    appearance::style(WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into())).title(title))
 }
 
 fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
@@ -771,6 +767,7 @@ pub fn run() {
             app_data::load_app_data,
             app_data::save_app_data,
             app_data::set_aside_app_data,
+            appearance::set_window_look,
             cancel_quit,
             read_file,
             write_file,
@@ -794,6 +791,8 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             crash::set_folder(&handle);
+            // Before any window opens, so the first one already has the chosen look.
+            appearance::restore(&handle);
             let menu = build_menu(&handle)?;
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| {

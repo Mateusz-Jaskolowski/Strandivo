@@ -1,11 +1,42 @@
 /* Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
    SPDX-License-Identifier: GPL-3.0-or-later */
 
+/* Design tokens. Colours are tokens: the `:root` block holds what every theme shares, and
+   each theme is one block named by it (`data-theme`, set by src/themeBoot.ts before the
+   first paint). Every theme block names the same tokens, and outside these blocks the CSS
+   uses no colour literals but a few listed ones (src/lib/themes.test.ts). */
 :root {
-  /* Design tokens. Dark values are opt-in via data-theme="dark". */
-  color-scheme: light;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  /* The simulated gel: dark in every theme, like a gel on a transilluminator. */
+  --gel-bg: #1c2130;
+  --gel-band: #e9efff;
+  --gel-pick: #ffd166;
+  --gel-well: #000000;
+
+  /* Older names used by the Reads, Info, Settings and Start views. */
+  --ps-bg: var(--bg);
+  --ps-panel: var(--panel);
+  --ps-line: var(--line);
+  --ps-line-strong: var(--line-2);
+  --ps-text: var(--text);
+  --ps-muted: var(--text-3);
+  --ps-accent: var(--accent);
+  --ps-accent-hover: var(--accent-hover);
+  --ps-accent-soft: var(--accent-soft);
+  --ps-ok: var(--ok);
+  --ps-bad: var(--bad);
+  --ps-bad-soft: var(--bad-soft);
+  --ps-warn: var(--warn);
+  --ps-radius: 7px;
+  --ps-font: var(--sans);
+  --ps-mono: var(--mono);
+}
+
+/* Light, also the default before a theme is set. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
   --bg: #eef0f3;
   --panel: #ffffff;
   --side: #f6f7f9;
@@ -21,6 +52,10 @@
   --accent-hover: #2a47b8;
   --accent-soft: rgba(53, 87, 214, 0.12);
   --accent-text: #3557d6;
+  /* Text on a strong colour: the accent, the default primer colour, a stop. */
+  --on-accent: #ffffff;
+  --on-primer: #ffffff;
+  --on-bad: #ffffff;
   --ok: #1e7f4f;
   --ok-soft: rgba(30, 127, 79, 0.12);
   --warn: #a85b00;
@@ -48,31 +83,34 @@
   /* GC content outside 40–60%: teal for AT-rich, orange for GC-rich (not blue, the selection's colour). */
   --gc-at: #23968a;
   --gc-gc: #d9772b;
-  /* The simulated gel: dark in both themes, like a gel on a transilluminator. */
-  --gel-bg: #1c2130;
-  --gel-band: #e9efff;
-  --gel-pick: #ffd166;
+  /* Chromatogram traces, in the usual colours: A green, C blue, G black, T red. */
+  --trace-a: #1f9d55;
+  --trace-c: #2563eb;
+  --trace-g: #15181e;
+  --trace-t: #dc2626;
+  /* Amino acids by chemistry (Clustal X colours): the letter, and the box behind it. */
+  --aa-hydrophobic: #2459b8;
+  --aa-hydrophobic-bg: #dbe6fa;
+  --aa-positive: #c62828;
+  --aa-positive-bg: #fadcdc;
+  --aa-negative: #a3207a;
+  --aa-negative-bg: #f5dcec;
+  --aa-polar: #1b7a3d;
+  --aa-polar-bg: #dcf2e3;
+  --aa-cysteine: #c2477a;
+  --aa-cysteine-bg: #f8dde8;
+  --aa-glycine: #b45309;
+  --aa-glycine-bg: #fbe7cf;
+  --aa-proline: #8a6d00;
+  --aa-proline-bg: #f7eec2;
+  --aa-aromatic: #0e7490;
+  --aa-aromatic-bg: #d6eef3;
+  /* Behind a dialog, and the shadows of things raised over the page. */
+  --scrim: rgba(20, 28, 38, 0.35);
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.1);
-
-  /* Older names used by the Reads, Info, Settings and Start views. */
-  --ps-bg: var(--bg);
-  --ps-panel: var(--panel);
-  --ps-line: var(--line);
-  --ps-line-strong: var(--line-2);
-  --ps-text: var(--text);
-  --ps-muted: var(--text-3);
-  --ps-accent: var(--accent);
-  --ps-accent-hover: var(--accent-hover);
-  --ps-accent-soft: #e8edfb;
-  --ps-ok: var(--ok);
-  --ps-ok-soft: #e5f3ec;
-  --ps-bad: var(--bad);
-  --ps-bad-soft: #fcebea;
-  --ps-warn: var(--warn);
-  --ps-warn-soft: #fdf3e2;
-  --ps-radius: 7px;
-  --ps-font: var(--sans);
-  --ps-mono: var(--mono);
+  --shadow-raised: 0 1px 2px rgba(16, 24, 40, 0.14);
+  --shadow-edge: 0 2px 4px -2px rgba(21, 24, 30, 0.18);
+  --shadow-dialog: 0 1px 2px rgba(16, 24, 40, 0.08), 0 24px 64px rgba(16, 24, 40, 0.28);
 }
 
 :root[data-theme="dark"] {
@@ -92,6 +130,9 @@
   --accent-hover: #87a0f4;
   --accent-soft: rgba(109, 139, 240, 0.22);
   --accent-text: #9db1f6;
+  --on-accent: #0f1114;
+  --on-primer: #16191d;
+  --on-bad: #16191d;
   --ok: #5cc98e;
   --ok-soft: rgba(92, 201, 142, 0.14);
   --warn: #f0a14a;
@@ -99,6 +140,7 @@
   --diff: #fb9a5f;
   --diff-soft: rgba(251, 140, 74, 0.2);
   --bad: #f07a70;
+  --bad-soft: rgba(240, 122, 112, 0.14);
   --stripe: rgba(255, 255, 255, 0.045);
   --seq2: #8e95a1;
   --backbone: #c3c8d0;
@@ -116,7 +158,32 @@
   --orf-r3: #b07c8f;
   --gc-at: #3fb3a5;
   --gc-gc: #f0954a;
+  /* G is light here: black would vanish into the panel. */
+  --trace-a: #4cc27c;
+  --trace-c: #6b9bff;
+  --trace-g: #c3c8d0;
+  --trace-t: #f2706a;
+  --aa-hydrophobic: #8fb0f2;
+  --aa-hydrophobic-bg: #1e2a44;
+  --aa-positive: #f28b82;
+  --aa-positive-bg: #3a1f1f;
+  --aa-negative: #e590cf;
+  --aa-negative-bg: #36203a;
+  --aa-polar: #6fd09a;
+  --aa-polar-bg: #183225;
+  --aa-cysteine: #f08fb5;
+  --aa-cysteine-bg: #3a2130;
+  --aa-glycine: #f0a860;
+  --aa-glycine-bg: #3a2a17;
+  --aa-proline: #e0c45a;
+  --aa-proline-bg: #343016;
+  --aa-aromatic: #5cc8e0;
+  --aa-aromatic-bg: #15313a;
+  --scrim: rgba(0, 0, 0, 0.55);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-edge: 0 2px 4px -2px rgba(0, 0, 0, 0.6);
+  --shadow-dialog: 0 1px 2px rgba(0, 0, 0, 0.5), 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -157,7 +224,7 @@ body {
   white-space: nowrap;
 }
 .ps-btn:hover {
-  background: #f0f2f5;
+  background: var(--hover);
 }
 .ps-btn:focus-visible {
   outline: 2px solid var(--ps-accent);
@@ -166,7 +233,7 @@ body {
 .ps-btn-primary {
   background: var(--ps-accent);
   border-color: var(--ps-accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .ps-btn-primary:hover {
   background: var(--ps-accent-hover);
@@ -240,7 +307,7 @@ body {
 .ps-context-menu button:focus-visible {
   outline: none;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .ps-context-menu button:disabled {
   color: var(--text-3);
@@ -368,14 +435,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(20, 28, 38, 0.35);
+  background: var(--scrim);
 }
 .ps-modal {
   width: min(440px, calc(100vw - 32px));
   padding: 20px 22px 16px;
   border-radius: 10px;
   background: var(--ps-panel);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-dialog);
 }
 .ps-modal h3 {
   margin: 0 0 6px;
@@ -407,7 +474,7 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(28, 111, 209, 0.12);
+  background: var(--accent-soft);
   border: 3px dashed var(--ps-accent);
   pointer-events: none;
 }
@@ -423,7 +490,7 @@ body {
   background: var(--ps-panel);
   font-size: 14px;
   font-weight: 500;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow);
 }
 .ps-load-error {
   max-width: 640px;
@@ -731,7 +798,7 @@ select.ps-field-input {
   display: inline-flex;
   padding: 2px;
   border-radius: 7px;
-  background: #eef0f3;
+  background: var(--bg);
 }
 .ps-seg-btn {
   height: 26px;
@@ -746,7 +813,7 @@ select.ps-field-input {
 .ps-seg-on {
   background: var(--ps-panel);
   color: var(--ps-text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-raised);
 }
 .ps-check-grid {
   display: grid;
@@ -815,7 +882,7 @@ select.ps-field-input {
   transform: rotate(180deg);
 }
 .ps-order-btn:hover:not(:disabled) {
-  background: #eef0f3;
+  background: var(--hover);
   color: var(--ps-text);
 }
 .ps-order-btn:disabled {

@@ -9,6 +9,7 @@ import { DEFAULT_SIDEBAR_ORDER, moveSection, SIDEBAR_SECTIONS } from "./lib/side
 import { iconSvg } from "./ui/icons.ts";
 import { browserAsksNotToTrack, isDesktop, openUsagePage, setWindowTitle } from "./platform.ts";
 import { DEFAULT_CONDITIONS, TM_METHODS, usesConditions, type TmConditions, type TmMethod } from "./lib/primers.ts";
+import { THEME_LABELS, THEMES, type Appearance } from "./lib/themes.ts";
 
 const TRIM_LEVELS: [string, number][] = [
   ["Off", 0],
@@ -167,6 +168,20 @@ export function mountSettings(root: HTMLElement, embedded = false) {
   });
 
   const sections = [
+    h(
+      "section",
+      { class: "ps-set-section" },
+      h("h2", null, "General"),
+      row(
+        "Appearance",
+        "System follows your computer's light or dark mode.",
+        segmented<Appearance>(
+          [["System", "system"], ...THEMES.map((t): [string, Appearance] => [THEME_LABELS[t], t])],
+          s.appearance,
+          v => commit({ ...s, appearance: v })
+        )
+      )
+    ),
     h(
       "section",
       { class: "ps-set-section" },

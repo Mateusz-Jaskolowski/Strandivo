@@ -7,6 +7,7 @@
 import { isDesktop } from "./platform.ts";
 import { DEFAULT_TM, type TmSettings } from "./lib/primers.ts";
 import { DEFAULT_SIDEBAR_ORDER, foldedSections, sidebarOrder, type SidebarSection } from "./lib/sidebar.ts";
+import { isAppearance, type Appearance } from "./lib/themes.ts";
 
 export type SequenceCase = "noPreference" | "uppercase" | "lowercase";
 
@@ -18,6 +19,8 @@ export interface FieldDef {
 }
 
 export interface Settings {
+  /** A theme's name (src/lib/themes.ts), or "system" to follow the computer's light or dark mode. */
+  appearance: Appearance;
   /** Differences below this Phred quality are shown as uncertain. */
   minQuality: number;
   /** Mott trimming error cutoff; 0 = no trimming. */
@@ -95,6 +98,7 @@ export function fieldDef(name: string): FieldDef {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  appearance: "system",
   minQuality: 20,
   trimCutoff: 0.05,
   labelSize: 8,
@@ -111,6 +115,7 @@ export const DEFAULT_SETTINGS: Settings = {
   welcomeSeen: 0
 };
 
+/** Also read by src/themeBoot.ts, before the page has loaded this file. */
 const KEY = "strandivo.settings";
 const EVENT = "settings-changed";
 
@@ -120,6 +125,7 @@ export function loadSettings(): Settings {
     return {
       ...DEFAULT_SETTINGS,
       ...raw,
+      appearance: isAppearance(raw.appearance) ? raw.appearance : DEFAULT_SETTINGS.appearance,
       show: { ...DEFAULT_SETTINGS.show, ...(raw.show || {}) },
       tm: { ...DEFAULT_TM, ...(raw.tm || {}) },
       orfs: { ...DEFAULT_SETTINGS.orfs, ...(raw.orfs || {}) },

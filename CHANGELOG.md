@@ -43,6 +43,9 @@ with Unreleased's notes and leaves them where they are.
   default, follows your computer's light or dark mode and changes along with it. Title
   bars, and the menu bar on Windows, follow your choice too. Figures you save or copy as
   images keep their usual colours, ready for slides.
+- **More room for traces**: the sidebar and inspector buttons now work in the Reads tab,
+  hiding the list of reads and the read details to widen the alignment. The Reads tab
+  remembers its own choice, so hiding the sidebar on the map leaves your reads in view.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

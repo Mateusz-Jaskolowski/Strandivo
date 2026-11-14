@@ -216,6 +216,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   let split = false;
   let sidebarOpen = true;
   let inspectorOpen = true;
+  // The Reads tab's list and inspector are panels of their own: hiding the outline to widen
+  // the map shouldn't take the reads away.
+  let readsListOpen = true;
+  let readsInspectorOpen = true;
   // Sequencing reads align against the current sequence; edits make the results stale.
   // Kept for each version of the document: a library's design can hold a million versions,
   // and what matches them is indexed by the list (`src/lib/versionMatch.ts`).
@@ -367,8 +371,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   const toolButton = (iconName: IconName, label: string, onclick: () => void, extra: Record<string, unknown> = {}) =>
     h("button", { type: "button", class: "sv-icon-btn", "aria-label": label, title: label, onclick, ...extra }, iconSvg(iconName, 18));
   const splitButton = toolButton("split", "Split view: map and sequence side by side", () => setSplit(!split), { "aria-pressed": "false" });
-  const sidebarButton = toolButton("sidebar", "Show sidebar: features, primers and enzymes", () => setSidebar(!sidebarOpen), { "aria-pressed": "true" });
-  const inspectorButton = toolButton("inspector", "Show inspector", () => setInspector(!inspectorOpen), { "aria-pressed": "true" });
+  const sidebarButton = toolButton("sidebar", "Show sidebar", () => toggleSidebar(), { "aria-pressed": "true" });
+  const inspectorButton = toolButton("inspector", "Show inspector", () => toggleInspector(), { "aria-pressed": "true" });
   const undoButton = toolButton("undo", "Undo", () => store.undo());
   const redoButton = toolButton("redo", "Redo", () => store.redo());
   const sep = () => h("span", { class: "sv-tool-sep", "aria-hidden": "true" });
@@ -455,6 +459,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     b.textContent = String(reads.count);
     b.classList.toggle("sv-badge-warn", reads.attention() > 0);
     inspector.refresh();
+    // The Reads tab has panels only once it has reads.
+    if (tab === "reads") panelButtons();
   });
 
   let infoDirty = false;
@@ -507,20 +513,35 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     inspector.el.hidden = !sidePanels || !inspectorOpen;
     outlineSplit.hidden = outline.el.hidden;
     inspectorSplit.hidden = inspector.el.hidden;
-    // A button for something this view doesn't have is turned off, not shown as on.
-    const panelButton = (b: HTMLButtonElement, on: boolean, offered: boolean) => {
-      b.disabled = !offered;
-      b.setAttribute("aria-pressed", String(on && offered));
-      b.classList.toggle("sv-on", on && offered);
-    };
-    panelButton(splitButton, split, tab === "map" || tab === "sequence");
-    panelButton(sidebarButton, sidebarOpen, tab === "map" || tab === "sequence");
-    panelButton(inspectorButton, inspectorOpen, sidePanels);
+    readsView.setPanels(readsListOpen, readsInspectorOpen);
+    panelButtons();
     mapView.setVisible(!panes.map.hidden);
     seqView.setVisible(!panes.sequence.hidden);
     primersView.setVisible(!panes.primers.hidden);
     readsView.setVisible(tab === "reads");
     if (tab === "info") infoPanel.render();
+  }
+
+  // A button for something this view doesn't have is turned off, not shown as on.
+  function panelButtons() {
+    const panelButton = (b: HTMLButtonElement, on: boolean, offered: boolean, label?: string) => {
+      b.disabled = !offered;
+      b.setAttribute("aria-pressed", String(on && offered));
+      b.classList.toggle("sv-on", on && offered);
+      if (label) {
+        b.title = label;
+        b.setAttribute("aria-label", label);
+      }
+    };
+    const readsShown = tab === "reads" && reads.count > 0;
+    panelButton(splitButton, split, tab === "map" || tab === "sequence");
+    panelButton(
+      sidebarButton,
+      readsShown ? readsListOpen : sidebarOpen,
+      tab === "map" || tab === "sequence" || readsShown,
+      readsShown ? "Show sidebar: reads" : "Show sidebar: features, primers and enzymes"
+    );
+    panelButton(inspectorButton, readsShown ? readsInspectorOpen : inspectorOpen, tab === "map" || tab === "sequence" || tab === "primers" || readsShown);
   }
 
   function setTab(t: Tab) {
@@ -535,12 +556,19 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     if (on && tab !== "map" && tab !== "sequence") tab = "map";
     layout();
   }
-  function setSidebar(on: boolean) {
-    sidebarOpen = on;
-    layout();
-  }
   function setInspector(on: boolean) {
     inspectorOpen = on;
+    layout();
+  }
+  // The panels of the view in front: the Reads tab's own, or the outline and inspector.
+  function toggleSidebar() {
+    if (tab === "reads") readsListOpen = !readsListOpen;
+    else sidebarOpen = !sidebarOpen;
+    layout();
+  }
+  function toggleInspector() {
+    if (tab === "reads") readsInspectorOpen = !readsInspectorOpen;
+    else inspectorOpen = !inspectorOpen;
     layout();
   }
 
@@ -964,10 +992,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         setSplit(!split);
         return true;
       case "toggle-sidebar":
-        setSidebar(!sidebarOpen);
+        toggleSidebar();
         return true;
       case "toggle-inspector":
-        setInspector(!inspectorOpen);
+        toggleInspector();
         return true;
       case "add-feature":
         addFeature();

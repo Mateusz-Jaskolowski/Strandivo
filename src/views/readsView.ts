@@ -269,6 +269,9 @@ export class ReadsView {
   private divider: HTMLElement;
   private main: HTMLElement;
   private insp = h("aside", { class: "sv-reads-insp", "aria-label": "Read details" });
+  private list: HTMLElement;
+  private listSplit: HTMLElement;
+  private inspSplit: HTMLElement;
   private grid: HTMLElement;
   private empty: HTMLElement;
   /** What the alignment shows, on the map's fixed part and on its rows. */
@@ -294,12 +297,15 @@ export class ReadsView {
     });
     this.summaryPanel = new CloneSummaryPanel(ctx, { features: () => this.actions.legacyFeatures(), show: p => this.showPosition(p) });
     const list = h("aside", { class: "sv-reads-list", "aria-label": "Reads" }, this.listHead, this.listEl, h("div", { class: "sv-reads-drop" }, "Drop .ab1, .seq or FASTQ files on the window to add them"), this.listFoot);
+    this.list = list;
     this.alignment = h("section", { class: "sv-reads-aln", "aria-label": "Alignment" }, this.alnHead, this.trace.el);
     this.divider = this.makeDivider();
     this.top = h("section", { class: "sv-reads-cov", "aria-label": "Reads overview" }, this.covHead, this.overview, this.cloneTable, this.diffs, this.summaryPanel.el);
     this.main = h("div", { class: "sv-reads-main" }, this.top, this.divider, this.alignment);
     this.installDrag();
-    this.grid = h("div", { class: "sv-reads-grid" }, list, panelSplitter("sidebar", () => list), this.main, panelSplitter("inspector", () => this.insp), this.insp);
+    this.listSplit = panelSplitter("sidebar", () => list);
+    this.inspSplit = panelSplitter("inspector", () => this.insp);
+    this.grid = h("div", { class: "sv-reads-grid" }, list, this.listSplit, this.main, this.inspSplit, this.insp);
     this.empty = h(
       "div",
       { class: "sv-reads-empty" },
@@ -340,6 +346,14 @@ export class ReadsView {
       this.renderOverview();
       void this.reads.refreshIfStale();
     }
+  }
+
+  /** Shows or hides the list of reads and the inspector (the toolbar's panel buttons). */
+  setPanels(list: boolean, inspector: boolean) {
+    this.list.hidden = this.listSplit.hidden = !list;
+    this.insp.hidden = this.inspSplit.hidden = !inspector;
+    this.grid.classList.toggle("sv-reads-no-list", !list);
+    this.grid.classList.toggle("sv-reads-no-insp", !inspector);
   }
 
   get activeRead(): number | null {

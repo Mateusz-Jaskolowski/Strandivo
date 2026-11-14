@@ -878,13 +878,18 @@
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
+/* A heading folds its section (`foldSection` in src/views/inspector.ts); the chevron sits
+   in the section's margin, so the title stays close to the text under it. The heading
+   keeps to one line, and its links go under it when the panel is too narrow for both. */
 .sv-insp-section > .sv-section-head {
+  flex-wrap: wrap;
+  row-gap: 4px;
   padding: 0;
 }
-/* A heading folds its section (`foldSection` in src/views/inspector.ts); the chevron sits
-   in the section's margin, so the title stays close to the text under it. */
 .sv-insp-section > .sv-section-head > .sv-section-toggle {
+  flex: 0 0 auto;
   margin-left: -10px;
+  white-space: nowrap;
 }
 .sv-insp-section.sv-folded {
   padding-top: 9px;

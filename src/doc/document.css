@@ -1188,6 +1188,22 @@
 .sv-gc-gc {
   background: var(--gc-gc);
 }
+/* The same levels as a ring (or band) on the map, drawn as thick strokes. */
+.sv-map-gc-at {
+  stroke: var(--gc-at);
+}
+.sv-map-gc-at-light {
+  stroke: color-mix(in srgb, var(--gc-at) 40%, transparent);
+}
+.sv-map-gc-mid {
+  stroke: var(--line);
+}
+.sv-map-gc-gc-light {
+  stroke: color-mix(in srgb, var(--gc-gc) 40%, transparent);
+}
+.sv-map-gc-gc {
+  stroke: var(--gc-gc);
+}
 .sv-orf:hover {
   filter: brightness(0.9);
 }

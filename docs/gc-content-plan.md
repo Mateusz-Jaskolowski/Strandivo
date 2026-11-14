@@ -1,6 +1,8 @@
 # GC content along the sequence
 
-Planned and built 12 November 2026; merged with its end-to-end checks passing in CI.
+Planned and built 12 November 2026; merged with its end-to-end checks passing in CI. The
+map's ring and the buttons' "GC%" label and tooltip were added on 14 November 2026, when
+asked for.
 
 ## Summary
 
@@ -11,7 +13,8 @@ difficult stretches are before a primer is drawn.
 
 Add a thin GC strip to the rows of bases, coloured only where GC leaves the 40–60% band,
 and a matching band along the Sequence tab's overview strip for the whole sequence. It is
-a layer, switched on with a "GC" chip, not a sixth view.
+a layer, switched on with a "GC%" chip, not a sixth view. The map can show the same as a
+ring.
 
 ## What it shows
 
@@ -65,8 +68,17 @@ a layer, switched on with a "GC" chip, not a sixth view.
   scale is where GC causes trouble beyond one primer: a GC-rich promoter that won't
   amplify, an AT-rich stretch where reads fail. Same colours and thresholds, so one
   legend reads both.
+- **Map**: a ring 6 units wide just inside the features and ORFs, with the ruler inside
+  it, so it reads against the features it explains and stays next to the positions. On
+  the linear map it is a band between the ruler's numbers and the features: the same
+  order, the ruler on one side and the features on the other. It uses the overview's
+  window and colours, and on a circle a stretch across the origin is one run, with one
+  tooltip. Off by default, with its own "GC%" chip after ORFs, as the map's Regions chip
+  is apart from the Sequence tab's.
 
-Both chips are remembered like the others (`VIEW_KEY` in `src/doc/document.ts`).
+The chips read "GC%", and each one's tooltip says what is counted (the window) and what
+each colour means, as the strip has no legend of its own. All three are remembered like
+the other chips (`VIEW_KEY` in `src/doc/document.ts`).
 
 ## Implementation
 
@@ -75,10 +87,13 @@ Both chips are remembered like the others (`VIEW_KEY` in `src/doc/document.ts`).
   one level between two positions. Pure, unit-tested in `src/lib/gc.test.ts`.
 - `src/doc/analysis.ts` caches a profile per sequence and window, like ORFs and cut sites,
   so drawing rows on scroll doesn't count again.
-- `src/views/gcStrip.ts` draws the runs; `src/views/sequenceView.ts` and
+- `src/views/gcStrip.ts` draws the runs and holds the chips' label and tooltip; `src/views/sequenceView.ts` and
   `src/views/primerContext.ts` make room for the strip in each row and place it; the overview band is drawn with the overview strip. Views draw only the
   rows on screen, and a row has a handful of runs, not an element per base.
-- The options are `sequenceGc` (off) and `primerGc` (on) in `ViewOptions`.
+- `src/views/mapView.ts` draws the map's ring or band as one thick stroke per run, with
+  its tooltip in a `<title>`; `joinAtOrigin` in `src/lib/gc.ts` joins the run across the
+  origin.
+- The options are `sequenceGc` (off), `primerGc` (on) and `mapGc` (off) in `ViewOptions`.
 
 ## Alternatives considered
 
@@ -93,7 +108,13 @@ time. Verdict: better on a map, where there is room and no per-base reading; not
 
 **A GC ring on the map.** The usual picture of a whole plasmid's GC, but the map is for
 features and is already layered; the overview band gives the same overall picture in the
-tab where primers are placed. Verdict: not now; reconsider if people ask for it on the map.
+tab where primers are placed. Verdict at first: not now; reconsider if people ask for it
+on the map. Asked for on 14 November 2026, and added, off by default.
+
+**A line plot on the map** (GC drawn as its distance from 50%, as genome viewers do).
+Shows how far from the band GC goes, but needs a wider ring and a second way of reading
+GC beside the strips' colours. Verdict: the same colours as the strips, so one legend
+reads every view; a plot can come later if the ring is too coarse.
 
 **Letting "Design primers…" move the ends.** `designPairs` in `src/lib/design.ts` put the
 forward primer exactly at the selection's start and the reverse exactly at its end, so

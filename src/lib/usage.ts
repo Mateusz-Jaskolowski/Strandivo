@@ -125,14 +125,15 @@ export function randomDigits(count: number, bytes: (n: number) => Uint8Array): s
 /**
  * One event as the browser version posts it: the app's version and whether it is a Debug
  * event, and nothing about the browser or the computer, not even the language, which the
- * shell doesn't send either.
+ * shell doesn't send either. The version says "(web)", as Aptabase's dashboard shows and
+ * filters by the version but not by the SDK, so browser and desktop sessions stay apart.
  */
 export function webUsageBody(e: UsageEvent, session: string, version: string, debug: boolean) {
   return {
     timestamp: e.at,
     sessionId: session,
     eventName: e.name,
-    systemProps: { isDebug: debug, appVersion: version, sdkVersion: `strandivo-web@${version}` },
+    systemProps: { isDebug: debug, appVersion: `${version} (web)`, sdkVersion: `strandivo-web@${version}` },
     props: e.props
   };
 }

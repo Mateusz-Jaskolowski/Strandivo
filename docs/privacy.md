@@ -188,9 +188,10 @@ everyone else's. A copy built by the project's checks sends none, and neither do
 built from the source, unless whoever builds it adds the project's key, which only its
 maintainers have; theirs are marked as tests too.
 
-In the browser version the page sends each event itself, with the app's version, the time
-and the session number, which is kept only while the page is open: closing or reloading it
-starts a new one. Aptabase reads the browser and the operating system from the request, as
+In the browser version the page sends each event itself, with the app's version (marked
+"web", such as 0.4.1 (web), so its use can be counted apart from the desktop app's), the
+time and the session number, which is kept only while the page is open: closing or
+reloading it starts a new one. Aptabase reads the browser and the operating system from the request, as
 any website can. Nothing is stored for statistics, so `app_started` has no `installed`
 there, and its processor is always "other". Events also go as the page closes, so the last
 ones aren't lost. Only the browser version the project publishes sends; a preview of a

@@ -84,13 +84,13 @@ test("the privacy page names every event and property", () => {
   }
 });
 
-test("the browser version sends the event, its version and Debug, and nothing about the computer", () => {
+test("the browser version sends the event, its version marked as the web's and Debug, and nothing about the computer", () => {
   const e = usageEvent("view_used", { view: "map" }, new Date(Date.UTC(2026, 10, 9, 9, 30)))!;
   assert.deepEqual(webUsageBody(e, "176268060012345678", "0.4.0", false), {
     timestamp: "2026-11-09T09:30:00.000Z",
     sessionId: "176268060012345678",
     eventName: "view_used",
-    systemProps: { isDebug: false, appVersion: "0.4.0", sdkVersion: "strandivo-web@0.4.0" },
+    systemProps: { isDebug: false, appVersion: "0.4.0 (web)", sdkVersion: "strandivo-web@0.4.0" },
     props: { view: "map" }
   });
 });

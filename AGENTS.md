@@ -112,7 +112,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   beside the views it shows). Views show the document (Map, Sequence, Primers, Reads, Info), and
   there are five; a task with a start and an end (design primers, a PCR product, adding
   from the library) is a dialog (`openDialog` in `src/ui/modal.ts`, see
-  `src/views/primerDialogs.ts`); something not tied to one file gets its own window, like
+  `src/views/primerDialogs.ts`); so is a closer look at one thing too big for the
+  inspector, such as a protein (`src/views/proteinDialog.ts`: its figure, numbered sequence
+  and properties), opened from its section there and its right-click menu, never by a
+  double-click. The inspector keeps that thing's summary and actions, and there is one
+  such dialog per kind of thing, not one per section: a second wish grows the first.
+  Something not tied to one file gets its own window, like
   Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
   selected. This keeps windows from getting crowded. On the map, what is drawn is chosen
@@ -341,6 +346,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   Gibson splits a missing overlap between two amplified neighbours
   (NEBuilder's way); In-Fusion puts all 15 bases on the insert's primers (Takara's).
 - **Read alignment in Rust** (`crates/seqcore/`), so it is fast and testable on its own.
+- **A protein's mass and ε280** are worked out as ExPASy ProtParam does
+  (`src/lib/proteinProperties.ts`, tested against its answers), so numbers can be checked
+  there: average residue masses plus a water, and Pace et al. (1995) for ε280 (5500 per
+  Trp, 1490 per Tyr, 125 per pair of Cys). Both coefficients show once there are two Cys,
+  as which applies depends on where the protein folds. The protein ends at its first stop,
+  and an unknown residue (X) leaves both numbers out rather than guess. DNA's extinction
+  coefficients are left for later, by choice.
 - **Tm**: SantaLucia 1998 with primer3's default conditions by default, so numbers match
   primer3. Settings can choose Breslauer 1986 (primer3's older method), the Wallace rule or
   a basic GC formula, and the conditions. Each window applies the choice with `useTmSettings`

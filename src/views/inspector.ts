@@ -43,7 +43,9 @@ import {
 import { fmt, fmtRange } from "../ui/format.ts";
 import { openUniprotDialog } from "./uniprotDialog.ts";
 import { openProteinRegionDialog, openProteinRegionFromSelection } from "./proteinRegionDialog.ts";
-import { openProteinDiagram, proteinDiagram } from "./proteinDiagram.ts";
+import { proteinDiagram } from "./proteinDiagram.ts";
+import { openProteinDialog } from "./proteinDialog.ts";
+import { absorbance, extinctionNote, kilodaltons, proteinProperties } from "../lib/proteinProperties.ts";
 import { openDigestDialog } from "./digestDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
@@ -389,6 +391,7 @@ export class Inspector {
     // A selected protein region shows its own details, not the CDS's note.
     const ownFocus = this.ctx.store.selection.focus?.region === undefined;
     if (ownFocus) out.push(...this.noteSections(f));
+    if (isCds(f)) out.push(this.proteinSection(prot, () => openProteinDialog(this.ctx, f)));
     if (isCds(f)) out.push(this.regionsSection(f));
     if (isCds(f)) {
       out.push(
@@ -457,6 +460,41 @@ export class Inspector {
       )
     );
     return out;
+  }
+
+  /**
+   * A protein's mass and extinction coefficient (`src/lib/proteinProperties.ts`), and the
+   * way to its dialog, which has the rest. Both coefficients show once it has a pair of
+   * Cys, as which applies depends on where the protein folds. A note about the numbers
+   * stays while the section is folded.
+   */
+  private proteinSection(prot: string, details: () => void): Node {
+    const p = proteinProperties(prot);
+    const rows: [string, Node | string][] = [];
+    if (p.mass !== null) rows.push(["Mass", kilodaltons(p.mass)]);
+    if (p.reduced !== null && p.mass !== null && (p.trp || p.tyr || p.cys)) {
+      const two = p.cys >= 2;
+      const both = (first: string, second: string) => (two ? h("span", null, first, h("div", { class: "sv-dim" }, second)) : first);
+      const a280 = (e: number) => absorbance(e, p.mass!).toFixed(3);
+      rows.push(
+        ["ε280", both(`${fmt(p.reduced)} M⁻¹ cm⁻¹`, `${fmt(p.cystines!)} with disulfides`)],
+        ["A280", both(`${a280(p.reduced)} at 1 mg/mL`, `${a280(p.cystines!)} with disulfides`)]
+      );
+    }
+    const note = extinctionNote(p);
+    const notes = [
+      p.earlyStop !== null ? h("p", { class: "sv-small sv-text-warn" }, `Up to the stop at codon ${fmt(p.earlyStop)}, where the protein ends.`) : null,
+      note ? h("p", { class: p.unknown ? "sv-small sv-text-warn" : "sv-small sv-dim" }, note) : null
+    ];
+    const head = this.facts(rows);
+    head.title = "Worked out as ExPASy ProtParam does: ε280 from Trp, Tyr and cystines (Pace et al. 1995).";
+    return this.foldSection(
+      "protein",
+      "Protein",
+      { actions: [h("button", { type: "button", class: "sv-link", onclick: details }, "Details…")], keep: notes },
+      rows.length ? head : null,
+      ...notes
+    );
   }
 
   /**
@@ -548,7 +586,6 @@ export class Inspector {
       {
         count: regions.length || undefined,
         actions: [
-          regions.length ? h("button", { type: "button", class: "sv-link", onclick: () => openProteinDiagram(this.ctx, f) }, "Expand…") : null,
           h("button", { type: "button", class: "sv-link", onclick: () => openProteinRegionDialog(this.ctx, f) }, "Add region…")
         ],
         keep: [detail]
@@ -564,10 +601,14 @@ export class Inspector {
 
   private regionDetail(f: SeqFeature, r: ProteinRegion): Node {
     const here = `Residues ${fmt(r.start)}–${fmt(r.end)} of this CDS`;
+    // The region on its own, as for a domain expressed by itself.
+    const own = proteinProperties(protein(f, this.ctx.store.data.sequence).slice(r.start - 1, r.end));
+    const ownEps = own.reduced !== null && (own.trp || own.tyr || own.cys) ? ` · ε280 ${fmt(own.reduced)}${own.cys >= 2 ? ` (${fmt(own.cystines!)} with disulfides)` : ""} M⁻¹ cm⁻¹` : "";
     return h(
       "div",
       { class: "sv-region-detail" },
       h("p", { class: "sv-small sv-dim" }, `${r.kind} · ${here}${r.accession && isClipped(r) ? ` · length differs from UniProt ${fmt(r.sourceStart)}–${fmt(r.sourceEnd)}` : ""}`),
+      own.mass !== null ? h("p", { class: "sv-small sv-dim" }, `On its own: ${kilodaltons(own.mass)}${ownEps}`) : null,
       r.variable ? h("p", { class: "sv-small sv-dim" }, `Varies between clones · ${r.variable.kind === "any" ? "any sequence" : r.variable.kind === "pattern" ? r.variable.pattern : r.variable.protein ? "protein versions" : "DNA versions"}`) : null,
       h(
         "div",
@@ -937,7 +978,13 @@ export class Inspector {
         ]),
         this.viewOther(o)
       ),
-      this.foldSection("translation", "Translation", {}, h("div", { class: "sv-code" }, prot)),
+      this.proteinSection(prot, () => openProteinDialog(this.ctx, orfFeature(o), "ORF")),
+      this.foldSection(
+        "translation",
+        "Translation",
+        { actions: [h("button", { type: "button", class: "sv-link", onclick: () => this.actions.copy(prot, "protein sequence") }, iconSvg("copy", 13), "Copy")] },
+        h("div", { class: "sv-code" }, prot)
+      ),
       h(
         "div",
         { class: "sv-insp-actions" },

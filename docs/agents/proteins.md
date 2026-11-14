@@ -70,7 +70,8 @@ and CI checks that they exist.
   translation is shown. They use `src/views/regionTracks.ts` to pack and draw both the
   bars and captions, so names do not collide or widen the scroller. The primer's panel
   shows all regions in its visible template window, including neighbouring boundaries.
-- **The protein figure** (Expand… in the inspector) is laid out once, as shapes with
+- **The protein figure** (in Protein details, `src/views/proteinDialog.ts`, opened by
+  Details… in the inspector's Protein section) is laid out once, as shapes with
   concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
   as SVG in the dialog, paints on a canvas for the PNG and writes as the SVG file, so all
   three match. Painting from the shapes, not loading the SVG as an image, keeps `data:`

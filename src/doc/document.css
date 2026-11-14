@@ -4039,6 +4039,29 @@
   background: #ffffff;
 }
 .sv-figure { display: block; width: 100%; min-width: 640px; height: auto; }
+/* Protein details (src/views/proteinDialog.ts): properties, regions and the sequence. */
+.sv-protein-section { display: flex; flex-direction: column; gap: 8px; }
+.sv-protein-section + .sv-protein-section { padding-top: 12px; border-top: 1px solid var(--line); }
+.sv-protein-head { padding: 0; }
+.sv-protein-facts { grid-template-columns: 124px minmax(0, 1fr); }
+.sv-protein-seq {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font: 12px/1.7 var(--mono);
+  color: var(--text-2);
+  white-space: pre;
+  overflow-x: auto;
+}
+.sv-protein-seq-num {
+  display: inline-block;
+  min-width: 5ch;
+  margin-right: 2ch;
+  text-align: right;
+  color: var(--text-3);
+  user-select: none;
+}
 .sv-figure-pick { cursor: pointer; }
 rect.sv-figure-pick:hover { filter: brightness(1.07); }
 text.sv-figure-pick:hover { fill: var(--accent-text); }

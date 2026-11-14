@@ -9,6 +9,7 @@
 export type InspectorFold =
   | "note"
   | "qualifiers"
+  | "protein"
   | "regions"
   | "region-list"
   | "translation"
@@ -26,6 +27,7 @@ const FOLDED_FIRST: ReadonlySet<InspectorFold> = new Set(["qualifiers", "region-
 const KNOWN: ReadonlySet<string> = new Set<InspectorFold>([
   "note",
   "qualifiers",
+  "protein",
   "regions",
   "region-list",
   "translation",

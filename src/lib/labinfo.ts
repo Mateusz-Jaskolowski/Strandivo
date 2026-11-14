@@ -9,6 +9,11 @@ import type { Feature } from "./types.ts";
 
 export const BLOCK_START = "##Strandivo-Data-START##";
 export const BLOCK_END = "##Strandivo-Data-END##";
+/**
+ * The sequence's exact name, kept in the block when GenBank's LOCUS line can't hold it
+ * (`src/lib/sequenceName.ts`). Not a lab field: the Info tab takes no field by this name.
+ */
+export const NAME_KEY = "Name with spaces";
 
 /** Ordered key → value pairs. Empty values are not stored. */
 export type LabFields = [string, string][];
@@ -17,6 +22,8 @@ export interface ParsedComments {
   fields: LabFields;
   /** All other comment lines, untouched. */
   otherComments: string[];
+  /** The sequence's name with its spaces (`NAME_KEY`), if the block keeps it. */
+  name?: string;
 }
 
 const escapeValue = (v: string) => v.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n");
@@ -26,6 +33,7 @@ const unescapeValue = (v: string) => v.replace(/\\(n|\\)/g, (_, c) => (c === "n"
 export function parseComments(comments: string[] | undefined): ParsedComments {
   const fields: LabFields = [];
   const otherComments: string[] = [];
+  let name: string | undefined;
   let inBlock = false;
   for (const raw of comments || []) {
     const line = String(raw);
@@ -46,14 +54,18 @@ export function parseComments(comments: string[] | undefined): ParsedComments {
     if (sep < 0) continue;
     const key = t.slice(0, sep).trim();
     const value = unescapeValue(t.slice(sep + 2).trim());
-    if (key) fields.push([key, value]);
+    if (key === NAME_KEY) name = value;
+    else if (key) fields.push([key, value]);
   }
-  return { fields, otherComments };
+  return name === undefined ? { fields, otherComments } : { fields, otherComments, name };
 }
 
-/** GenBank COMMENT lines for the given fields (empty values left out). */
-export function formatComments(fields: LabFields, otherComments: string[] = []): string[] {
-  const filled = fields.filter(([k, v]) => k.trim() && v.trim());
+/**
+ * GenBank COMMENT lines for the given fields (empty values left out), and the sequence's
+ * name when the LOCUS line can't hold it (`nameToKeep` in `src/lib/sequenceName.ts`).
+ */
+export function formatComments(fields: LabFields, otherComments: string[] = [], name?: string | null): string[] {
+  const filled: LabFields = [...(name ? [[NAME_KEY, name] as [string, string]] : []), ...fields.filter(([k, v]) => k.trim() && v.trim() && k.trim() !== NAME_KEY)];
   if (!filled.length) return [...otherComments];
   const width = Math.min(28, Math.max(...filled.map(([k]) => k.trim().length)));
   return [

@@ -208,7 +208,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Files** are read and written with TeselaGen's bio-parsers (`src/doc/fileio.ts`);
   `src/doc/convert.ts` turns them into `SeqData` and back, keeping fields we don't model
   in `raw`. SnapGene `.dna` is read but saved as GenBank. Lab fields from the Info tab live
-  in GenBank COMMENT lines (`src/lib/labinfo.ts`).
+  in GenBank COMMENT lines (`src/lib/labinfo.ts`). So does a sequence's name with spaces,
+  as the LOCUS line holds them as underscores; it is read back only while that line still
+  matches it, so a rename made in another program wins (`src/lib/sequenceName.ts`).
 - **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
   working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in
   IndexedDB, so it lasts between visits), `web:<id>/<folder>/<path>` for one in a folder

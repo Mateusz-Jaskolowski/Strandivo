@@ -5,7 +5,7 @@
 // fields (storage, verification, …) saved inside the file.
 
 import { h, toast } from "../ui/dom.ts";
-import { detectFromFeatures, dsDnaKilodaltons, gcPercent, type LabFields } from "../lib/labinfo.ts";
+import { detectFromFeatures, dsDnaKilodaltons, gcPercent, NAME_KEY, type LabFields } from "../lib/labinfo.ts";
 import { fieldDef, loadSettings } from "../settings.ts";
 import type { Feature } from "../lib/types.ts";
 
@@ -204,7 +204,8 @@ export class InfoPanel {
       const input = h("input", { class: "ps-field-input", placeholder: "Field name, e.g. Glycerol stock ID" }) as HTMLInputElement;
       const done = () => {
         const v = input.value.trim();
-        if (v && !names.includes(v)) {
+        // The file keeps the sequence's name with spaces under that key.
+        if (v && !names.includes(v) && v !== NAME_KEY) {
           this.fields.push([v, ""]);
           this.render();
         } else if (v) toast(`“${v}” is already there.`, "info");

@@ -75,7 +75,7 @@ import { applyPanelWidths, panelSplitter } from "../panelWidths.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { documentShortcut, shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
-import { tidyName } from "../lib/sequenceName.ts";
+import { nameToKeep, tidyName } from "../lib/sequenceName.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const VIEW_KEY = "strandivo.view";
@@ -713,7 +713,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   function fileJson(includeRegions = false): Record<string, unknown> {
     const d = store.data;
     const json = toParsed(loaded, includeRegions ? { ...d, features: [...d.features, ...d.features.flatMap(f => proteinRegionFeatures(f, d.sequence.length))] } : d);
-    json.comments = formatComments(infoPanel.getFields(), otherComments);
+    json.comments = formatComments(infoPanel.getFields(), otherComments, nameToKeep(d.name));
     return json;
   }
 

@@ -5,6 +5,8 @@
 // document model. Fields the model doesn't use are kept and written back unchanged.
 
 import { newId, reverseComplement, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
+import { parseComments } from "../lib/labinfo.ts";
+import { nameFromFile } from "../lib/sequenceName.ts";
 
 export interface LoadedDocument {
   data: SeqData;
@@ -80,7 +82,8 @@ export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
   for (const [k, v] of Object.entries(seq)) if (!MODEL_KEYS.has(k)) extra[k] = v;
   return {
     data: {
-      name: String(seq.name ?? "Untitled"),
+      // A name with spaces is kept in the comments too, as the LOCUS line can't hold it.
+      name: nameFromFile(String(seq.name ?? "Untitled"), parseComments(Array.isArray(seq.comments) ? seq.comments : undefined).name),
       description: typeof seq.description === "string" ? seq.description : "",
       circular: !!seq.circular,
       sequence,

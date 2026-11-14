@@ -1703,6 +1703,76 @@ async function main() {
       await s.waitFor("!window.__strandivo.tabs().includes('library-parent.gb')", 5000);
     }
 
+    // --- features into regions: the library's frameworks and CDRs, as one undo step ---
+    await s.execAsync(
+      "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",
+      [data("library", "library-parent.gb")]
+    );
+    const foldOpen = await s.waitFor("window.__strandivo.tabs()[window.__strandivo.activeTab()] === 'library-parent.gb' && window.__strandivo.store", 20000);
+    check("The library's parent opens again to turn its features into regions", foldOpen);
+    if (foldOpen) {
+      // The nanobody's CDS, as testdata/library/protein-regions.gb adds it over its parts.
+      await s.exec(`${doc} window.__strandivo.setView("map");
+        const cds = { id: "e2e-nanobody", name: "Nanobody", type: "CDS", start: 2096, end: 2449, strand: 1, notes: {}, raw: {} };
+        s.apply({ ...s.data, features: [...s.data.features, cds] }, "Add feature", { range: { start: cds.start, end: cds.end }, focus: { kind: "feature", id: cds.id } });`);
+      const before = await s.exec(`${doc} return s.data.features.length;`);
+      const foldLink = "Turn 7 features into regions…";
+      check("A CDS with features inside offers to turn them into regions", await s.waitFor(`Array.from(document.querySelectorAll('.sv-inspector .sv-link')).some(b => b.textContent.trim() === '${foldLink}')`, 5000));
+      await s.click(`//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='${foldLink}']`, "xpath");
+      const listed = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 7", 5000);
+      const rows = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-row')).map(r => [r.querySelector('.sv-fold-name').textContent, r.querySelector('.sv-fold-where').textContent, r.querySelector('select').value, r.querySelector('input[type=checkbox]').checked].join(' '));");
+      const want = ["FR1 1–25 Framework true", "cdr1 26–35 CDR true", "FR2 36–49 Framework true", "cdr2 50–59 CDR true", "FR3 60–96 Framework true", "cdr3 97–107 CDR true", "FR4 108–118 Framework true"];
+      check("It lists the frameworks and CDRs, ticked, with their residues and kinds", listed && JSON.stringify(rows) === JSON.stringify(want), rows.join("; "));
+      check("Every ticked row shows the colour its region will have", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-swatch')).every(sw => sw.style.background !== '');"));
+      await s.shot("11-fold-regions");
+      check("Nothing changes while the dialog is open", (await s.exec(`${doc} return s.data.features.length;`)) === before);
+      await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Turn 7 features into regions']", "xpath");
+      check("Turning them deletes the features", await s.waitFor(`window.__strandivo.store.data.features.length === ${before - 7} && !document.querySelector('.sv-dialog')`, 5000));
+      const folded = await s.exec(`${doc} return s.data.features.find(f => f.id === 'e2e-nanobody').notes.strandivo_regions.map(v => v.split('|').slice(0, 3).join(' '));`);
+      check(
+        "and makes them regions of the CDS, at the same residues",
+        JSON.stringify(folded) === JSON.stringify(["FR1 Framework 1-25", "cdr1 CDR 26-35", "FR2 Framework 36-49", "cdr2 CDR 50-59", "FR3 Framework 60-96", "cdr3 CDR 97-107", "FR4 Framework 108-118"]),
+        JSON.stringify(folded)
+      );
+      check("The inspector draws them in the CDS's protein", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 7", 5000));
+      const foldToast = "Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).find(t => /Turned 7 features into regions of Nanobody/.test(t.textContent))";
+      check("It says what happened, with an Undo button", await s.waitFor(`${foldToast}?.querySelector('.ps-toast-action')`, 3000));
+      await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Undo']", "xpath");
+      check(
+        "One undo brings the features back and takes the regions away",
+        await s.waitFor(`window.__strandivo.store.data.features.length === ${before} && !window.__strandivo.store.data.features.find(f => f.id === 'e2e-nanobody').notes.strandivo_regions`, 5000)
+      );
+
+      // Right-clicking one feature offers its CDS, and the dialog ticks only that feature.
+      const rightClick = id => s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
+        const row = document.querySelector('.sv-outline [data-kind="feature"][data-id="' + arguments[0] + '"]:not([data-region])');
+        if (!row) return [];
+        row.scrollIntoView({ block: 'nearest' });
+        row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+        return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`, id);
+      const cdsMenu = await rightClick("e2e-nanobody");
+      check("The CDS's right-click menu offers to turn features into regions", cdsMenu.includes("Turn features into regions…"), cdsMenu.join(", "));
+      const cdr1 = await s.exec(`${doc} return s.data.features.find(f => f.name === 'cdr1').id;`);
+      const featureMenu = await rightClick(cdr1);
+      check("A feature inside it offers to become one of its regions", featureMenu.includes("Turn into region of Nanobody…"), featureMenu.join(", "));
+      await s.exec("window.__e2eMenu.find(e => e.label === 'Turn into region of Nanobody…')?.run(); delete window.__strandivoMenu;");
+      const onlyOne = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 7", 5000) &&
+        await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-row input[type=checkbox]')).filter(b => b.checked).map(b => b.closest('.sv-fold-row').querySelector('.sv-fold-name').textContent);");
+      check("Only that feature starts ticked", JSON.stringify(onlyOne) === JSON.stringify(["cdr1"]), JSON.stringify(onlyOne));
+      await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Turn 1 feature into regions']", "xpath");
+      check(
+        "It becomes a region of the CDS, which is selected with the region picked",
+        await s.waitFor(`!window.__strandivo.store.data.features.some(f => f.id === '${cdr1}') && window.__strandivo.store.selection.focus?.id === 'e2e-nanobody' && window.__strandivo.store.selection.focus?.region === 0`, 5000),
+        await s.exec(`${doc} return JSON.stringify(s.selection.focus);`)
+      );
+      await s.exec(`${doc} s.undo(); s.undo();`);
+      check("Undo takes the file back to how it opened", await s.waitFor(`window.__strandivo.store.data.features.length === ${before - 1}`, 5000));
+      await s.exec("window.__strandivo.closeTab()");
+      // Undone all the way, the file may still count as edited.
+      if (await s.waitFor("!!document.querySelector('.ps-modal')", 1500)) await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
+      await s.waitFor("!window.__strandivo.tabs().includes('library-parent.gb')", 5000);
+    }
+
     // --- a whole-plasmid read: made up until a real one is in testdata (see its README) ---
     await s.execAsync(
       "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",

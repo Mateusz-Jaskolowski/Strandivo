@@ -106,3 +106,41 @@ pub fn set_window_look<R: Runtime>(app: AppHandle<R>, look: WindowLook) -> Resul
     let contents = serde_json::to_string(&look).map_err(|e| e.to_string())?;
     crate::app_data::save_at(&path, &contents)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn look(theme: Option<&str>, background: Option<&str>) -> WindowLook {
+        WindowLook { theme: theme.map(String::from), background: background.map(String::from) }
+    }
+
+    #[test]
+    fn a_look_is_light_dark_or_the_systems_with_a_hex_background() {
+        let (theme, color) = look(Some("dark"), Some("#0f1114")).parts().unwrap();
+        assert_eq!(theme, Some(Theme::Dark));
+        assert_eq!(color, Some(Color(15, 17, 20, 255)));
+        assert_eq!(look(None, None).parts().unwrap(), (None, None));
+        assert_eq!(look(Some("light"), Some("#EEF0F3")).parts().unwrap().1, Some(Color(238, 240, 243, 255)));
+        assert!(look(Some("sepia"), None).parts().is_err());
+        for bad in ["0f1114", "#0f111", "#0f11145", "#0g1114", "rgb(15, 17, 20)", "#ö11114"] {
+            assert!(look(None, Some(bad)).parts().is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_kept_look_is_read_back_and_a_damaged_one_ignored() {
+        let dir = std::env::temp_dir().join(format!("strandivo-look-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(FILE);
+        assert_eq!(read_at(&path), None);
+        let kept = look(Some("dark"), Some("#0f1114"));
+        crate::app_data::save_at(&path, &serde_json::to_string(&kept).unwrap()).unwrap();
+        assert_eq!(read_at(&path), Some(kept));
+        std::fs::write(&path, r#"{"theme":"sepia","background":null}"#).unwrap();
+        assert_eq!(read_at(&path), None);
+        std::fs::write(&path, "damaged").unwrap();
+        assert_eq!(read_at(&path), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

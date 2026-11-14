@@ -7,13 +7,18 @@
 // It decides as `themeFor` there does; src/theme.ts then keeps the theme up to date.
 
 (() => {
-  let theme = "light";
+  let chosen: unknown;
   try {
     // Settings' key in src/settings.ts.
-    const chosen: unknown = JSON.parse(localStorage.getItem("strandivo.settings") || "{}").appearance;
-    theme = __THEMES__.includes(chosen as string) ? (chosen as string) : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    chosen = JSON.parse(localStorage.getItem("strandivo.settings") || "{}").appearance;
   } catch {
-    /* no storage or unreadable settings: light */
+    /* no storage or unreadable settings: System, as loadSettings has it */
   }
-  document.documentElement.dataset.theme = theme;
+  let dark = false;
+  try {
+    dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch {
+    /* no media queries: light */
+  }
+  document.documentElement.dataset.theme = __THEMES__.includes(chosen as string) ? (chosen as string) : dark ? "dark" : "light";
 })();

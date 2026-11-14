@@ -1885,6 +1885,48 @@ async function main() {
     const tabsBefore = await s.exec("return window.__strandivo.tabs().length");
     await s.click("//button[contains(@class,'sv-home-open')][normalize-space()='bla-check.fasta']", "xpath");
     check("Opening a construct from Home adds a tab", await s.waitFor(`window.__strandivo.tabs().length === ${tabsBefore + 1} && window.__strandivo.store?.data.sequence.length > 0`, 20000));
+
+    // --- dark: the main views and a dialog in the other theme, to look at ---
+    await s.exec("window.__strandivo.saveSettings({ appearance: 'dark' })");
+    check(
+      "Choosing Dark turns the window dark at once",
+      await s.waitFor("document.documentElement.dataset.theme === 'dark' && getComputedStyle(document.body).backgroundColor === 'rgb(15, 17, 20)'", 5000),
+      await s.exec("return `${document.documentElement.dataset.theme} ${getComputedStyle(document.body).backgroundColor}`")
+    );
+    await s.execAsync(
+      "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",
+      [data("library", "library-parent.gb")]
+    );
+    if (await s.waitFor("window.__strandivo.tabs()[window.__strandivo.activeTab()] === 'library-parent.gb' && window.__strandivo.store", 20000)) {
+      // A selected CDS and its amino acids, coloured by chemistry, on the map and in the sequence.
+      await s.exec(`${doc} window.__strandivo.setView("map"); const f = s.data.features.find(x => x.name === "FR1"); s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+      await sleep(1200);
+      await s.shot("13-dark-map");
+      await s.exec('window.__strandivo.setView("sequence")');
+      await sleep(400);
+      await s.exec("const chip = Array.from(document.querySelectorAll('.sv-seq-chips button, button')).find(b => b.textContent.trim() === 'Colour amino acids'); if (chip && chip.getAttribute('aria-pressed') !== 'true') chip.click();");
+      await sleep(800);
+      await s.shot("13-dark-sequence");
+      await s.exec('window.__strandivo.setView("reads")');
+      const libReads = ["2026-10-13_A01_MJF3PRIMER.ab1", "2026-10-13_A02_MJE4PRIMER.ab1", "2026-10-13_C01_MJG5PRIMER.ab1"].map(n => data("library", n));
+      if (!(await s.waitFor("document.querySelectorAll('.sv-read-card').length === 3", 5000))) {
+        await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.addReadPaths(arguments[0]).then(() => done(true), e => done(String(e)));", libReads);
+      }
+      await s.waitFor("document.querySelectorAll('.sv-read-card').length === 3 && !document.querySelector('.sv-reads.sv-busy')", 30000);
+      await s.click("//*[contains(@class,'sv-read-card')][contains(., 'C01_MJG5PRIMER')]", "xpath");
+      check("In dark, the read's traces are drawn", await s.waitFor("Number(document.querySelector('.sv-aln')?.dataset.traces) >= 1", 10000));
+      await sleep(1200);
+      await s.shot("13-dark-reads");
+      await s.exec('window.__strandivo.setView("map"); window.__strandivo.command("digest")');
+      if (await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000)) {
+        await s.click(".sv-dialog input[data-enzyme='EcoRI']");
+        await sleep(600);
+        await s.shot("13-dark-digest");
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
+      } else check("In dark, Digest opens its dialog", false);
+    } else check("The library's parent opens again for the dark screenshots", false);
+    await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");
+    check("Choosing Light turns it back", await s.waitFor("document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(238, 240, 243)'", 5000));
   } catch (e) {
     check("Test run finished without errors", false, e instanceof Error ? e.message : e);
     await s.shot("99-error").catch(() => {});

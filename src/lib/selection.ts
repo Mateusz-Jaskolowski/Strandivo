@@ -30,6 +30,23 @@ export function mergeRanges(ranges: Range[], n: number, circular = true): Range[
   return merged;
 }
 
+/**
+ * The bases a selection leaves out, on the top strand: nothing selected inverts to the
+ * whole sequence, everything selected to nothing. On a circular sequence the stretches
+ * either side of the origin are one, so the backbone around an insert is one stretch.
+ */
+export function invertedRanges(s: BaseSelection, n: number, circular: boolean): Range[] {
+  if (!n) return [];
+  const gaps: Range[] = [];
+  let at = 0;
+  for (const r of mergeRanges(selectedRanges(s), n, false)) {
+    if (r.start > at) gaps.push({ start: at, end: r.start - 1 });
+    at = r.end + 1;
+  }
+  if (at < n) gaps.push({ start: at, end: n - 1 });
+  return mergeRanges(gaps, n, circular);
+}
+
 /** Selected DNA on the top strand, leaving out unselected gaps. */
 export const selectedBases = (sequence: string, s: BaseSelection): string => selectedRanges(s).map(r => basesIn(sequence, r)).join("");
 

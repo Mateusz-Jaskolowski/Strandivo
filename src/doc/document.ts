@@ -44,7 +44,7 @@ import { codonOffset, describeDifference } from "../lib/genetics.ts";
 import { selectionTmText } from "../lib/primers.ts";
 import { designOf } from "../lib/variable.ts";
 import { loadSettings, onSettingsChanged, saveSettings, type Settings } from "../settings.ts";
-import { selectedBases, selectedRanges } from "../lib/selection.ts";
+import { invertedRanges, selectedBases, selectedRanges } from "../lib/selection.ts";
 import { parseSequenceFile, serialize } from "./fileio.ts";
 import { fromParsed, toParsed, type LoadedDocument } from "./convert.ts";
 import { DocStore } from "./store.ts";
@@ -73,7 +73,7 @@ import { Search } from "../views/search.ts";
 import { ReadsView } from "../views/readsView.ts";
 import { applyPanelWidths, panelSplitter } from "../panelWidths.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
-import { shortcutHint } from "../lib/shortcuts.ts";
+import { documentShortcut, shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -953,6 +953,13 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
           if (tab === "sequence") seqView.focus();
         }
         return true;
+      case "invert-selection":
+        // The bases left out, dropping a clicked annotation and picked codons or enzymes.
+        if (!inField()) {
+          store.select({ ranges: invertedRanges(store.selection, store.length, store.data.circular) }, "menu");
+          if (tab === "sequence") seqView.focus();
+        }
+        return true;
       case "split-view":
         setSplit(!split);
         return true;
@@ -1022,29 +1029,16 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   }
   // Shortcuts that are also native menu items. Depending on the platform the page or the
   // menu sees the key first (or both do), so the menu skips a command the page just handled.
-  const shortcutCommand = (e: KeyboardEvent): string | null => {
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    if (!mod || e.altKey) return null;
-    const k = e.key.toLowerCase();
-    if (k === "z") return e.shiftKey ? "redo" : "undo";
-    if (k === "y") return "redo";
-    if (k === "a") return "select-all";
-    if (k === "f") return "find";
-    const t = TABS.find(x => x.key === e.key);
-    return t ? `show-${t.id}` : null;
-  };
+  const shortcutCommand = (e: KeyboardEvent) => documentShortcut(e, { mac: isMac, browser: !isDesktop });
   let lastShortcut: { id: string; at: number; handled: boolean } | null = null;
   const seqField = () => document.activeElement === seqView.el.querySelector(".sv-clipboard");
   const keydown = (e: KeyboardEvent) => {
     const id = shortcutCommand(e);
     if (id && !e.defaultPrevented) {
-      if (id === "undo" || id === "redo" || id === "select-all") {
-        // Text fields keep their own undo and select-all; the sequence handles its keys itself.
-        if (!inField() && !seqField()) {
-          e.preventDefault();
-          command(id);
-        }
-      } else {
+      // Text fields keep these keys, and the sequence handles its own undo and select-all.
+      const sequenceOwn = id === "undo" || id === "redo" || id === "select-all";
+      const fieldOwn = sequenceOwn || id === "invert-selection";
+      if (!(fieldOwn && inField()) && !(sequenceOwn && seqField())) {
         e.preventDefault();
         command(id);
       }

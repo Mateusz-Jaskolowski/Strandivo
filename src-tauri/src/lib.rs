@@ -328,14 +328,17 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let split_view = MenuItemBuilder::with_id("split-view", "Map and Sequence Side by Side").build(app)?;
     let toggle_sidebar = MenuItemBuilder::with_id("toggle-sidebar", "Show or Hide Sidebar").build(app)?;
     let toggle_inspector = MenuItemBuilder::with_id("toggle-inspector", "Show or Hide Inspector").build(app)?;
-    // Undo, Redo and Select All act on the document (its own undo history and sequence
-    // selection), so they're ordinary items handled by the page, not the system's.
+    // Undo, Redo, Select All and Invert Selection act on the document (its own undo history
+    // and sequence selection), so they're ordinary items handled by the page, not the system's.
     let undo = MenuItemBuilder::with_id("undo", "Undo").accelerator("CmdOrCtrl+Z").build(app)?;
     let redo = MenuItemBuilder::with_id("redo", "Redo")
         .accelerator(if cfg!(target_os = "macos") { "CmdOrCtrl+Shift+Z" } else { "CmdOrCtrl+Y" })
         .build(app)?;
     let select_all = MenuItemBuilder::with_id("select-all", "Select All")
         .accelerator("CmdOrCtrl+A")
+        .build(app)?;
+    let invert_selection = MenuItemBuilder::with_id("invert-selection", "Invert Selection")
+        .accelerator("CmdOrCtrl+Shift+I")
         .build(app)?;
     let find = MenuItemBuilder::with_id("find", "Find…").accelerator("CmdOrCtrl+F").build(app)?;
     let reverse_complement = MenuItemBuilder::with_id("reverse-complement", "Reverse Complement").build(app)?;
@@ -393,6 +396,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .copy()
         .paste()
         .item(&select_all)
+        .item(&invert_selection)
         .separator()
         .item(&find)
         .separator()

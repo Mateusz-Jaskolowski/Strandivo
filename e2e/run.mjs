@@ -450,6 +450,32 @@ async function main() {
     check("Add reverse primer adds the bottom-strand primer over the selection", added && added.start === 100 && added.end === 119 && added.strand === -1 && added.rc, JSON.stringify(added));
     await s.exec(`${doc} s.undo(); delete window.__strandivoMenu;`);
 
+    // --- invert selection: on a circular plasmid an insert's inverse is one stretch across the origin ---
+    const statusBp = "return Number(Array.from(document.querySelectorAll('.sv-status-left span')).map(x => x.textContent).find(t => /^[\\d,]+ bp$/.test(t))?.replace(/[, bp]/g, ''));";
+    const viewHeight = await s.exec("return window.innerHeight");
+    const lac = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'lacZ-alpha'); s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e"); return { start: f.start, end: f.end, n: s.data.sequence.length };`);
+    const lacBp = lac.end - lac.start + 1;
+    await s.exec("window.__strandivo.command('invert-selection')");
+    const backbone = await s.exec(`${doc} return { range: s.selection.range, ranges: s.selection.ranges ?? null, focus: s.selection.focus };`);
+    check("Invert selection selects the rest of a circular plasmid as one stretch across the origin", backbone.range?.start === lac.end + 1 && backbone.range?.end === lac.start - 1 && !backbone.ranges && !backbone.focus, JSON.stringify(backbone));
+    await sleep(200);
+    check("The status bar gives the inverted selection's length", (await s.exec(statusBp)) === lac.n - lacBp, `${await s.exec(statusBp)} bp`);
+    // Not its key: in this debug build Ctrl+Shift+I opens WebKitGTK's inspector, even sent
+    // from a script, over part of the window for the rest of the run. Unit tests check the
+    // page claims the key (`documentShortcut`), so the menu's copy of a press is skipped.
+    await s.exec("window.__strandivo.menu('invert-selection');");
+    check("Edit > Invert Selection inverts it", await s.waitFor(`window.__strandivo.store.selection.range?.start === ${lac.start} && window.__strandivo.store.selection.range?.end === ${lac.end}`, 3000), JSON.stringify(await s.exec(`${doc} return s.selection.range;`)));
+    const invertMenu = await s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
+      const band = document.querySelector('.sv-sel-band');
+      band.scrollIntoView({ block: 'center' });
+      const r = band.getBoundingClientRect();
+      band.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+      return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
+    check("Right-clicking selected bases offers Invert selection", invertMenu.includes("Invert selection"), invertMenu.join(", "));
+    await s.exec("window.__e2eMenu.find(e => e.label === 'Invert selection')?.run(); delete window.__strandivoMenu;");
+    check("Invert selection in the right-click menu inverts it", await s.waitFor(`window.__strandivo.store.selection.range?.start === ${lac.end + 1} && window.__strandivo.store.selection.range?.end === ${lac.start - 1}`, 3000));
+    check("Inverting leaves the window its size", (await s.exec("return window.innerHeight")) === viewHeight, `${viewHeight} → ${await s.exec("return window.innerHeight")} px`);
+
     // --- primers: design a pair in its dialog ---
     await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR'); s.select({ range: { start: f.start, end: f.end }, caret: f.start, focus: { kind: 'feature', id: f.id } });`);
     await sleep(300);
@@ -928,6 +954,11 @@ async function main() {
     await s.shot("11-offer");
     await s.click("//*[contains(@class,'sv-offer')]//button[contains(., 'Not now')]", "xpath");
     check("Not now puts the offer away", await s.waitFor("document.querySelector('.sv-offer').hidden", 3000));
+    // On a linear sequence a middle stretch inverts to its two ends, kept apart.
+    const linear = await s.exec(`${doc} s.selectRange({ start: 100, end: 199 }, null, "e2e"); window.__strandivo.command('invert-selection'); return { circular: s.data.circular, n: s.data.sequence.length, range: s.selection.range, ranges: s.selection.ranges ?? null };`);
+    check("Inverting a middle stretch of a linear sequence selects its two ends", !linear.circular && !linear.range && JSON.stringify(linear.ranges) === JSON.stringify([{ start: 0, end: 99 }, { start: 200, end: linear.n - 1 }]), JSON.stringify(linear));
+    await sleep(200);
+    check("The status bar counts both stretches' bases", (await s.exec(statusBp)) === linear.n - 100 && /2 stretches selected/.test(await s.exec("return document.querySelector('.sv-status-left').textContent")), `${await s.exec(statusBp)} bp`);
     await s.exec("window.__strandivo.closeTab(); window.__strandivo.showTab(0);");
     await sleep(500);
 

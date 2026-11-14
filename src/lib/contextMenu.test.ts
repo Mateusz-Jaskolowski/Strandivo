@@ -35,6 +35,8 @@ test("selected bases: primers for primer-sized stretches, design for longer ones
     "Copy",
     "Copy reverse complement",
     "—",
+    "Invert selection",
+    "—",
     "Add forward primer",
     "Add reverse primer",
     "Mutagenesis primers…",
@@ -64,7 +66,7 @@ test("cut sites and ORFs", () => {
 });
 
 test("separate stretches offer actions that leave their unselected gaps alone", () => {
-  assert.deepEqual(labels({ kind: "selections", ranges: [{ start: 10, end: 12 }, { start: 40, end: 42 }] }), ["Copy", "Copy reverse complement", "—", "Delete bases"]);
+  assert.deepEqual(labels({ kind: "selections", ranges: [{ start: 10, end: 12 }, { start: 40, end: 42 }] }), ["Copy", "Copy reverse complement", "—", "Invert selection", "—", "Delete bases"]);
 });
 
 test("features: protein only for coding ones, and the other view", () => {
@@ -115,6 +117,7 @@ test("primers: flipping only without a tail, and whether it is in the library", 
 });
 
 test("the cursor: set origin only inside a circular sequence", () => {
+  // No Invert selection: right-clicking outside the selection has already dropped it.
   assert.deepEqual(labels({ kind: "cursor", at: 50 }), ["Select all", "—", "Set origin here", "Reverse-complement sequence"]);
   assert.ok(!labels({ kind: "cursor", at: 0 }).includes("Set origin here"));
   assert.ok(!labels({ kind: "cursor", at: 50 }, { data: { ...data, circular: false } }).includes("Set origin here"));

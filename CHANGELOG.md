@@ -20,6 +20,12 @@ with Unreleased's notes and leaves them where they are.
   credit you in the public issue, and remember them for next time. If you have a GitHub
   account, Post on GitHub instead opens the issue on GitHub filled in with what you wrote,
   to post as yourself.
+- **Invert selection**: choose Invert Selection in the Edit menu, or press ⇧⌘I on Mac or
+  Ctrl+Shift+I elsewhere, to select every base that wasn't selected. Select an insert and
+  invert, and a circular plasmid's backbone is selected as one stretch across the origin;
+  on a linear sequence, inverting a stretch in the middle selects both ends. It is also in
+  the right-click menu for selected bases. With nothing selected it selects everything,
+  and in the browser version it is in the menu only, as browsers keep that key.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

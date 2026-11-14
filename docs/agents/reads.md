@@ -123,7 +123,10 @@ and CI checks that they exist.
   near the pane (`readsSpan`), as a plate of traces drawn whole took hundreds of megabytes
   and WebKit draws a canvas above 268 million pixels blank. Read names leave out the
   start every read shares, such as a date (`sharedPrefix` in `src/lib/readNames.ts`); the
-  full name is each row's tooltip and `data-name`, which tests read.
+  full name is each row's tooltip and `data-name`, which tests read. The toolbar's sidebar
+  and inspector buttons hide the list and the inspector (`setPanels`), with an open state
+  of their own, apart from the outline's and the document inspector's, so hiding the
+  outline to widen the map doesn't take the reads away.
 - **Keeping a check**: the app remembers each file's reads by path (`src/readChecks.ts`,
   local storage) and adds them again when the file opens. A check file (`.svcheck`,
   `src/lib/readCheck.ts`) holds paths relative to itself. Both keep only the groups the

@@ -4075,6 +4075,12 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
 .sv-region-message:empty { display: none; }
 .sv-region-field .sv-input { width: 100%; min-width: 0; }
 .sv-region-field input[type=color] { height: 34px; padding: 3px; cursor: pointer; }
+.sv-region-field-wide { grid-column: 1 / -1; }
+.sv-region-note-input { height: auto; min-height: 52px; padding: 6px 9px; line-height: 1.45; resize: vertical; }
+/* A note keeps the lines it was written in, and a long word wraps rather than widening the panel. */
+.sv-region-note,
+.sv-region-list-note { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.sv-region-list-note { padding-right: 8px; padding-bottom: 4px; }
 .sv-region-design:not([hidden]) { display: grid; gap: 8px; margin-top: 10px; }
 .sv-region-design textarea { height: auto; min-height: 52px; padding: 6px 9px; line-height: 1.45; font-family: var(--mono); }
 .sv-region-match:not([hidden]) { display: grid; gap: 6px; }

@@ -69,6 +69,13 @@ export interface ProteinRegion {
   /** Imported annotations edited locally survive another import of their entry. */
   edited?: boolean;
   sourceKey?: string;
+  /** The user's own words about it, one line per GenBank /note value when exported. */
+  note?: string;
+  /**
+   * Metadata this version doesn't know, written back as it was read, so what a newer
+   * version adds survives an older one editing the CDS's regions.
+   */
+  more?: Record<string, unknown>;
 }
 
 interface Noted {
@@ -77,10 +84,13 @@ interface Noted {
 
 const clean = (s: string) => s.replace(/\|/g, "/").trim();
 
+/** Keys of the optional metadata this version reads; any other is kept in `more`. */
+const METADATA = new Set(["id", "color", "parentId", "variable", "edited", "sourceKey", "note"]);
+
 /** `TM1|Transmembrane|13-33|Q9UKG4:13-33|predicted` */
 export function formatRegion(r: ProteinRegion): string {
   const parts = [clean(r.name), clean(r.kind), `${r.start}-${r.end}`, `${r.accession}:${r.sourceStart}-${r.sourceEnd}`];
-  const metadata = { id: r.id, color: r.color, parentId: r.parentId, variable: r.variable ? formatDesign(r.variable) : undefined, edited: r.edited, sourceKey: r.sourceKey };
+  const metadata = { ...r.more, id: r.id, color: r.color, parentId: r.parentId, variable: r.variable ? formatDesign(r.variable) : undefined, edited: r.edited, sourceKey: r.sourceKey, note: r.note || undefined };
   if (Object.values(metadata).some(v => v !== undefined)) return [...parts, r.predicted ? "predicted" : "", encodeURIComponent(JSON.stringify(metadata))].join("|");
   return (r.predicted ? [...parts, "predicted"] : parts).join("|");
 }
@@ -93,14 +103,19 @@ export function parseRegion(value: string): ProteinRegion | null {
   let extra: Partial<ProteinRegion> = {};
   try {
     const m = metadata ? JSON.parse(decodeURIComponent(metadata)) : {};
-    if (m && typeof m === "object") extra = {
-      ...(typeof m.id === "string" ? { id: m.id } : {}),
-      ...(typeof m.color === "string" && /^#[0-9a-f]{6}$/i.test(m.color) ? { color: m.color } : {}),
-      ...(typeof m.parentId === "string" ? { parentId: m.parentId } : {}),
-      ...(typeof m.variable === "string" ? { variable: parseDesign(m.variable) } : {}),
-      ...(m.edited === true ? { edited: true } : {}),
-      ...(typeof m.sourceKey === "string" ? { sourceKey: m.sourceKey } : {})
-    };
+    if (m && typeof m === "object" && !Array.isArray(m)) {
+      const more = Object.fromEntries(Object.entries(m).filter(([k]) => !METADATA.has(k)));
+      extra = {
+        ...(typeof m.id === "string" ? { id: m.id } : {}),
+        ...(typeof m.color === "string" && /^#[0-9a-f]{6}$/i.test(m.color) ? { color: m.color } : {}),
+        ...(typeof m.parentId === "string" ? { parentId: m.parentId } : {}),
+        ...(typeof m.variable === "string" ? { variable: parseDesign(m.variable) } : {}),
+        ...(m.edited === true ? { edited: true } : {}),
+        ...(typeof m.sourceKey === "string" ? { sourceKey: m.sourceKey } : {}),
+        ...(typeof m.note === "string" && m.note.trim() ? { note: m.note } : {}),
+        ...(Object.keys(more).length ? { more } : {})
+      };
+    }
   } catch { /* Keep the annotation even if its optional metadata cannot be read. */ }
   return {
     ...extra,
@@ -259,12 +274,25 @@ export function regionOfFeatureId(features: readonly (Noted & { id: string })[],
   return null;
 }
 
+/** The GenBank type a region becomes as a feature of its own. */
+export const regionFeatureType = (r: ProteinRegion) => (r.kind === "Signal peptide" ? "sig_peptide" : r.kind === "Transit peptide" ? "transit_peptide" : "misc_feature");
+
+/**
+ * A region's /note values as a feature of its own: what it is ("Transmembrane, predicted",
+ * with its CDS and residues in an exported copy, and its UniProt entry), then the user's
+ * note, a line per value. Turning the feature back into a region reads them again.
+ */
+export function regionFeatureNotes(r: ProteinRegion, cds?: string): string[] {
+  const what = `${r.kind}${r.predicted ? ", predicted" : ""}${cds === undefined ? "" : `; ${cds}, residues ${r.start}-${r.end}`}${r.accession ? `; UniProtKB ${r.accession} ${r.sourceStart}-${r.sourceEnd}` : ""}`;
+  return [what, ...(r.note ?? "").split("\n").map(l => l.trim()).filter(Boolean)];
+}
+
 /** Portable DNA annotations for an exported copy; the document keeps its attached regions. */
 export function proteinRegionFeatures(f: SeqFeature, n: number): SeqFeature[] {
   return regionsOf(f).flatMap((r, index) => {
     const spans = regionSpans(f, r, n);
     if (!spans.length) return [];
-    return [{ id: regionFeatureId(f, r, index), name: r.name, type: r.kind === "Signal peptide" ? "sig_peptide" : r.kind === "Transit peptide" ? "transit_peptide" : "misc_feature", start: spans[0].start, end: spans[spans.length - 1].end, strand: f.strand, ...(spans.length > 1 ? { locations: spans } : {}), color: regionColor(r), notes: { note: [`${r.kind}; ${f.name}, residues ${r.start}-${r.end}${r.accession ? `; UniProtKB ${r.accession} ${r.sourceStart}-${r.sourceEnd}` : ""}`] }, raw: {} }];
+    return [{ id: regionFeatureId(f, r, index), name: r.name, type: regionFeatureType(r), start: spans[0].start, end: spans[spans.length - 1].end, strand: f.strand, ...(spans.length > 1 ? { locations: spans } : {}), color: regionColor(r), notes: { note: regionFeatureNotes(r, f.name) }, raw: {} }];
   });
 }
 

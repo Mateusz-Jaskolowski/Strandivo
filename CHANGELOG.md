@@ -43,6 +43,10 @@ with Unreleased's notes and leaves them where they are.
   default, follows your computer's light or dark mode and changes along with it. Title
   bars, and the menu bar on Windows, follow your choice too. Figures you save or copy as
   images keep their usual colours, ready for slides.
+- **Notes on protein regions**: a region can carry a note of its own, typed in Edit
+  region… and shown with the region in the inspector and in Protein details. Added as a
+  feature or exported in a GenBank copy, a region takes its note along as the feature's
+  note, and says when UniProt only predicted it.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

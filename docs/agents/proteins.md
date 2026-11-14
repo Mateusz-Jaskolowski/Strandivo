@@ -24,8 +24,13 @@ and CI checks that they exist.
   entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
   makes a real one for files going to other software.
 - **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
-  after the original qualifier fields holds stable ids, colour, a parent id and a library
-  design; keep reading the original four/five-field form. Parent links describe nesting,
+  after the original qualifier fields holds stable ids, colour, a parent id, a library
+  design and the user's note (lines joined by line breaks); keep reading the original
+  four/five-field form. Keys this version doesn't know are kept in `more` and written
+  back, so a field added later survives this version rewriting the CDS's regions. Versions
+  up to 0.4.0 keep only what they know: they drop every note on a CDS when they rewrite
+  its regions (an edit that changes its coding length or first base, adding, editing or
+  removing a region, a UniProt import), though opening and saving keep them. Parent links describe nesting,
   never reading order or splicing. The region dialog requires a parent to contain its
   children; overlapping annotations can also be independent. Removing a parent promotes
   its children. Plain manual regions show the CDS's own residue numbers.
@@ -103,7 +108,11 @@ and CI checks that they exist.
   adds document features. Ordinary feature-based library designs continue to work.
 - **Portable export**: normal Save keeps regions attached. The Export dialog can include
   them as ordinary annotations in a GenBank copy (`proteinRegionFeatures`); this leaves
-  the open document alone. Importing that copy also imports those ordinary annotations.
+  the open document alone, and the copy keeps the regions on its CDS too. Importing that
+  copy also imports those ordinary annotations. Their first /note says what the region
+  is, `<kind>[, predicted]; <CDS>, residues a-b[; UniProtKB <entry> s-e]`, and the
+  region's note follows, a value per line (`regionFeatureNotes`); Add as feature writes
+  the same without the CDS and residues.
 - **UniProt** (`src/lib/uniprot.ts`) is one of the two things the page fetches from the
   internet, and only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's
   own `fetch`; the API allows any origin); the other is a feedback report the user sends

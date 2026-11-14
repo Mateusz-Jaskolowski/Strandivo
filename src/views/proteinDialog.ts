@@ -112,7 +112,11 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
       sectionHead("Regions", h("div", { class: "sv-figure-controls" }, nested ? h("label", { class: "sv-figure-control" }, "Show", detail) : null, h("label", { class: "sv-figure-control" }, scale, "Residue scale"))),
       h("div", { class: "sv-figure-paper" }, figureElement(figure(), font, { label: `Protein regions of ${f.name}`, selected, title: index => regionTitle(regions[index]), pick })),
       h("button", { type: "button", class: "sv-fold-link", "aria-expanded": String(figureChoice.list), onclick: () => { figureChoice.list = !figureChoice.list; render(); dlg.body.querySelector<HTMLElement>(".sv-fold-link")?.focus(); } }, iconSvg("chevronDown", 12), figureChoice.list ? "Hide list" : "Show list"),
-      !figureChoice.list ? null : h("div", { class: "sv-list" }, regionTree(regions).map(({ region: r, index, depth }) => h("button", { type: "button", class: `sv-list-row${index === selected ? " sv-selected" : ""}`, style: { paddingLeft: `${8 + depth * 16}px` }, onclick: () => pick(index) }, h("span", { class: "sv-swatch", style: { background: regionColor(r) } }), h("span", { class: "sv-list-name" }, r.name), h("span", { class: "sv-list-meta" }, r.kind), h("span", { class: "sv-list-meta sv-mono" }, `${r.start}–${r.end} aa`))))
+      !figureChoice.list ? null : h("div", { class: "sv-list" }, regionTree(regions).flatMap(({ region: r, index, depth }) => [
+        h("button", { type: "button", class: `sv-list-row${index === selected ? " sv-selected" : ""}`, style: { paddingLeft: `${8 + depth * 16}px` }, onclick: () => pick(index) }, h("span", { class: "sv-swatch", style: { background: regionColor(r) } }), h("span", { class: "sv-list-name" }, r.name), h("span", { class: "sv-list-meta" }, r.kind), h("span", { class: "sv-list-meta sv-mono" }, `${r.start}–${r.end} aa`)),
+        // The note under its region, lined up with the name.
+        r.note ? h("p", { class: "sv-small sv-dim sv-region-list-note", style: { paddingLeft: `${26 + depth * 16}px` } }, r.note) : null
+      ]))
     );
   };
 

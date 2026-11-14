@@ -37,7 +37,8 @@ with Unreleased's notes and leaves them where they are.
   a domain expressed by itself.
 - **Protein details**: Details… in the inspector, or Protein details… in the right-click
   menu, opens a protein on its own, with its properties, its regions drawn as a figure and
-  its sequence numbered in lines of 60. It replaces Expand….
+  its sequence numbered in lines of 60. It replaces Expand…. Edit region… there brings
+  you back to it when you're done.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

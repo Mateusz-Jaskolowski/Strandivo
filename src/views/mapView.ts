@@ -23,6 +23,7 @@ import { selectedRanges } from "../lib/selection.ts";
 import { sweep, sweptRange } from "../lib/mapDrag.ts";
 import { gcRuns, joinAtOrigin, overviewWindow, type GcRun } from "../lib/gc.ts";
 import { GC_CHIP_LABEL, gcChipTitle, gcRunTitle, gcWindowText } from "./gcStrip.ts";
+import { layoutName, LENGTH_SIZE, type NameLines } from "../lib/mapName.ts";
 
 
 interface LabelItem {
@@ -348,6 +349,8 @@ export class MapView {
   private closeMenu: (() => void) | null = null;
   /** The sequence's name in the middle of a circular map, which a double-click renames. */
   private nameEl: SVGTextElement | null = null;
+  /** The name's last layout, as working it out measures it many times. */
+  private nameFit: { key: string; lines: NameLines } | null = null;
   /** The field typed into while renaming, over the name it hides. */
   private renaming: { input: HTMLInputElement; nameEl: SVGTextElement } | null = null;
   private visible = false;
@@ -594,6 +597,9 @@ export class MapView {
 
     // Backbone and ruler.
     root.appendChild(s("circle", { cx: 0, cy: 0, r: BAND_OUT - BAND / 2, fill: "none", class: "sv-map-backbone" }));
+    // The room left in the middle, for the name: inside the ruler's numbers, wherever they
+    // stand, so turning the map doesn't wrap the name again.
+    let middle = ring.inner;
     if (o.ruler) {
       const step = niceStep(n, 6);
       const minor = step / 5 >= 1 ? step / 5 : step;
@@ -607,6 +613,7 @@ export class MapView {
         if (major) {
           const [x, y] = pt(a, tr - 20);
           tickLabels.appendChild(s("text", { x: f1(x), y: f1(y) }, fmt(p)));
+          middle = Math.min(middle, tr - 20 - Math.hypot(textWidth(fmt(p), `9.5px ${mono}`) / 2, 6));
         }
       }
       root.append(ticks, tickLabels);
@@ -830,11 +837,17 @@ export class MapView {
     }
     root.append(leaders, texts);
 
-    // Name in the middle, renamed by a double-click (`startRename`).
-    const nameSize = Math.min(18, Math.max(12, (innermost * 1.6) / Math.max(4, d.name.length)));
-    this.nameEl = s("text", { x: 0, y: -8, "text-anchor": "middle", "font-size": f1(nameSize), "font-weight": 600, class: "sv-map-name" }, d.name, s("title", null, "Double-click to rename"));
+    // Name in the middle, inside the ruler's numbers and wrapped to fit (`layoutName`), and
+    // renamed by a double-click (`startRename`).
+    const fitted = this.fitName(d.name, middle - 4, sans);
+    this.nameEl = s(
+      "text",
+      { "text-anchor": "middle", "font-size": f1(fitted.size), "font-weight": 600, class: "sv-map-name" },
+      fitted.lines.map(l => s("tspan", { x: 0, y: f1(l.y) }, l.text)),
+      s("title", null, fitted.cut ? `${d.name} · double-click to rename` : "Double-click to rename")
+    );
     root.appendChild(this.nameEl);
-    root.appendChild(s("text", { x: 0, y: 12, "text-anchor": "middle", "font-size": 11.5, class: "sv-map-size" }, `${fmt(n)} bp`));
+    root.appendChild(s("text", { x: 0, y: f1(fitted.lengthY), "text-anchor": "middle", "font-size": LENGTH_SIZE, class: "sv-map-size" }, `${fmt(n)} bp`));
 
     const m = 10;
     const vb = [minX - m, minY - m, maxX - minX + 2 * m, maxY - minY + 2 * m];
@@ -1192,6 +1205,13 @@ export class MapView {
   }
 
   // ---------- renaming ----------
+
+  /** The name's lines inside a circle of `radius`, worked out again only when either changes. */
+  private fitName(name: string, radius: number, sans: string): NameLines {
+    const key = `${name}|${f1(radius)}|${sans}`;
+    if (this.nameFit?.key !== key) this.nameFit = { key, lines: layoutName(name, radius, (text, px) => textWidth(text, `600 ${px}px ${sans}`)) };
+    return this.nameFit.lines;
+  }
 
   /**
    * Puts a field over the sequence's name in the middle of the map, with the name selected:

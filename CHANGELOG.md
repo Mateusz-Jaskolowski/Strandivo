@@ -19,7 +19,8 @@ with Unreleased's notes and leaves them where they are.
 - **Rename a plasmid on its map**: double-click the name in the middle of the map, type a
   new one and press Enter, or Esc to keep the old one. This renames the sequence, not its
   file. Right-click the name, or empty space around the map, for Rename sequence…, Select
-  all and Reverse-complement sequence.
+  all and Reverse-complement sequence. A long name now wraps onto up to three lines inside
+  the circle instead of running across the ruler.
 - **Names with spaces keep them**: a GenBank file's LOCUS line can't hold spaces, so a
   sequence named “pUC19 K45A” came back as “pUC19_K45A” after saving and reopening. The
   file now keeps the exact name too, and Strandivo shows it unless another program has

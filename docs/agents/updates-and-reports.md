@@ -35,7 +35,8 @@ and CI checks that they exist.
   buttons, not icons, so people see they can report things; a window under 1,000 px wide
   shows only their icons, keeping room for tabs. The page posts the report to `feedback.strandivo.com` (`services/feedback/`), which
   files it as a GitHub issue as a GitHub App's bot, with a token that can only write
-  issues. Issues are public,
+  issues; when GitHub turns one down, the reporter can copy, email or post it instead and
+  the maintainer is emailed GitHub's reason. Issues are public,
   so **the reporter's email address and an attached file never go in one**: the Worker
   emails them to the maintainer alone (Email Routing, to a verified address kept as a
   secret), and what the reporter wrote is fenced as plain text, so it can't mention

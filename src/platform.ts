@@ -425,8 +425,8 @@ export async function sendFeedback(report: FeedbackReport): Promise<FeedbackSent
   if (res.ok && typeof answer?.number === "number") return { number: answer.number, emailed: answer.emailed !== false };
   if (res.status === 429) throw new Error("Too many reports from this network just now. Wait a minute and send again, or email it instead.");
   // The service's own reason is shown as text, cut short.
-  const why = typeof answer?.error === "string" ? answer.error.slice(0, 200) : `error ${res.status}`;
-  throw new Error(`The feedback service didn't take the report (${why}). Copy it or email it instead.`);
+  const why = typeof answer?.error === "string" ? answer.error.slice(0, 200).replace(/[.\s]+$/, "") : `error ${res.status}`;
+  throw new Error(`The feedback service didn't take the report (${why}). Copy it, email it or post it on GitHub instead.`);
 }
 
 /** This copy's version, system and processor; in a browser only what it can tell. */

@@ -6,7 +6,6 @@
 #   npx wrangler@4 secret put GITHUB_APP_INSTALLATION_ID --config services/feedback/wrangler.toml
 #   npx wrangler@4 secret put GITHUB_APP_PRIVATE_KEY --config services/feedback/wrangler.toml < key.pem
 #   npx wrangler@4 secret put MAINTAINER_EMAIL --config services/feedback/wrangler.toml
-# Until the App's are all set, a fine-grained token (GITHUB_TOKEN) files them instead.
 name = "strandivo-feedback"
 main = "src/index.mjs"
 compatibility_date = "2026-10-01"

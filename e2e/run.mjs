@@ -1117,6 +1117,13 @@ async function main() {
     check("Clicking a block in the figure selects its region", await s.waitFor("window.__strandivo.store.selection.focus?.region === 1 && document.querySelector('.sv-figure rect[data-region=\"1\"]').classList.contains('sv-selected')", 5000));
     check("The figure can be copied or saved as PNG or SVG", await s.exec("const labels = Array.from(document.querySelectorAll('.sv-dialog-foot button')).map(b => b.textContent.trim()); return ['Copy image', 'Save as PNG…', 'Save as SVG…'].every(l => labels.includes(l));"));
     check("Protein details give both coefficients for a protein with a pair of Cys", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-protein-facts dt')).map(d => d.textContent).join() === 'Length,Mass,ε280, Cys reduced,ε280, disulfides,Counted';"));
+    check("Protein details fold the list of regions under the figure", await s.exec("return document.querySelector('.sv-dialog .sv-fold-link')?.getAttribute('aria-expanded') === 'false' && !document.querySelector('.sv-dialog .sv-list-row');"));
+    // Edit region… gives the editor the dialog's place, and Protein details come back when
+    // it closes. Cancel takes the same way back as Save and leaves the file as it is.
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Edit region…']", "xpath");
+    await s.waitFor("!!document.querySelector('.sv-dialog [aria-label=\"Region name\"]')", 5000);
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Cancel']", "xpath");
+    check("Closing a region editor opened from Protein details returns to them", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && !!document.querySelector('.sv-dialog .sv-protein-seq') && document.querySelector('.sv-dialog .sv-figure rect[data-region=\"1\"]')?.classList.contains('sv-selected')", 5000));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
 
     await s.exec("window.__strandivo.command('show-sequence')");

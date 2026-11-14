@@ -85,6 +85,12 @@ and CI checks that they exist.
   size and says so (`pngWithDpi`), so a slide places it at the size it was drawn. The
   shell writes its bytes with `write_bytes`, which takes them as the request's body
   rather than JSON, with the path in a header.
+- **Protein details** keeps the sequence in sight: the list of regions under the figure
+  starts folded (the figure shows and picks them all). Edit region… there gives the
+  dialog's place to the region editor, which brings Protein details back when it closes,
+  saved or not (`onClose` of `openProteinRegionDialog`); opened from the inspector, the
+  editor closes to the window. Stacking the editor over it was the alternative, but it
+  would darken the window twice and leave numbers from before the edit showing beneath.
 - **Regions from a selection** use `selectedProteinResidues` for both the inspector and
   right-click menu: coordinates follow the CDS's direction and splicing, partial codons
   expand to whole residues, and a terminal stop is excluded. When several CDSs contain

@@ -22,8 +22,12 @@ import { protein } from "../doc/analysis.ts";
 import { openProteinRegionDialog } from "./proteinRegionDialog.ts";
 import { copyText } from "./inspector.ts";
 
-/** Kept for the visit, so the next figure is drawn the same way. */
-const figureChoice: { detail: "domains" | "all"; scale: boolean } = { detail: "all", scale: true };
+/**
+ * Kept for the visit, so the next figure is drawn the same way. The list of regions under
+ * it starts folded, as the figure shows and picks them all and a long list would push the
+ * sequence out of sight.
+ */
+const figureChoice: { detail: "domains" | "all"; scale: boolean; list: boolean } = { detail: "all", scale: true, list: false };
 
 /** The protein of a CDS, or of an ORF (`orfFeature`, which has no regions): `of` names which. */
 export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "ORF" = "CDS") {
@@ -65,6 +69,15 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
     if (range) ctx.store.selectRange(range, { kind: "feature", id: f.id, region: index }, "inspector");
     render();
   };
+  // The editor takes this dialog's place, and this comes back when it closes, saved or
+  // not, showing the CDS as it then is.
+  const editRegion = () => {
+    dlg.close();
+    openProteinRegionDialog(ctx, f, selected, undefined, () => {
+      const now = ctx.store.data.features.find(x => x.id === f.id);
+      if (now) openProteinDialog(ctx, now, of);
+    });
+  };
   const sectionHead = (title: string, ...actions: Node[]) => h("div", { class: "sv-section-head sv-protein-head" }, h("h3", { class: "sv-section-title" }, title), ...actions);
 
   const properties = () => {
@@ -98,7 +111,8 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
       { class: "sv-protein-section", "aria-label": "Regions" },
       sectionHead("Regions", h("div", { class: "sv-figure-controls" }, nested ? h("label", { class: "sv-figure-control" }, "Show", detail) : null, h("label", { class: "sv-figure-control" }, scale, "Residue scale"))),
       h("div", { class: "sv-figure-paper" }, figureElement(figure(), font, { label: `Protein regions of ${f.name}`, selected, title: index => regionTitle(regions[index]), pick })),
-      h("div", { class: "sv-list" }, regionTree(regions).map(({ region: r, index, depth }) => h("button", { type: "button", class: `sv-list-row${index === selected ? " sv-selected" : ""}`, style: { paddingLeft: `${8 + depth * 16}px` }, onclick: () => pick(index) }, h("span", { class: "sv-swatch", style: { background: regionColor(r) } }), h("span", { class: "sv-list-name" }, r.name), h("span", { class: "sv-list-meta" }, r.kind), h("span", { class: "sv-list-meta sv-mono" }, `${r.start}–${r.end} aa`))))
+      h("button", { type: "button", class: "sv-fold-link", "aria-expanded": String(figureChoice.list), onclick: () => { figureChoice.list = !figureChoice.list; render(); dlg.body.querySelector<HTMLElement>(".sv-fold-link")?.focus(); } }, iconSvg("chevronDown", 12), figureChoice.list ? "Hide list" : "Show list"),
+      !figureChoice.list ? null : h("div", { class: "sv-list" }, regionTree(regions).map(({ region: r, index, depth }) => h("button", { type: "button", class: `sv-list-row${index === selected ? " sv-selected" : ""}`, style: { paddingLeft: `${8 + depth * 16}px` }, onclick: () => pick(index) }, h("span", { class: "sv-swatch", style: { background: regionColor(r) } }), h("span", { class: "sv-list-name" }, r.name), h("span", { class: "sv-list-meta" }, r.kind), h("span", { class: "sv-list-meta sv-mono" }, `${r.start}–${r.end} aa`))))
     );
   };
 
@@ -124,7 +138,7 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
         h("button", { type: "button", class: "sv-btn", onclick: () => save("png") }, iconSvg("download", 14), "Save as PNG…"),
         h("button", { type: "button", class: "sv-btn", onclick: () => save("svg") }, "Save as SVG…")),
       close,
-      h("button", { type: "button", class: "sv-btn sv-btn-primary", disabled: selected === undefined, onclick: () => { dlg.close(); openProteinRegionDialog(ctx, f, selected); } }, "Edit region…")
+      h("button", { type: "button", class: "sv-btn sv-btn-primary", disabled: selected === undefined, onclick: editRegion }, "Edit region…")
     );
   };
   render();

@@ -37,7 +37,8 @@ with Unreleased's notes and leaves them where they are.
   a domain expressed by itself.
 - **Protein details**: Details… in the inspector, or Protein details… in the right-click
   menu, opens a protein on its own, with its properties, its regions drawn as a figure and
-  its sequence numbered in lines of 60. It replaces Expand….
+  its sequence numbered in lines of 60. It replaces Expand…. Edit region… there brings
+  you back to it when you're done.
 - **Dark mode**: choose System, Light or Dark under Appearance in Settings. System, the
   default, follows your computer's light or dark mode and changes along with it. Title
   bars, and the menu bar on Windows, follow your choice too. Figures you save or copy as

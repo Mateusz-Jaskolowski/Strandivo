@@ -232,6 +232,22 @@ export function foldTargets(d: SeqData, f: SeqFeature, fills?: Fills): { cds: Se
 }
 
 /**
+ * The colour each chosen row's region gets: its own, else the next of the CDS's palette
+ * after the regions it has and those placed before it. The dialog shows the same ones.
+ */
+export function foldColors(regions: readonly ProteinRegion[], chosen: readonly FoldRow[], fill?: string): Map<string, string> {
+  const placed: ProteinRegion[] = [...regions];
+  const out = new Map<string, string>();
+  for (const row of chosen) {
+    if (row.flags.includes("duplicate")) continue;
+    const color = row.region.color ?? nextRegionColor(placed, fill);
+    out.set(row.feature.id, color);
+    placed.push({ ...row.region, color }, ...row.children);
+  }
+  return out;
+}
+
+/**
  * Turns the chosen features into regions of the CDS and deletes them, as one new document
  * (one undo step). `chosen` maps each ticked feature's id to the kind picked for it. A new
  * region goes under the smallest region, new or old, that holds it and is larger; regions
@@ -256,15 +272,14 @@ export function foldFeatures(
     taken.add(out);
     return out;
   };
-  const fill = opts.fills?.get(cds.id)?.fill;
+  const colors = foldColors(old, rows, opts.fills?.get(cds.id)?.fill);
   const added: (ProteinRegion & { id: string })[] = [];
   const children: ProteinRegion[] = [];
   const regionIds = new Map<string, string>();
   for (const row of rows) {
     if (row.flags.includes("duplicate")) continue;
     const kind = chosen.get(row.feature.id)?.trim() || row.region.kind;
-    const region = { ...row.region, id: fresh(), kind };
-    region.color ??= nextRegionColor([...old, ...added, ...children], fill);
+    const region = { ...row.region, id: fresh(), kind, color: colors.get(row.feature.id) };
     // Library designs never overlap: the first chosen keeps its own.
     if (region.variable && [...added, ...children].some(r => r.variable && r.start <= region.end && r.end >= region.start)) delete region.variable;
     added.push(region);

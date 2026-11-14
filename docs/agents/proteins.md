@@ -120,6 +120,11 @@ and CI checks that they exist.
   and its library design the region's; other qualifiers are named as lost. A new region
   goes under the smallest larger region, new or old, that holds it, and regions there
   before are left as they were; a folded CDS's own regions come along under its region.
+  The dialog (`src/views/foldRegionsDialog.ts`) opens from a link in the inspector's
+  Protein regions section and the CDS's right-click menu, both shown only while a row
+  would start ticked, so a CDS with only DNA or regions inside never nags; or from a
+  feature's right-click (`foldTargets`), with only that feature ticked, asking which CDS
+  when several hold it. Its swatches show the colours applying gives (`foldColors`).
 - **Library designs on regions** are optional and separate from their kind: a CDR or a
   variable domain does not automatically vary between clones. `variableProteinFeatures`
   projects only marked regions into the existing read-analysis model, as noncoding

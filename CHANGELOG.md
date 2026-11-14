@@ -43,6 +43,13 @@ with Unreleased's notes and leaves them where they are.
   default, follows your computer's light or dark mode and changes along with it. Title
   bars, and the menu bar on Windows, follow your choice too. Figures you save or copy as
   images keep their usual colours, ready for slides.
+- **Turn features into regions**: if a protein's domains, CDRs, linkers or tags are
+  marked as features inside its CDS, they can become its regions in one step. Select the
+  CDS and choose Turn features into regions… under Protein regions or in its right-click
+  menu, or right-click one of them and choose Turn into region of…. Each gets a kind from
+  its type or name, which you can change, and keeps its colour, note and library design,
+  and features from a GenBank copy exported with regions turn back into the same regions.
+  One Undo takes it all back.
 - **Notes on protein regions**: a region can carry a note of its own, typed in Edit
   region… and shown with the region in the inspector and in Protein details. Added as a
   feature or exported in a GenBank copy, a region takes its note along as the feature's

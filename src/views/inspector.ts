@@ -43,6 +43,8 @@ import {
 import { fmt, fmtRange } from "../ui/format.ts";
 import { openUniprotDialog } from "./uniprotDialog.ts";
 import { openProteinRegionDialog, openProteinRegionFromSelection } from "./proteinRegionDialog.ts";
+import { openFoldDialog } from "./foldRegionsDialog.ts";
+import { foldOffered, foldRows } from "../lib/foldRegions.ts";
 import { proteinDiagram } from "./proteinDiagram.ts";
 import { openProteinDialog } from "./proteinDialog.ts";
 import { absorbance, extinctionNote, kilodaltons, proteinProperties } from "../lib/proteinProperties.ts";
@@ -555,6 +557,7 @@ export class Inspector {
     const focus = store.selection.focus;
     const picked = focus?.kind === "feature" && focus.id === f.id && focus.region !== undefined ? regions[focus.region] : undefined;
     const accessions = [...new Set(regions.map(r => r.accession).filter(Boolean))];
+    const offered = foldOffered(foldRows(store.data, f));
     const pick = (index: number) => {
       const range = regionRange(f, regions[index], n);
       if (range) store.selectRange(range, { kind: "feature", id: f.id, region: index }, "inspector");
@@ -594,7 +597,13 @@ export class Inspector {
       regions.length ? this.foldToggle("region-list", listOpen, "sv-fold-link", h("span", null, listOpen ? "Hide list" : "Show list")) : null,
       regions.length && listOpen ? h("div", { class: "sv-list sv-list-flush" }, rows) : null,
       detail,
-      h("button", { type: "button", class: "sv-link", onclick: () => openUniprotDialog(this.ctx, f) }, "Get from UniProt…"),
+      // Where else regions come from: UniProt, and features marked inside the CDS.
+      h(
+        "div",
+        { class: "sv-region-sources" },
+        h("button", { type: "button", class: "sv-link", onclick: () => openUniprotDialog(this.ctx, f) }, "Get from UniProt…"),
+        offered ? h("button", { type: "button", class: "sv-link", onclick: () => openFoldDialog(this.ctx, f) }, offered === 1 ? "Turn 1 feature into a region…" : `Turn ${fmt(offered)} features into regions…`) : null
+      ),
       accessions.length ? h("p", { class: "sv-small sv-dim" }, `From UniProtKB ${accessions.join(", ")}.`) : null
     );
   }

@@ -62,7 +62,7 @@ test("cut sites and ORFs", () => {
   assert.equal(labels({ kind: "cutsite", id: "XbaI@423" }, { enzymes: ["EcoRI", "BamHI"] })[1], "Digest with XbaI…");
   assert.deepEqual(digestEnzymes("BamHI@417", ["EcoRI", "BamHI"]), ["EcoRI", "BamHI"]);
   assert.deepEqual(digestEnzymes("XbaI@423", ["EcoRI", "BamHI"]), ["XbaI"]);
-  assert.deepEqual(labels({ kind: "orf", id: "1:10" }, { onMap: true }), ["Copy DNA", "Copy protein", "—", "Add as feature", "Show in sequence"]);
+  assert.deepEqual(labels({ kind: "orf", id: "1:10" }, { onMap: true }), ["Copy DNA", "Copy protein", "Protein details…", "—", "Add as feature", "Show in sequence"]);
 });
 
 test("separate stretches offer actions that leave their unselected gaps alone", () => {
@@ -72,6 +72,8 @@ test("separate stretches offer actions that leave their unselected gaps alone", 
 test("features: protein only for coding ones, and the other view", () => {
   assert.ok(labels({ kind: "feature", id: "cds" }).includes("Copy protein"));
   assert.ok(!labels({ kind: "feature", id: "pro" }).includes("Copy protein"));
+  assert.ok(labels({ kind: "feature", id: "cds" }).includes("Protein details…"));
+  assert.ok(!labels({ kind: "feature", id: "pro" }).includes("Protein details…"));
   assert.ok(labels({ kind: "feature", id: "cds" }).includes("Mutagenesis primers…"));
   assert.ok(!labels({ kind: "feature", id: "pro" }).includes("Mutagenesis primers…"));
   assert.ok(labels({ kind: "feature", id: "pro" }).includes("Show on map"));
@@ -88,6 +90,7 @@ test("protein regions have their own edit and removal actions", () => {
   const withRegion = { ...data, features: data.features.map(f => f.id === "cds" ? { ...f, notes: { strandivo_regions: ["CDR1|CDR|2-5|:2-5"] } } : f) };
   const entries = labels({ kind: "feature", id: "cds", region: 0 }, { data: withRegion });
   assert.ok(entries.includes("Edit region…") && entries.includes("Remove region"));
+  assert.ok(entries.includes("Protein details…"));
   assert.ok(!entries.includes("Delete feature"));
   assert.ok(labels({ kind: "selection", range: { start: 13, end: 24 } }).includes("Add as region…"));
   assert.ok(!labels({ kind: "selection", range: { start: 95, end: 105 } }).includes("Add as region…"));

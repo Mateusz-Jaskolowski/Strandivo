@@ -44,6 +44,7 @@ export type MenuAction =
   // Features, primers and cut sites.
   | "copy-dna"
   | "copy-protein"
+  | "protein-details"
   | "copy-primer"
   | "copy-for-ordering"
   | "copy-site"
@@ -151,11 +152,12 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
       if (!f) return [];
       if (target.region !== undefined) {
         if (!regionsOf(f)[target.region]) return [];
-        return [item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), "separator", item("edit-protein-region", "Edit region…"), show, "separator", item("remove-protein-region", "Remove region")];
+        return [item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), item("protein-details", "Protein details…"), "separator", item("edit-protein-region", "Edit region…"), show, "separator", item("remove-protein-region", "Remove region")];
       }
       return tidy([
         item("copy-dna", "Copy DNA"),
         ...when(f.type.toUpperCase() === "CDS", item("copy-protein", "Copy protein")),
+        ...when(f.type.toUpperCase() === "CDS", item("protein-details", "Protein details…")),
         "separator",
         item("design-primers", "Design primers to amplify…"),
         ...when(f.type.toUpperCase() === "CDS", item("mutagenesis", "Mutagenesis primers…")),
@@ -209,7 +211,7 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
         saved ? item("remove-personal-enzyme", "Remove from My enzymes") : item("add-personal-enzyme", "Add to My enzymes")];
     }
     case "orf":
-      return tidy([item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), "separator", item("add-orf-feature", "Add as feature"), show]);
+      return tidy([item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), item("protein-details", "Protein details…"), "separator", item("add-orf-feature", "Add as feature"), show]);
     case "cursor":
       return tidy([
         item("select-all", "Select all"),

@@ -878,8 +878,51 @@
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
+/* A heading folds its section (`foldSection` in src/views/inspector.ts); the chevron sits
+   in the section's margin, so the title stays close to the text under it. The heading
+   keeps to one line, and its links go under it when the panel is too narrow for both. */
 .sv-insp-section > .sv-section-head {
+  flex-wrap: wrap;
+  row-gap: 4px;
   padding: 0;
+}
+.sv-insp-section > .sv-section-head > .sv-section-toggle {
+  flex: 0 0 auto;
+  margin-left: -10px;
+  white-space: nowrap;
+}
+.sv-insp-section.sv-folded {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.sv-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+/* The list of a protein's regions, folded under their diagram. */
+.sv-fold-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.sv-fold-link:hover {
+  color: var(--text-2);
+}
+.sv-fold-link > .sv-icon {
+  transition: transform 0.12s ease;
+}
+.sv-fold-link[aria-expanded="false"] > .sv-icon {
+  transform: rotate(-90deg);
 }
 .sv-code {
   padding: 9px 10px;
@@ -3996,6 +4039,29 @@
   background: #ffffff;
 }
 .sv-figure { display: block; width: 100%; min-width: 640px; height: auto; }
+/* Protein details (src/views/proteinDialog.ts): properties, regions and the sequence. */
+.sv-protein-section { display: flex; flex-direction: column; gap: 8px; }
+.sv-protein-section + .sv-protein-section { padding-top: 12px; border-top: 1px solid var(--line); }
+.sv-protein-head { padding: 0; }
+.sv-protein-facts { grid-template-columns: 124px minmax(0, 1fr); }
+.sv-protein-seq {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font: 12px/1.7 var(--mono);
+  color: var(--text-2);
+  white-space: pre;
+  overflow-x: auto;
+}
+.sv-protein-seq-num {
+  display: inline-block;
+  min-width: 5ch;
+  margin-right: 2ch;
+  text-align: right;
+  color: var(--text-3);
+  user-select: none;
+}
 .sv-figure-pick { cursor: pointer; }
 rect.sv-figure-pick:hover { filter: brightness(1.07); }
 text.sv-figure-pick:hover { fill: var(--accent-text); }

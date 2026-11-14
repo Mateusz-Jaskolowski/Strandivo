@@ -338,7 +338,14 @@ async function main() {
     await s.click(outlineRow("AmpR"), "xpath");
     await sleep(500);
     const insp = await s.exec("return { name: document.querySelector('.sv-inspector .sv-insp-name')?.value, text: document.querySelector('.sv-inspector')?.textContent || '' }");
-    check("Clicking a feature shows it in the inspector", insp.name === "AmpR" && /MSIQHFRV/.test(insp.text), `${insp.name}: ${insp.text.slice(0, 120)}`);
+    check("Clicking a feature shows it in the inspector", insp.name === "AmpR" && /\d aa/.test(insp.text), `${insp.name}: ${insp.text.slice(0, 120)}`);
+    check("A CDS's translation starts folded", await s.exec("return document.querySelector('.sv-inspector [data-fold=\"translation\"]')?.getAttribute('aria-expanded') === 'false' && !/MSIQHFRV/.test(document.querySelector('.sv-inspector').textContent);"));
+    // Unfolded here, it stays open in every file, which the ORF and region checks below rely on.
+    await s.click(".sv-inspector [data-fold='translation']");
+    check("Clicking its heading unfolds the translation", await s.waitFor("/MSIQHFRV/.test(document.querySelector('.sv-inspector')?.textContent) && document.querySelector('.sv-inspector [data-fold=\"translation\"]').getAttribute('aria-expanded') === 'true'", 3000));
+    // ExPASy ProtParam gives AmpR 31,557.28 Da, ε280 27,960 reduced and 28,085 with its one cystine.
+    const proteinFacts = await s.exec("return document.querySelector('.sv-inspector [data-section=\"protein\"]')?.textContent || ''");
+    check("The inspector shows the protein's mass and ε280, as ProtParam does", /31\.6 kDa/.test(proteinFacts) && /27,960 M⁻¹ cm⁻¹/.test(proteinFacts) && /28,085 with disulfides/.test(proteinFacts) && /0\.886 at 1 mg\/mL/.test(proteinFacts), proteinFacts);
     check("The feature is highlighted on the map", await s.exec("return !!document.querySelector('.sv-map-sel, .sv-map-wedge')"));
     await s.shot("02-feature");
 
@@ -807,7 +814,17 @@ async function main() {
     await s.exec(`${doc} s.selectRange({ start: ${amp.start}, end: ${amp.end} }, { kind: "orf", id: "${ampOrf}" });`);
     await sleep(400);
     const orfText = await s.exec("return document.querySelector('.sv-inspector')?.textContent || ''");
-    check("The inspector shows the selected ORF and its protein", /Open reading frame/.test(orfText) && /286 aa/.test(orfText) && /MSIQHFRV/.test(orfText), orfText.slice(0, 160));
+    check("The inspector shows the selected ORF and its protein", /Open reading frame/.test(orfText) && /286 aa/.test(orfText) && /MSIQHFRV/.test(orfText) && /kDa[\s\S]*M⁻¹ cm⁻¹/.test(orfText), orfText.slice(0, 160));
+    const orfMenu = await s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
+      const orf = document.querySelector('.sv-map-orf[data-id="${ampOrf}"]');
+      const r = orf.getBoundingClientRect();
+      orf.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+      return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
+    check("Right-clicking an ORF offers its protein's details", orfMenu.includes("Protein details…"), orfMenu.join(", "));
+    await s.exec("window.__e2eMenu.find(e => e.label === 'Protein details…')?.run(); delete window.__strandivoMenu;");
+    check("Protein details number the ORF's sequence in lines of 60, with no figure", await s.waitFor("(() => { const d = document.querySelector('.sv-dialog'); const nums = Array.from(d?.querySelectorAll('.sv-protein-seq-num') || []).map(n => n.textContent); return /this ORF/.test(d.textContent) && /\\d Da/.test(d.textContent) && nums.join() === '1,61,121,181,241' && !d.querySelector('.sv-figure'); })()", 5000));
+    await s.shot("09-orf-protein");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
     await s.shot("09-orfs");
     await s.exec("window.__strandivo.command('show-sequence')");
     check("ORFs show in the sequence too", await s.waitFor("document.querySelector('.sv-seq .sv-orf')", 5000));
@@ -1018,6 +1035,7 @@ async function main() {
     // The map only draws while it shows.
     await s.exec("window.__strandivo.command('show-map')");
     check("They are drawn inside the CDS", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
+    check("The inspector draws them with their list folded", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2 && document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'false'", 3000));
     check("Independent regions need no top-level/all choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     check("The entry goes in the file's cross-references", await s.exec(`${doc} return s.data.features.find(f => f.id === window.__strandivoCds).notes.db_xref.includes("UniProtKB/Swiss-Prot:P62593");`));
     await s.exec(`${doc} s.undo();`);
@@ -1084,12 +1102,12 @@ async function main() {
     check("A region's bounds and name can be edited", await s.waitFor("Array.from(document.querySelectorAll('.sv-outline [data-region]')).some(r => r.textContent.includes('CDR1 edited') && r.textContent.includes('9–19'))", 5000));
     await s.shot("11-protein-regions");
 
-    // Expand… draws the protein as a figure: a nested region is a bracket under its parts.
-    await s.click("//button[normalize-space(.)='Expand…']", "xpath");
+    // Protein details draw the protein as a figure: a nested region is a bracket under its parts.
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Details…']", "xpath");
     const figureNames = `
       const names = Array.from(document.querySelectorAll('.sv-figure text[data-region]')).map(t => t.getBoundingClientRect());
       const apart = names.every((a, i) => names.every((b, j) => i <= j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));`;
-    check("Expand draws a block for the CDR and a bracket for its domain, all named apart", await s.waitFor(`(() => { ${figureNames}
+    check("Protein details draw a block for the CDR and a bracket for its domain, all named apart", await s.waitFor(`(() => { ${figureNames}
       return document.querySelectorAll('.sv-figure rect[data-region]').length === 1 && names.length === 2 && apart; })()`, 5000));
     await s.shot("11-protein-figure");
     await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
@@ -1098,6 +1116,7 @@ async function main() {
     await s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
     check("Clicking a block in the figure selects its region", await s.waitFor("window.__strandivo.store.selection.focus?.region === 1 && document.querySelector('.sv-figure rect[data-region=\"1\"]').classList.contains('sv-selected')", 5000));
     check("The figure can be copied or saved as PNG or SVG", await s.exec("const labels = Array.from(document.querySelectorAll('.sv-dialog-foot button')).map(b => b.textContent.trim()); return ['Copy image', 'Save as PNG…', 'Save as SVG…'].every(l => labels.includes(l));"));
+    check("Protein details give both coefficients for a protein with a pair of Cys", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-protein-facts dt')).map(d => d.textContent).join() === 'Length,Mass,ε280, Cys reduced,ε280, disulfides,Counted';"));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
 
     await s.exec("window.__strandivo.command('show-sequence')");

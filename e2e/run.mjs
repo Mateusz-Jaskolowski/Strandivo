@@ -1340,6 +1340,37 @@ async function main() {
     await sleep(300);
     const barFollows = await s.exec("return document.querySelector('.sv-aln-bar').scrollLeft === document.querySelector('.sv-aln-scroll').scrollLeft");
     check("The alignment's scroll bar stays in view and is in step with the traces", bar.inPane && bar.fromBar === 0 && bar.width === 0 && barFollows, JSON.stringify({ ...bar, barFollows }));
+    // The toolbar's panel buttons hide the Reads tab's own list and inspector, which give
+    // the alignment their room, and leave the map's outline as it was.
+    const readsPanels = () =>
+      s.exec(`return {
+        list: !document.querySelector('.sv-reads-list').hidden,
+        insp: !document.querySelector('.sv-reads-insp').hidden,
+        width: Math.round(document.querySelector('.sv-aln-scroll').getBoundingClientRect().width),
+        pressed: [...document.querySelectorAll("button[aria-label^='Show sidebar'], button[aria-label='Show inspector']")].map(b => b.getAttribute('aria-pressed') === 'true' && !b.disabled)
+      }`);
+    const panelsShown = await readsPanels();
+    await s.click("button[aria-label^='Show sidebar']");
+    await s.click("button[aria-label='Show inspector']");
+    await sleep(400);
+    const panelsHidden = await readsPanels();
+    await s.exec("window.__strandivo.setView('map')");
+    await sleep(300);
+    const outlineKept = await s.exec("return !document.querySelector('.sv-outline').hidden && !document.querySelector('.sv-inspector').hidden");
+    await s.exec("window.__strandivo.setView('reads')");
+    await sleep(300);
+    const stillHidden = await s.exec("return document.querySelector('.sv-reads-list').hidden && document.querySelector('.sv-reads-insp').hidden");
+    await s.click("button[aria-label^='Show sidebar']");
+    await s.click("button[aria-label='Show inspector']");
+    await sleep(400);
+    const panelsBack = await readsPanels();
+    check(
+      "The panel buttons hide and show the reads' list and inspector, apart from the map's",
+      panelsShown.list && panelsShown.insp && panelsShown.pressed.join() === "true,true" &&
+        !panelsHidden.list && !panelsHidden.insp && panelsHidden.pressed.join() === "false,false" && panelsHidden.width > panelsShown.width + 400 &&
+        outlineKept && stillHidden && panelsBack.list && panelsBack.insp && panelsBack.width === panelsShown.width,
+      JSON.stringify({ panelsShown, panelsHidden, outlineKept, stillHidden, panelsBack })
+    );
 
     await s.click(".sv-read-card:nth-child(3)");
     await sleep(1000);

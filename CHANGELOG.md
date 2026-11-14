@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **NEB's Tm and annealing temperature**: choose NEB polymerase as the Tm method in
+  Settings, then your polymerase (Q5, Phusion, OneTaq, Taq, LongAmp, Vent and others), and
+  primers show the same Tm as NEB's Tm Calculator. The PCR product dialog then says where
+  to anneal, by NEB's rule for that polymerase. Strandivo works it out on your computer;
+  nothing is sent to NEB.
 - **GC content on the map**: the map's new GC% button draws GC content as a ring inside
   the features (a band under the ruler on the linear map), in the same colours as in the
   Sequence tab: teal where it is AT-rich, orange where it is GC-rich. Hover over a stretch

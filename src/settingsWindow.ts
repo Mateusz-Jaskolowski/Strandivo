@@ -9,6 +9,7 @@ import { DEFAULT_SIDEBAR_ORDER, moveSection, SIDEBAR_SECTIONS } from "./lib/side
 import { iconSvg } from "./ui/icons.ts";
 import { browserAsksNotToTrack, isDesktop, openUsagePage, setWindowTitle } from "./platform.ts";
 import { DEFAULT_CONDITIONS, TM_METHODS, usesConditions, type TmConditions, type TmMethod } from "./lib/primers.ts";
+import { annealingRuleText, NEB_POLYMERASES, nebPolymerase } from "./lib/polymerases.ts";
 import { THEME_LABELS, THEMES, type Appearance } from "./lib/themes.ts";
 
 const TRIM_LEVELS: [string, number][] = [
@@ -128,6 +129,41 @@ export function mountSettings(root: HTMLElement, embedded = false) {
     }) as HTMLInputElement;
     return { key, input, el: h("label", { class: "ps-tm-field" }, h("span", null, label), input, h("span", { class: "ps-muted" }, unit)) };
   });
+  // The NEB method's polymerase, which brings its buffer's salt and its own primer
+  // concentration; picking one starts the concentration at the polymerase's.
+  const nebAbout = h("div", { class: "ps-set-hint" });
+  const families = [...new Set(NEB_POLYMERASES.map(p => p.family))];
+  const nebSelect = h(
+    "select",
+    {
+      class: "ps-set-select",
+      "aria-label": "NEB polymerase",
+      onchange: (e: Event) => {
+        const p = nebPolymerase((e.target as HTMLSelectElement).value);
+        commit({ ...s, tm: { ...s.tm, polymerase: p.id, nebPrimer: p.primer } });
+        drawTm();
+      }
+    },
+    families.map(f => h("optgroup", { label: f }, NEB_POLYMERASES.filter(p => p.family === f).map(p => h("option", { value: p.id }, p.name))))
+  ) as HTMLSelectElement;
+  const nebPrimer = h("input", {
+    type: "number",
+    class: "ps-set-number",
+    min: "1",
+    max: "100000",
+    step: "any",
+    "aria-label": "Each primer, for the NEB polymerase",
+    onchange: (e: Event) => {
+      const v = Number((e.target as HTMLInputElement).value);
+      if (Number.isFinite(v) && v > 0) commit({ ...s, tm: { ...s.tm, nebPrimer: Math.min(100000, v) } });
+      drawTm();
+    }
+  }) as HTMLInputElement;
+  const nebRow = row(
+    "NEB polymerase",
+    "Sets the buffer's salt, and the annealing temperature PCR products show.",
+    h("div", { class: "ps-set-stack" }, nebSelect, nebAbout, h("label", { class: "ps-tm-field" }, h("span", null, "Each primer"), nebPrimer, h("span", { class: "ps-muted" }, "nM")))
+  );
   const drawTm = () => {
     tmMethod.value = s.tm.method;
     tmAbout.textContent = TM_METHODS.find(m => m.id === s.tm.method)?.about ?? "";
@@ -135,6 +171,11 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       f.input.value = String(s.tm[f.key]);
       f.input.disabled = !usesConditions(s.tm.method);
     }
+    const p = nebPolymerase(s.tm.polymerase);
+    nebSelect.value = p.id;
+    nebPrimer.value = String(s.tm.nebPrimer);
+    nebAbout.textContent = `${p.also ? `Also ${p.also}. ` : ""}Annealing temperature: ${annealingRuleText(p.annealing)}.`;
+    nebRow.hidden = s.tm.method !== "neb";
   };
   drawTm();
 
@@ -284,6 +325,7 @@ export function mountSettings(root: HTMLElement, embedded = false) {
       { class: "ps-set-section" },
       h("h2", null, "Primers"),
       row("Tm method", "Used for all primer Tm calculations and primer design.", h("div", { class: "ps-set-stack" }, tmMethod, tmAbout)),
+      nebRow,
       row(
         "Reaction conditions",
         "Used by the SantaLucia and Breslauer methods. Defaults match primer3.",

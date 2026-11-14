@@ -43,6 +43,10 @@ with Unreleased's notes and leaves them where they are.
   default, follows your computer's light or dark mode and changes along with it. Title
   bars, and the menu bar on Windows, follow your choice too. Figures you save or copy as
   images keep their usual colours, ready for slides.
+- **Steadier toggles**: the buttons that show or hide things on the map, in the Sequence
+  and Primers tabs and over the reads' alignment keep their width when turned on or off,
+  so the ones beside them no longer shift. Over the alignment, a hidden track's button now
+  loses its tick like the others.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

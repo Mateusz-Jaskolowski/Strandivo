@@ -11,6 +11,7 @@ import { parseSequenceFile, serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed, type LoadedDocument } from "../doc/convert.ts";
 import { formatComments, parseComments } from "./labinfo.ts";
 import { designOf, formatDesign, VARIABLE_QUALIFIER } from "./variable.ts";
+import { regionsOf, withRegions } from "./regions.ts";
 import { protein } from "../doc/analysis.ts";
 import { deleteRange, featureBases, insertBases, reverseComplement, reverseComplementRange, setOrigin, type SeqData, type SeqFeature } from "./seqdata.ts";
 
@@ -184,6 +185,32 @@ test("a variable region's design is saved in its qualifier", async () => {
   }
   // Other features stay unmarked.
   assert.equal(designOf(again.data.features.find(x => x.name === "cdr3")!.notes), null);
+});
+
+test("a protein region's note is saved, also after an edit moves the region", async () => {
+  const doc = await open("testdata/library/protein-regions.gb");
+  const cds = doc.data.features.find(f => f.name === "Nanobody")!;
+  // Characters the qualifier's own format uses, quotes GenBank doubles, a line break, and
+  // enough words to be wrapped, which the region's metadata must survive.
+  const notes: Record<string, string> = {
+    CDR1: 'Binds the "tip" | loop of the antigen; Kd ≈ 4 nM (SPR, 25 °C)\nSee lab book 7, p. 112',
+    CDR3: "Randomised in the library with NNK codons, so every clone differs here and nowhere else in this domain"
+  };
+  // A field from a newer version is kept as it was.
+  const regions = regionsOf(cds).map(r => (notes[r.name] ? { ...r, note: notes[r.name], more: { future: { kept: true } } } : r));
+  const data = { ...doc.data, features: doc.data.features.map(f => (f.id === cds.id ? { ...f, notes: withRegions(f.notes, regions) } : f)) };
+  const again = await reopen(save(doc, data));
+  const back = regionsOf(again.data.features.find(f => f.name === "Nanobody")!);
+  assert.deepEqual(back, regionsOf(data.features.find(f => f.id === cds.id)!));
+  assert.equal(back.find(r => r.name === "CDR1")!.note, notes.CDR1);
+  assert.deepEqual(back.find(r => r.name === "CDR3")!.more, { future: { kept: true } });
+  // Three bases before the CDS's 30th codon move CDR3 a residue on, with its note.
+  const nanobody = again.data.features.find(f => f.name === "Nanobody")!;
+  const moved = insertBases(again.data, nanobody.start + 29 * 3, "GCT");
+  const third = await reopen(save(again, moved));
+  const cdr3 = regionsOf(third.data.features.find(f => f.name === "Nanobody")!).find(r => r.name === "CDR3")!;
+  assert.equal(cdr3.start, back.find(r => r.name === "CDR3")!.start + 1);
+  assert.equal(cdr3.note, notes.CDR3);
 });
 
 test("numeric qualifiers and web addresses survive saving, and /codon_start sets the frame", async () => {

@@ -55,6 +55,17 @@ with Unreleased's notes and leaves them where they are.
 - **More room for traces**: the sidebar and inspector buttons now work in the Reads tab,
   hiding the list of reads and the read details to widen the alignment. The Reads tab
   remembers its own choice, so hiding the sidebar on the map leaves your reads in view.
+- **Turn features into regions**: if a protein's domains, CDRs, linkers or tags are
+  marked as features inside its CDS, they can become its regions in one step. Select the
+  CDS and choose Turn features into regions… under Protein regions or in its right-click
+  menu, or right-click one of them and choose Turn into region of…. Each gets a kind from
+  its type or name, which you can change, and keeps its colour, note and library design,
+  and features from a GenBank copy exported with regions turn back into the same regions.
+  One Undo takes it all back.
+- **Notes on protein regions**: a region can carry a note of its own, typed in Edit
+  region… and shown with the region in the inspector and in Protein details. Added as a
+  feature or exported in a GenBank copy, a region takes its note along as the feature's
+  note, and says when UniProt only predicted it.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

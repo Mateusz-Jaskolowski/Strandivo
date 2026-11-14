@@ -21,6 +21,11 @@ with Unreleased's notes and leaves them where they are.
   primers show the same Tm as NEB's Tm Calculator. The PCR product dialog then says where
   to anneal, by NEB's rule for that polymerase. Strandivo works it out on your computer;
   nothing is sent to NEB.
+- **GC content on the map**: the map's new GC% button draws GC content as a ring inside
+  the features (a band under the ruler on the linear map), in the same colours as in the
+  Sequence tab: teal where it is AT-rich, orange where it is GC-rich. Hover over a stretch
+  to see its GC. The GC buttons in the Sequence and Primers tabs now read GC% too, and
+  each says what its colours mean when you hover over it.
 - **Credit for feedback**: Report a bug and Send feedback take your name or initials to
   credit you in the public issue, and remember them for next time. If you have a GitHub
   account, Post on GitHub instead opens the issue on GitHub filled in with what you wrote,
@@ -44,6 +49,28 @@ with Unreleased's notes and leaves them where they are.
   menu, opens a protein on its own, with its properties, its regions drawn as a figure and
   its sequence numbered in lines of 60. It replaces Expand…. Edit region… there brings
   you back to it when you're done.
+- **Dark mode**: choose System, Light or Dark under Appearance in Settings. System, the
+  default, follows your computer's light or dark mode and changes along with it. Title
+  bars, and the menu bar on Windows, follow your choice too. Figures you save or copy as
+  images keep their usual colours, ready for slides.
+- **Steadier toggles**: the buttons that show or hide things on the map, in the Sequence
+  and Primers tabs and over the reads' alignment keep their width when turned on or off,
+  so the ones beside them no longer shift. Over the alignment, a hidden track's button now
+  loses its tick like the others.
+- **More room for traces**: the sidebar and inspector buttons now work in the Reads tab,
+  hiding the list of reads and the read details to widen the alignment. The Reads tab
+  remembers its own choice, so hiding the sidebar on the map leaves your reads in view.
+- **Turn features into regions**: if a protein's domains, CDRs, linkers or tags are
+  marked as features inside its CDS, they can become its regions in one step. Select the
+  CDS and choose Turn features into regions… under Protein regions or in its right-click
+  menu, or right-click one of them and choose Turn into region of…. Each gets a kind from
+  its type or name, which you can change, and keeps its colour, note and library design,
+  and features from a GenBank copy exported with regions turn back into the same regions.
+  One Undo takes it all back.
+- **Notes on protein regions**: a region can carry a note of its own, typed in Edit
+  region… and shown with the region in the inspector and in Protein details. Added as a
+  feature or exported in a GenBank copy, a region takes its note along as the feature's
+  note, and says when UniProt only predicted it.
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

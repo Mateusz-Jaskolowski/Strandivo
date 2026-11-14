@@ -221,8 +221,17 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   names, and a check's files that can't be reached are chosen and matched by name.
 - **Styles**: design tokens are CSS variables in `src/styles.css`; document styles are
   `sv-*` classes in `src/doc/document.css`, the app bar's and Home's in `src/mainWindow.css`.
-  Older `ps-*` classes remain for the Settings and Info screens. Dark tokens exist but no
-  setting turns them on yet.
+  Older `ps-*` classes remain for the Settings and Info screens. Colours are tokens: a theme
+  is one block of them in `src/styles.css`, named by `data-theme`, and every theme block
+  names the same tokens; outside the blocks the CSS uses no colour literals. The themes are
+  listed in `src/lib/themes.ts`, and Settings' Appearance stores one's name or "system".
+  `src/themeBoot.ts`, a plain script in `<head>` (a module can run after the first paint),
+  sets the theme before anything is drawn; `src/theme.ts` keeps it to Settings and the
+  system. CSS follows by itself, but a canvas reads its colours as it draws, so it redraws on
+  `onThemeChanged`. The gel and what is saved or copied as an image (the protein figure)
+  keep their own colours in every theme. `src/lib/themes.test.ts` holds every block it finds
+  to this, with a short list of allowed literals, each with its reason, and every theme's
+  text tokens to WCAG AA on their backgrounds: fix a token that fails, never the bar.
 - **Interface text** is plain and short, sentence case, says what happens ("Add reads…",
   "Use read base"), with ranges as 1,700–2,400 and an ellipsis on commands that open a
   dialog. Write like a colleague in the lab, using standard everyday and wet-lab words
@@ -249,7 +258,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 
 ## Checking work
 
-- `npm test` (unit tests in `src/lib/`), `npm run typecheck`, `npm run build`.
+- `npm test` (unit tests in `src/lib/`), `npm run typecheck`, `npm run build`. Among them,
+  `src/lib/themes.test.ts` reads the stylesheets: a colour written outside the token blocks,
+  a token one theme lacks or text too faint on its background fails it.
 - `cd crates/seqcore && cargo test --release` for the alignment core, and the same in
   `crates/seqcore-json/` for the JSON it answers with and `crates/seqcore-wasm/` for its
   buffers; `cargo test --lib` in `src-tauri/` for the shell's own (the crash hook, usage
@@ -304,7 +315,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   without a file dialog). It runs a debug build, where Ctrl+Shift+I opens WebKitGTK's
   inspector over part of the window for the rest of the run, even sent from a script and
   cancelled by the page, so it never sends that key; `documentShortcut` in
-  `src/lib/shortcuts.ts` is unit-tested instead. Then `e2e/web.mjs` clicks through the browser version in
+  `src/lib/shortcuts.ts` is unit-tested instead. At its end it switches to Dark through
+  `saveSettings` and takes `13-dark-*` screenshots of the map, sequence, reads and a dialog:
+  look at them after a change to colours, as no test sees what reads badly. Then
+  `e2e/web.mjs` clicks through the browser version in
   headless Chrome with no hooks, so alignment and detection run in the worker, and checks
   the worker answers after a panic (`trapCore`), then its menu, keys, opening, saving
   and dropping files, Home's folders, and reads and checks remembered across a reload. It
@@ -424,9 +438,15 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   where the user is, never a hard-coded one.
 - **A new native menu item** goes in `src/lib/appMenu.ts` too, or the browser has no way
   to it; a unit test compares the two lists' ids and labels.
-- **Windows are light on Windows** (`app_window` in `src-tauri/src/lib.rs`), since the
-  interface is: a menu bar following the system's dark mode is drawn by hand and turned
-  light again when another window opened. Take that out when dark tokens get a setting.
+- **Title bars follow the page's theme only because the page says so**
+  (`src-tauri/src/appearance.rs`): `src/theme.ts` tells the shell light, dark or "follow the
+  system" (from the theme block's `color-scheme`) and its background, and the shell keeps it
+  in app data, so the next launch opens windows in it before any page has loaded. Build
+  every window through `app_window` in `src-tauri/src/lib.rs`, which applies it, or it opens
+  white. With System the shell must set no theme: the page sees the system's mode only
+  through `prefers-color-scheme`, which a theme set on the window overrides. On Windows the
+  menu library draws the menu bar by hand, and once turned it light again when another
+  window opened; check there after changing how windows are built or themed.
 - **macOS title bar**: the main window uses an overlay title bar, so the app bar is the drag
   area (`data-tauri-drag-region="deep"`; buttons and fields are excluded automatically).
   Mark other controls in it with `data-tauri-drag-region="false"`, as the file tabs are. On

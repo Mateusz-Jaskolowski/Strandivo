@@ -24,8 +24,13 @@ and CI checks that they exist.
   entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
   makes a real one for files going to other software.
 - **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
-  after the original qualifier fields holds stable ids, colour, a parent id and a library
-  design; keep reading the original four/five-field form. Parent links describe nesting,
+  after the original qualifier fields holds stable ids, colour, a parent id, a library
+  design and the user's note (lines joined by line breaks); keep reading the original
+  four/five-field form. Keys this version doesn't know are kept in `more` and written
+  back, so a field added later survives this version rewriting the CDS's regions. Versions
+  up to 0.4.0 keep only what they know: they drop every note on a CDS when they rewrite
+  its regions (an edit that changes its coding length or first base, adding, editing or
+  removing a region, a UniProt import), though opening and saving keep them. Parent links describe nesting,
   never reading order or splicing. The region dialog requires a parent to contain its
   children; overlapping annotations can also be independent. Removing a parent promotes
   its children. Plain manual regions show the CDS's own residue numbers.
@@ -96,6 +101,30 @@ and CI checks that they exist.
   expand to whole residues, and a terminal stop is excluded. When several CDSs contain
   the selection, ask which protein owns the region rather than silently choosing one.
   Right-clicking a drawn feature within a plain selection keeps that selection.
+- **Features into regions** (`src/lib/foldRegions.ts`): files often mark a protein's
+  domains, CDRs, linkers and tags as short features inside its CDS, and each can become a
+  region of it, the feature deleted, in one `store.apply`. A feature is listed when every
+  base is a coding base of the CDS (none in an intron, before `/codon_start`, past its
+  ends or only in its stop) and its type is part of a protein: `misc_feature`, `variation`
+  and other software's `region`, unless the name is DNA (MCS, lox, att, an operator…);
+  GenBank's peptide types; other software's `domain`, `tag`, `linker`, `epitope` and
+  `motif`; or a CDS read the same way in the same frame (a fused protein, or a framework
+  annotated as a CDS, as `testdata/library/library-parent.gb` does). Residues take whole
+  codons, as selections do. A row on the other strand, or already a region (same name and
+  residues: an Export copy keeps its regions on the CDS too), starts unticked; a feature
+  without a direction (Benchling's "none" too) is on either. Residues in pieces can't be
+  one region, so that row can't be ticked. The kind comes from what `regionFeatureNotes`
+  wrote (`parseRegionFeatureNote`), else the type, else the name (`kindFromName`), never a
+  GenBank type. The feature's own colour carries over unless the app doesn't draw it or it
+  is the CDS's, where the stripe wouldn't show; its other notes become the region's note
+  and its library design the region's; other qualifiers are named as lost. A new region
+  goes under the smallest larger region, new or old, that holds it, and regions there
+  before are left as they were; a folded CDS's own regions come along under its region.
+  The dialog (`src/views/foldRegionsDialog.ts`) opens from a link in the inspector's
+  Protein regions section and the CDS's right-click menu, both shown only while a row
+  would start ticked, so a CDS with only DNA or regions inside never nags; or from a
+  feature's right-click (`foldTargets`), with only that feature ticked, asking which CDS
+  when several hold it. Its swatches show the colours applying gives (`foldColors`).
 - **Library designs on regions** are optional and separate from their kind: a CDR or a
   variable domain does not automatically vary between clones. `variableProteinFeatures`
   projects only marked regions into the existing read-analysis model, as noncoding
@@ -103,7 +132,11 @@ and CI checks that they exist.
   adds document features. Ordinary feature-based library designs continue to work.
 - **Portable export**: normal Save keeps regions attached. The Export dialog can include
   them as ordinary annotations in a GenBank copy (`proteinRegionFeatures`); this leaves
-  the open document alone. Importing that copy also imports those ordinary annotations.
+  the open document alone, and the copy keeps the regions on its CDS too. Importing that
+  copy also imports those ordinary annotations. Their first /note says what the region
+  is, `<kind>[, predicted]; <CDS>, residues a-b[; UniProtKB <entry> s-e]`, and the
+  region's note follows, a value per line (`regionFeatureNotes`); Add as feature writes
+  the same without the CDS and residues.
 - **UniProt** (`src/lib/uniprot.ts`) is one of the two things the page fetches from the
   internet, and only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's
   own `fetch`; the API allows any origin); the other is a feedback report the user sends

@@ -100,54 +100,54 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 162 | setting label | "NEB polymerase" |
-| 163 | setting hint | "Sets the buffer's salt, and the annealing temperature PCR products show." |
-| 164 | field | "Each primer" … "nM" |
-| 176 | polymerase note | "Also …. Annealing temperature: …." (the polymerase's other products and rule, from `src/lib/polymerases.ts`) |
-| 214 | section heading | "Maps" |
-| 216 | setting label | "Label size" |
-| 217 | setting hint | "Font size of labels on the circular map." |
-| 221 | setting label | "Sequence letters" |
-| 225 | option labels | "As in file" / "UPPER" / "lower" |
-| 234 | setting label | "Show when opening a file" |
-| 235 | setting hint | "Default visibility for newly opened files." |
-| 248 | setting label | "Sidebar" |
-| 249 | setting hint | "Order of sections in the left sidebar." |
-| 263 | button | "Reset order" |
-| 268 | setting label | "Open reading frames" |
-| 269 | setting hint | "From a start codon to the next stop, on both strands. Shorter ORFs inside a longer one in the same frame are not shown." |
-| 294 | checkbox | "Also start at GTG and TTG" |
-| 298 | setting label | "Amber stop codon" |
-| 299 | setting hint | "For amber suppressor strains such as TG1 and XL1-Blue (phage display). Applies to translations, ORFs and read differences." |
-| 300 | checkbox | "Read TAG as Q" |
-| 303 | setting label | "Feature detection" |
-| 304 | setting hint | "Offer to scan for common plasmid parts when opening a file with few features." |
-| 305 | checkbox | "Offer when a file looks unannotated" |
-| 311 | section heading | "Primers" |
-| 312 | setting label | "Tm method" |
-| 312 | setting hint | "Used for all primer Tm calculations and primer design." |
-| 315 | setting label | "Reaction conditions" |
-| 316 | setting hint | "Used by the SantaLucia and Breslauer methods. Defaults match primer3." |
-| 330 | button | "Reset to defaults" |
-| 338 | section heading | "Sequencing results" |
-| 340 | setting label | "Minimum quality" |
-| 341 | setting hint | "Differences supported by bases below this Phred score are marked uncertain (Q20 = 1 error in 100)." |
-| 355 | setting label | "Quality trimming" |
-| 356 | setting hint | "How much of the noisy start and end of each read is ignored." |
-| 363 | section heading | "Plasmid info" |
-| 364 | setting label | "Lab fields" |
-| 364 | setting hint | "Shown on every plasmid's Info tab, one per line. Values are saved inside each file." |
-| 377 | button | "Restore default fields" |
-| 384 | section heading | "Updates and privacy" |
-| 386 | setting label | "Updates" |
-| 387 | setting hint | "Checks updates.strandivo.com once a day and installs updates only when you choose." |
-| 388 | checkbox | "Check for updates automatically" |
-| 391 | setting label | "Usage statistics" |
-| 392 | setting hint | "Which features are used and on which operating systems — never your files, sequences, names or anything that identifies you." |
-| 396 | checkbox | "Share anonymous usage statistics" |
-| 397 | button | "What is sent" |
-| 409 | browser note | "These settings are saved in this browser, separate from the desktop app." |
-| 425 | button | "Reset all settings" |
+| 163 | setting label | "NEB polymerase" |
+| 164 | setting hint | "Sets the buffer's salt, and the annealing temperature PCR products show." |
+| 165 | field | "Each primer" … "nM" |
+| 177 | polymerase note | "Also …. Annealing temperature: …." (the polymerase's other products and rule, from `src/lib/polymerases.ts`) |
+| 229 | section heading | "Maps" |
+| 231 | setting label | "Label size" |
+| 232 | setting hint | "Font size of labels on the circular map." |
+| 236 | setting label | "Sequence letters" |
+| 240 | option labels | "As in file" / "UPPER" / "lower" |
+| 249 | setting label | "Show when opening a file" |
+| 250 | setting hint | "Default visibility for newly opened files." |
+| 263 | setting label | "Sidebar" |
+| 264 | setting hint | "Order of sections in the left sidebar." |
+| 278 | button | "Reset order" |
+| 283 | setting label | "Open reading frames" |
+| 284 | setting hint | "From a start codon to the next stop, on both strands. Shorter ORFs inside a longer one in the same frame are not shown." |
+| 309 | checkbox | "Also start at GTG and TTG" |
+| 313 | setting label | "Amber stop codon" |
+| 314 | setting hint | "For amber suppressor strains such as TG1 and XL1-Blue (phage display). Applies to translations, ORFs and read differences." |
+| 315 | checkbox | "Read TAG as Q" |
+| 318 | setting label | "Feature detection" |
+| 319 | setting hint | "Offer to scan for common plasmid parts when opening a file with few features." |
+| 320 | checkbox | "Offer when a file looks unannotated" |
+| 326 | section heading | "Primers" |
+| 327 | setting label | "Tm method" |
+| 327 | setting hint | "Used for all primer Tm calculations and primer design." |
+| 330 | setting label | "Reaction conditions" |
+| 331 | setting hint | "Used by the SantaLucia and Breslauer methods. Defaults match primer3." |
+| 345 | button | "Reset to defaults" |
+| 353 | section heading | "Sequencing results" |
+| 355 | setting label | "Minimum quality" |
+| 356 | setting hint | "Differences supported by bases below this Phred score are marked uncertain (Q20 = 1 error in 100)." |
+| 370 | setting label | "Quality trimming" |
+| 371 | setting hint | "How much of the noisy start and end of each read is ignored." |
+| 378 | section heading | "Plasmid info" |
+| 379 | setting label | "Lab fields" |
+| 379 | setting hint | "Shown on every plasmid's Info tab, one per line. Values are saved inside each file." |
+| 392 | button | "Restore default fields" |
+| 399 | section heading | "Updates and privacy" |
+| 401 | setting label | "Updates" |
+| 402 | setting hint | "Checks updates.strandivo.com once a day and installs updates only when you choose." |
+| 403 | checkbox | "Check for updates automatically" |
+| 406 | setting label | "Usage statistics" |
+| 407 | setting hint | "Which features are used and on which operating systems — never your files, sequences, names or anything that identifies you." |
+| 411 | checkbox | "Share anonymous usage statistics" |
+| 412 | button | "What is sent" |
+| 424 | browser note | "These settings are saved in this browser, separate from the desktop app." |
+| 440 | button | "Reset all settings" |
 
 ---
 

@@ -1,8 +1,9 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, transformWithEsbuild, type Plugin } from "vite";
 import { readFileSync } from "node:fs";
+import { THEMES } from "./src/lib/themes.ts";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const host = process.env.TAURI_DEV_HOST;
@@ -15,7 +16,7 @@ export default defineConfig(({ mode }) => {
     // Tauri serves the built files from disk; relative paths keep that simple.
     base: "./",
     clearScreen: false,
-    plugins: web ? [webEntry()] : [],
+    plugins: web ? [themeBoot(), webEntry()] : [themeBoot()],
     // Cloudflare Pages' headers and 404 page, for the browser version only.
     publicDir: web ? "public-web" : false,
     define: {
@@ -57,6 +58,40 @@ export default defineConfig(({ mode }) => {
     }
   };
 });
+
+/**
+ * Sets the theme before the first paint: src/themeBoot.ts as `theme.js`, a plain script in
+ * <head>, which runs before anything is drawn, as the page's modules may not.
+ * Vite bundles only modules, so it is built here, handed the themes' names.
+ */
+function themeBoot(): Plugin {
+  const file = "theme.js";
+  const build = async () => {
+    const source = readFileSync(new URL("./src/themeBoot.ts", import.meta.url), "utf8");
+    const out = await transformWithEsbuild(source, "themeBoot.ts", {
+      format: "iife",
+      define: { __THEMES__: JSON.stringify(THEMES) },
+      target: ["es2020", "safari14"],
+      minify: true
+    });
+    return out.code;
+  };
+  return {
+    name: "strandivo-theme-boot",
+    configureServer(server) {
+      server.middlewares.use(`/${file}`, (_req, res, next) => {
+        build().then(code => {
+          res.setHeader("Content-Type", "text/javascript");
+          res.end(code);
+        }, next);
+      });
+    },
+    async generateBundle() {
+      this.emitFile({ type: "asset", fileName: file, source: await build() });
+    },
+    transformIndexHtml: () => [{ tag: "script", attrs: { src: `./${file}` }, injectTo: "head" }]
+  };
+}
 
 /** Loads src/web.ts instead of src/main.ts, so only the browser version holds the worker. */
 function webEntry(): Plugin {

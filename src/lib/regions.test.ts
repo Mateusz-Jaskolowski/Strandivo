@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { parseSequenceFile, serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { protein } from "../doc/analysis.ts";
-import { carryRegions, formatRegion, isClipped, layoutRegions, nextRegionColor, parseRegion, proteinRegionFeatures, proteinRegionTargets, regionColor, regionRange, regionSpans, regionsOf, regionOfFeatureId, regionTree, selectedProteinResidues, REGIONS_QUALIFIER, variableProteinFeatures, withRegions, type ProteinRegion } from "./regions.ts";
+import { carryRegions, formatRegion, isClipped, layoutRegions, nextRegionColor, parseRegion, parseRegionFeatureNote, proteinRegionFeatures, regionFeatureNotes, proteinRegionTargets, regionColor, regionRange, regionSpans, regionsOf, regionOfFeatureId, regionTree, selectedProteinResidues, REGIONS_QUALIFIER, variableProteinFeatures, withRegions, type ProteinRegion } from "./regions.ts";
 import { cloneVariants } from "./variants.ts";
 import { splitVariable } from "./variable.ts";
 import type { CloneDifference, CloneResult } from "./types.ts";
@@ -55,6 +55,24 @@ test("a region survives being written and read", () => {
   assert.equal(parseRegion("not a region"), null);
   assert.equal(parseRegion("TM1|Transmembrane|33-13|Q9UKG4:13-33"), null);
   assert.equal(parseRegion("TM1|Transmembrane|0-13|Q9UKG4:13-33"), null);
+});
+
+test("a region's note and metadata this version doesn't know survive being written and read", () => {
+  const r: ProteinRegion = { ...region("CDR1", 3, 5), id: "cdr1", note: 'a|b "quoted"\nsecond line, 4 °C', more: { future: [1, 2] } };
+  assert.deepEqual(parseRegion(formatRegion(r)), r);
+  assert.equal(formatRegion(r).split("|").length, 6, "the note is inside the metadata, not a field of its own");
+  // A blank note isn't written, so a region without one reads as before.
+  assert.equal(formatRegion({ ...region("TM1", 13, 33), note: "" }), "TM1|Transmembrane|13-33|Q9UKG4:13-33|predicted");
+  const newer = `CDR1|CDR|3-5|:3-5||${encodeURIComponent(JSON.stringify({ id: "cdr1", note: "kept", shape: "loop" }))}`;
+  const read = parseRegion(newer)!;
+  assert.deepEqual([read.note, read.more], ["kept", { shape: "loop" }]);
+  assert.deepEqual(JSON.parse(decodeURIComponent(formatRegion({ ...read, name: "CDR1 renamed" }).split("|")[5])), { shape: "loop", id: "cdr1", note: "kept" });
+});
+
+test("an edit that moves a region keeps its note", () => {
+  const d = doc({ regions: [{ ...region("TM2", 10, 12), note: "kept" }] });
+  const moved = insertBases(d, 10 + 3, "GCT");
+  assert.deepEqual(regionsOf(cds(moved)).map(r => [r.start, r.note]), [[11, "kept"]]);
 });
 
 test("a region's bases are found on either strand", () => {
@@ -258,6 +276,27 @@ test("portable region annotations preserve direction and split CDS locations", (
   assert.equal(out.strand, -1);
   assert.equal(out.type, "misc_feature");
   assert.match(String(out.notes.note), /residues 3-4/);
+});
+
+test("a region as a feature says what it is, whether predicted, and its note, a line per value", () => {
+  const f: SeqFeature = { id: "cds", name: "SLC13A4", type: "CDS", start: 0, end: 59, strand: 1, notes: withRegions({}, [{ ...region("TM1", 3, 5), note: "First helix\n\n  checked by AlphaFold  " }, { ...region("Signal", 1, 2), kind: "Signal peptide", accession: "", predicted: false }]), raw: {} };
+  const [signal, tm] = proteinRegionFeatures(f, 60);
+  assert.deepEqual(tm.notes.note, ["Transmembrane, predicted; SLC13A4, residues 3-5; UniProtKB Q9UKG4 3-5", "First helix", "checked by AlphaFold"]);
+  assert.deepEqual(signal.notes.note, ["Signal peptide; SLC13A4, residues 1-2"]);
+  assert.equal(signal.type, "sig_peptide");
+  // Added as a feature in the document, it leaves out the CDS and residues.
+  assert.deepEqual(regionFeatureNotes(regionsOf(f)[1]), ["Transmembrane, predicted; UniProtKB Q9UKG4 3-5", "First helix", "checked by AlphaFold"]);
+});
+
+test("what a region wrote as a feature's note is read back, from this version and older ones", () => {
+  assert.deepEqual(parseRegionFeatureNote("Transmembrane, predicted; SLC13A4, residues 3-5; UniProtKB Q9UKG4 13-33"), { kind: "Transmembrane", predicted: true, accession: "Q9UKG4", sourceStart: 13, sourceEnd: 33 });
+  // Before "predicted" was written, and with a CDS whose name has the separator in it.
+  assert.deepEqual(parseRegionFeatureNote("My kind; heavy; chain, residues 1-9"), { kind: "My kind", predicted: false, accession: "" });
+  assert.deepEqual(parseRegionFeatureNote("Signal peptide; UniProtKB P1 1-20"), { kind: "Signal peptide", predicted: false, accession: "P1", sourceStart: 1, sourceEnd: 20 });
+  assert.deepEqual(parseRegionFeatureNote("Linker"), { kind: "Linker", predicted: false, accession: "" });
+  // A note of the user's is no kind.
+  assert.equal(parseRegionFeatureNote("Binds the antigen"), null);
+  assert.equal(parseRegionFeatureNote("linker"), null);
 });
 
 test("selected bases become whole residues in their CDS's frame on either strand", () => {

@@ -46,6 +46,8 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     .filter(r => r.start <= start && r.end >= end && (r.start < start || r.end > end))
     .sort((a, b) => (a.end - a.start) - (b.end - b.start))[0]?.id;
   const parent = h("select", { class: "sv-input", "aria-label": "Parent region" }, h("option", { value: "" }, "Whole protein"), regions.filter(r => r !== old).map(r => h("option", { value: r.id, selected: suggestedParent === r.id }, r.name))) as HTMLSelectElement;
+  const note = h("textarea", { class: "sv-input sv-region-note-input", rows: "2", "aria-label": "Region note" }) as HTMLTextAreaElement;
+  note.value = old?.note ?? "";
   const variable = h("input", { type: "checkbox", checked: !!old?.variable, "aria-label": "Varies between clones" }) as HTMLInputElement;
   const oldDesign = old?.variable;
   const isVersions = (v: string) => v === "alternatives" || v === "protein";
@@ -94,7 +96,8 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     refresh();
   });
   const row = (label: string, control: HTMLElement) => h("label", { class: "sv-region-field" }, h("span", { class: "sv-design-label" }, label), control);
-  dlg.body.replaceChildren(h("div", { class: "sv-region-form" }, row("Name", name), row("Kind", h("div", { class: "sv-region-kind" }, kind, customKind)), row("First residue", from), row("Last residue", to), row("Colour", color), row("Within", parent)),
+  dlg.body.replaceChildren(h("div", { class: "sv-region-form" }, row("Name", name), row("Kind", h("div", { class: "sv-region-kind" }, kind, customKind)), row("First residue", from), row("Last residue", to), row("Colour", color), row("Within", parent),
+    h("label", { class: "sv-region-field sv-region-field-wide" }, h("span", { class: "sv-design-label" }, "Note"), note)),
     ...(!old && residues?.rounded ? [h("p", { class: "sv-small sv-dim" }, "The selection includes part of a codon, so the region includes the whole codon.")] : []),
     h("label", { class: "sv-check-row" }, variable, "Varies between clones"), variableControls, hint, error);
   const save = () => {
@@ -124,7 +127,7 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
     }
     const current = ctx.store.data;
     if (current.features.find(x => x.id === f.id) !== f) { error.textContent = "The CDS changed while this dialog was open. Close it and open it again."; return; }
-    const region: ProteinRegion = { ...old, id: old?.id ?? newId("r"), name: name.value.trim(), kind: regionKind, start: a, end: b, color: color.value, parentId: parent.value || undefined, accession: old?.accession ?? "", sourceStart: old?.accession ? old.sourceStart : a, sourceEnd: old?.accession ? old.sourceEnd : b, predicted: old?.predicted ?? false, variable: variable.checked ? variableDesign : undefined, ...(old?.accession ? { edited: true, sourceKey: old.sourceKey ?? `${old.kind}:${old.sourceStart}-${old.sourceEnd}` } : {}) };
+    const region: ProteinRegion = { ...old, id: old?.id ?? newId("r"), name: name.value.trim(), kind: regionKind, start: a, end: b, color: color.value, parentId: parent.value || undefined, accession: old?.accession ?? "", sourceStart: old?.accession ? old.sourceStart : a, sourceEnd: old?.accession ? old.sourceEnd : b, predicted: old?.predicted ?? false, variable: variable.checked ? variableDesign : undefined, note: note.value.split("\n").map(l => l.trim()).filter(Boolean).join("\n") || undefined, ...(old?.accession ? { edited: true, sourceKey: old.sourceKey ?? `${old.kind}:${old.sourceStart}-${old.sourceEnd}` } : {}) };
     const next = old ? regions.map(r => r === old ? region : r) : [...regions, region];
     const feature = { ...f, notes: withRegions(f.notes, next) };
     const sorted = regionsOf(feature);

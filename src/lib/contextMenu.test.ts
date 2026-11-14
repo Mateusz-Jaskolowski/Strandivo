@@ -96,6 +96,21 @@ test("protein regions have their own edit and removal actions", () => {
   assert.ok(!labels({ kind: "selection", range: { start: 95, end: 105 } }).includes("Add as region…"));
 });
 
+test("features inside a protein can be turned into its regions", () => {
+  const tag = { id: "tag", name: "His tag", type: "misc_feature", start: 31, end: 48, strand: 1 as const, notes: {}, raw: {} };
+  const mcs = { id: "mcs", name: "MCS", type: "misc_feature", start: 52, end: 63, strand: 1 as const, notes: {}, raw: {} };
+  const inside = { ...data, features: [...data.features, tag, mcs] };
+  assert.ok(labels({ kind: "feature", id: "cds" }, { data: inside }).includes("Turn features into regions…"));
+  assert.ok(labels({ kind: "feature", id: "tag" }, { data: inside }).includes("Turn into region of lacZ…"));
+  // DNA inside a CDS isn't offered, and a CDS with nothing to turn doesn't offer it.
+  assert.ok(!labels({ kind: "feature", id: "mcs" }, { data: inside }).some(l => l.startsWith("Turn into region")));
+  assert.ok(!labels({ kind: "feature", id: "cds" }).includes("Turn features into regions…"));
+  assert.ok(!labels({ kind: "feature", id: "pro" }, { data: inside }).some(l => l.startsWith("Turn")));
+  // In two proteins, the dialog asks which.
+  const twice = { ...inside, features: [...inside.features, { id: "cds2", name: "lacZ short", type: "CDS", start: 22, end: 60, strand: 1 as const, notes: {}, raw: {} }] };
+  assert.ok(labels({ kind: "feature", id: "tag" }, { data: twice }).includes("Turn into region…"));
+});
+
 test("primers: the other places they show, and a PCR product", () => {
   const inPrimers = labels({ kind: "primer", id: "plain" }, { tab: "primers" });
   assert.ok(inPrimers.includes("Show on map") && inPrimers.includes("Show in sequence") && !inPrimers.includes("Show in Primers tab"));

@@ -843,14 +843,28 @@ async function main() {
     await s.shot("09-orf-protein");
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
     await s.shot("09-orfs");
+    // GC content on the map: off until its button is on, then a ring inside the features, and a band on the linear map.
+    const mapGcChip = "//*[contains(@class,'sv-map')]//button[contains(@class,'sv-chip')][normalize-space()='GC%']";
+    check("The map shows no GC until its button is on", await s.exec("return !document.querySelector('.sv-map .sv-map-gc')"));
+    check("The map's GC% button says what its colours mean", await s.exec("const b = Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'GC%'); return /GC content of the [0-9,]+ bp around each position/.test(b?.title) && /AT-rich/.test(b.title) && /GC-rich/.test(b.title);"));
+    await s.click(mapGcChip, "xpath");
+    check("The GC% button draws GC as a ring inside the features", await s.waitFor("(() => { const ring = document.querySelector('.sv-map .sv-map-gc'); const backbone = document.querySelector('.sv-map .sv-map-backbone'); return ring?.children.length > 0 && ring.getBoundingClientRect().width < backbone.getBoundingClientRect().width; })()", 5000));
+    check("Each stretch of the ring says its GC and bases", await s.exec("return Array.from(document.querySelectorAll('.sv-map .sv-map-gc > *')).every(e => /^GC [0-9]+(–[0-9]+)?% around [0-9,]+–[0-9,]+$/.test(e.querySelector('title')?.textContent))"));
+    await s.shot("09-map-gc");
+    await s.click("//*[contains(@class,'sv-map')]//button[normalize-space()='Linear']", "xpath");
+    check("The linear map draws GC as a band", await s.waitFor("document.querySelector('.sv-map-svg-linear .sv-map-gc line')", 5000));
+    await s.click("//*[contains(@class,'sv-map')]//button[normalize-space()='Circular']", "xpath");
+    await s.click(mapGcChip, "xpath");
+    check("The map's GC% button hides it again", await s.waitFor("!document.querySelector('.sv-map-svg-linear') && !document.querySelector('.sv-map .sv-map-gc')", 3000));
     await s.exec("window.__strandivo.command('show-sequence')");
     check("ORFs show in the sequence too", await s.waitFor("document.querySelector('.sv-seq .sv-orf')", 5000));
     await s.click("//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='ORFs']", "xpath");
     check("The ORFs button hides them again", await s.waitFor("!document.querySelector('.sv-seq .sv-orf')", 3000));
     // GC content: off in Sequence until its button is on, then under the bases and along the overview strip.
-    const gcChip = "//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='GC']";
+    const gcChip = "//*[contains(@class,'sv-seq')]//button[contains(@class,'sv-chip')][normalize-space()='GC%']";
     check("Sequence shows no GC until its button is on", await s.exec("return !document.querySelector('.sv-seq .sv-gc') && !document.querySelector('.sv-strip-gc')"));
     await s.click(gcChip, "xpath");
+    check("The Sequence GC% button says what its colours mean", await s.exec("const b = Array.from(document.querySelectorAll('.sv-seq .sv-chip')).find(b => b.textContent.trim() === 'GC%'); return /GC content of the 21 bases around each base/.test(b?.title) && /best for primers/.test(b.title);"));
     check("The GC button draws GC under the bases and along the overview strip", await s.waitFor("document.querySelector('.sv-seq .sv-gc') && document.querySelector('.sv-strip-gc')", 5000));
     check("Each stretch of the GC strip says its GC and bases", await s.exec("return Array.from(document.querySelectorAll('.sv-seq .sv-gc')).every(e => /^GC [0-9]+(–[0-9]+)?% around [0-9,]+–[0-9,]+$/.test(e.title))"));
     await s.click(gcChip, "xpath");
@@ -1227,7 +1241,7 @@ async function main() {
       s.apply({ ...d, features: d.features.map(x => x.id === f.id ? { ...x, notes } : x), primers: [...d.primers, p] }, 'Test primer context', { range, focus: { kind: 'primer', id: p.id } });
       window.__strandivo.command('show-primers');`);
     check("Primer context shows the overlapping CDR and a neighbouring region", await s.waitFor("document.querySelector('.sv-ctx-primer') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'CDR1 edited') && Array.from(document.querySelectorAll('.sv-ctx .sv-region-caption')).some(e => e.textContent === 'Nearby region')", 5000));
-    check("The primer's context shows GC under its bases without turning it on", await s.waitFor("document.querySelector('.sv-ctx .sv-gc') && Array.from(document.querySelectorAll('.sv-ctx .sv-chip')).find(b => b.textContent.trim() === 'GC')?.getAttribute('aria-pressed') === 'true'", 5000));
+    check("The primer's context shows GC under its bases without turning it on", await s.waitFor("document.querySelector('.sv-ctx .sv-gc') && Array.from(document.querySelectorAll('.sv-ctx .sv-chip')).find(b => b.textContent.trim() === 'GC%')?.getAttribute('aria-pressed') === 'true'", 5000));
     const primerWindowBeforeToggle = await s.exec("return document.querySelector('.sv-ctx-readout .sv-mono').textContent;");
     await s.click("//section[contains(@class,'sv-ctx')]//button[normalize-space(.)='Regions']", "xpath");
     check("Primer regions can be hidden without hiding the primer or its handles", await s.waitFor("document.querySelectorAll('.sv-ctx .sv-seq-region-bar').length === 0 && document.querySelector('.sv-ctx-primer') && document.querySelectorAll('.sv-ctx-handle').length === 2", 5000));
@@ -1357,6 +1371,37 @@ async function main() {
     await sleep(300);
     const barFollows = await s.exec("return document.querySelector('.sv-aln-bar').scrollLeft === document.querySelector('.sv-aln-scroll').scrollLeft");
     check("The alignment's scroll bar stays in view and is in step with the traces", bar.inPane && bar.fromBar === 0 && bar.width === 0 && barFollows, JSON.stringify({ ...bar, barFollows }));
+    // The toolbar's panel buttons hide the Reads tab's own list and inspector, which give
+    // the alignment their room, and leave the map's outline as it was.
+    const readsPanels = () =>
+      s.exec(`return {
+        list: !document.querySelector('.sv-reads-list').hidden,
+        insp: !document.querySelector('.sv-reads-insp').hidden,
+        width: Math.round(document.querySelector('.sv-aln-scroll').getBoundingClientRect().width),
+        pressed: [...document.querySelectorAll("button[aria-label^='Show sidebar'], button[aria-label='Show inspector']")].map(b => b.getAttribute('aria-pressed') === 'true' && !b.disabled)
+      }`);
+    const panelsShown = await readsPanels();
+    await s.click("button[aria-label^='Show sidebar']");
+    await s.click("button[aria-label='Show inspector']");
+    await sleep(400);
+    const panelsHidden = await readsPanels();
+    await s.exec("window.__strandivo.setView('map')");
+    await sleep(300);
+    const outlineKept = await s.exec("return !document.querySelector('.sv-outline').hidden && !document.querySelector('.sv-inspector').hidden");
+    await s.exec("window.__strandivo.setView('reads')");
+    await sleep(300);
+    const stillHidden = await s.exec("return document.querySelector('.sv-reads-list').hidden && document.querySelector('.sv-reads-insp').hidden");
+    await s.click("button[aria-label^='Show sidebar']");
+    await s.click("button[aria-label='Show inspector']");
+    await sleep(400);
+    const panelsBack = await readsPanels();
+    check(
+      "The panel buttons hide and show the reads' list and inspector, apart from the map's",
+      panelsShown.list && panelsShown.insp && panelsShown.pressed.join() === "true,true" &&
+        !panelsHidden.list && !panelsHidden.insp && panelsHidden.pressed.join() === "false,false" && panelsHidden.width > panelsShown.width + 400 &&
+        outlineKept && stillHidden && panelsBack.list && panelsBack.insp && panelsBack.width === panelsShown.width,
+      JSON.stringify({ panelsShown, panelsHidden, outlineKept, stillHidden, panelsBack })
+    );
 
     await s.click(".sv-read-card:nth-child(3)");
     await sleep(1000);
@@ -1729,6 +1774,81 @@ async function main() {
       await s.waitFor("!window.__strandivo.tabs().includes('library-parent.gb')", 5000);
     }
 
+    // --- features into regions: the library's frameworks and CDRs, as one undo step ---
+    await s.execAsync(
+      "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",
+      [data("library", "library-parent.gb")]
+    );
+    const foldOpen = await s.waitFor("window.__strandivo.tabs()[window.__strandivo.activeTab()] === 'library-parent.gb' && window.__strandivo.store", 20000);
+    check("The library's parent opens again to turn its features into regions", foldOpen);
+    if (foldOpen) {
+      // The nanobody's CDS, as testdata/library/protein-regions.gb adds it over its parts.
+      await s.exec(`${doc} window.__strandivo.setView("map");
+        const cds = { id: "e2e-nanobody", name: "Nanobody", type: "CDS", start: 2096, end: 2449, strand: 1, notes: {}, raw: {} };
+        s.apply({ ...s.data, features: [...s.data.features, cds] }, "Add feature", { range: { start: cds.start, end: cds.end }, focus: { kind: "feature", id: cds.id } });`);
+      const before = await s.exec(`${doc} return s.data.features.length;`);
+      const foldLink = "Turn 7 features into regions…";
+      check("A CDS with features inside offers to turn them into regions", await s.waitFor(`Array.from(document.querySelectorAll('.sv-inspector .sv-link')).some(b => b.textContent.trim() === '${foldLink}')`, 5000));
+      // Clicked in the page: the file's remembered reads align again once the CDS is added,
+      // and the inspector, rebuilt when they do, can swap the link under a WebDriver click.
+      await s.exec("const b = Array.from(document.querySelectorAll('.sv-inspector .sv-link')).find(x => x.textContent.trim() === arguments[0]); b?.scrollIntoView({ block: 'center' }); b?.click();", foldLink);
+      const listed = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 7", 5000);
+      const rows = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-row')).map(r => [r.querySelector('.sv-fold-name').textContent, r.querySelector('.sv-fold-where').textContent, r.querySelector('select').value, r.querySelector('input[type=checkbox]').checked].join(' '));");
+      const want = ["FR1 1–25 Framework true", "cdr1 26–35 CDR true", "FR2 36–49 Framework true", "cdr2 50–59 CDR true", "FR3 60–96 Framework true", "cdr3 97–107 CDR true", "FR4 108–118 Framework true"];
+      check("It lists the frameworks and CDRs, ticked, with their residues and kinds", listed && JSON.stringify(rows) === JSON.stringify(want), rows.join("; "));
+      // The rest needs the dialog; without it, they would only fail one after another.
+      if (listed) {
+        check("Every ticked row shows the colour its region will have", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-swatch')).every(sw => sw.style.background !== '');"));
+        await s.shot("11-fold-regions");
+        check("Nothing changes while the dialog is open", (await s.exec(`${doc} return s.data.features.length;`)) === before);
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Turn 7 features into regions']", "xpath");
+        check("Turning them deletes the features", await s.waitFor(`window.__strandivo.store.data.features.length === ${before - 7} && !document.querySelector('.sv-dialog')`, 5000));
+        const folded = await s.exec(`${doc} return s.data.features.find(f => f.id === 'e2e-nanobody').notes.strandivo_regions.map(v => v.split('|').slice(0, 3).join(' '));`);
+        check(
+          "and makes them regions of the CDS, at the same residues",
+          JSON.stringify(folded) === JSON.stringify(["FR1 Framework 1-25", "cdr1 CDR 26-35", "FR2 Framework 36-49", "cdr2 CDR 50-59", "FR3 Framework 60-96", "cdr3 CDR 97-107", "FR4 Framework 108-118"]),
+          JSON.stringify(folded)
+        );
+        check("The inspector draws them in the CDS's protein", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 7", 5000));
+        const foldToast = "Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).find(t => /Turned 7 features into regions of Nanobody/.test(t.textContent))";
+        check("It says what happened, with an Undo button", await s.waitFor(`${foldToast}?.querySelector('.ps-toast-action')`, 3000));
+        await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Undo']", "xpath");
+        check(
+          "One undo brings the features back and takes the regions away",
+          await s.waitFor(`window.__strandivo.store.data.features.length === ${before} && !window.__strandivo.store.data.features.find(f => f.id === 'e2e-nanobody').notes.strandivo_regions`, 5000)
+        );
+
+        // Right-clicking one feature offers its CDS, and the dialog ticks only that feature.
+        const rightClick = id => s.exec(`window.__strandivoMenu = items => { window.__e2eMenu = items; };
+          const row = document.querySelector('.sv-outline [data-kind="feature"][data-id="' + arguments[0] + '"]:not([data-region])');
+          if (!row) return [];
+          row.scrollIntoView({ block: 'nearest' });
+          row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+          return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`, id);
+        const cdsMenu = await rightClick("e2e-nanobody");
+        check("The CDS's right-click menu offers to turn features into regions", cdsMenu.includes("Turn features into regions…"), cdsMenu.join(", "));
+        const cdr1 = await s.exec(`${doc} return s.data.features.find(f => f.name === 'cdr1').id;`);
+        const featureMenu = await rightClick(cdr1);
+        check("A feature inside it offers to become one of its regions", featureMenu.includes("Turn into region of Nanobody…"), featureMenu.join(", "));
+        await s.exec("window.__e2eMenu.find(e => e.label === 'Turn into region of Nanobody…')?.run(); delete window.__strandivoMenu;");
+        const onlyOne = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 7", 5000) &&
+          await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-row input[type=checkbox]')).filter(b => b.checked).map(b => b.closest('.sv-fold-row').querySelector('.sv-fold-name').textContent);");
+        check("Only that feature starts ticked", JSON.stringify(onlyOne) === JSON.stringify(["cdr1"]), JSON.stringify(onlyOne));
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Turn 1 feature into regions']", "xpath");
+        check(
+          "It becomes a region of the CDS, which is selected with the region picked",
+          await s.waitFor(`!window.__strandivo.store.data.features.some(f => f.id === '${cdr1}') && window.__strandivo.store.selection.focus?.id === 'e2e-nanobody' && window.__strandivo.store.selection.focus?.region === 0`, 5000),
+          await s.exec(`${doc} return JSON.stringify(s.selection.focus);`)
+        );
+        await s.exec(`${doc} s.undo(); s.undo();`);
+        check("Undo takes the file back to how it opened", await s.waitFor(`window.__strandivo.store.data.features.length === ${before - 1}`, 5000));
+      }
+      await s.exec("document.querySelector('.sv-dialog-close')?.click(); window.__strandivo.closeTab()");
+      // Undone all the way, the file may still count as edited.
+      if (await s.waitFor("!!document.querySelector('.ps-modal')", 1500)) await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
+      await s.waitFor("!window.__strandivo.tabs().includes('library-parent.gb')", 5000);
+    }
+
     // --- a whole-plasmid read: made up until a real one is in testdata (see its README) ---
     await s.execAsync(
       "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",
@@ -1937,6 +2057,50 @@ async function main() {
     const tabsBefore = await s.exec("return window.__strandivo.tabs().length");
     await s.click("//button[contains(@class,'sv-home-open')][normalize-space()='bla-check.fasta']", "xpath");
     check("Opening a construct from Home adds a tab", await s.waitFor(`window.__strandivo.tabs().length === ${tabsBefore + 1} && window.__strandivo.store?.data.sequence.length > 0`, 20000));
+
+    // --- dark: the main views and a dialog in the other theme, to look at ---
+    await s.exec("window.__strandivo.saveSettings({ appearance: 'dark' })");
+    check(
+      "Choosing Dark turns the window dark at once",
+      await s.waitFor("document.documentElement.dataset.theme === 'dark' && getComputedStyle(document.body).backgroundColor === 'rgb(15, 17, 20)'", 5000),
+      await s.exec("return `${document.documentElement.dataset.theme} ${getComputedStyle(document.body).backgroundColor}`")
+    );
+    await s.execAsync(
+      "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",
+      [data("library", "library-parent.gb")]
+    );
+    if (await s.waitFor("window.__strandivo.tabs()[window.__strandivo.activeTab()] === 'library-parent.gb' && window.__strandivo.store", 20000)) {
+      // A selected CDS and its amino acids, coloured by chemistry, on the map and in the sequence.
+      await s.exec(`${doc} window.__strandivo.setView("map"); const f = s.data.features.find(x => x.name === "FR1"); s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+      // With the GC ring, to see its colours in dark.
+      await s.exec("const chip = Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'GC%'); if (chip && chip.getAttribute('aria-pressed') !== 'true') chip.click();");
+      await sleep(1200);
+      await s.shot("13-dark-map");
+      await s.exec('window.__strandivo.setView("sequence")');
+      await sleep(400);
+      await s.exec("const chip = Array.from(document.querySelectorAll('.sv-seq-chips button, button')).find(b => b.textContent.trim() === 'Colour amino acids'); if (chip && chip.getAttribute('aria-pressed') !== 'true') chip.click();");
+      await sleep(800);
+      await s.shot("13-dark-sequence");
+      await s.exec('window.__strandivo.setView("reads")');
+      const libReads = ["2026-10-13_A01_MJF3PRIMER.ab1", "2026-10-13_A02_MJE4PRIMER.ab1", "2026-10-13_C01_MJG5PRIMER.ab1"].map(n => data("library", n));
+      if (!(await s.waitFor("document.querySelectorAll('.sv-read-card').length === 3", 5000))) {
+        await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.addReadPaths(arguments[0]).then(() => done(true), e => done(String(e)));", libReads);
+      }
+      await s.waitFor("document.querySelectorAll('.sv-read-card').length === 3 && !document.querySelector('.sv-reads.sv-busy')", 30000);
+      await s.click("//*[contains(@class,'sv-read-card')][contains(., 'C01_MJG5PRIMER')]", "xpath");
+      check("In dark, the read's traces are drawn", await s.waitFor("Number(document.querySelector('.sv-aln')?.dataset.traces) >= 1", 10000));
+      await sleep(1200);
+      await s.shot("13-dark-reads");
+      await s.exec('window.__strandivo.setView("map"); window.__strandivo.command("digest")');
+      if (await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000)) {
+        await s.click(".sv-dialog input[data-enzyme='EcoRI']");
+        await sleep(600);
+        await s.shot("13-dark-digest");
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
+      } else check("In dark, Digest opens its dialog", false);
+    } else check("The library's parent opens again for the dark screenshots", false);
+    await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");
+    check("Choosing Light turns it back", await s.waitFor("document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(238, 240, 243)'", 5000));
   } catch (e) {
     check("Test run finished without errors", false, e instanceof Error ? e.message : e);
     await s.shot("99-error").catch(() => {});

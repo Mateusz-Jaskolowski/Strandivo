@@ -10,7 +10,7 @@ import { fontStack, textWidth } from "../ui/svg.ts";
 import { checkIcon } from "../ui/icons.ts";
 import { codons, cutSites, featureStyles, gcValues, isCds, orfs, orfTitle, primerAlignment, primerColors, primerTitle } from "../doc/analysis.ts";
 import { GC_WINDOW, overviewWindow } from "../lib/gc.ts";
-import { drawGcStrip, GC_STRIP_HEIGHT } from "./gcStrip.ts";
+import { drawGcStrip, GC_CHIP_LABEL, GC_STRIP_HEIGHT, gcChipTitle, gcWindowText } from "./gcStrip.ts";
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
 import { drawPrimer, laneHeight, pieceExtent } from "./primerDraw.ts";
 import { aminoGroup } from "../lib/aminoAcids.ts";
@@ -179,7 +179,7 @@ export class SequenceView {
       chip("aaColors", "Colour amino acids"),
       chip("sequenceRegions", "Regions"),
       chip("orfs", "ORFs"),
-      chip("sequenceGc", "GC"),
+      chip("sequenceGc", GC_CHIP_LABEL),
       chip("cutsites", "Cut sites"),
       chip("primers", "Primers"),
       h("span", { class: "sv-push" }),
@@ -262,6 +262,7 @@ export class SequenceView {
     // Colours only show on translations.
     this.chips.aaColors.disabled = !o.translations;
     this.chips.aaColors.title = o.translations ? "Colour amino acids by their chemistry (Clustal X colours)" : "Turn on Translation to colour amino acids";
+    this.chips.sequenceGc.title = gcChipTitle(`the ${GC_WINDOW} bases around each base (${gcWindowText(overviewWindow(this.ctx.store.length))} along the strip above)`, true);
     this.measure();
     const width = this.scroller.clientWidth || 800;
     this.lastWidth = width;

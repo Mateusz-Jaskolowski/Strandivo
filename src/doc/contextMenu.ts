@@ -14,6 +14,7 @@ import { digestEnzymes, menuFor, type MenuEntry, type MenuItem, type MenuTarget 
 import { basesIn, deleteRange, featureBases, inRange, rangeLength, reverseComplement, type Range } from "../lib/seqdata.ts";
 import { proteinRegionTargets, regionSpans, regionsOf, withRegions } from "../lib/regions.ts";
 import { openProteinRegionDialog, openProteinRegionFromSelection } from "../views/proteinRegionDialog.ts";
+import { openFoldDialog, openFoldFromFeature } from "../views/foldRegionsDialog.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
 import { cutSites, orfFeature, orfs, protein } from "./analysis.ts";
 import type { DocContext, Tab } from "./context.ts";
@@ -129,6 +130,12 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       else if (range) openProteinRegionFromSelection(ctx, range);
       return;
     }
+    case "fold-features":
+      if (annotation) openFoldDialog(ctx, annotation);
+      return;
+    case "fold-feature":
+      if (annotation) openFoldFromFeature(ctx, annotation);
+      return;
     case "edit-protein-region":
       if (annotation && target.kind === "feature") openProteinRegionDialog(ctx, annotation, target.region);
       return;

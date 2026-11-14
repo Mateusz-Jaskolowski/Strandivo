@@ -8,6 +8,7 @@
 import { alignPrimer } from "./primerAlign.ts";
 import { rangeLength, type Range, type SeqData } from "./seqdata.ts";
 import { proteinRegionTargets, regionsOf } from "./regions.ts";
+import { foldOffered, foldRows, foldTargets } from "./foldRegions.ts";
 import { enzymeOf, enzymesText } from "./enzymePick.ts";
 
 /**
@@ -36,6 +37,8 @@ export type MenuAction =
   | "mutagenesis"
   | "add-feature"
   | "add-protein-region"
+  | "fold-features"
+  | "fold-feature"
   | "edit-protein-region"
   | "remove-protein-region"
   | "reverse-complement"
@@ -154,6 +157,8 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
         if (!regionsOf(f)[target.region]) return [];
         return [item("copy-dna", "Copy DNA"), item("copy-protein", "Copy protein"), item("protein-details", "Protein details…"), "separator", item("edit-protein-region", "Edit region…"), show, "separator", item("remove-protein-region", "Remove region")];
       }
+      // Features inside a protein can become its regions (`src/lib/foldRegions.ts`).
+      const owners = foldTargets(d, f);
       return tidy([
         item("copy-dna", "Copy DNA"),
         ...when(f.type.toUpperCase() === "CDS", item("copy-protein", "Copy protein")),
@@ -162,6 +167,9 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
         item("design-primers", "Design primers to amplify…"),
         ...when(f.type.toUpperCase() === "CDS", item("mutagenesis", "Mutagenesis primers…")),
         ...when(f.type.toUpperCase() === "CDS", item("add-protein-region", "Add protein region…")),
+        ...when(f.type.toUpperCase() === "CDS" && foldOffered(foldRows(d, f)) > 0, item("fold-features", "Turn features into regions…")),
+        // With several proteins to choose from, the dialog asks which.
+        ...when(owners.length > 0, item("fold-feature", owners.length === 1 ? `Turn into region of ${owners[0].cds.name}…` : "Turn into region…")),
         "separator",
         show,
         item("rename", "Rename…"),

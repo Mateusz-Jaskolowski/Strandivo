@@ -56,6 +56,8 @@ and CI checks that they exist.
   the note says how many with Show all; a pair with an unknown Tm always shows. The
   difference is compared as the list rounds it, so a pair shown 5.0 °C apart is within
   5 °C. The PCR product dialog's warning keeps the fixed `TM_APART`, as it judges one pair.
+  With an NEB polymerase as the Tm method the dialog also says where to anneal, in whole
+  degrees as NEB's calculator shows it (`annealingTemp`; AGENTS.md says why only then).
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

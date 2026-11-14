@@ -100,50 +100,54 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 173 | section heading | "Maps" |
-| 175 | setting label | "Label size" |
-| 176 | setting hint | "Font size of labels on the circular map." |
-| 180 | setting label | "Sequence letters" |
-| 184 | option labels | "As in file" / "UPPER" / "lower" |
-| 193 | setting label | "Show when opening a file" |
-| 194 | setting hint | "Default visibility for newly opened files." |
-| 207 | setting label | "Sidebar" |
-| 208 | setting hint | "Order of sections in the left sidebar." |
-| 222 | button | "Reset order" |
-| 227 | setting label | "Open reading frames" |
-| 228 | setting hint | "From a start codon to the next stop, on both strands. Shorter ORFs inside a longer one in the same frame are not shown." |
-| 253 | checkbox | "Also start at GTG and TTG" |
-| 257 | setting label | "Amber stop codon" |
-| 258 | setting hint | "For amber suppressor strains such as TG1 and XL1-Blue (phage display). Applies to translations, ORFs and read differences." |
-| 259 | checkbox | "Read TAG as Q" |
-| 262 | setting label | "Feature detection" |
-| 263 | setting hint | "Offer to scan for common plasmid parts when opening a file with few features." |
-| 264 | checkbox | "Offer when a file looks unannotated" |
-| 270 | section heading | "Primers" |
-| 271 | setting label | "Tm method" |
-| 271 | setting hint | "Used for all primer Tm calculations and primer design." |
-| 273 | setting label | "Reaction conditions" |
-| 274 | setting hint | "Used by the SantaLucia and Breslauer methods. Defaults match primer3." |
-| 288 | button | "Reset to defaults" |
-| 296 | section heading | "Sequencing results" |
-| 298 | setting label | "Minimum quality" |
-| 299 | setting hint | "Differences supported by bases below this Phred score are marked uncertain (Q20 = 1 error in 100)." |
-| 313 | setting label | "Quality trimming" |
-| 314 | setting hint | "How much of the noisy start and end of each read is ignored." |
-| 321 | section heading | "Plasmid info" |
-| 322 | setting label | "Lab fields" |
-| 322 | setting hint | "Shown on every plasmid's Info tab, one per line. Values are saved inside each file." |
-| 335 | button | "Restore default fields" |
-| 342 | section heading | "Updates and privacy" |
-| 344 | setting label | "Updates" |
-| 345 | setting hint | "Checks updates.strandivo.com once a day and installs updates only when you choose." |
-| 346 | checkbox | "Check for updates automatically" |
-| 349 | setting label | "Usage statistics" |
-| 350 | setting hint | "Which features are used and on which operating systems — never your files, sequences, names or anything that identifies you." |
-| 354 | checkbox | "Share anonymous usage statistics" |
-| 355 | button | "What is sent" |
-| 367 | browser note | "These settings are saved in this browser, separate from the desktop app." |
-| 383 | button | "Reset all settings" |
+| 162 | setting label | "NEB polymerase" |
+| 163 | setting hint | "Sets the buffer's salt, and the annealing temperature PCR products show." |
+| 164 | field | "Each primer" … "nM" |
+| 176 | polymerase note | "Also …. Annealing temperature: …." (the polymerase's other products and rule, from `src/lib/polymerases.ts`) |
+| 214 | section heading | "Maps" |
+| 216 | setting label | "Label size" |
+| 217 | setting hint | "Font size of labels on the circular map." |
+| 221 | setting label | "Sequence letters" |
+| 225 | option labels | "As in file" / "UPPER" / "lower" |
+| 234 | setting label | "Show when opening a file" |
+| 235 | setting hint | "Default visibility for newly opened files." |
+| 248 | setting label | "Sidebar" |
+| 249 | setting hint | "Order of sections in the left sidebar." |
+| 263 | button | "Reset order" |
+| 268 | setting label | "Open reading frames" |
+| 269 | setting hint | "From a start codon to the next stop, on both strands. Shorter ORFs inside a longer one in the same frame are not shown." |
+| 294 | checkbox | "Also start at GTG and TTG" |
+| 298 | setting label | "Amber stop codon" |
+| 299 | setting hint | "For amber suppressor strains such as TG1 and XL1-Blue (phage display). Applies to translations, ORFs and read differences." |
+| 300 | checkbox | "Read TAG as Q" |
+| 303 | setting label | "Feature detection" |
+| 304 | setting hint | "Offer to scan for common plasmid parts when opening a file with few features." |
+| 305 | checkbox | "Offer when a file looks unannotated" |
+| 311 | section heading | "Primers" |
+| 312 | setting label | "Tm method" |
+| 312 | setting hint | "Used for all primer Tm calculations and primer design." |
+| 315 | setting label | "Reaction conditions" |
+| 316 | setting hint | "Used by the SantaLucia and Breslauer methods. Defaults match primer3." |
+| 330 | button | "Reset to defaults" |
+| 338 | section heading | "Sequencing results" |
+| 340 | setting label | "Minimum quality" |
+| 341 | setting hint | "Differences supported by bases below this Phred score are marked uncertain (Q20 = 1 error in 100)." |
+| 355 | setting label | "Quality trimming" |
+| 356 | setting hint | "How much of the noisy start and end of each read is ignored." |
+| 363 | section heading | "Plasmid info" |
+| 364 | setting label | "Lab fields" |
+| 364 | setting hint | "Shown on every plasmid's Info tab, one per line. Values are saved inside each file." |
+| 377 | button | "Restore default fields" |
+| 384 | section heading | "Updates and privacy" |
+| 386 | setting label | "Updates" |
+| 387 | setting hint | "Checks updates.strandivo.com once a day and installs updates only when you choose." |
+| 388 | checkbox | "Check for updates automatically" |
+| 391 | setting label | "Usage statistics" |
+| 392 | setting hint | "Which features are used and on which operating systems — never your files, sequences, names or anything that identifies you." |
+| 396 | checkbox | "Share anonymous usage statistics" |
+| 397 | button | "What is sent" |
+| 409 | browser note | "These settings are saved in this browser, separate from the desktop app." |
+| 425 | button | "Reset all settings" |
 
 ---
 
@@ -244,14 +248,15 @@ assembled, with the line of the first part.
 | 419 | hint (pick primers) | "Choose a forward and a reverse primer to see the product." |
 | 421 | no product (circular) | "These primers don't make a product here." |
 | 421 | no product (linear) | "These primers point away from each other on this linear sequence, so they make no product." |
+| 432 | fact (NEB method only) | "Anneal at" "… °C · {polymerase}: {rule}" |
 
 ### Design primers
 
 | Line | Where | Text |
 |------|-------|------|
-| 506 | dialog title | "Design primers" |
-| 506 | dialog note | "Design a primer pair with matched Tms and optional 5′ restriction sites." |
-| 596 | no result | "No pair fits here (on a linear sequence the region may be too close to an end). Try a wider Tm or length range." |
+| 515 | dialog title | "Design primers" |
+| 515 | dialog note | "Design a primer pair with matched Tms and optional 5′ restriction sites." |
+| 605 | no result | "No pair fits here (on a linear sequence the region may be too close to an end). Try a wider Tm or length range." |
 
 ---
 
@@ -470,20 +475,29 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 543 | 3′ change (at end) | "The 3′ end base doesn't pair with the template, so extension may fail." |
-| 543 | 3′ change (near end) | "A change … bases from the 3′ end may stop extension." |
-| 547 | not ACGT | "Contains bases other than A, C, G and T, so the Tm can't be calculated." |
-| 548 | low Tm | "Tm is … °C — below 52 °C may anneal poorly." |
-| 549 | high Tm | "Tm is … °C — above 72 °C." |
-| 553 | Tm mismatch | "Tm differs from its partner by … °C (aim for under 5 °C)." |
-| 558 | low/high GC | "GC content is …% (aim for 40–60%)." |
-| 563 | no 3′ G/C | "No G or C in the last two bases at the 3′ end." |
-| 564 | GC-rich 3′ | "More than three G/C in the last five bases can cause mispriming." |
-| 568 | long run | "Has a run of … identical bases." |
-| 572 | self-dimer | "The 3′ end can pair with itself over … bases." |
-| 577 | no site | "Doesn't bind this sequence." |
-| 578 | multi-site | "Binds … places in this sequence." |
-| 593 | tail binds | "… bases of the 5′ tail also match this sequence at …, so the primer may prime there as well." |
+| 592 | 3′ change (at end) | "The 3′ end base doesn't pair with the template, so extension may fail." |
+| 592 | 3′ change (near end) | "A change … bases from the 3′ end may stop extension." |
+| 596 | not ACGT | "Contains bases other than A, C, G and T, so the Tm can't be calculated." |
+| 597 | low Tm | "Tm is … °C — below 52 °C may anneal poorly." |
+| 598 | high Tm | "Tm is … °C — above 72 °C." |
+| 602 | Tm mismatch | "Tm differs from its partner by … °C (aim for under 5 °C)." |
+| 607 | low/high GC | "GC content is …% (aim for 40–60%)." |
+| 612 | no 3′ G/C | "No G or C in the last two bases at the 3′ end." |
+| 613 | GC-rich 3′ | "More than three G/C in the last five bases can cause mispriming." |
+| 617 | long run | "Has a run of … identical bases." |
+| 621 | self-dimer | "The 3′ end can pair with itself over … bases." |
+| 626 | no site | "Doesn't bind this sequence." |
+| 627 | multi-site | "Binds … places in this sequence." |
+| 642 | tail binds | "… bases of the 5′ tail also match this sequence at …, so the primer may prime there as well." |
+
+---
+
+## NEB polymerases — `src/lib/polymerases.ts`
+
+| Line | Where | Text |
+|------|-------|------|
+| 51–62 | menu (Settings) | "Q5 High-Fidelity" / "Q5U Hot Start" / "Phusion High-Fidelity (HF or GC buffer)" / "OneTaq, Standard buffer" / "OneTaq, GC buffer" / "Taq, Standard Taq buffer" / "Taq, ThermoPol buffer" / "Taq 2X or 5X Master Mix" / "Hemo KlenTaq" / "Multiplex PCR 5X Master Mix" / "LongAmp Taq" / "Vent or Deep Vent", grouped as Q5, Phusion, OneTaq, Taq, LongAmp and Vent; each with its other products in `also` |
+| 89 | annealing rule | "lower Tm + 1 °C, at most 72 °C" / "0.93 × lower Tm + 7.5 °C, at most 72 °C" / "the lower Tm" / "lower Tm − 2 °C (the lower Tm if a primer is under 21 bases), at most 72 °C" |
 
 ---
 
@@ -491,14 +505,16 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 39 | label | "SantaLucia 1998 (default)" |
-| 41 | about | "Nearest-neighbour method. Gives the same Tm as primer3, and close to NEB's and most current calculators." |
-| 45 | label | "Breslauer 1986" |
-| 47 | about | "An older nearest-neighbour method (early primer3 versions, some vendors). Usually a few °C higher." |
-| 51 | label | "Wallace rule (quick estimate)" |
-| 53 | about | "2 °C for each A or T and 4 °C for each G or C. For short primers; ignores salt and concentration." |
-| 57 | label | "Basic GC formula" |
-| 59 | about | "64.9 + 41 × (G+C − 16.4) / length, or the Wallace rule below 14 bases. Ignores salt and concentration." |
+| 46 | label | "SantaLucia 1998 (default)" |
+| 48 | about | "Nearest-neighbour method. Gives the same Tm as primer3." |
+| 52 | label | "NEB polymerase" |
+| 54 | about | "Gives the same Tm as NEB's Tm Calculator for the polymerase chosen below, and its annealing temperature." |
+| 58 | label | "Breslauer 1986" |
+| 60 | about | "An older nearest-neighbour method (early primer3 versions, some vendors). Usually a few °C higher." |
+| 64 | label | "Wallace rule (quick estimate)" |
+| 66 | about | "2 °C for each A or T and 4 °C for each G or C. For short primers; ignores salt and concentration." |
+| 70 | label | "Basic GC formula" |
+| 72 | about | "64.9 + 41 × (G+C − 16.4) / length, or the Wallace rule below 14 bases. Ignores salt and concentration." |
 
 ---
 

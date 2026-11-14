@@ -584,6 +584,23 @@ async function main() {
     await s.shot("04-pcr");
     await s.press(ESCAPE);
     check("Escape closes the dialog", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
+    // With an NEB polymerase as the Tm method, the dialog adds where NEB would anneal.
+    const tmMethod = method => s.exec(`return window.__strandivo.saveSettings({ tm: { method: '${method}', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 500 } })`);
+    await tmMethod("neb");
+    await sleep(300);
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]", "xpath");
+    await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Forward primer']\")", 5000);
+    await choose("Forward primer", "AmpR-XhoI-R");
+    await sleep(300);
+    await choose("Reverse primer", "AmpR-NdeI-F");
+    await s.waitFor("/Anneal at/.test(document.querySelector('.sv-pcr-result')?.textContent)", 5000);
+    const nebPcr = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check("With NEB's Q5 as the Tm method, a PCR product says where to anneal", /Anneal at\s*\d+ °C · Q5 High-Fidelity: lower Tm \+ 1 °C, at most 72 °C/.test(nebPcr), nebPcr.slice(0, 300));
+    await s.shot("04-pcr-neb");
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await tmMethod("santalucia");
+    await sleep(300);
 
     // --- mutagenesis: a codon of AmpR to alanine, from the right-click menu ---
     await s.click("button[data-tab=sequence]");
@@ -1566,7 +1583,16 @@ async function main() {
       await s.switchTo(settingsHandle);
       check("Settings window opens", await s.waitFor("document.querySelector('.ps-settings')", 10000));
       await s.shot("09-settings");
-      await s.exec("const m = document.querySelector(\"select[aria-label='Tm method']\"); m.value = 'wallace'; m.dispatchEvent(new Event('change'));");
+      // The NEB method shows its polymerases, each bringing its primer concentration.
+      const pickTm = (label, value) => s.exec(`const m = document.querySelector("select[aria-label='${label}']"); m.value = '${value}'; m.dispatchEvent(new Event('change'));`);
+      const nebRow = "const p = document.querySelector(\"select[aria-label='NEB polymerase']\"); return [p.closest('.ps-set-row').hidden, document.querySelector(\"input[aria-label='Each primer, for the NEB polymerase']\").value];";
+      await pickTm("Tm method", "neb");
+      await pickTm("NEB polymerase", "longamp");
+      const nebShown = await s.exec(nebRow);
+      await s.shot("09b-settings-neb");
+      await pickTm("Tm method", "wallace");
+      const nebHidden = await s.exec(nebRow);
+      check("The NEB method offers NEB's polymerases, each with its primer concentration, and only then", nebShown[0] === false && nebShown[1] === "400" && nebHidden[0] === true, JSON.stringify([nebShown, nebHidden]));
       await s.switchTo(handles0[0]);
       await s.exec(`${doc} s.selectRange({ start: 100, end: 119 }, null, "e2e");`);
       await sleep(800);

@@ -45,7 +45,7 @@ export const USAGE_EVENTS = {
   },
   settings_chosen: {
     why: "Whether the choices in Settings are used, so ones nobody changes can go; once a launch.",
-    props: { tm: ["santalucia", "breslauer", "wallace", "basic"], amber: ["on", "off"], bases: ["upper", "lower", "as_file"] }
+    props: { tm: ["santalucia", "breslauer", "neb", "wallace", "basic"], amber: ["on", "off"], bases: ["upper", "lower", "as_file"] }
   },
   file_opened: {
     why: "Which formats people bring, whether they open files from Home, and how long their sequences are, so the readers that matter, Home and speed on long sequences get the work.",

@@ -7,9 +7,12 @@
 // conditions unless Settings choose another method: 50 mM monovalent salt, 1.5 mM Mg²⁺,
 // 0.6 mM dNTPs (Mg²⁺ counted as a sodium equivalent, von Ahsen 2001) and 50 nM primer.
 // Breslauer (1986) with Schildkraut's salt correction is primer3's older method; both
-// match primer3's numbers.
+// match primer3's numbers. "neb" works it out as NEB's Tm Calculator does for one of its
+// polymerases (polymerases.ts): SantaLucia (1998) at 1 M Na⁺ and the whole primer
+// concentration, then Owczarzy et al. (2004)'s salt correction for the buffer's salt.
 
 import { alignPrimer, hasChanges, type PrimerAlignment, type PrimerOp } from "./primerAlign.ts";
+import { annealingRuleText, annealingTemp as nebAnnealing, DEFAULT_POLYMERASE, nebPolymerase } from "./polymerases.ts";
 import { reverseComplement, type SeqPrimer } from "./seqdata.ts";
 
 export interface TmConditions {
@@ -25,20 +28,30 @@ export interface TmConditions {
 
 export const DEFAULT_CONDITIONS: TmConditions = { monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50 };
 
-export type TmMethod = "santalucia" | "breslauer" | "wallace" | "basic";
+export type TmMethod = "santalucia" | "breslauer" | "neb" | "wallace" | "basic";
 
 export interface TmSettings extends TmConditions {
   method: TmMethod;
+  /** The NEB polymerase the "neb" method follows (`NEB_POLYMERASES` in polymerases.ts). */
+  polymerase: string;
+  /** Each primer for the "neb" method, nM: the polymerase's own until changed. */
+  nebPrimer: number;
 }
 
-export const DEFAULT_TM: TmSettings = { method: "santalucia", ...DEFAULT_CONDITIONS };
+export const DEFAULT_TM: TmSettings = { method: "santalucia", ...DEFAULT_CONDITIONS, polymerase: DEFAULT_POLYMERASE, nebPrimer: nebPolymerase(DEFAULT_POLYMERASE).primer };
 
 export const TM_METHODS: { id: TmMethod; label: string; short: string; about: string }[] = [
   {
     id: "santalucia",
     label: "SantaLucia 1998 (default)",
     short: "SantaLucia 1998",
-    about: "Nearest-neighbour method. Gives the same Tm as primer3, and close to NEB's and most current calculators."
+    about: "Nearest-neighbour method. Gives the same Tm as primer3."
+  },
+  {
+    id: "neb",
+    label: "NEB polymerase",
+    short: "NEB",
+    about: "Gives the same Tm as NEB's Tm Calculator for the polymerase chosen below, and its annealing temperature."
   },
   {
     id: "breslauer",
@@ -73,6 +86,7 @@ export function useTmSettings(s: TmSettings) {
 /** How Tm is worked out, for notes under tables, e.g. "SantaLucia 1998 · 50 mM Na⁺ · …". */
 export function tmLabel(s: TmSettings = current): string {
   const name = TM_METHODS.find(m => m.id === s.method)?.short ?? s.method;
+  if (s.method === "neb") return `${name} · ${nebPolymerase(s.polymerase).name} · ${s.nebPrimer} nM primer`;
   return usesConditions(s.method) ? `${name} · ${s.monovalent} mM Na⁺ · ${s.divalent} mM Mg²⁺ · ${s.primer} nM primer` : name;
 }
 
@@ -131,8 +145,43 @@ export function meltingTemp(seq: string, c: TmSettings = current): number | null
       ds += 4.1;
     }
   }
+  if (c.method === "neb") return nebTm(dh, ds, gc / s.length, c);
   ds += 0.368 * (s.length - 1) * Math.log(sodium);
   return (dh * 1000) / (ds + 1.987 * Math.log(ct / 4)) - 273.15;
+}
+
+/**
+ * NEB's Tm from SantaLucia's ΔH and ΔS (ends included): at 1 M Na⁺ with the whole primer
+ * concentration, then corrected for the buffer's salt by Owczarzy et al. (2004), eq. 22.
+ * Phusion's buffer is corrected as Schildkraut and Lifson (1965) do, with a quarter of
+ * the primer concentration; that is what NEB's own numbers fit, to within 1e-12 °C.
+ */
+function nebTm(dh: number, ds: number, fgc: number, c: TmSettings): number {
+  const p = nebPolymerase(c.polymerase);
+  const ct = c.nebPrimer * 1e-9;
+  if (p.correction === "schildkraut") return (dh * 1000) / (ds + 1.987 * Math.log(ct / 4)) - 273.15 + 16.6 * Math.log10(p.salt / 1000);
+  const oneMolar = (dh * 1000) / (ds + 1.987 * Math.log(ct));
+  const ln = Math.log(p.salt / 1000);
+  return 1 / (1 / oneMolar + (4.29e-5 * fgc - 3.95e-5) * ln + 9.4e-6 * ln * ln) - 273.15;
+}
+
+/** The bases a primer's Tm is worked out from: those that pair, or a mutagenic primer's 3′ arm. */
+export function tmBases(a: PrimerAlignment): string {
+  return hasChanges(a) ? a.arms[0] : a.binding;
+}
+
+/**
+ * NEB's annealing temperature for two primers, from the bases their Tms come from
+ * (`tmBases`), with the rule in words; null unless the Tm method is "neb" or either Tm is
+ * unknown. `ta` is to 0.1 °C, as NEB's API gives it; its calculator shows `Math.round(ta)`.
+ */
+export function annealingTemp(a: string, b: string, c: TmSettings = current): { ta: number; polymerase: string; rule: string } | null {
+  if (c.method !== "neb") return null;
+  const tmA = meltingTemp(a, c);
+  const tmB = meltingTemp(b, c);
+  if (tmA === null || tmB === null) return null;
+  const p = nebPolymerase(c.polymerase);
+  return { ta: nebAnnealing(p, { tm: tmA, length: a.length }, { tm: tmB, length: b.length }), polymerase: p.name, rule: annealingRuleText(p.annealing) };
 }
 
 /** From this Tm up, a selection's Tm is shown only as "> 80 °C". */
@@ -464,7 +513,7 @@ function changeShapes(size: number): [number, number][] {
  * 3′ arm, which has to anneal for the first cycle.
  */
 export function bindingTm(a: PrimerAlignment): number | null {
-  return meltingTemp(hasChanges(a) ? a.arms[0] : a.binding);
+  return meltingTemp(tmBases(a));
 }
 
 /** "3 bases changed, 6 inserted", or "" for a primer that matches its site. */

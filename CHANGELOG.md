@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **NEB's Tm and annealing temperature**: choose NEB polymerase as the Tm method in
+  Settings, then your polymerase (Q5, Phusion, OneTaq, Taq, LongAmp, Vent and others), and
+  primers show the same Tm as NEB's Tm Calculator. The PCR product dialog then says where
+  to anneal, by NEB's rule for that polymerase. Strandivo works it out on your computer;
+  nothing is sent to NEB.
 - **Credit for feedback**: Report a bug and Send feedback take your name or initials to
   credit you in the public issue, and remember them for next time. If you have a GitHub
   account, Post on GitHub instead opens the issue on GitHub filled in with what you wrote,

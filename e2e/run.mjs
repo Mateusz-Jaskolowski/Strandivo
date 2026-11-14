@@ -127,6 +127,10 @@ class Session {
     await wd("POST", `/session/${this.id}/actions`, { actions: [{ type: "key", id: "keyboard", actions: [...down, ...keys, ...up] }] });
     await wd("DELETE", `/session/${this.id}/actions`).catch(() => {});
   }
+  /** A real click at a point of the page (CSS pixels from its top left). */
+  async clickAt([x, y]) {
+    await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
+  }
   /** Drags the mouse between two points of the page (CSS pixels from its top left). */
   async drag(from, to) {
     const at = ([x, y], duration = 0) => ({ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport", duration });
@@ -328,6 +332,36 @@ async function main() {
     const ticksAfter = await s.exec(tickCount);
     check("Ruler button hides the map's ruler", ticksBefore > 0 && ticksAfter === 0, `${ticksBefore} → ${ticksAfter} ticks`);
     await s.click(mapChip("Ruler"), "xpath");
+    await sleep(300);
+
+    // Only a press near the circle places the cursor; the far corners clear the selection.
+    const mapPoints = await s.exec(`
+      const host = document.querySelector('.sv-map-svg');
+      const m = document.querySelector('.sv-map-svgel').getScreenCTM();
+      const r = Number(document.querySelector('.sv-map-backbone').getAttribute('r'));
+      const rotation = Number(document.querySelector("input[aria-label='Rotate']").value);
+      const box = host.getBoundingClientRect();
+      const empty = ([x, y]) => { const el = document.elementFromPoint(x, y); return !!el && host.contains(el) && !el.closest('[data-kind]'); };
+      const at = (deg, radius) => { const t = deg * Math.PI / 180; const p = new DOMPoint(radius * Math.sin(t), -radius * Math.cos(t)).matrixTransform(m); return [p.x, p.y]; };
+      // Just inside the features, among the ruler's ticks.
+      let ring = null;
+      for (let deg = 3; deg < 360 && !ring; deg += 7) if (empty(at(deg, r - 14))) ring = { point: at(deg, r - 14), deg };
+      const corner = [[box.left + 8, box.top + 8], [box.right - 8, box.top + 8], [box.left + 8, box.bottom - 8], [box.right - 8, box.bottom - 8]].find(empty) || null;
+      return { ring, corner, rotation };`);
+    if (mapPoints.ring && mapPoints.corner) {
+      await s.exec(`${doc} const f = s.data.features.find(f => f.name === 'AmpR'); s.selectRange({ start: f.start, end: f.end }, { kind: 'feature', id: f.id }, 'e2e');`);
+      const caretBefore = (await state()).sel.caret;
+      await s.clickAt(mapPoints.corner);
+      await sleep(200);
+      const cornerSel = (await state()).sel;
+      check("A click far from the map's circle clears the selection and leaves the cursor", !cornerSel.range && !cornerSel.focus && cornerSel.caret === caretBefore, JSON.stringify({ caretBefore, ...cornerSel }));
+      await s.clickAt(mapPoints.ring.point);
+      await sleep(200);
+      const ringSel = (await state()).sel;
+      const expected = Math.round(((((mapPoints.ring.deg - mapPoints.rotation) % 360) + 360) % 360) / 360 * start.len) % start.len;
+      const off = Math.abs(ringSel.caret - expected) % start.len;
+      check("A click near the circle puts the cursor there", !ringSel.range && Math.min(off, start.len - off) <= 3, `caret ${ringSel.caret}, expected about ${expected}`);
+    } else check("Empty points near and far from the map's circle were found", false, JSON.stringify(mapPoints));
 
     const lacId = await s.exec(addTouching);
     await sleep(400);

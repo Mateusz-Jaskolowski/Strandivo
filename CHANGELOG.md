@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Clicking beside the map**: a click on empty space away from the map now clears the
+  selection, instead of putting the cursor at whatever base lay in that direction, even
+  from the window's far corners. On or near the circle, and along the linear map's
+  tracks, the cursor still goes where you click, and the pointer turns into a crosshair
+  there.
 - **GC content on the map**: the map's new GC% button draws GC content as a ring inside
   the features (a band under the ruler on the linear map), in the same colours as in the
   Sequence tab: teal where it is AT-rich, orange where it is GC-rich. Hover over a stretch

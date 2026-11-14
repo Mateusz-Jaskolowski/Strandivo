@@ -101,6 +101,25 @@ and CI checks that they exist.
   expand to whole residues, and a terminal stop is excluded. When several CDSs contain
   the selection, ask which protein owns the region rather than silently choosing one.
   Right-clicking a drawn feature within a plain selection keeps that selection.
+- **Features into regions** (`src/lib/foldRegions.ts`): files often mark a protein's
+  domains, CDRs, linkers and tags as short features inside its CDS, and each can become a
+  region of it, the feature deleted, in one `store.apply`. A feature is listed when every
+  base is a coding base of the CDS (none in an intron, before `/codon_start`, past its
+  ends or only in its stop) and its type is part of a protein: `misc_feature`, `variation`
+  and other software's `region`, unless the name is DNA (MCS, lox, att, an operator…);
+  GenBank's peptide types; other software's `domain`, `tag`, `linker`, `epitope` and
+  `motif`; or a CDS read the same way in the same frame (a fused protein, or a framework
+  annotated as a CDS, as `testdata/library/library-parent.gb` does). Residues take whole
+  codons, as selections do. A row on the other strand, or already a region (same name and
+  residues: an Export copy keeps its regions on the CDS too), starts unticked; a feature
+  without a direction (Benchling's "none" too) is on either. Residues in pieces can't be
+  one region, so that row can't be ticked. The kind comes from what `regionFeatureNotes`
+  wrote (`parseRegionFeatureNote`), else the type, else the name (`kindFromName`), never a
+  GenBank type. The feature's own colour carries over unless the app doesn't draw it or it
+  is the CDS's, where the stripe wouldn't show; its other notes become the region's note
+  and its library design the region's; other qualifiers are named as lost. A new region
+  goes under the smallest larger region, new or old, that holds it, and regions there
+  before are left as they were; a folded CDS's own regions come along under its region.
 - **Library designs on regions** are optional and separate from their kind: a CDR or a
   variable domain does not automatically vary between clones. `variableProteinFeatures`
   projects only marked regions into the existing read-analysis model, as noncoding

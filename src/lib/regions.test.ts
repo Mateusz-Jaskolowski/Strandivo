@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { parseSequenceFile, serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { protein } from "../doc/analysis.ts";
-import { carryRegions, formatRegion, isClipped, layoutRegions, nextRegionColor, parseRegion, proteinRegionFeatures, regionFeatureNotes, proteinRegionTargets, regionColor, regionRange, regionSpans, regionsOf, regionOfFeatureId, regionTree, selectedProteinResidues, REGIONS_QUALIFIER, variableProteinFeatures, withRegions, type ProteinRegion } from "./regions.ts";
+import { carryRegions, formatRegion, isClipped, layoutRegions, nextRegionColor, parseRegion, parseRegionFeatureNote, proteinRegionFeatures, regionFeatureNotes, proteinRegionTargets, regionColor, regionRange, regionSpans, regionsOf, regionOfFeatureId, regionTree, selectedProteinResidues, REGIONS_QUALIFIER, variableProteinFeatures, withRegions, type ProteinRegion } from "./regions.ts";
 import { cloneVariants } from "./variants.ts";
 import { splitVariable } from "./variable.ts";
 import type { CloneDifference, CloneResult } from "./types.ts";
@@ -286,6 +286,17 @@ test("a region as a feature says what it is, whether predicted, and its note, a 
   assert.equal(signal.type, "sig_peptide");
   // Added as a feature in the document, it leaves out the CDS and residues.
   assert.deepEqual(regionFeatureNotes(regionsOf(f)[1]), ["Transmembrane, predicted; UniProtKB Q9UKG4 3-5", "First helix", "checked by AlphaFold"]);
+});
+
+test("what a region wrote as a feature's note is read back, from this version and older ones", () => {
+  assert.deepEqual(parseRegionFeatureNote("Transmembrane, predicted; SLC13A4, residues 3-5; UniProtKB Q9UKG4 13-33"), { kind: "Transmembrane", predicted: true, accession: "Q9UKG4", sourceStart: 13, sourceEnd: 33 });
+  // Before "predicted" was written, and with a CDS whose name has the separator in it.
+  assert.deepEqual(parseRegionFeatureNote("My kind; heavy; chain, residues 1-9"), { kind: "My kind", predicted: false, accession: "" });
+  assert.deepEqual(parseRegionFeatureNote("Signal peptide; UniProtKB P1 1-20"), { kind: "Signal peptide", predicted: false, accession: "P1", sourceStart: 1, sourceEnd: 20 });
+  assert.deepEqual(parseRegionFeatureNote("Linker"), { kind: "Linker", predicted: false, accession: "" });
+  // A note of the user's is no kind.
+  assert.equal(parseRegionFeatureNote("Binds the antigen"), null);
+  assert.equal(parseRegionFeatureNote("linker"), null);
 });
 
 test("selected bases become whole residues in their CDS's frame on either strand", () => {

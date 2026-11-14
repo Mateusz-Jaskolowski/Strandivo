@@ -287,6 +287,27 @@ export function regionFeatureNotes(r: ProteinRegion, cds?: string): string[] {
   return [what, ...(r.note ?? "").split("\n").map(l => l.trim()).filter(Boolean)];
 }
 
+export interface RegionFeatureNote {
+  kind: string;
+  predicted: boolean;
+  accession: string;
+  sourceStart?: number;
+  sourceEnd?: number;
+}
+
+/**
+ * What `regionFeatureNotes` wrote in a feature's first /note, read back; null for a note
+ * of the user's. Without a CDS, residues or entry, only a kind of `REGION_KINDS` counts,
+ * so a note that happens to be one word isn't taken for a kind of the user's own.
+ */
+export function parseRegionFeatureNote(text: string): RegionFeatureNote | null {
+  const exported = /^(.+?)(, predicted)?; (.+), residues (\d+)-(\d+)(?:; UniProtKB (\S+) (\d+)-(\d+))?$/.exec(text.trim());
+  const added = exported ? null : /^(.+?)(, predicted)?(?:; UniProtKB (\S+) (\d+)-(\d+))?$/.exec(text.trim());
+  const m = exported ? [exported[1], exported[2], exported[6], exported[7], exported[8]] : added ? [added[1], added[2], added[3], added[4], added[5]] : null;
+  if (!m || (!exported && !m[2] && !REGION_KINDS.includes(m[0]))) return null;
+  return { kind: m[0], predicted: !!m[1], accession: m[2] ?? "", ...(m[2] ? { sourceStart: Number(m[3]), sourceEnd: Number(m[4]) } : {}) };
+}
+
 /** Portable DNA annotations for an exported copy; the document keeps its attached regions. */
 export function proteinRegionFeatures(f: SeqFeature, n: number): SeqFeature[] {
   return regionsOf(f).flatMap((r, index) => {

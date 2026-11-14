@@ -141,19 +141,13 @@ export async function appJwt(clientId, pem, now = Date.now()) {
   return `${head}.${claims}.${base64url(new Uint8Array(signature))}`;
 }
 
-/** Whether the GitHub App's three secrets are set; until they all are, the old token files issues. */
-export const usesApp = env => Boolean(env.GITHUB_APP_CLIENT_ID && env.GITHUB_APP_INSTALLATION_ID && env.GITHUB_APP_PRIVATE_KEY);
-
 /**
- * A token to file one report's issue. With the App's secrets, the installation's token,
- * made for this report and narrowed to this repository's issues, so issues show the
- * App's bot as their author. Without them, the maintainer's fine-grained token
- * (GITHUB_TOKEN), whose issues show the maintainer: kept until the App is set up.
+ * A token to file one report's issue: the GitHub App installation's, made for this report
+ * and narrowed to this repository's issues, so issues show the App's bot as their author.
  */
 export async function githubToken(env, fetchFn, now = Date.now()) {
-  if (!usesApp(env)) {
-    if (!env.GITHUB_TOKEN) throw new Error("No way to reach GitHub is set up.");
-    return env.GITHUB_TOKEN;
+  if (!env.GITHUB_APP_CLIENT_ID || !env.GITHUB_APP_INSTALLATION_ID || !env.GITHUB_APP_PRIVATE_KEY) {
+    throw new Error("The GitHub App's secrets aren't all set.");
   }
   const installation = String(env.GITHUB_APP_INSTALLATION_ID).trim();
   if (!/^\d+$/.test(installation)) throw new Error("GITHUB_APP_INSTALLATION_ID isn't a number.");

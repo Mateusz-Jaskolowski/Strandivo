@@ -18,11 +18,23 @@ const report = {
   file: null
 };
 
-function service({ github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } }, mailFails = false, limited = false, env = {} } = {}) {
-  const calls = { github: [], mail: [] };
+// A GitHub App's key, as GitHub hands it out (PKCS#1), and the same key as PKCS#8.
+const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const pkcs1Pem = privateKey.export({ type: "pkcs1", format: "pem" });
+const pkcs8Pem = privateKey.export({ type: "pkcs8", format: "pem" });
+const appEnv = { GITHUB_APP_CLIENT_ID: "Iv23liExample", GITHUB_APP_INSTALLATION_ID: "12345678", GITHUB_APP_PRIVATE_KEY: pkcs1Pem };
+
+/** GitHub gives the App a token for each report (`tokens`), then files its issue (`github`). */
+function service({ github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } }, tokenStatus = 201, mailFails = false, limited = false, env = {} } = {}) {
+  const calls = { tokens: [], github: [], mail: [] };
   const deps = {
     fetch: async (url, init) => {
-      calls.github.push({ url, init, body: JSON.parse(init.body) });
+      const call = { url, init, body: JSON.parse(init.body) };
+      if (url.includes("/access_tokens")) {
+        calls.tokens.push(call);
+        return new Response(JSON.stringify(tokenStatus === 201 ? { token: "ghs_report" } : { message: "no" }), { status: tokenStatus });
+      }
+      calls.github.push(call);
       return new Response(JSON.stringify(github.body), { status: github.status });
     },
     sendMail: async (_env, raw) => {
@@ -30,7 +42,7 @@ function service({ github = { status: 201, body: { number: 42, html_url: "https:
       calls.mail.push(raw);
     }
   };
-  const fullEnv = { GITHUB_TOKEN: "t", MAINTAINER_EMAIL: "maintainer@example.org", LIMITER: { limit: async () => ({ success: !limited }) }, ...env };
+  const fullEnv = { ...appEnv, MAINTAINER_EMAIL: "maintainer@example.org", LIMITER: { limit: async () => ({ success: !limited }) }, ...env };
   const send = (body, headers = {}) =>
     handle(new Request("https://feedback.strandivo.com/report", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) }), fullEnv, deps);
   return { calls, send };
@@ -44,7 +56,7 @@ test("a report becomes an issue, and the answer is its number", async () => {
   assert.equal(res.headers.get("access-control-allow-origin"), "*");
   const [call] = calls.github;
   assert.equal(call.url, "https://api.github.com/repos/Mateusz-Jaskolowski/Strandivo/issues");
-  assert.equal(call.init.headers.authorization, "Bearer t");
+  assert.equal(call.init.headers.authorization, "Bearer ghs_report");
   assert.deepEqual(call.body.labels, ["from-app", "bug"]);
   assert.equal(call.body.title, "Map is blank");
   assert.equal(calls.mail.length, 0);
@@ -86,6 +98,7 @@ test("only a sound report is filed", async () => {
   assert.equal((await send(report, { "content-type": "text/plain" })).status, 415);
   assert.equal((await send(report, { "content-length": String(MAX_BYTES + 1) })).status, 413);
   assert.equal(calls.github.length, 0);
+  assert.equal(calls.tokens.length, 0);
   assert.equal((await service({ limited: true }).send(report)).status, 429);
   assert.equal((await service({ github: { status: 401, body: {} } }).send(report)).status, 502);
   const get = await handle(new Request("https://feedback.strandivo.com/report"), {}, {});
@@ -132,12 +145,6 @@ test("the email's subject may be in any language", () => {
   assert.ok(mail.endsWith("--B--\r\n"));
 });
 
-// A GitHub App's key, as GitHub hands it out (PKCS#1), and the same key as PKCS#8.
-const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-const pkcs1Pem = privateKey.export({ type: "pkcs1", format: "pem" });
-const pkcs8Pem = privateKey.export({ type: "pkcs8", format: "pem" });
-const appEnv = { GITHUB_APP_CLIENT_ID: "Iv23liExample", GITHUB_APP_INSTALLATION_ID: "12345678", GITHUB_APP_PRIVATE_KEY: pkcs1Pem };
-
 const part = s => JSON.parse(Buffer.from(s, "base64url").toString());
 /** `now`, when the token was made at a known time; otherwise just now. */
 function checkJwt(jwt, now = null) {
@@ -163,56 +170,31 @@ test("the App's key works as GitHub gives it, or as PKCS#8", async () => {
   assert.throws(() => pkcs8("not a key"), /PEM/);
 });
 
-/** GitHub with an App: a token for the installation, then the issue. */
-function appService({ tokenStatus = 201 } = {}) {
-  const calls = [];
-  const deps = {
-    fetch: async (url, init) => {
-      calls.push({ url, init, body: JSON.parse(init.body) });
-      if (url.includes("/access_tokens")) return new Response(JSON.stringify(tokenStatus === 201 ? { token: "ghs_report" } : { message: "no" }), { status: tokenStatus });
-      return new Response(JSON.stringify({ number: 43, html_url: "https://github.com/o/r/issues/43" }), { status: 201 });
-    },
-    sendMail: async () => {}
-  };
-  const send = (env, body = report) =>
-    handle(new Request("https://feedback.strandivo.com/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { MAINTAINER_EMAIL: "m@example.org", ...env }, deps);
-  return { calls, send };
-}
-
-test("with the App set up, each report gets a token that can only write this repository's issues", async () => {
-  const { calls, send } = appService();
-  const res = await send({ ...appEnv, GITHUB_TOKEN: "old" });
-  assert.deepEqual(await res.json(), { number: 43, emailed: true });
-  const [token, issue] = calls;
+test("each report gets a token that can only write this repository's issues", async () => {
+  const { calls, send } = service();
+  assert.equal((await send(report)).status, 200);
+  const [token] = calls.tokens;
   assert.equal(token.url, "https://api.github.com/app/installations/12345678/access_tokens");
   assert.deepEqual(token.body, { repositories: ["Strandivo"], permissions: { issues: "write" } });
   checkJwt(token.init.headers.authorization.replace(/^Bearer /, ""));
-  // The issue goes in with that token, not the old one.
-  assert.equal(issue.url, "https://api.github.com/repos/Mateusz-Jaskolowski/Strandivo/issues");
-  assert.equal(issue.init.headers.authorization, "Bearer ghs_report");
-  assert.deepEqual(issue.body.labels, ["from-app", "bug"]);
+  // The issue goes in with that token, so the App's bot is its author.
+  assert.equal(calls.github[0].init.headers.authorization, "Bearer ghs_report");
   // A token for each report: none is kept between them.
-  await send(appEnv);
-  assert.equal(calls.filter(c => c.url.includes("/access_tokens")).length, 2);
+  await send(report);
+  assert.equal(calls.tokens.length, 2);
 });
 
-test("until all three of the App's secrets are set, the old token files issues", async () => {
-  for (const missing of ["GITHUB_APP_CLIENT_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY"]) {
-    const { calls, send } = appService();
-    assert.equal((await send({ ...appEnv, [missing]: "", GITHUB_TOKEN: "old" })).status, 200);
-    assert.equal(calls.length, 1, missing);
-    assert.equal(calls[0].init.headers.authorization, "Bearer old");
+test("without a token from GitHub, nothing is filed and the app hears so", async () => {
+  const refused = service({ tokenStatus: 401 });
+  assert.equal((await refused.send(report)).status, 502);
+  assert.equal(refused.calls.tokens.length, 1);
+  assert.equal(refused.calls.github.length, 0);
+  // A secret missing or wrong asks for nothing, and a token from before the App isn't used.
+  const envs = [{ GITHUB_APP_CLIENT_ID: "" }, { GITHUB_APP_INSTALLATION_ID: "", GITHUB_TOKEN: "old" }, { GITHUB_APP_PRIVATE_KEY: "" }, { GITHUB_APP_INSTALLATION_ID: "../repos" }, { GITHUB_APP_PRIVATE_KEY: "nonsense" }];
+  for (const env of envs) {
+    const s = service({ env });
+    assert.equal((await s.send(report)).status, 502, JSON.stringify(env));
+    assert.equal(s.calls.tokens.length + s.calls.github.length, 0, JSON.stringify(env));
   }
-  await assert.rejects(githubToken({}, async () => new Response("{}")), /No way to reach GitHub/);
-});
-
-test("if GitHub gives no token, nothing is filed and the app hears so", async () => {
-  const refused = appService({ tokenStatus: 401 });
-  assert.equal((await refused.send(appEnv)).status, 502);
-  assert.equal(refused.calls.length, 1);
-  for (const env of [{ ...appEnv, GITHUB_APP_INSTALLATION_ID: "../repos" }, { ...appEnv, GITHUB_APP_PRIVATE_KEY: "nonsense" }]) {
-    const s = appService();
-    assert.equal((await s.send(env)).status, 502);
-    assert.equal(s.calls.length, 0);
-  }
+  await assert.rejects(githubToken({}, async () => new Response("{}")), /App's secrets/);
 });

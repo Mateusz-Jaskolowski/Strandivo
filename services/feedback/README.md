@@ -55,8 +55,9 @@ report with a field it doesn't know.
    Then Create GitHub App.
 2. **Note its Client ID**, at the top of the App's General page (it starts `Iv`).
 3. **Make a private key**: further down the same page, Private keys → Generate a private
-   key. GitHub downloads a `.pem` file. Keep it in your password manager; it doesn't
-   expire, and GitHub keeps no copy.
+   key. GitHub downloads a `.pem` file and keeps no copy. You needn't keep one either:
+   to replace a key, lost or not, generate another, set it as in step 5, then delete the
+   old one here.
 4. **Install it on the repository**: Install App (in the App's menu on the left) → your
    account → Install → **Only select repositories** → `Strandivo` → Install. The address
    you land on ends in the installation's ID, a number:
@@ -70,31 +71,10 @@ report with a field it doesn't know.
    ```
 
    The first two ask for the value; the key is read from the file as GitHub gave it, as
-   a prompt would take only its first line. Then delete the downloaded file. The Worker
-   uses the App once all three are set, and the token below until then, so reports
-   keep working while you set them one by one.
+   a prompt would take only its first line. Then delete the downloaded file. Until all
+   three are set, a report fails and the app offers to copy or email it instead.
 6. **Check it**: send a report from the app (below) and see that the issue's author is
    the App's bot, then close the issue.
-
-### Until the App is set up: the old token
-
-Before the App, issues were filed with a fine-grained token of the maintainer's, so they
-showed the maintainer as their author. The Worker still uses it while any of the App's
-three secrets is missing. Once the App works:
-
-```sh
-npx wrangler@4 secret delete GITHUB_TOKEN --config services/feedback/wrangler.toml
-```
-
-and delete the token on GitHub (Settings → Developer settings → Fine-grained tokens), so
-nothing is left that writes issues as you. A later change takes this fallback out.
-
-To make such a token again, should the App ever fail: Fine-grained tokens → Generate new
-token. Resource owner: you. Repository access: only `Mateusz-Jaskolowski/Strandivo`.
-Permissions: **Issues: Read and write**, nothing else. Pick an expiry, as reports fail
-when it expires, and set it with
-`npx wrangler@4 secret put GITHUB_TOKEN --config services/feedback/wrangler.toml`; it is
-used only while the App's secrets are missing.
 
 ## Checking it
 

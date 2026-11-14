@@ -29,7 +29,15 @@ with Unreleased's notes and leaves them where they are.
 - **A tidier inspector**: click a section's heading to fold or unfold it, and Strandivo
   remembers it for every file. A CDS's translation, its qualifiers, what lies inside a
   feature and the list of a protein's regions start folded, so the inspector is shorter;
-  Copy and Expand… stay beside their headings.
+  links such as Copy stay beside their headings.
+- **Protein mass and extinction coefficient**: select a CDS or an ORF and the inspector
+  shows its protein's mass, its extinction coefficient at 280 nm and the A280 of 1 mg/mL,
+  worked out as ExPASy ProtParam does. A protein with two or more cysteines gets both
+  values, reduced and with disulfides, and a selected protein region shows its own, as for
+  a domain expressed by itself.
+- **Protein details**: Details… in the inspector, or Protein details… in the right-click
+  menu, opens a protein on its own, with its properties, its regions drawn as a figure and
+  its sequence numbered in lines of 60. It replaces Expand….
 - **Thanks to JIB** for testing Strandivo and sending us ideas from the app, which is why
   reports can now carry a name to credit.
 

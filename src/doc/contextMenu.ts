@@ -20,6 +20,7 @@ import type { DocContext, Tab } from "./context.ts";
 import type { Focus } from "./store.ts";
 import { openMutagenesisDialog } from "../views/mutagenesisDialog.ts";
 import { openPcrDialog } from "../views/primerDialogs.ts";
+import { openProteinDialog } from "../views/proteinDialog.ts";
 
 export interface ContextMenuHost {
   ctx: DocContext;
@@ -157,6 +158,10 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       return;
     case "copy-protein":
       if (feature) { const translated = protein(feature, d.sequence); host.copy(region ? translated.slice(region.start - 1, region.end) : translated, "protein sequence"); }
+      return;
+    case "protein-details":
+      if (orf) openProteinDialog(ctx, orfFeature(orf), "ORF");
+      else if (annotation) openProteinDialog(ctx, annotation);
       return;
     case "copy-primer":
       if (primer) host.copy(primer.bases, primer.name);

@@ -12,8 +12,12 @@ import { slowToMatch } from "../lib/versionMatch.ts";
 import { matchChoice } from "./versionMatchChoice.ts";
 import { fmt } from "../ui/format.ts";
 
-/** Amino-acid coordinates belong to this CDS, including on reverse and spliced sequences. */
-export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: number, selection = ctx.store.selection.range) {
+/**
+ * Amino-acid coordinates belong to this CDS, including on reverse and spliced sequences.
+ * `onClose` runs however the dialog closes (saved or not), so the dialog it was opened
+ * from can come back.
+ */
+export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: number, selection = ctx.store.selection.range, onClose?: () => void) {
   const d = ctx.store.data;
   const regions = regionsOf(f).map(r => ({ ...r, id: r.id ?? newId("r") }));
   const old = index === undefined ? undefined : regions[index];
@@ -22,7 +26,7 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
   const residues = selection ? selectedProteinResidues(f, selection, d.sequence) : null;
   const start = old?.start ?? residues?.start ?? 1;
   const end = old?.end ?? residues?.end ?? length;
-  const dlg = openDialog({ title: old ? "Edit protein region" : "Add protein region", note: `Amino-acid positions in ${f.name} (1–${length.toLocaleString()}), counted from the start of its CDS.`, width: 520 });
+  const dlg = openDialog({ title: old ? "Edit protein region" : "Add protein region", note: `Amino-acid positions in ${f.name} (1–${length.toLocaleString()}), counted from the start of its CDS.`, width: 520, onClose });
   const input = (label: string, value: string, type = "text") => h("input", { class: "sv-input", type, value, "aria-label": label, ...(type === "text" ? { autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } : {}), ...(type === "number" ? { min: "1", max: String(length), step: "1" } : {}) }) as HTMLInputElement;
   const name = input("Region name", old?.name ?? "");
   name.placeholder = "Domain, linker, CDR1…";

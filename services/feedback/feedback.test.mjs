@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { appJwt, DAILY_REPORTS, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, pkcs8 } from "./src/index.mjs";
+import { appJwt, DAILY_REPORTS, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, networkKey, pkcs8 } from "./src/index.mjs";
 
 /** The text of an email the Worker sent with one part, decoded. */
 const mailText = raw => Buffer.from(raw.split("\r\n\r\n")[1], "base64").toString();
@@ -39,9 +39,12 @@ function counts() {
   };
 }
 
-/** GitHub gives the App a token for each report (`tokens`), then files its issue (`github`). */
+/**
+ * GitHub gives the App a token for each report (`tokens`), then files its issue (`github`).
+ * The per-network limit records what it was asked about (`limited`).
+ */
 function service({ github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } }, tokenStatus = 201, mailFails = false, limited = false, env = {}, now } = {}) {
-  const calls = { tokens: [], github: [], mail: [] };
+  const calls = { tokens: [], github: [], mail: [], limited: [] };
   const deps = {
     now,
     fetch: async (url, init) => {
@@ -58,7 +61,8 @@ function service({ github = { status: 201, body: { number: 42, html_url: "https:
       calls.mail.push(raw);
     }
   };
-  const fullEnv = { ...appEnv, MAINTAINER_EMAIL: "maintainer@example.org", LIMITER: { limit: async () => ({ success: !limited }) }, ...env };
+  const limiter = { limit: async ({ key }) => (calls.limited.push(key), { success: !limited }) };
+  const fullEnv = { ...appEnv, MAINTAINER_EMAIL: "maintainer@example.org", LIMITER: limiter, ...env };
   const send = (body, headers = {}) =>
     handle(new Request("https://feedback.strandivo.com/report", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) }), fullEnv, deps);
   return { calls, send };
@@ -232,6 +236,21 @@ test("without a token from GitHub, nothing is filed and the app hears so", async
     assert.equal(s.calls.tokens.length + s.calls.github.length, 0, JSON.stringify(env));
   }
   await assert.rejects(githubToken({}, async () => new Response("{}")), /App's secrets/);
+});
+
+test("one network is an IPv4 address, or the first 64 bits of an IPv6 one", async () => {
+  assert.equal(networkKey("192.0.2.7"), "192.0.2.7");
+  assert.equal(networkKey(null), "unknown");
+  // Every address in a /64 is one network, however it is written.
+  for (const ip of ["2001:db8:1:2:3:4:5:6", "2001:0DB8:0001:0002::9", "2001:db8:1:2::", "2001:db8:1:2::192.0.2.1"]) assert.equal(networkKey(ip), "2001:db8:1:2::/64", ip);
+  assert.equal(networkKey("2001:db8:1:3::1"), "2001:db8:1:3::/64");
+  assert.equal(networkKey("2001:db8::1"), "2001:db8:0:0::/64");
+  assert.equal(networkKey("::1"), "0:0:0:0::/64");
+  assert.equal(networkKey("::ffff:192.0.2.1"), "0:0:0:0::/64");
+  const { calls, send } = service();
+  await send(report, { "cf-connecting-ip": "2001:db8:1:2:aaaa:bbbb:cccc:dddd" });
+  await send(report, { "cf-connecting-ip": "203.0.113.5" });
+  assert.deepEqual(calls.limited, ["2001:db8:1:2::/64", "203.0.113.5"]);
 });
 
 const day1 = new Date("2026-11-14T23:59:00Z");

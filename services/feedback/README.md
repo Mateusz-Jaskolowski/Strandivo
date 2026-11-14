@@ -17,7 +17,8 @@ flood, as an app can't keep a secret and anyone can send a report:
   away until midnight and emails you once, with a link to the day's issues.
 - When GitHub turns a report down, the reporter is told it wasn't taken, and you get an
   email with GitHub's reason and nothing from the report: the day's first only.
-- Cloudflare's rate limiter holds each network to 5 reports a minute.
+- Cloudflare's rate limiter holds each network to 5 reports a minute, an IPv6 network
+  being the first 64 bits of the address.
 
 Issues are filed by a GitHub App, so they show its bot as their author rather than the
 maintainer: for each report the Worker signs a token request with the App's private key

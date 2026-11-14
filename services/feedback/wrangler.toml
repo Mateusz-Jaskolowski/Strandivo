@@ -16,7 +16,8 @@ routes = [{ pattern = "feedback.strandivo.com", custom_domain = true }]
 [observability]
 enabled = false
 
-# How often one network may send: 5 a minute, counted by Cloudflare in each location.
+# How often one network may send: 5 a minute, counted by Cloudflare in each location. A
+# network is an IPv4 address, or the first 64 bits of an IPv6 one (networkKey).
 [[ratelimits]]
 name = "LIMITER"
 namespace_id = "2101"

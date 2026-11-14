@@ -240,6 +240,23 @@ async function createIssue(r, env, fetchFn) {
 
 // ---------- how much is sent ----------
 
+/**
+ * What the per-network limit counts a report against: an IPv4 address as it is, an IPv6
+ * one by its first 64 bits. A home or a server is given a whole /64, so it could
+ * otherwise send from a new address each time.
+ */
+export function networkKey(ip) {
+  if (!ip) return "unknown";
+  if (!ip.includes(":")) return ip;
+  // An IPv4 address written at the end ("::ffff:192.0.2.1") takes two groups.
+  const groups = s => (s ? s.split(":").flatMap(g => (g.includes(".") ? ["0", "0"] : [g])) : []);
+  const [head, tail] = ip.toLowerCase().split("::");
+  const front = groups(head);
+  const back = tail === undefined ? [] : groups(tail);
+  const all = [...front, ...Array(Math.max(0, 8 - front.length - back.length)).fill("0"), ...back];
+  return `${all.slice(0, 4).map(g => parseInt(g, 16).toString(16)).join(":")}::/64`;
+}
+
 /** Adds one to the day's reports or failures (schema.sql) and gives the new count as `n`. */
 export const COUNT_SQL = {
   reports: "INSERT INTO days (day, reports) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET reports = reports + 1 RETURNING reports AS n",
@@ -289,7 +306,7 @@ export async function handle(request, env, deps = {}) {
 
   // Per network, for a minute, by Cloudflare: we keep no addresses ourselves.
   if (env.LIMITER) {
-    const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "unknown" });
+    const { success } = await env.LIMITER.limit({ key: networkKey(request.headers.get("cf-connecting-ip")) });
     if (!success) return answer(429, { error: "Too many reports from this network just now." });
   }
 

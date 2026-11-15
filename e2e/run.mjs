@@ -367,8 +367,8 @@ async function main() {
     // The name in the middle of the map is the sequence's, renamed in place; the file keeps its name.
     const nameBefore = await s.exec(`${doc} return s.data.name;`);
     const renameField = "document.activeElement?.classList.contains('sv-map-name-edit')";
-    // The name's own text, without its tooltip (a <title> inside it).
-    const mapName = "document.querySelector('.sv-map-name')?.firstChild?.textContent";
+    // The name's own text, line by line, without its tooltip (a <title> inside it).
+    const mapName = "Array.from(document.querySelectorAll('.sv-map-name tspan'), t => t.textContent).join(' ')";
     await s.doubleClick(".sv-map-name");
     const renameOpened = await s.waitFor(renameField, 3000) && await s.exec("const i = document.activeElement; return i.value === arguments[0] && i.selectionStart === 0 && i.selectionEnd === i.value.length;", nameBefore);
     check("Double-clicking the map's name opens a field with the name selected", renameOpened);
@@ -389,6 +389,17 @@ async function main() {
     await s.press(ESCAPE);
     await s.exec(`${doc} s.undo();`);
     check("Undo brings the old name back", await s.exec(`${doc} return s.data.name === arguments[0] && ${mapName} === arguments[0];`, nameBefore));
+    // A long name wraps inside the ruler's numbers instead of running across them.
+    await s.exec(`${doc} s.apply({ ...s.data, name: 'testing how it works and seeing how the long text works' }, 'Rename');`);
+    await sleep(300);
+    const wrapped = await s.exec(`
+      const lines = Array.from(document.querySelectorAll('.sv-map-name tspan'));
+      const ticks = Array.from(document.querySelectorAll('.sv-map-ticklabel text'), t => t.getBoundingClientRect());
+      const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      return { lines: lines.map(t => t.textContent), clash: lines.some(t => ticks.some(b => hit(t.getBoundingClientRect(), b))) };`);
+    check("A long name wraps inside the ruler's numbers", wrapped.lines.length > 1 && !wrapped.clash, JSON.stringify(wrapped));
+    await s.shot("01-long-name");
+    await s.exec(`${doc} s.undo();`);
 
     const lacId = await s.exec(addTouching);
     await sleep(400);

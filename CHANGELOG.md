@@ -16,6 +16,12 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+Strandivo now follows your computer into dark mode, or stays light or dark as you choose
+in Settings. Primers can show NEB's Tm and annealing temperature for your polymerase, the
+map can draw GC content, and double-clicking the map's name renames the plasmid. Proteins
+show their mass and extinction coefficient, and features in a CDS can become its regions
+in one step.
+
 - **Rename a plasmid on its map**: double-click the name in the middle of the map, type a
   new one and press Enter, or Esc to keep the old one. This renames the sequence, not its
   file. Right-click the name, or empty space around the map, for Rename sequence…, Select

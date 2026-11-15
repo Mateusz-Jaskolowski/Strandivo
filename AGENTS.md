@@ -381,9 +381,14 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (`src/main.ts`), so `meltingTemp` without arguments follows it; tests pass settings.
 - **NEB polymerases** (Nov 2026): the "neb" Tm method gives NEB's Tm Calculator's numbers
   for a polymerase chosen in Settings (`src/lib/polymerases.ts`), as people compare with
-  it and primer3's conditions come out 3–8 °C below its Q5. Only then does the PCR product
-  dialog show an annealing temperature, as NEB's calculator has a rule for each
-  polymerase; other methods have none to follow. The polymerases and rules started from
+  it and primer3's conditions come out 3–8 °C below its Q5. The PCR product dialog has a
+  polymerase menu of its own, starting as Settings have it (Q5 under another Tm method),
+  and always works its Tms, annealing temperature and cycling program in NEB's way for the
+  one picked, as only NEB's calculator has a rule for each polymerase to follow. It says
+  when that differs from Settings and offers to make it the Tm method for the whole app
+  (`withNebPolymerase`). The program (`src/lib/pcrProgram.ts`) follows NEB's own protocol
+  for the polymerase (`src/lib/pcrProtocols.ts`, tested): a polymerase whose protocol has
+  not been read has none, and the dialog says so rather than guess. The polymerases and rules started from
   polymerase-tm (MIT), whose numbers were in part wrong, so every salt and rule was fitted
   to NEB's own Tm API instead and `src/lib/polymerases.test.ts` keeps its answers: change
   them only from new answers of that API. The app never asks NEB: Tm is worked out here,

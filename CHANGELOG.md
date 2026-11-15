@@ -16,6 +16,14 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
+  genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
+  it, with the annealing temperature and an extension time worked out from the product's
+  length, ready to copy. It covers Q5, Phusion, OneTaq and Taq so far. The dialog's Tms
+  follow the polymerase you pick there, and it offers to make it the Tm for the whole
+  app. When 5′ tails raise how well the primers anneal, you can use two stages of
+  annealing.
+
 ## 0.5.0
 
 Strandivo now follows your computer into dark mode, or stays light or dark as you choose

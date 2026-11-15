@@ -669,6 +669,14 @@ async function main() {
     const nebPcr = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
     check("With NEB's Q5 as the Tm method, a PCR product says where to anneal", /Anneal at\s*\d+ °C · Q5 High-Fidelity: lower Tm \+ 1 °C, at most 72 °C/.test(nebPcr), nebPcr.slice(0, 300));
     await s.shot("04-pcr-neb");
+    check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && /\d+ cycles/.test(nebPcr) && /Final extension/.test(nebPcr), nebPcr.slice(-400));
+    // Another polymerase picked in the dialog gets its own Tms and program, and offers to become the Tm method.
+    await choose("Polymerase", "OneTaq, Standard buffer");
+    await s.waitFor("/Tms here are for OneTaq/.test(document.querySelector('.sv-dialog')?.textContent)", 5000);
+    const oneTaq = await s.exec("return document.querySelector('.sv-dialog').textContent");
+    check("Picking another polymerase in the dialog offers it for all Tms", /Tms here are for OneTaq, Standard buffer; the rest of the app uses Q5 High-Fidelity/.test(oneTaq) && /Use for all Tms/.test(oneTaq), oneTaq.slice(0, 500));
+    check("Its program is OneTaq's, from 94 °C", /94 °C/.test(oneTaq) && /OneTaq, Standard buffer: lower Tm − 5 °C, at most 68 °C/.test(oneTaq), oneTaq.slice(-500));
+    await s.shot("04-pcr-onetaq");
     await s.press(ESCAPE);
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");

@@ -43,6 +43,7 @@ import {
   type SeqPrimer
 } from "../lib/seqdata.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
+import { ReplaceCard } from "./replaceCard.ts";
 
 const FONT_PX = 13;
 const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
@@ -163,6 +164,8 @@ export class SequenceView {
   private stale = true;
   private ctx: DocContext;
   private lastWidth = 0;
+  /** Open while bases typed or pasted over a selection wait for Replace. */
+  private card: ReplaceCard | null = null;
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
@@ -211,6 +214,8 @@ export class SequenceView {
       if (w && Math.abs(w - this.lastWidth) > 2) this.invalidate();
     }).observe(this.scroller);
     ctx.store.subscribe(c => {
+      // Anything else done meanwhile, a click elsewhere above all, leaves the bases as they were.
+      if (this.card && (c.data || c.selection)) this.cancelCard(c.data ? "changed" : "moved");
       if (c.data) this.invalidate();
       else if (c.selection) {
         this.renderSelection();
@@ -224,6 +229,7 @@ export class SequenceView {
   }
 
   setVisible(v: boolean) {
+    if (!v) this.cancelCard("moved");
     this.visible = v;
     if (v && (this.stale || this.scroller.clientWidth !== this.lastWidth)) this.render();
   }
@@ -280,6 +286,7 @@ export class SequenceView {
     this.renderStrip();
     this.renderVisible();
     this.renderSelection();
+    this.placeCard();
   }
 
   /** The first base of the row at the top of the view, and how far down that row the view starts. */
@@ -1058,6 +1065,7 @@ export class SequenceView {
     });
     area.addEventListener("keydown", e => {
       const mod = e.metaKey || e.ctrlKey;
+      if (this.card && this.cardKey(this.card, e, mod)) return;
       const sel = store.selection;
       const n = store.length;
       const caret = sel.caret;
@@ -1146,7 +1154,14 @@ export class SequenceView {
     // Anything that slips through as text input is undone; the field mirrors the selection.
     area.addEventListener("input", () => this.syncClipboard());
     area.addEventListener("focus", () => this.el.classList.add("sv-seq-focused"));
-    area.addEventListener("blur", () => this.el.classList.remove("sv-seq-focused"));
+    area.addEventListener("blur", () => {
+      this.el.classList.remove("sv-seq-focused");
+      // Another app or window taking the keyboard leaves the card waiting; a click on
+      // another part of this one is a click elsewhere.
+      setTimeout(() => {
+        if (this.card && document.hasFocus() && document.activeElement !== area) this.cancelCard("moved");
+      });
+    });
     area.addEventListener("copy", e => {
       if (!selectedRanges(store.selection).length) return;
       e.preventDefault();
@@ -1182,17 +1197,129 @@ export class SequenceView {
   private typeBases(bases: string, label = "Typing") {
     const store = this.ctx.store;
     const { range, caret } = store.selection;
+    if (this.card) {
+      this.card.add(bases, label === "Paste");
+      this.placeCard();
+      return;
+    }
     if (store.selection.ranges) {
       toast("Select one continuous stretch to replace bases.", "info");
       return;
     }
     if (range) {
-      const r = replaceRange(store.data, range, bases);
-      store.apply(r.data, label, { caret: r.caret }, label === "Typing" ? "typing" : undefined);
-    } else {
-      store.apply(insertBases(store.data, caret, bases), label, { caret: caret + bases.length }, label === "Typing" ? "typing" : undefined);
+      // Over a selection, the bases wait in a card for Replace.
+      this.openCard(range, bases, label === "Paste");
+      return;
     }
+    store.apply(insertBases(store.data, caret, bases), label, { caret: caret + bases.length }, label === "Typing" ? "typing" : undefined);
     this.revealCaret();
+  }
+
+  // ---------- the replace card ----------
+
+  private openCard(range: Range, bases: string, pasted: boolean) {
+    const o = this.ctx.options;
+    const caseOf = (t: string) => (o.caseMode === "uppercase" ? t.toUpperCase() : o.caseMode === "lowercase" ? t.toLowerCase() : t);
+    const card = new ReplaceCard(this.ctx.store.data, range, caseOf, { replace: () => this.replaceFrom(card), cancel: () => this.closeCard() });
+    this.card = card;
+    card.add(bases, pasted);
+    this.canvas.appendChild(card.el);
+    this.placeCard();
+    card.el.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Above the selection's first row, or below it when there is no room above. */
+  private placeCard() {
+    const card = this.card;
+    if (!card || !this.rows.length) return;
+    const n = this.ctx.store.length;
+    const first = pieces(card.range, n)[0];
+    const i = Math.min(this.rows.length - 1, Math.floor(first.start / this.bpr));
+    const row = this.rows[i];
+    const last = Math.min(first.end, row.end);
+    const x = GUTTER + 12 + ((first.start + last + 1) / 2 - row.start) * this.chPx;
+    const half = card.el.offsetWidth / 2;
+    const left = Math.max(half + 4, Math.min(this.canvas.clientWidth - half - 4, x));
+    const strands = this.ctx.options.complement ? row.yBot + 18 - row.yTop : 18;
+    const above = this.offsets[i] + row.yTop - 2;
+    const below = above + strands + 4;
+    const room = above - card.el.offsetHeight - 8 >= 0;
+    card.el.classList.toggle("sv-replace-below", !room);
+    card.el.style.left = `${left}px`;
+    card.el.style.top = `${room ? above : below}px`;
+    card.el.style.setProperty("--arrow", `${x - left}px`);
+  }
+
+  private closeCard() {
+    this.card?.el.remove();
+    this.card = null;
+    this.focus();
+  }
+
+  /** Closed by anything but Esc: says so, offering to replace all the same while nothing else changed. */
+  private cancelCard(why: "moved" | "changed") {
+    const card = this.card;
+    if (!card) return;
+    this.card = null;
+    card.el.remove();
+    if (!card.bases) return;
+    const where = fmtRange(card.range.start + 1, card.range.end + 1);
+    if (why === "changed") {
+      toast(`Didn't replace ${where}, as the sequence changed.`, "info", { key: "replace" });
+      return;
+    }
+    const what = card.bases.length > 12 ? `${fmt(card.bases.length)} bases` : card.bases;
+    toast(`Didn't replace ${where} with ${what}.`, "info", { key: "replace", action: { label: "Replace", run: () => this.replaceFrom(card) } });
+  }
+
+  private replaceFrom(card: ReplaceCard) {
+    const store = this.ctx.store;
+    if (this.card === card) this.closeCard();
+    if (!card.bases) return;
+    if (store.data !== card.data) {
+      toast("The sequence has changed since, so those bases weren't replaced.", "info");
+      return;
+    }
+    const r = replaceRange(card.data, card.range, card.bases);
+    store.apply(r.data, "Replace", { caret: r.caret });
+    this.revealCaret();
+  }
+
+  /** Keys while the card is open: true for those it takes. */
+  private cardKey(card: ReplaceCard, e: KeyboardEvent, mod: boolean): boolean {
+    if (e.key === "Enter" && !mod && !e.altKey) {
+      e.preventDefault();
+      this.replaceFrom(card);
+      return true;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.closeCard();
+      return true;
+    }
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      if (e.key === "Backspace") {
+        card.back();
+        this.placeCard();
+      }
+      return true;
+    }
+    // Undo takes back the card, not an edit before it.
+    if (mod && !e.altKey && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
+      e.preventDefault();
+      this.closeCard();
+      return true;
+    }
+    if (e.key.length === 1 && !mod && !e.altKey) {
+      e.preventDefault();
+      if (DNA_CHARS.test(e.key)) {
+        card.add(e.key.toUpperCase(), false);
+        this.placeCard();
+      } else if (e.key !== " ") toast(`“${e.key}” isn't a DNA base. Type A, C, G, T or an IUPAC code like N.`, "info", 2200);
+      return true;
+    }
+    return false;
   }
 
   deleteSelection(label = "Delete") {

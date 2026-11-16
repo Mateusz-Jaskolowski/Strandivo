@@ -35,6 +35,11 @@ with Unreleased's notes and leaves them where they are.
   later region three residues off), and replacing bases no longer trims a feature, primer
   or region that starts or ends there. Replace a whole region, like a CDR, and the region
   keeps the new bases.
+- **See a replacement before it happens**: with bases selected, typing or pasting opens a
+  small card above them with the old and new bases, how many for how many (green when they
+  match), the change to the protein, like I15A, and which regions and features take the
+  new bases. Press Enter to replace them or Esc to keep the old ones. Clicking elsewhere
+  keeps them too, and the message that says so can still replace them.
 
 ## 0.5.0
 

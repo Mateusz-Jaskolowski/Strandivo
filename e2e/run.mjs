@@ -493,6 +493,55 @@ async function main() {
     await sleep(400);
     const redone = (await state()).len;
     check("Ctrl+Y redoes it", redone === n0 + 3, `${undone} → ${n0} → ${redone} bp`);
+    // --- Typing over selected bases: a card asks first, and nothing changes until Replace ---
+    const over = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR');
+      const at = Math.floor((f.start + f.end) / 2);
+      s.select({ range: { start: at, end: at + 2 }, caret: at + 3, anchor: at }, 'e2e');
+      document.querySelector('.sv-clipboard').focus();
+      return { at, was: s.data.sequence.slice(at, at + 3).toUpperCase(), len: s.data.sequence.length };`);
+    const reselect = `${doc} s.select({ range: { start: ${over.at}, end: ${over.at + 2} }, caret: ${over.at + 3}, anchor: ${over.at} }, 'e2e'); document.querySelector('.sv-clipboard').focus();`;
+    const swap = [...over.was].map(c => ({ A: "T", T: "A", G: "C", C: "G" })[c] ?? "A").join("");
+    const card = () => s.exec(`${doc} const c = document.querySelector('.sv-replace');
+      return { open: !!c, text: c?.textContent ?? '', len: s.data.sequence.length, bases: s.data.sequence.slice(${over.at}, ${over.at} + 3).toUpperCase() };`);
+    await s.press(swap[0]);
+    await sleep(200);
+    const one = await card();
+    check("Typing over selected bases opens a card and changes nothing yet", one.open && /1 of 3 bases/.test(one.text) && one.len === over.len && one.bases === over.was, JSON.stringify(one));
+    await s.press(swap.slice(1));
+    await sleep(200);
+    const three = await card();
+    check("The card counts the bases and names the protein change", /3 bases for 3 · same length/.test(three.text) && /AmpR · /.test(three.text), three.text);
+    await s.shot("03-replace-card");
+    await s.press(ENTER);
+    await sleep(300);
+    const replaced = await card();
+    check("Enter replaces them in one step", !replaced.open && replaced.bases === swap && replaced.len === over.len, JSON.stringify(replaced));
+    await s.exec(`${doc} s.undo();`);
+    check("One undo brings the old bases back", (await card()).bases === over.was);
+    // A click elsewhere cancels, and the message can still replace them.
+    await s.exec(reselect);
+    await s.press("GG");
+    await sleep(200);
+    const selRow = await s.exec("return document.querySelector('.sv-sel-band')?.closest('.sv-row')?.dataset.row");
+    await s.click(`.sv-row[data-row="${selRow}"] .sv-row-track`);
+    await sleep(300);
+    const away = await card();
+    check("A click elsewhere closes the card and keeps the bases", !away.open && away.bases === over.was && away.len === over.len, JSON.stringify(away));
+    check("It says so, with Replace", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /Didn't replace/.test(t.textContent) && t.querySelector('.ps-toast-action'))", 2000));
+    await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Replace']", "xpath");
+    await sleep(300);
+    const late = await card();
+    check("Replace in the message replaces them after all", late.len === over.len - 1, `${over.len} → ${late.len} bp`);
+    await s.exec(`${doc} s.undo();`);
+    // A paste over a selection waits in the card too, and Esc keeps the bases.
+    await s.exec(`${reselect} window.__strandivo.paste('ACGTA');`);
+    await sleep(200);
+    const pasted = await card();
+    check("Pasting over selected bases waits in the card", pasted.open && /5 bases for 3/.test(pasted.text) && pasted.len === over.len, pasted.text);
+    await s.press(ESCAPE);
+    await sleep(200);
+    const kept = await card();
+    check("Esc closes it and keeps the bases", !kept.open && kept.bases === over.was && kept.len === over.len, JSON.stringify(kept));
     // --- Pasting what a database copies: a FASTA header, and text that isn't a sequence ---
     const pasteLen = async (text) =>
       s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');

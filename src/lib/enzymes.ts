@@ -358,6 +358,86 @@ export function enzymeSuppliers(name: string): string[] {
   return [...(known(name)?.suppliers ?? "")].map(code => SUPPLIERS[code] ?? code);
 }
 
+/**
+ * Each cut as boundaries from the site's first base, the top strand's then the bottom
+ * strand's: the one searched for and, for an enzyme that cuts both sides, the one before
+ * its site, from REBASE's (m/n) in front ((10/12)CGA… cuts 10 and 12 bases before).
+ */
+function cutsOf(e: Enzyme): [number, number][] {
+  const before = e.bothSides ? /^\((-?\d+)\/(-?\d+)\)/.exec(e.notation) : null;
+  const after: [number, number] = [e.topSnipOffset, e.bottomSnipOffset];
+  return before ? [[-Number(before[1]), -Number(before[2])], after] : [after];
+}
+
+const reverseComplement = (site: string) => [...site].reverse().map(c => COMPLEMENT[c]).join("");
+
+/** An enzyme's site and cuts read along either strand, as keys, so two enzymes compare whichever way REBASE wrote them. */
+function readings(e: Enzyme): { site: string; cuts: string }[] {
+  const n = e.site.length;
+  const key = (cuts: [number, number][]) => cuts.map(([top, bottom]) => `${top}/${bottom}`).sort().join(" ");
+  const cuts = cutsOf(e);
+  return [
+    { site: e.site, cuts: key(cuts) },
+    { site: reverseComplement(e.site), cuts: key(cuts.map(([top, bottom]) => [n - bottom, n - top])) }
+  ];
+}
+
+/**
+ * Other enzymes on sale with the same site: isoschizomers cut it the same way, so they
+ * leave the same ends; neoschizomers cut it elsewhere (Acc65I and KpnI).
+ */
+export function enzymeRelatives(name: string): { isoschizomers: string[]; neoschizomers: string[] } {
+  const out = { isoschizomers: [] as string[], neoschizomers: [] as string[] };
+  const e = known(name);
+  if (!e) return out;
+  const [own] = readings(e);
+  for (const other of ENZYMES.values()) {
+    if (other === e) continue;
+    const same = readings(other).filter(r => r.site === own.site);
+    if (same.length) (same.some(r => r.cuts === own.cuts) ? out.isoschizomers : out.neoschizomers).push(other.name);
+  }
+  out.isoschizomers.sort((a, b) => a.localeCompare(b));
+  out.neoschizomers.sort((a, b) => a.localeCompare(b));
+  return out;
+}
+
+/** An enzyme's site on both strands with its cuts, to draw. */
+export interface CutDrawing {
+  /** The top strand, 5′ to 3′: the site, Ns out to its cuts and one more on each side. */
+  top: string;
+  /** The bottom strand under it, base for base, so read 3′ to 5′. */
+  bottom: string;
+  /** Where the site REBASE writes lies in `top`: from, and to (not included). */
+  site: [number, number];
+  /** Each cut as boundaries in `top`, the top strand's and the bottom strand's. */
+  cuts: { top: number; bottom: number }[];
+}
+
+export function cutDrawing(name: string): CutDrawing | null {
+  const e = known(name);
+  if (!e) return null;
+  const site = e.site.toUpperCase();
+  const cuts = cutsOf(e);
+  const from = Math.min(0, ...cuts.flat()) - 1;
+  const to = Math.max(site.length, ...cuts.flat()) + 1;
+  const top = Array.from({ length: to - from }, (_, i) => site[i + from] ?? "N").join("");
+  // TspRI's CASTGNN^ is searched for with Ns in front (NNCASTGNN): they aren't its site.
+  const written = enzymeSite(name).length;
+  const start = site.length - written - from;
+  return {
+    top,
+    bottom: [...top].map(c => COMPLEMENT[c.toLowerCase()].toUpperCase()).join(""),
+    site: [start, start + written],
+    cuts: cuts.map(([t, b]) => ({ top: t - from, bottom: b - from }))
+  };
+}
+
+/** Where one enzyme recognises and cuts a sequence, whichever list it is in, by position. */
+export function enzymeSites(sequence: string, circular: boolean, name: string): SiteHit[] {
+  const e = known(name);
+  return e && sequence.length ? search(sequence, circular, [e]).sort((a, b) => a.start - b.start) : [];
+}
+
 /** Enzymes whose site can be added to a primer as written (no N or other ambiguity codes). */
 export const TAIL_ENZYMES: { name: string; site: string }[] = ALL_ENZYMES.filter(e => /^[acgt]{6,}$/i.test(e.site))
   .map(e => ({ name: e.name, site: e.site.toUpperCase() }))

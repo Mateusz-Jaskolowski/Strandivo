@@ -266,6 +266,7 @@ async function main(outDir) {
     await s.click("//button[normalize-space()='My enzymes']");
     await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
     check("The full enzyme catalogue renders only its visible rows", await s.exec("return document.querySelectorAll('[data-personal-enzyme]').length > 0 && document.querySelectorAll('[data-personal-enzyme]').length < 100;"));
+    check("My enzymes opens on the common enzymes, under their heading, before the rest of the catalogue", await s.waitFor("document.querySelector('.sv-personal-enzyme-group')?.firstChild?.textContent === 'Common enzymes' && document.querySelector('[data-personal-enzyme]')?.dataset.personalEnzyme === 'AatII'", 5000));
     for (const name of ["EcoRI", "Acc65I", "PvuII"]) {
       await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = arguments[0]; q.dispatchEvent(new Event('input'));", name);
       await s.click(`//input[@data-personal-enzyme='${name}']`);

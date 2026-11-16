@@ -1010,6 +1010,12 @@ async function main() {
       await s.waitFor("document.querySelector('[role=status]')?.textContent === 'Saved'", 5000);
       const stockSaved = await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('load_app_data', { name: 'enzyme-library' }).then(raw => done(JSON.parse(raw)), e => done(String(e)));");
       check("Product, freezer location and edited notes are kept in the JSON file", stockSaved?.version === 1 && ["EcoRI", "PvuII"].every(enzyme => stockSaved.entries.some(e => e.enzyme === enzyme && e.product === `E2E ${enzyme}` && e.location === "Freezer 2, box A" && e.notes === (enzyme === "EcoRI" ? "Updated spare tube" : "Spare tube"))), JSON.stringify(stockSaved));
+      check("Stock rows show each enzyme's cut and the ends it leaves", await s.exec("const row = document.querySelector('input[aria-label=\"Product of E2E EcoRI\"]').closest('tr'); return row.querySelector('.sv-cut-site')?.textContent === 'G^AATTC' && row.querySelector('.sv-cut-ends')?.textContent === '5′ AATT';"));
+      const sortStock = label => s.exec("Array.from(document.querySelectorAll('.sv-enzyme-grid th button')).find(b => b.textContent.startsWith(arguments[0])).click();", label);
+      await sortStock("Product");
+      await sortStock("Product");
+      check("The stock table sorts by a clicked column, both ways", await s.exec("const products = Array.from(document.querySelectorAll('.sv-enzyme-grid input[data-field=\"product\"]')).map(i => i.value); return products.indexOf('E2E PvuII') >= 0 && products.indexOf('E2E PvuII') < products.indexOf('E2E EcoRI');"));
+      await sortStock("Enzyme");
       await s.shot("10c-enzyme-library");
       await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Enzyme library section\"] button')).find(b => b.textContent === 'My enzymes').click();");
       await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);

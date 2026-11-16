@@ -459,15 +459,28 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 63 | toast (unknown enzyme) | "Unknown enzyme “…”. Choose a standard name from the list." |
-| 93 | guidance | "Pick the exact isoschizomer for the cut site and overhang (e.g. Acc65I vs. KpnI), and put the vendor name or HF version in Product / supplier." |
-| 112 | import dialog | "Add … stock records to your current list, or replace all …?" |
-| 139 | confirm (remove) | "Remove …? Remove this enzyme from your lab's stock list?" |
-| 143 | confirm (start new) | "The unreadable file will be kept alongside the new list as a backup." |
-| 232 | empty | "Track your lab's restriction enzymes and freezer locations. Select “Lab enzymes” on a map to show only their cut sites." |
-| 250 | unknown enzyme in list | "Not in this version's enzyme list" |
-| 286 | subtitle (desktop) | "Your lab's restriction enzyme stock." |
-| 286 | subtitle (browser) | "Your lab's restriction enzyme stock (saved in this browser — Export… to keep a backup)." |
+| 62 | subtitle (My enzymes) | "Enzymes you choose to show on maps and use in digests." (browser: "…, saved in this browser.") |
+| 63 | subtitle (Lab stock) | "Your lab's restriction enzymes and where they are kept." (browser: "…, saved in this browser (Export… keeps a backup).") |
+| 78 | search | "Search stock" (tooltip: "Search enzymes, products, freezer locations and notes") |
+| 110 | toast (unknown enzyme) | "Unknown enzyme “…”. Choose a standard name from the list." |
+| 150 | guidance (adding) | "Name the isoschizomer you have, as their ends can differ (Acc65I, KpnI); HF versions and suppliers go under Product." |
+| 170 | import dialog | "Add … stock records to your current list, or replace all …?" |
+| 197 | confirm (remove) | "Remove …? Remove this enzyme from your lab's stock list?" |
+| 201 | confirm (start new) | "The unreadable file will be kept alongside the new list as a backup." |
+| 309 | empty | "Track your lab's restriction enzymes and freezer locations. Choose “Lab enzymes” on a map to show only their cut sites." |
+| 322 | no match | "No stock matches “…”." |
+| 326 | column tooltip | "^ marks the cut in the top strand. GGTCTC(1/5) cuts 1 base after the site in the top strand, 5 in the bottom." |
+| 338 | unknown enzyme in list | "Not in this version's enzyme list" |
+
+My enzymes — `src/views/personalEnzymesPanel.ts`, and the cut — `src/views/enzymeCut.ts`
+
+| Line | Where | Text |
+|------|-------|------|
+| 18 | group headings | "Selected" / "In lab stock" / "Common enzymes" / "Other enzymes" |
+| 27 | search | "Search by name or site" |
+| 235 | empty | "No enzyme matches “…”." / "No enzymes selected yet." |
+| 17 (enzymeCut) | tooltip | "Bases from the site to the cut, top strand/bottom strand" |
+| `src/lib/enzymes.ts` | ends, no cut marked | "Cuts both sides" / "Cut not known" |
 
 ---
 

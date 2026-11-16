@@ -33,6 +33,11 @@ declare module "@teselagen/sequence-utils" {
     topSnipOffset: number;
     bottomSnipOffset: number;
     aliases?: string[];
+    /** Set for enzymes that cut on both sides of their site (BcgI); only one cut is kept. */
+    usForward?: number;
+    usReverse?: number;
+    cutType?: number;
+    isType2S?: boolean;
   }
   export interface CutsiteResult {
     id: string;

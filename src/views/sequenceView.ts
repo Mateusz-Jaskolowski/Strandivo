@@ -21,6 +21,7 @@ import { drawRegionTracks, layoutRegionTracks, markRegionSelection, REGION_TRACK
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
+import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
 import { firstDelete } from "../lib/deletion.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
@@ -922,6 +923,8 @@ export class SequenceView {
     let anchor: number | null = null;
     let dragging = false;
     let target: Focus | null = null;
+    /** Pressed last: an amino acid, a name, a bar or none. */
+    let pressed: HTMLElement | null = null;
     const translation = new TranslationDrag(this.ctx, "sequence");
     let startX = 0;
     let startY = 0;
@@ -932,6 +935,7 @@ export class SequenceView {
       this.focus();
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       target = el?.dataset.kind ? hitOf(el) : null;
+      pressed = el;
       const onCodon = translation.begin(el, e);
       if (target?.kind === "cutsite" && isPickClick(e)) {
         pickSite(this.ctx, target.id, "sequence");
@@ -987,7 +991,12 @@ export class SequenceView {
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       // Pointer capture can send the double-click to the canvas instead of the hit area.
       const hit = el?.dataset.kind ? hitOf(el) : target;
-      if (hit) this.selectAnnotation(hit);
+      if (!hit) return;
+      this.selectAnnotation(hit);
+      // A CDS's name or bar, one of its regions or an ORF opens Protein details. Its amino
+      // acids, clicked to pick codons, only select it.
+      const p = (el ?? pressed)?.dataset.codonIndex === undefined ? proteinAt(this.ctx, hit) : null;
+      if (p) openProteinDialog(this.ctx, p.feature, p.of);
     });
   }
 

@@ -27,6 +27,8 @@ with Unreleased's notes and leaves them where they are.
   missing, such as PaqCI and I-SceI, corrects MluCI's cut and TaqII's site, and shows
   TspRI's and TscAI's sites once each with their 9-base overhangs. Hover over an enzyme in
   My enzymes to see who sells it.
+- **Double-click a protein**: on the map or in the Sequence tab, a double-click on a CDS,
+  one of its regions or an ORF opens its Protein details.
 
 ## 0.5.0
 

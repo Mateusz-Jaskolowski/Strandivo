@@ -80,7 +80,8 @@ and CI checks that they exist.
 - **Translation selection** in both sequence panels uses `src/views/translationHit.ts`:
   click for one codon, drag for whole codons in the starting CDS, ⌘/Ctrl-click to toggle
   separate codons, and Shift to extend from the last clicked residue (with ⌘/Ctrl to keep
-  other picks). A double-click or the feature name selects the whole feature. A gesture
+  other picks). A double-click on them or a click on the feature name selects the whole
+  feature; in the Sequence tab a double-click on the name opens Protein details. A gesture
   remembers its original picks so dragging back shrinks the span; pointer capture means
   the codon under a moving pointer comes from `elementFromPoint`, not the event's target.
   The bases of a split codon exclude introns. Keep the primer's window in place throughout.

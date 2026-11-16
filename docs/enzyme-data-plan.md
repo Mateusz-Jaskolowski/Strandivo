@@ -55,6 +55,12 @@ per-enzyme literature, not a file. So methylation sensitivity comes with the pro
 - **Plain HTTP**: REBASE's HTTPS certificate doesn't verify in Node (an incomplete
   chain), so the generator downloads over HTTP. Check the regenerated file's diff before
   committing it.
+- **A double-click opens a thing's dialog** (changed with phase 1, as phase 4 needs it):
+  on the map or in the Sequence tab, a double-click on a CDS, one of its regions or an ORF
+  opens Protein details; an enzyme's cut site will open its details once phase 4 adds
+  them. Bases, and a CDS's amino acids, which are clicked to pick codons, keep what two
+  clicks do. The rule used to be that dialogs never open on a double-click, from a worry
+  about windows popping up unasked; a double-click on the thing itself is asking.
 
 ## Rebuilding
 

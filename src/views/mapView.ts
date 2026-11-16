@@ -24,6 +24,7 @@ import { sweep, sweptRange } from "../lib/mapDrag.ts";
 import { gcRuns, joinAtOrigin, overviewWindow, type GcRun } from "../lib/gc.ts";
 import { GC_CHIP_LABEL, gcChipTitle, gcRunTitle, gcWindowText } from "./gcStrip.ts";
 import { layoutName, LENGTH_SIZE, type NameLines } from "../lib/mapName.ts";
+import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
 
 
 interface LabelItem {
@@ -129,7 +130,10 @@ interface Geometry {
  * cursor or starts a selection, so a click needn't land exactly on the circle.
  */
 const NEAR_PX = 12;
-/** Two presses on the sequence's name within this many milliseconds rename it. */
+/**
+ * Two presses within this many milliseconds are a double-click: on the sequence's name they
+ * rename it, on a CDS, one of its regions or an ORF they open Protein details.
+ */
 const DOUBLE_MS = 500;
 
 const BAND_OUT = 151;
@@ -1339,6 +1343,8 @@ export class MapView {
     let last = 0;
     let swept = 0;
     let namePressed = -Infinity;
+    let lastPress: { hit: Focus; at: number } | null = null;
+    const same = (a: Focus, b: Focus) => a.kind === b.kind && a.id === b.id && a.region === b.region;
     const rangeTo = (a: number, b: number): Range | null => {
       const g = this.geom;
       if (g && !g.circular) return a === b ? null : { start: Math.min(a, b), end: Math.max(a, b) - 1 };
@@ -1371,6 +1377,17 @@ export class MapView {
       if (target?.kind === "cutsite" && isPickClick(e)) {
         pickSite(this.ctx, target.id, "map");
         e.preventDefault();
+        return;
+      }
+      // The second press on a protein opens it, timed like the name's.
+      const again = target && lastPress && e.timeStamp - lastPress.at < DOUBLE_MS && same(target, lastPress.hit) && !e.shiftKey && !e.metaKey && !e.ctrlKey;
+      const opened = again && target ? proteinAt(this.ctx, target) : null;
+      lastPress = target && !opened ? { hit: target, at: e.timeStamp } : null;
+      if (opened && target) {
+        e.preventDefault();
+        this.selectAnnotation(target);
+        target = null;
+        openProteinDialog(this.ctx, opened.feature, opened.of);
         return;
       }
       // Empty space away from the sequence selects nothing, as on a drawing; it clears the

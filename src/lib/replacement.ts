@@ -17,7 +17,7 @@ export interface Replacement {
   typed: number;
   /** "ok" for as many as were selected, "warn" when it shifts a CDS's frame. */
   kind: "ok" | "warn" | "plain";
-  /** "✓ 3 bases for 3 · same length", "1 of 3 bases", "⚠ 4 bases for 3 · shifts EGFP's frame". */
+  /** "✓ 3 bases for 3 · same length", "⚠ 28 of 30 bases · shifts EGFP's frame", "6 bases for 3 · adds 1 residue". */
   status: string;
   /** Each CDS whose protein changes, named as in the Reads tab: I15A, I15fs, I15delinsAA. */
   effects: { name: string; change: string }[];
@@ -38,8 +38,8 @@ const residues = (k: number) => `${COUNT.format(k)} ${k === 1 ? "residue" : "res
 
 /**
  * `typing` says the bases were typed rather than pasted: fewer than were selected is then
- * a replacement still being typed, shown as "1 of 3 bases" without its protein change,
- * which would be a frameshift at every key.
+ * a replacement still being typed, counted as "28 of 30 bases". What it would do is said
+ * all the same, a frameshift included, as Enter replaces with what is there.
  */
 export function describeReplacement(d: SeqData, sel: Range, typed: string, typing: boolean): Replacement {
   const n = d.sequence.length;
@@ -58,24 +58,22 @@ export function describeReplacement(d: SeqData, sel: Range, typed: string, typin
     const change = proteinChange(d, after, f, g, sel, typed);
     if (change) effects.push({ name: f.name || "CDS", change });
   }
-  const still = typing && typed.length < selected;
   const [holds, outside, removed] = typed.length === selected ? [[], [], []] : fates(d, sel);
+  const count = typing && typed.length < selected ? `${COUNT.format(typed.length)} of ${bases(selected)}` : `${bases(typed.length)} for ${COUNT.format(selected)}`;
   let kind: Replacement["kind"] = "plain";
   let status: string;
   if (typed.length === selected) {
     kind = "ok";
     status = `✓ ${bases(typed.length)} for ${COUNT.format(selected)} · same length`;
-  } else if (still) {
-    status = `${COUNT.format(typed.length)} of ${bases(selected)}`;
   } else if (shifts.length) {
     kind = "warn";
     const whose = shifts.length === 1 ? `${shifts[0]}'s frame` : `the frame of ${shifts.length} CDSs`;
-    status = `⚠ ${bases(typed.length)} for ${COUNT.format(selected)} · shifts ${whose}`;
+    status = `⚠ ${count} · shifts ${whose}`;
   } else {
     const more = residueChange > 0 ? ` · adds ${residues(residueChange)}` : residueChange < 0 ? ` · removes ${residues(-residueChange)}` : "";
-    status = `${bases(typed.length)} for ${COUNT.format(selected)}${more}`;
+    status = `${count}${more}`;
   }
-  return { selected, typed: typed.length, kind, status, effects: still ? [] : effects, holds, outside, removed };
+  return { selected, typed: typed.length, kind, status, effects, holds, outside, removed };
 }
 
 /** The protein of a CDS, codon by codon from its first whole one, stops included. */

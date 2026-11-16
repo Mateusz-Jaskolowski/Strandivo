@@ -49,12 +49,16 @@ test("another codon for the same amino acid is silent, and the same bases change
   assert.deepEqual(describeReplacement(doc(), { start: 2, end: 4 }, "GGG", true).effects, []);
 });
 
-test("fewer bases while typing count up without a protein change", () => {
+test("fewer bases while typing count up, and still say what Enter would do", () => {
   const r = describeReplacement(doc(), residues(3, 3), "G", true);
-  assert.equal(r.kind, "plain");
-  assert.equal(r.status, "1 of 3 bases");
-  assert.deepEqual(r.effects, []);
-  // The same pasted is what it is: a frameshift.
+  assert.equal(r.kind, "warn");
+  assert.equal(r.status, "⚠ 1 of 3 bases · shifts gene's frame");
+  assert.deepEqual(r.effects, [{ name: "gene", change: "C3fs" }]);
+  const inFrame = describeReplacement(doc(), residues(3, 4), "GCT", true);
+  assert.equal(inFrame.kind, "plain");
+  assert.equal(inFrame.status, "3 of 6 bases · removes 1 residue");
+  assert.equal(describeReplacement(doc(), { start: 2, end: 4 }, "G", true).status, "1 of 3 bases");
+  // Pasted, they are the replacement, not a count towards it.
   const pasted = describeReplacement(doc(), residues(3, 3), "G", false);
   assert.equal(pasted.kind, "warn");
   assert.equal(pasted.status, "⚠ 1 base for 3 · shifts gene's frame");

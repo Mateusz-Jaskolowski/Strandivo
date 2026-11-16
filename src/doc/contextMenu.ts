@@ -22,6 +22,7 @@ import type { Focus } from "./store.ts";
 import { openMutagenesisDialog } from "../views/mutagenesisDialog.ts";
 import { openPcrDialog } from "../views/primerDialogs.ts";
 import { openProteinDialog } from "../views/proteinDialog.ts";
+import { openEnzymeDialog } from "../views/enzymeDialog.ts";
 
 export interface ContextMenuHost {
   ctx: DocContext;
@@ -194,6 +195,9 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
         store.select({ range: { start: orf.start, end: orf.end }, focus: { kind: "orf", id: orf.id } }, "menu");
         ctx.addFeatureFromSelection({ name: "New CDS", type: "CDS", strand: orf.strand });
       }
+      return;
+    case "enzyme-details":
+      if (target.kind === "cutsite") openEnzymeDialog(ctx, enzymeOf(target.id));
       return;
     case "copy-site": {
       const c = target.kind === "cutsite" ? cutSites(d, ctx.options).find(x => x.id === target.id) : undefined;

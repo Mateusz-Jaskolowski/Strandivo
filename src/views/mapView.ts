@@ -25,6 +25,7 @@ import { gcRuns, joinAtOrigin, overviewWindow, type GcRun } from "../lib/gc.ts";
 import { GC_CHIP_LABEL, gcChipTitle, gcRunTitle, gcWindowText } from "./gcStrip.ts";
 import { layoutName, LENGTH_SIZE, type NameLines } from "../lib/mapName.ts";
 import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
+import { openEnzymeDialog } from "./enzymeDialog.ts";
 
 
 interface LabelItem {
@@ -1421,11 +1422,14 @@ export class MapView {
       }
     };
     this.svgHost.addEventListener("pointerup", end);
-    // A double-click on a CDS, one of its regions or an ORF opens Protein details, after its
-    // second click has selected it. The browser's own, unlike the name's timed presses, so
-    // the two clicks must land together at the system's speed, with nothing between them.
+    // A double-click on a CDS, one of its regions or an ORF opens Protein details, and on a
+    // cut site Enzyme details, after its second click has selected it. The browser's own,
+    // unlike the name's timed presses, so the two clicks must land together at the system's
+    // speed, with nothing between them.
     this.svgHost.addEventListener("dblclick", e => {
-      const p = pressed && !e.shiftKey && !e.metaKey && !e.ctrlKey ? proteinAt(this.ctx, pressed) : null;
+      if (!pressed || e.shiftKey || e.metaKey || e.ctrlKey) return;
+      if (pressed.kind === "cutsite") return openEnzymeDialog(this.ctx, enzymeOf(pressed.id));
+      const p = proteinAt(this.ctx, pressed);
       if (p) openProteinDialog(this.ctx, p.feature, p.of);
     });
     this.svgHost.addEventListener("pointercancel", e => {

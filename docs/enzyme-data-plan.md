@@ -1,6 +1,7 @@
 # Enzyme data: plan
 
-Status: phase 1 done (16 November 2026); phases 2 to 4 to come.
+Status: phase 1 done (16 November 2026), and the Enzyme details dialog of phase 4 with
+what REBASE gives; phases 2 and 3 and the rest of 4 to come.
 
 ## What we want
 
@@ -24,7 +25,10 @@ inactivation, and whether Dam, Dcm or CpG methylation blocks it.
    buffers and activity in each, incubation and heat inactivation, methylation
    sensitivity. It starts with a small sample entered by hand; bulk supplier data goes in
    only with permission.
-4. **Features.** An enzyme details dialog, a buffer for a double digest, and warnings on
+4. **Features.** An enzyme details dialog (started: `src/views/enzymeDialog.ts` shows the
+   cut on both strands, suppliers, isoschizomers and neoschizomers, the enzyme's sites
+   and fragments in the open sequence and the lab's stock of it; products, buffers and
+   methylation join it with phase 3), a buffer for a double digest, and warnings on
    sites that Dam or Dcm methylation blocks.
 
 ## Sources and their terms
@@ -61,8 +65,7 @@ per-enzyme literature, not a file. So methylation sensitivity comes with the pro
   committing it.
 - **A double-click opens a thing's dialog** (changed with phase 1, as phase 4 needs it):
   on the map or in the Sequence tab, a double-click on a CDS, one of its regions or an ORF
-  opens Protein details; an enzyme's cut site will open its details once phase 4 adds
-  them. Bases, and a CDS's amino acids, which are clicked to pick codons, keep what two
+  opens Protein details, and on a cut site Enzyme details. Bases, and a CDS's amino acids, which are clicked to pick codons, keep what two
   clicks do. The rule used to be that dialogs never open on a double-click, from a worry
   about windows popping up unasked; a double-click on the thing itself is asking.
 

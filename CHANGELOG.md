@@ -30,6 +30,10 @@ with Unreleased's notes and leaves them where they are.
   My enzymes to see who sells it.
 - **Double-click a protein**: on the map or in the Sequence tab, a double-click on a CDS,
   one of its regions or an ORF opens its Protein details.
+- **Enzyme details**: double-click a cut site, or choose Enzyme details… from its
+  right-click menu or the inspector, to see the enzyme's cut drawn on both strands, who
+  sells it, its isoschizomers and neoschizomers (Acc65I for KpnI), where it cuts your
+  sequence and the fragments, and your lab's stock of it.
 
 ## 0.5.0
 

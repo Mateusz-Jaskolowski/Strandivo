@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, newEnzymeStocks, parseEnzymeLibrary, parseEnzymeTable, unknownEnzymes, type LabEnzyme } from "./enzymeLibrary.ts";
-import { enzymeCut, enzymeName, enzymeSite, enzymeSuppliers, findCutSites, KNOWN_ENZYMES, MAX_CUT_DISTANCE, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { cutDrawing, enzymeCut, enzymeName, enzymeRelatives, enzymeSite, enzymeSites, enzymeSuppliers, findCutSites, KNOWN_ENZYMES, MAX_CUT_DISTANCE, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
 import { REBASE_ENZYMES } from "./rebaseEnzymes.ts";
 
 const labOptions = (names: readonly string[] = [], enzymeFilter: EnzymeFilter = "all"): EnzymeOptions => ({ enzymeSource: "lab", enzymeFilter, labEnzymes: names, personalEnzymes: [] });
@@ -69,6 +69,40 @@ test("cuts are marked with ^, with Ns out to a cut past the site, and the ends t
   assert.equal(enzymeSite("TspRI"), "CASTGNN");
   assert.equal(enzymeSite("BcgI"), "CGANNNNNNTGC");
   assert.deepEqual(enzymeSuppliers("BtsI"), ["New England Biolabs"]);
+});
+
+test("isoschizomers cut a site the same way, neoschizomers elsewhere", () => {
+  assert.deepEqual(enzymeRelatives("Acc65I"), { isoschizomers: [], neoschizomers: ["KpnI"] });
+  assert.ok(enzymeRelatives("BsaI").isoschizomers.includes("Eco31I"));
+  assert.ok(enzymeRelatives("BsmBI").isoschizomers.includes("Esp3I"));
+  assert.ok(enzymeRelatives("FokI").neoschizomers.includes("BtsCI"));
+  // Ns put in front of TspRI's site for the search are compared like any other base.
+  assert.deepEqual(enzymeRelatives("TspRI").isoschizomers, ["TscAI"]);
+  assert.deepEqual(enzymeRelatives("NoSuchI"), { isoschizomers: [], neoschizomers: [] });
+  for (const name of KNOWN_ENZYMES) {
+    const r = enzymeRelatives(name);
+    for (const other of r.isoschizomers) assert.ok(enzymeRelatives(other).isoschizomers.includes(name), `${other} is an isoschizomer of ${name}`);
+    for (const other of r.neoschizomers) assert.ok(enzymeRelatives(other).neoschizomers.includes(name), `${other} is a neoschizomer of ${name}`);
+  }
+});
+
+test("a cut is drawn on both strands, with one more base each side", () => {
+  assert.deepEqual(cutDrawing("EcoRI"), { top: "NGAATTCN", bottom: "NCTTAAGN", site: [1, 7], cuts: [{ top: 2, bottom: 6 }] });
+  assert.deepEqual(cutDrawing("KpnI")?.cuts, [{ top: 6, bottom: 2 }]);
+  // Out to a cut past the site: BsaI's GGTCTCN^NNNN.
+  assert.deepEqual(cutDrawing("BsaI"), { top: "NGGTCTCNNNNNN", bottom: "NCCAGAGNNNNNN", site: [1, 7], cuts: [{ top: 8, bottom: 12 }] });
+  // TspRI's site is CASTGNN; the Ns searched for in front of it aren't.
+  assert.deepEqual(cutDrawing("TspRI"), { top: "NNNCASTGNNN", bottom: "NNNGTSACNNN", site: [3, 10], cuts: [{ top: 10, bottom: 1 }] });
+  // BcgI's (10/12)CGANNNNNNTGC(12/10): both cuts.
+  assert.deepEqual(cutDrawing("BcgI")?.cuts, [{ top: 3, bottom: 1 }, { top: 37, bottom: 35 }]);
+  assert.deepEqual(cutDrawing("BcgI")?.site, [13, 25]);
+  assert.equal(cutDrawing("NoSuchI"), null);
+});
+
+test("one enzyme's sites are found whichever list it is in", () => {
+  assert.deepEqual(enzymeSites("GAATTCAAAGAATTCGGTACC", false, "EcoRI").map(h => h.start), [0, 9]);
+  assert.deepEqual(enzymeSites("GAATTCAAAGAATTCGGTACC", false, "Acc65I").map(h => [h.start, h.cut, h.bottomCut]), [[15, 16, 20]]);
+  assert.deepEqual(enzymeSites("GAATTCAAAGAATTCGGTACC", false, "NoSuchI"), []);
 });
 
 test("every enzyme sold finds its own site and cuts near it", () => {

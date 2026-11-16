@@ -16,6 +16,8 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+## 0.5.0
+
 Strandivo now follows your computer into dark mode, or stays light or dark as you choose
 in Settings. Primers can show NEB's Tm and annealing temperature for your polymerase, the
 map can draw GC content, and double-clicking the map's name renames the plasmid. Proteins

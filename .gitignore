@@ -10,3 +10,5 @@ src-tauri/gen/
 !.vscode/extensions.json
 .claude/
 codebase-review*
+# Email drafts kept beside the code, never committed
+/email-*.md

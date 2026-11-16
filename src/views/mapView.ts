@@ -130,10 +130,7 @@ interface Geometry {
  * cursor or starts a selection, so a click needn't land exactly on the circle.
  */
 const NEAR_PX = 12;
-/**
- * Two presses within this many milliseconds are a double-click: on the sequence's name they
- * rename it, on a CDS, one of its regions or an ORF they open Protein details.
- */
+/** Two presses on the sequence's name within this many milliseconds rename it. */
 const DOUBLE_MS = 500;
 
 const BAND_OUT = 151;
@@ -1343,8 +1340,8 @@ export class MapView {
     let last = 0;
     let swept = 0;
     let namePressed = -Infinity;
-    let lastPress: { hit: Focus; at: number } | null = null;
-    const same = (a: Focus, b: Focus) => a.kind === b.kind && a.id === b.id && a.region === b.region;
+    // What the last press was on, as the double-click after it arrives on the whole map.
+    let pressed: Focus | null = null;
     const rangeTo = (a: number, b: number): Range | null => {
       const g = this.geom;
       if (g && !g.circular) return a === b ? null : { start: Math.min(a, b), end: Math.max(a, b) - 1 };
@@ -1355,6 +1352,7 @@ export class MapView {
     };
     this.svgHost.addEventListener("pointerdown", e => {
       const on = e.target as Element;
+      pressed = null;
       // The rename field is a text field like any other.
       if (on.closest(".sv-map-name-edit")) return;
       // Any other press finishes renaming, also one whose default the map prevents below.
@@ -1379,17 +1377,7 @@ export class MapView {
         e.preventDefault();
         return;
       }
-      // The second press on a protein opens it, timed like the name's.
-      const again = target && lastPress && e.timeStamp - lastPress.at < DOUBLE_MS && same(target, lastPress.hit) && !e.shiftKey && !e.metaKey && !e.ctrlKey;
-      const opened = again && target ? proteinAt(this.ctx, target) : null;
-      lastPress = target && !opened ? { hit: target, at: e.timeStamp } : null;
-      if (opened && target) {
-        e.preventDefault();
-        this.selectAnnotation(target);
-        target = null;
-        openProteinDialog(this.ctx, opened.feature, opened.of);
-        return;
-      }
+      pressed = target;
       // Empty space away from the sequence selects nothing, as on a drawing; it clears the
       // selection but leaves the cursor where it was.
       if (!target && !this.nearTrack(e.clientX, e.clientY)) {
@@ -1433,6 +1421,13 @@ export class MapView {
       }
     };
     this.svgHost.addEventListener("pointerup", end);
+    // A double-click on a CDS, one of its regions or an ORF opens Protein details, after its
+    // second click has selected it. The browser's own, unlike the name's timed presses, so
+    // the two clicks must land together at the system's speed, with nothing between them.
+    this.svgHost.addEventListener("dblclick", e => {
+      const p = pressed && !e.shiftKey && !e.metaKey && !e.ctrlKey ? proteinAt(this.ctx, pressed) : null;
+      if (p) openProteinDialog(this.ctx, p.feature, p.of);
+    });
     this.svgHost.addEventListener("pointercancel", e => {
       this.hoverRegion(null);
       end(e);

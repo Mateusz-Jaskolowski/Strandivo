@@ -312,7 +312,11 @@ export function enzymeSite(name: string): string {
 
 /** How an enzyme cuts, for lists of enzymes. */
 export interface EnzymeCut {
-  /** As REBASE writes it: "G^AATTC", "GGTCTC(1/5)" (bases after the site to each strand's cut). */
+  /**
+   * The site with a ^ where the top strand is cut inside it ("G^AATTC", and "C^CGC" for
+   * AciI, which REBASE writes CCGC(-3/-1)); a cut outside it as REBASE writes it, with the
+   * bases after the site to each strand's cut ("GGTCTC(1/5)"). The ends say the rest.
+   */
   notation: string;
   /** "5′ AATT", "3′ GTAC", "Blunt", or "Cuts both sides" (BcgI, which cuts a piece out). */
   ends: string;
@@ -328,7 +332,11 @@ export function enzymeCut(name: string): EnzymeCut | null {
   const site = e.site.toUpperCase();
   const from = Math.min(top, bottom);
   const overhang = Array.from({ length: Math.abs(top - bottom) }, (_, i) => site[from + i] ?? "N").join("");
-  return { notation: e.notation, ends: top === bottom ? "Blunt" : `${top < bottom ? "5′" : "3′"} ${overhang}` };
+  // REBASE marks a cut inside a site that isn't a palindrome by counting back from its end;
+  // a ^ reads at a glance. Then the site searched for is the one REBASE writes.
+  const inside = !e.notation.includes("^") && top >= 0 && top <= site.length;
+  const notation = inside ? `${site.slice(0, top)}^${site.slice(top)}` : e.notation;
+  return { notation, ends: top === bottom ? "Blunt" : `${top < bottom ? "5′" : "3′"} ${overhang}` };
 }
 
 /** The companies REBASE says sell an enzyme, by name. */

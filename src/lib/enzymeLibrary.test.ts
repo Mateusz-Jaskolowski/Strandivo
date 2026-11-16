@@ -32,7 +32,7 @@ test("enzyme names: any enzyme REBASE lists as sold, as REBASE writes it", () =>
   assert.equal(new Set(KNOWN_ENZYMES.map(n => n.toLowerCase())).size, KNOWN_ENZYMES.length);
 });
 
-test("cuts are written as REBASE writes them, with the ends they leave", () => {
+test("cuts are marked with ^ inside the site, else written as REBASE writes them, with the ends they leave", () => {
   const cut = (name: string) => {
     const c = enzymeCut(name);
     return c && `${c.notation} ${c.ends}`;
@@ -47,9 +47,11 @@ test("cuts are written as REBASE writes them, with the ends they leave", () => {
   assert.equal(cut("BsaI"), "GGTCTC(1/5) 5′ NNNN");
   assert.equal(cut("BtsI"), "GCAGTG(2/0) 3′ NN");
   assert.equal(cut("BsmI"), "GAATGC(1/-1) 3′ CN");
-  // A site that isn't a palindrome, cut inside it: REBASE counts back from its end.
-  assert.equal(cut("AciI"), "CCGC(-3/-1) 5′ CG");
-  assert.equal(cut("I-SceI"), "TAGGGATAACAGGGTAAT(-9/-13) 3′ ATAA");
+  // A site that isn't a palindrome, cut inside it: REBASE counts back from its end
+  // (CCGC(-3/-1)), a ^ reads at a glance and the ends give the bottom strand.
+  assert.equal(cut("AciI"), "C^CGC 5′ CG");
+  assert.equal(cut("GsaI"), "CCCAG^C 3′ CCAG");
+  assert.equal(cut("I-SceI"), "TAGGGATAA^CAGGGTAAT 3′ ATAA");
   // Cut outside a palindromic core, on both strands alike.
   assert.equal(cut("TspRI"), "CASTGNN^ 3′ NNCASTGNN");
   // TeselaGen's list had A^ATT.

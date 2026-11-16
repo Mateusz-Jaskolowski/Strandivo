@@ -405,10 +405,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   may name any enzyme REBASE lists as sold (`src/lib/rebaseEnzymes.ts`, built by
   `tools/build-enzymes.mjs`; sources, terms and what is left out in
   `docs/enzyme-data-plan.md`): Acc65I is not KpnI (same site, other ends), and Esp3I
-  keeps its name. Lists show cuts as REBASE writes them (CCGC(-3/-1), not C^CGC). Names
-  reach analysis and reaction dialogs through `ViewOptions`, never a global; name arrays
-  remain the same until membership changes, so editing a stock note redraws no map. Source and filter changes prune unavailable
-  enzyme picks; drawing visibility is separate and the outline still lists sites when
+  keeps its name. Lists mark a cut inside the site with ^ (C^CGC, which REBASE writes
+  CCGC(-3/-1)) and one outside it as REBASE does (GGTCTC(1/5)), with the ends beside it.
+  Names reach analysis and reaction dialogs through `ViewOptions`, never a global; name
+  arrays remain the same until membership changes, so editing a stock note redraws no
+  map. Source and filter changes prune unavailable enzyme picks; drawing visibility is
+  separate and the outline still lists sites when
   drawing is off. Digest and restriction cloning choose their own source, initially the
   document's, and keep already chosen reaction enzymes available through filter changes.
   Product names are user text, never read for recognition or reaction conditions.

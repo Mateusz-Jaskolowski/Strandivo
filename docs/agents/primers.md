@@ -69,27 +69,38 @@ and CI checks that they exist.
   What the dialog decides before drawing (the starting polymerase, the strip that says its
   Tms differ from Settings, the whole primers' annealing temperature) is in
   `src/lib/pcrPlan.ts`, so tests reach it.
-  The overview analyses the final **linear product**, including tails and primer edits;
-  its positions are product positions, while the template span and its cut counts are
-  separate. Its enzyme source and filter start from the document's, then stay independent;
-  membership changes refresh them through ViewOptions. The filter affects drawing only:
-  suggested digests consider the whole chosen list, favour one enzyme and try pairs when
-  single digests give small or similar fragments. Their sizes are top-strand lengths;
-  incomplete Type IIS cuts and overlapping overhangs are not suggested. This is a size
-  comparison, not a buffer-compatibility check or proof of product identity. Tail-flank
-  checks prompt users to check the enzyme's requirements; 6 bp is NEB's general fallback,
-  never an enzyme-specific minimum. Polymerase end/length/enhancer guidance is separately
-  sourced in `src/lib/pcrGuidance.ts`; do not fill missing entries from the Tm family.
-  The program's connected line is schematic: widths and slopes encode neither time nor
-  ramp rate. Temperatures, durations and cycle counts are native text fields, including
-  both optional stages; the final hold stays indefinite. Raw drafts in
-  `src/lib/pcrProgramEdit.ts` survive redraws, even unfinished text. Copy is blocked while
-  any field is invalid. A custom program keeps its original protocol and context when
-  inputs change; Escape restores the field's last accepted value before closing the dialog.
-  Regeneration is offered; untouched programs follow new inputs.
-  Reset regenerates from the current inputs, and edits never change Settings. Controls
-  need unique aria-labels or data-focus keys; restore their caret as well as their focus,
-  and disconnect the overview/program ResizeObservers when redrawn or closed.
+  The **overview** above it is of the final linear product, tails and primer changes
+  included (`src/lib/pcrOverview.ts`), so its positions are the product's own; the template
+  row keeps the plasmid's, and a site says how often its enzyme cuts each. Its enzyme list
+  and filter start from the document's and then go their own way, following only a change
+  of membership, through `ViewOptions`. The filter chooses what is drawn, not what is
+  suggested: a digest is looked for in the whole list, one enzyme first and a pair only
+  where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
+  bar). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
+  complete on both strands or whose overhangs overlap another's makes no suggestion rather
+  than a band that wouldn't be there. It says what to expect on a gel, never that the
+  product is the right one or that two enzymes share a buffer. What is said about the
+  polymerase comes from `src/lib/pcrGuidance.ts` alone (the ends it leaves, NEB's longest
+  product, the GC enhancer): a polymerase whose row has not been read says nothing, and
+  nothing is taken from another member of its Tm family. GC is the whole product's against
+  NEB's 65% (`HIGH_GC`), as the enhancer is described for an amplicon, while the strip
+  shows where it runs high inside; a colony is a simple template, being E. coli, so only
+  genomic DNA or cDNA takes the complex limit.
+  The **program**'s line is schematic: its widths and slopes are neither time nor ramp
+  rate. Temperatures, times and cycle counts are text fields, in both stages, and the last
+  step holds until stopped. What is typed lives in a draft (`src/lib/pcrProgramEdit.ts`)
+  and survives a redraw, unfinished text and all, while Copy is off until every field
+  reads; a temperature outside `MIN_TEMP`–`MAX_TEMP` is a slip, not a program. A value
+  counts as entered when the field is left or Enter is pressed, not on the browser's change
+  event alone, as a field drawn anew mid-edit fires none; Escape then goes back to that
+  value instead of closing the dialog. An edited program stays, with the protocol and the
+  setup it was made for, when the inputs change, and only what `pcrProgram` is given counts
+  as an input (`programInputKey`), so a primer renamed elsewhere doesn't say the setup has
+  moved. Regenerate and Reset build it again from the current inputs, change no setting,
+  and hand focus to Copy program, as each takes itself away. Every control needs its own
+  `aria-label` or `data-focus`; a redraw puts back the caret as well as the focus, passes
+  over a control that came back disabled, and the two ResizeObservers are disconnected when
+  the dialog is drawn again or closed.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

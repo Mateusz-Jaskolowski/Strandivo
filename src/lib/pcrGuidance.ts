@@ -19,9 +19,10 @@ const Q5: PcrGuidance = {
   maxLength: { simple: 20000, complex: 10000 },
   // "Can be coupled with Q5 High GC Enhancer to amplify high GC (>= 65%) amplicons."
   // https://www.neb.com/en-us/products/b9027-q5-reaction-buffer-pack
-  // Protocol: enhancer "should be added only ... when other conditions have failed".
-  // https://www.neb.com/protocols/pcr-using-q5-high-fidelity-dna-polymerase-m0491?pdf=true
-  enhancer: "If amplification is difficult, consider Q5 High GC Enhancer with Q5 Reaction Buffer."
+  // The protocol adds it only for a reaction that needs it: "Amplification of some difficult
+  // targets, like GC-rich sequences, may be improved by the addition of 1X Q5 High GC Enhancer."
+  // https://www.neb.com/en-us/protocols/pcr-using-q5-high-fidelity-dna-polymerase-m0491
+  enhancer: "Adding Q5 High GC Enhancer may help if it doesn’t amplify."
 };
 const ONETAQ: PcrGuidance = { product: "OneTaq (M0481)", ends: "3′ A overhangs or blunt", maxLength: { simple: 6000, complex: 6000 } };
 export const PCR_GUIDANCE: Readonly<Record<string, PcrGuidance>> = {

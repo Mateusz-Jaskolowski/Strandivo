@@ -697,6 +697,8 @@ async function main() {
     check("Escape cancels unfinished text without closing the PCR dialog", await s.exec(`return document.querySelector('[data-focus="program-1:0:seconds"]')?.value`) === invalidProgram.previous);
     await s.click("button[data-focus=reset-program]");
     await s.waitFor("!document.querySelector('.sv-prog-modified') || document.querySelector('.sv-prog-modified').hidden", 5000);
+    // Reset disables itself, so it hands focus on rather than leaving it nowhere.
+    check("Reset moves focus to Copy program", await s.exec("return document.activeElement === document.querySelector('[data-focus=copy-program]')"));
     // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
     // whether a menu, a button in the program or one in the footer.
     const keepsFocus = async (selector, nebPrimer) => {

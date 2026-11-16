@@ -33,7 +33,7 @@ import { copyText } from "./inspector.ts";
 import { editableProgram } from "./pcrProgramView.ts";
 import { pcrOverviewView, type ProductViewChoice } from "./pcrOverviewView.ts";
 import { enzymeSourceSelect } from "./enzymeControls.ts";
-import { programDraft, syncProgram, type ProgramDraft, type ProgramSnapshot } from "../lib/pcrProgramEdit.ts";
+import { programDraft, programInputKey, syncProgram, type ProgramDraft, type ProgramSnapshot } from "../lib/pcrProgramEdit.ts";
 import { productAdvice, productOverview } from "../lib/pcrOverview.ts";
 import { PCR_GUIDANCE } from "../lib/pcrGuidance.ts";
 
@@ -412,7 +412,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
   let draft: ProgramDraft | null = null;
   let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
   let enzymeFilter: EnzymeFilter = ctx.options.enzymeFilter;
-  const overviewChoice: ProductViewChoice = { site: "", digest: "" };
+  const overviewChoice: ProductViewChoice = { site: "", digest: "", flanks: false };
   let disposeViews: (() => void)[] = [];
   const redraw = () => requestAnimationFrame(refresh);
   let counted = false;
@@ -529,8 +529,8 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       const canStage = !!input && twoStagesPossible(input);
       const useTwo = twoStage && canStage;
       const stages = input && PCR_PROTOCOLS[polymerase] ? pcrProgram({ ...input, twoStage: useTwo }) : null;
-      const programInputKey = JSON.stringify({ polymerase, template, twoStage: useTwo, sequence: product.sequence, forward: f, reverse: r, ta: anneal?.ta, taFull, conf });
-      const generated: ProgramSnapshot | null = stages ? { key: programInputKey, stages, title: programTitle(polymerase, product.length), source: programSource(polymerase)!, context: `${TEMPLATES.find(t => t.id === template)!.label} · ${fmt(product.length)} bp`, notes: programNotes(polymerase, product.length, template) } : null;
+      const inputKey = input ? programInputKey({ ...input, twoStage: useTwo }) : "";
+      const generated: ProgramSnapshot | null = stages ? { key: inputKey, stages, title: programTitle(polymerase, product.length), source: programSource(polymerase)!, context: `${TEMPLATES.find(t => t.id === template)!.label} · ${fmt(product.length)} bp`, notes: programNotes(polymerase, product.length, template) } : null;
       draft = syncProgram(draft, generated);
       const overview = productOverview(product, d.sequence, d.circular, { ...ctx.options, enzymeSource, enzymeFilter });
       const sourceSelect = enzymeSourceSelect(enzymeSource, "Product enzyme list", source => { enzymeSource = source; redraw(); });
@@ -552,7 +552,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
         ...annealRow,
         ["Contains", inside.length ? inside.map(x => x.name).join(", ") + (partly.length ? `; part of ${partly.map(x => x.name).join(", ")}` : "") : partly.length ? `Part of ${partly.map(x => x.name).join(", ")}` : "No features"]
       ];
-      const warnings: string[] = productAdvice(polymerase, template, product.length, overview.highGc.length > 0);
+      const warnings: string[] = productAdvice(polymerase, template, product.length, overview.gcPercent);
       if (tmF !== null && tmR !== null && Math.abs(tmF - tmR) > TM_APART) warnings.push(`The two Tms are more than ${TM_APART} °C apart.`);
       // Either 3′ end extending on the other primer makes primer dimer instead of product.
       const dimer = crossDimer(f.bases, r.bases);
@@ -580,10 +580,17 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
             h("label", { class: "sv-check-row" }, stageBox, "Anneal in two stages")
           ]
         : [];
-      const programView = draft ? editableProgram(draft, generated, programInputKey,
+      const programView = draft ? editableProgram(draft, generated, inputKey,
         infoButton("About the program", info === "program", () => toggleInfo("program")),
         info === "program" ? h("div", { class: "sv-info-pop" }, h("p", null, "These notes describe the generated starting program."), ...(draft.original.notes ?? []).map(t => h("p", null, t))) : null,
-        () => { if (generated) { draft = programDraft(generated); redraw(); } },
+        () => {
+          if (!generated) return;
+          draft = programDraft(generated);
+          // Reset and Regenerate both go: the first is disabled by its own press, the
+          // second is gone, so focus is handed to the button beside them.
+          focusAfter = "copy-program";
+          redraw();
+        },
         text => void copyText(text, "the program")) : null;
       if (programView) disposeViews.push(programView.dispose);
       if (programView) cancelProgramEdit = programView.cancelEdit;
@@ -623,7 +630,8 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     dlg.body.replaceChildren(...rows);
     dlg.footer.replaceChildren(...(actions.length ? actions : [h("button", { type: "button", class: "sv-btn sv-foot-start", "data-focus": "close", onclick: () => dlg.close() }, "Close")]));
     if (focusAfter) {
-      (dlg.el.querySelector(`[aria-label="${CSS.escape(focusAfter)}"]`) as HTMLElement | null)?.focus();
+      const key = CSS.escape(focusAfter);
+      (dlg.el.querySelector(`[aria-label="${key}"], [data-focus="${key}"]`) as HTMLElement | null)?.focus();
       focusAfter = null;
     }
   };
@@ -642,7 +650,9 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     const handoff = focusAfter !== null;
     render();
     if (!inside || handoff || had!.isConnected) return;
-    const same = key ? (dlg.el.querySelector(`[aria-label="${CSS.escape(key)}"], [data-focus="${CSS.escape(key)}"]`) as HTMLElement | null) : null;
+    const found = key ? (dlg.el.querySelector(`[aria-label="${CSS.escape(key)}"], [data-focus="${CSS.escape(key)}"]`) as HTMLElement | null) : null;
+    // One that came back disabled can take no focus, so it counts as gone.
+    const same = found && !(found as HTMLButtonElement).disabled ? found : null;
     (same ?? (dlg.body.querySelector("select") as HTMLElement | null))?.focus();
     if (same instanceof HTMLInputElement && caret && caret[0] !== null && caret[1] !== null) same.setSelectionRange(caret[0], caret[1]);
   };

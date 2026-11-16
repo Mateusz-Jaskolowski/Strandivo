@@ -2,31 +2,62 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Analysis of the final, linear PCR product, including tails and primer edits.
-import { scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
-import { gcProfile, gcRuns, overviewWindow } from "./gc.ts";
+import { extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { gcProfile, overviewWindow } from "./gc.ts";
+import { gcPercent } from "./labinfo.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
 import type { PcrProduct } from "./pcr.ts";
 import type { TemplateKind } from "./pcrProtocols.ts";
 
+/**
+ * The last template counted. The dialog is drawn again on every change around it (Settings,
+ * the primer library, a view option), nearly always with the same template, whose whole
+ * sequence this would otherwise be searched again each time.
+ */
+let counted: { sequence: string; circular: boolean; members: string; counts: Map<string, number> } | null = null;
+
+/** How many times each enzyme of the chosen list cuts the template. */
+function templateCutCounts(sequence: string, circular: boolean, members: readonly string[]): Map<string, number> {
+  const key = extraKey(members);
+  if (counted && counted.sequence === sequence && counted.circular === circular && counted.members === key) return counted.counts;
+  const counts = new Map<string, number>();
+  for (const h of scanSites(sequence, circular, members)) counts.set(h.enzyme, (counts.get(h.enzyme) ?? 0) + 1);
+  counted = { sequence, circular, members: key, counts };
+  return counts;
+}
+
 export function productOverview(product: PcrProduct, template: string, circular: boolean, options: EnzymeOptions) {
   const members = sourceEnzymes(options);
   const hits = scanSites(product.sequence, false, members);
-  const templateHits = scanSites(template, circular, members);
-  const templateCounts = new Map<string, number>();
-  for (const h of templateHits) templateCounts.set(h.enzyme, (templateCounts.get(h.enzyme) ?? 0) + 1);
+  const templateCounts = templateCutCounts(template, circular, members);
   const window = overviewWindow(product.length);
   const gc = gcProfile(product.sequence, false, window);
-  const highGc = gcRuns(gc.length, i => gc[i]).filter(r => r.level === "gc");
   const tails = { left: alignPrimer(product.forward, template).tail.length, right: alignPrimer(product.reverse, template).tail.length };
   // A site can straddle a tail/paired-base boundary and still be introduced by that tail.
   const tailSites = selectSites(hits, { ...options, enzymeFilter: "all" }).filter(h => h.start < tails.left || h.end >= product.length - tails.right);
-  return { hits, sites: selectSites(hits, options), templateCounts, gc, window, highGc, tails, tailSites, digests: suggestedDigests(product.length, hits, members) };
+  return {
+    hits,
+    sites: selectSites(hits, options),
+    templateCounts,
+    gc,
+    window,
+    /** The whole product's GC, %, counted as the status bar and inspector count it. */
+    gcPercent: gcPercent(product.sequence),
+    tails,
+    tailSites,
+    digests: suggestedDigests(product.length, hits, members)
+  };
 }
 
-/** NEB's general fallback is 6 flanking bp; this is a prompt to check, not an enzyme-specific failure. */
-// "As a general rule and for enzymes not listed below, 6 base pairs should be added ..."
-// https://www.neb.com/en-us/tools-and-resources/usage-guidelines/cleavage-close-to-the-end-of-dna-fragments
+/**
+ * Bases beyond its site an enzyme is asked to have before this says to check it. NEB,
+ * "Cleavage Close to the End of DNA Fragments" (read in a browser on 16 November 2026):
+ * "As a general rule and for enzymes not listed below, 6 base pairs should be added on on
+ * either side of the recognition site to cleave efficiently." It is that general rule, not
+ * what any one enzyme needs, which is on the same page.
+ * https://www.neb.com/en-us/tools-and-resources/usage-guidelines/cleavage-close-to-the-end-of-dna-fragments
+ */
 export const CHECK_FLANKS = 6;
 export function tailSiteFlanks(length: number, sites: SiteHit[]) {
   return sites.map(site => ({ site, left: site.start, right: length - site.end - 1 })).filter(x => Math.min(x.left, x.right) < CHECK_FLANKS);
@@ -53,7 +84,14 @@ export function productDigestSizes(length: number, hits: SiteHit[]): number[] | 
     .sort((a, b) => b - a);
 }
 
-/** A drawing heuristic, not a claim about gel resolution: favour substantial, distinct sizes. */
+/**
+ * From this score up, a digest's fragments are far enough apart to suggest: the smallest is
+ * a tenth of the product, and each is a tenth smaller than the one above it. It is this
+ * suggestion's own bar, well clear of the 2% within which the gel draws bands as one.
+ */
+export const DISTINCT_DIGEST = 0.1;
+
+/** How far apart a digest's fragments are: the smallest as a share of the product, or of the next one up. */
 function digestScore(sizes: number[], length: number): number {
   return Math.min(sizes[sizes.length - 1] / length, ...sizes.slice(1).map((s, i) => (sizes[i] - s) / sizes[i]));
 }
@@ -77,23 +115,54 @@ export function suggestedDigests(length: number, hits: SiteHit[], members: reado
     if (sizes && sizes.length >= 2 && sizes.length <= 4) candidates.push({ enzymes, sizes, score: digestScore(sizes, length) });
   };
   names.forEach(name => add([name]));
-  // 10% is deliberately conservative for this suggestion, not the simulated gel's resolution.
-  if (!candidates.some(c => c.score >= 0.1)) {
+  if (!candidates.some(c => c.score >= DISTINCT_DIGEST)) {
     for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) add([names[i], names[j]]);
   }
   return candidates
-    .sort((a, b) => Number(b.score >= 0.1) - Number(a.score >= 0.1) || a.enzymes.length - b.enzymes.length || b.score - a.score || a.enzymes.join().localeCompare(b.enzymes.join()))
+    .sort(
+      (a, b) => Number(b.score >= DISTINCT_DIGEST) - Number(a.score >= DISTINCT_DIGEST) || a.enzymes.length - b.enzymes.length || b.score - a.score || a.enzymes.join().localeCompare(b.enzymes.join())
+    )
     .slice(0, 12);
 }
 
-export function productAdvice(polymerase: string, template: TemplateKind, length: number, highGc: boolean): string[] {
+/** A digest as its menu names it ("ScaI", "AseI + PstI"), which is also how the choice is kept. */
+export const digestName = (d: SuggestedDigest) => d.enzymes.join(" + ");
+
+/** The digest to show: the one chosen before while it is still offered, else the best. */
+export function pickDigest(digests: SuggestedDigest[], chosen: string): SuggestedDigest | null {
+  return digests.find(d => digestName(d) === chosen) ?? digests[0] ?? null;
+}
+
+/** The site to describe: the one clicked while it is still drawn, else one the digest uses, else the first. */
+export function pickSite(sites: CutSite[], clicked: string, digest: SuggestedDigest | null): CutSite | null {
+  return sites.find(s => s.id === clicked) ?? sites.find(s => digest?.enzymes.includes(s.enzyme)) ?? sites[0] ?? null;
+}
+
+/**
+ * A GC-rich product, as NEB's Q5 High GC Enhancer is described for: "high GC (>= 65%)
+ * amplicons" (https://www.neb.com/en-us/products/b9027-q5-reaction-buffer-pack, read in a
+ * browser on 16 November 2026). It is the whole product's GC, not a window of it, as that
+ * is what the sentence is about; where GC runs high within the product is on the strip.
+ */
+export const HIGH_GC = 65;
+
+/**
+ * Which of NEB's two maximum lengths a template takes. Its selection chart: "Simple
+ * templates include plasmid, viral, and E. coli genomic DNA. Complex templates include
+ * plant, human, and other mammalian genomic DNA and cDNA." So a colony, which is E. coli,
+ * is simple, and only the menu's genomic DNA or cDNA is complex.
+ */
+const isSimple = (template: TemplateKind) => template !== "complex";
+
+/** What NEB says about this product for the polymerase picked, and nothing the app has no source for. */
+export function productAdvice(polymerase: string, template: TemplateKind, length: number, gcPercent: number): string[] {
   const guidance = PCR_GUIDANCE[polymerase];
   const out: string[] = [];
-  if (highGc) out.push(`The product has a GC-rich region. ${guidance?.enhancer ?? "There is no enhancer guidance for this polymerase yet."}`);
+  // Rounded as the dialog shows it, so a product shown as 65% GC is one this warns about.
+  if (Math.round(gcPercent) >= HIGH_GC) out.push(`The product is ${Math.round(gcPercent)}% GC, which can be hard to amplify.${guidance?.enhancer ? ` ${guidance.enhancer}` : ""}`);
   if (guidance) {
-    // A colony's background is complex; only a purified plasmid uses the simple limit.
-    const max = template === "plasmid" ? guidance.maxLength.simple : guidance.maxLength.complex;
-    if (length > max) out.push(`The product exceeds NEB’s ${max.toLocaleString("en")} bp maximum for ${guidance.product} on this template.`);
+    const max = isSimple(template) ? guidance.maxLength.simple : guidance.maxLength.complex;
+    if (length > max) out.push(`The product is longer than NEB’s ${max.toLocaleString("en")} bp maximum for ${guidance.product} on this template.`);
   }
   return out;
 }

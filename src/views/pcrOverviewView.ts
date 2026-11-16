@@ -4,23 +4,22 @@
 import { h } from "../ui/dom.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { gcContent } from "../lib/primers.ts";
-import { productLabels, tailSiteFlanks, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pickDigest, pickSite, productLabels, tailSiteFlanks, type productOverview } from "../lib/pcrOverview.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
 
+/** What the user chose here, kept while the dialog is open, as it is drawn anew on every change. */
 export interface ProductViewChoice {
   site: string;
   digest: string;
+  flanks: boolean;
 }
 export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
-  const key = (names: string[]) => names.join(" + ");
-  const digest = data.digests.find(d => key(d.enzymes) === choice.digest) ?? data.digests[0];
-  choice.digest = digest ? key(digest.enzymes) : "";
+  const digest = pickDigest(data.digests, choice.digest);
+  choice.digest = digest ? digestName(digest) : "";
   const detail = h("p", { class: "sv-small sv-dim sv-pcr-site-detail", "aria-live": "polite" });
   const map = h("div", { class: "sv-pcr-product-map", "aria-label": "Cut sites in the final linear product" });
-  const picked = data.sites.find(site => site.id === choice.site) ?? data.sites.find(site => digest?.enzymes.includes(site.enzyme)) ?? data.sites[0];
-  choice.site = picked?.id ?? "";
+  choice.site = pickSite(data.sites, choice.site, digest)?.id ?? "";
   const updateDetail = () => {
     const site = data.sites.find(site => site.id === choice.site);
     detail.textContent = site
@@ -31,13 +30,13 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
   const digestSizes = h("span", { class: "sv-mono sv-small" });
   const digestNote = h("p", { class: "sv-small sv-dim" });
   const updateDigest = () => {
-    const d = data.digests.find(x => key(x.enzymes) === choice.digest);
+    const d = pickDigest(data.digests, choice.digest);
     digestSizes.textContent = d ? `${d.sizes.map(fmt).join(" + ")} bp` : "";
     digestNote.textContent = d
-      ? d.score >= 0.1
-        ? "Chosen for distinct fragment sizes; check the enzymes’ reaction conditions."
-        : "Some fragments are small or close in size and may be hard to distinguish."
-      : "No suitable digest is available from this enzyme list.";
+      ? d.score >= DISTINCT_DIGEST
+        ? "Its fragments are far enough apart to tell on a gel; check the enzymes’ buffer and temperature."
+        : "Some fragments are small or close in size, so they may be hard to tell apart."
+      : "No digest from this list gives fragments worth running.";
   };
   const digestSelect = h(
     "select",
@@ -49,7 +48,7 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
         updateDigest();
       }
     },
-    data.digests.map(d => h("option", { value: key(d.enzymes), selected: key(d.enzymes) === choice.digest }, key(d.enzymes)))
+    data.digests.map(d => h("option", { value: digestName(d), selected: digestName(d) === choice.digest }, digestName(d)))
   );
   const flanks = tailSiteFlanks(product.length, data.tailSites);
   const el = h(
@@ -60,7 +59,7 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
       { class: "sv-pcr-head" },
       h("h3", { class: "sv-pcr-title" }, "Product"),
       h("strong", null, `${fmt(product.length)} bp`),
-      h("span", { class: "sv-small sv-dim" }, `${gcContent(product.sequence).toFixed(1)}% GC${data.tails.left || data.tails.right ? " · 5′ tails included" : ""}`)
+      h("span", { class: "sv-small sv-dim" }, `${data.gcPercent.toFixed(1)}% GC${data.tails.left || data.tails.right ? " · 5′ tails included" : ""}`)
     ),
     h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Cut sites"), source, filter),
     map,
@@ -69,10 +68,17 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
     flanks.length
       ? h(
           "details",
-          { class: "sv-small sv-pcr-flanks" },
-          h("summary", { "data-focus": "tail-flanks" }, "Flanking bases at the tail sites"),
-          ...flanks.map(({ site, left, right }) => h("p", null, `${site.enzyme}: ${fmt(Math.min(left, right))} bp between its recognition site and the nearest product end.`)),
-          h("p", { class: "sv-dim" }, "Check each enzyme’s end requirements; NEB’s general fallback is 6 flanking bp.")
+          {
+            class: "sv-small sv-pcr-flanks",
+            // Opened by hand, it stays open while the dialog is drawn again around it.
+            open: choice.flanks,
+            ontoggle: (e: Event) => {
+              choice.flanks = (e.target as HTMLDetailsElement).open;
+            }
+          },
+          h("summary", { "data-focus": "tail-flanks" }, "Bases beyond the sites in the tails"),
+          ...flanks.map(({ site, left, right }) => h("p", null, `${site.enzyme}: ${fmt(Math.min(left, right))} bp between its site and the nearest end of the product.`)),
+          h("p", { class: "sv-dim" }, `Check how much each enzyme needs; NEB asks for ${CHECK_FLANKS} bases where it lists none.`)
         )
       : null
   );

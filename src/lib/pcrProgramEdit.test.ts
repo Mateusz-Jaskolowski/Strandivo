@@ -7,7 +7,10 @@ import {
   acceptProgramValue,
   cancelProgramValue,
   editedProgramText,
+  MAX_TEMP,
+  MIN_TEMP,
   parseProgramValue,
+  programInputKey,
   programDraft,
   programKey,
   programRows,
@@ -70,6 +73,28 @@ test("unfinished and invalid fields prevent copying and survive input changes", 
   assert.equal(parseProgramValue("cycles", "0"), null);
   assert.equal(parseProgramValue("seconds", "1m 30sec"), 90);
   assert.equal(parseProgramValue("seconds", "20.5"), 20.5);
+});
+
+test("a temperature outside a cycler's range is a slip, not a program", () => {
+  assert.equal(parseProgramValue("temp", "980"), null);
+  assert.equal(parseProgramValue("temp", "-5"), null);
+  assert.equal(parseProgramValue("temp", String(MIN_TEMP)), MIN_TEMP);
+  assert.equal(parseProgramValue("temp", String(MAX_TEMP)), MAX_TEMP);
+  assert.equal(parseProgramValue("temp", "98.5"), 98.5);
+  const d = programDraft(snapshot());
+  d.values[programKey(1, 0, "temp")] = "980";
+  assert.equal(editedProgramText(d), null);
+});
+
+test("the program's key follows what the program is made from, and nothing else", () => {
+  const input = { polymerase: "q5", template: "plasmid", length: 878, ta: 66, taFull: 72 } as const;
+  assert.equal(programInputKey(input), programInputKey({ ...input, twoStage: false }));
+  for (const other of [{ polymerase: "taq" }, { template: "colony" }, { length: 879 }, { ta: 65 }, { taFull: 71 }, { twoStage: true }] as const) {
+    assert.notEqual(programInputKey({ ...input, ...other }), programInputKey(input), JSON.stringify(other));
+  }
+  // A primer renamed, or a Tm setting that leaves the annealing temperature where it was,
+  // makes the same program, so an edited one is not reported as made for another setup.
+  assert.equal(syncProgram(programDraft(snapshot(programInputKey(input))), snapshot(programInputKey(input)))!.original.key, programInputKey(input));
 });
 
 test("untouched programs follow inputs; custom programs keep their baseline and provenance", () => {

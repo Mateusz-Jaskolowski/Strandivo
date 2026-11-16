@@ -16,10 +16,12 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
-- **Plan and adjust a PCR**: the product dialog shows cut sites and GC content, suggests
-  a digest with expected fragment sizes, and flags GC-rich regions and short tail flanks.
-  The cycling program is a line diagram: edit temperatures, times and cycle counts, then
-  copy the current program or reset it to the generated values.
+- **Check and adjust a PCR before you run it**: the product dialog now draws the product
+  with its cut sites and GC content, suggests a digest to check it by and says which
+  fragments to expect, and warns about a GC-rich product, one longer than the polymerase
+  is made for, or a site in a tail with too few bases beyond it. The cycling program is
+  drawn as a line you can edit: change a temperature, a time or a number of cycles, copy
+  the program as it stands, or put it back the way the protocol has it.
 
 - **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
   genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for

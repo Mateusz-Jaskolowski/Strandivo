@@ -11,6 +11,8 @@ import {
   acceptProgramValue,
   cancelProgramValue,
   editedProgramText,
+  MAX_TEMP,
+  MIN_TEMP,
   parseProgramValue,
   programKey,
   programRows,
@@ -59,10 +61,10 @@ export function editableProgram(
       ? h(
           "div",
           { class: "sv-pcr-strip" },
-          h("span", null, `Inputs changed; your earlier program is kept (${draft.original.context}).`),
+          h("span", null, `Your edits are kept from the earlier setup (${draft.original.context}).`),
           generated
             ? h("button", { type: "button", class: "sv-btn sv-btn-small", "data-focus": "regenerate-program", onclick: reset }, "Regenerate program")
-            : h("span", null, "There is no generated program for the current inputs.")
+            : h("span", null, "There is no program for the current setup.")
         )
       : null,
     rows,
@@ -77,7 +79,7 @@ export function editableProgram(
     modified.hidden = !p.modified;
     resetButton.disabled = !generated || (!p.modified && !stale);
     copyButton.disabled = p.errors.length > 0;
-    error.textContent = p.errors.length ? "Enter a temperature in °C, a positive time, or a positive whole cycle count." : "";
+    error.textContent = p.errors.length ? `Enter temperatures from ${MIN_TEMP} to ${MAX_TEMP} °C, times above 0 and whole numbers of cycles.` : "";
     for (const [key, { input }] of controls) {
       const kind = key.split(":")[2] as ProgramField;
       input.setAttribute("aria-invalid", String(p.errors.includes(key)));
@@ -119,15 +121,24 @@ export function editableProgram(
       draft.values[key] = input.value;
       status();
     });
-    input.addEventListener("change", () => {
+    // A value counts as entered on Enter or on leaving the field, which a field drawn anew
+    // after a redraw only does by losing focus (it fires no change). Escape goes back to it.
+    const accept = () => {
       acceptProgramValue(draft, key);
       draw();
+    };
+    input.addEventListener("change", accept);
+    input.addEventListener("blur", () => {
+      if (input.isConnected) accept();
     });
     input.addEventListener("keydown", e => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        e.stopPropagation();
-        if (parseProgramValue(kind, input.value) !== null) input.blur();
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Focus stays here: in a dialog, a blurred field would send the next Tab out of it.
+      if (parseProgramValue(kind, input.value) !== null) {
+        accept();
+        input.select();
       }
     });
     const wrap = h("label", { class: `sv-prog-value sv-prog-${kind}` }, input, kind === "temp" ? "°C" : kind === "cycles" ? "cycles" : "");
@@ -151,6 +162,7 @@ export function editableProgram(
           line
         );
         const wrapper = h("div", { class: "sv-prog-row" }, svg);
+        // Fields go in as they are drawn, so Tab moves left to right: a stage's cycle count, then its steps.
         row.groups.forEach((group, index) => {
           if (index > 0) svg.append(s("line", { x1: group.x - 11, x2: group.x - 11, y1: 30, y2: 180, class: "sv-prog-divider" }));
           if (p.stages[group.stage].cycles !== null) {
@@ -160,19 +172,19 @@ export function editableProgram(
             count.style.top = "-5px";
             wrapper.append(count);
           }
+          for (const at of row.steps.filter(x => x.stage === group.stage)) {
+            const step = p.stages[at.stage].steps[at.step];
+            const prefix = `Stage ${at.stage + 1}, ${step.name}`;
+            const temp = field(at.stage, at.step, "temp", `${prefix} temperature, °C`);
+            temp.style.left = `${at.x + at.width / 2 - 32}px`;
+            const time =
+              step.seconds !== null
+                ? field(at.stage, at.step, "seconds", `${prefix} duration`)
+                : h("span", { class: "sv-prog-value sv-prog-seconds", "data-hold": `${at.stage}:${at.step}`, role: "img", "aria-label": "Holds until stopped", title: "Holds until stopped" }, "∞");
+            time.style.left = `${at.x + at.width / 2 - 43}px`;
+            wrapper.append(temp, time, h("span", { class: "sv-prog-name", style: { left: `${at.x}px`, width: `${at.width}px` } }, step.name));
+          }
         });
-        for (const at of row.steps) {
-          const step = p.stages[at.stage].steps[at.step];
-          const prefix = `Stage ${at.stage + 1}, ${step.name}`;
-          const temp = field(at.stage, at.step, "temp", `${prefix} temperature, °C`);
-          temp.style.left = `${at.x + at.width / 2 - 32}px`;
-          const time =
-            step.seconds !== null
-              ? field(at.stage, at.step, "seconds", `${prefix} duration`)
-              : h("span", { class: "sv-prog-value sv-prog-seconds", "data-hold": `${at.stage}:${at.step}`, "aria-label": "Indefinite hold" }, "∞");
-          time.style.left = `${at.x + at.width / 2 - 43}px`;
-          wrapper.append(temp, time, h("span", { class: "sv-prog-name", style: { left: `${at.x}px`, width: `${at.width}px` } }, step.name));
-        }
         views.push({ line, steps: row.steps });
         return wrapper;
       })

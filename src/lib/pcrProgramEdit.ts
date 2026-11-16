@@ -3,7 +3,7 @@
 
 // A generated program and the user's raw edits. Raw text survives redraws, including an
 // unfinished or invalid entry. The baseline and its source stay together if inputs change.
-import { durationText, programText, type PcrStage } from "./pcrProgram.ts";
+import { durationText, programText, type PcrStage, type ProgramInput } from "./pcrProgram.ts";
 
 export interface ProgramSnapshot {
   key: string;
@@ -44,6 +44,13 @@ export function cancelProgramValue(draft: ProgramDraft, key: string): boolean {
   return true;
 }
 
+/**
+ * Temperatures a program may use, °C: a cycler's block holds from about 4 °C and denatures
+ * below 100 °C, so a value outside these is a slip ("980" for 98.0), not a choice.
+ */
+export const MIN_TEMP = 0;
+export const MAX_TEMP = 100;
+
 /** Bare numbers are seconds; minutes and seconds can be combined. */
 export function parseProgramValue(field: ProgramField, text: string): number | null {
   const t = text.trim();
@@ -53,7 +60,18 @@ export function parseProgramValue(field: ProgramField, text: string): number | n
     if (m && (m[1] || m[2])) n = Number(m[1] || 0) * 60 + Number(m[2] || 0);
     else if (/^\d+(?:\.\d+)?$/.test(t)) n = Number(t);
   } else if (/^-?\d+(?:\.\d+)?$/.test(t)) n = Number(t);
-  return Number.isFinite(n) && (field === "temp" || (n > 0 && (field !== "cycles" || Number.isSafeInteger(n)))) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  if (field === "temp") return n >= MIN_TEMP && n <= MAX_TEMP ? n : null;
+  return n > 0 && (field !== "cycles" || Number.isSafeInteger(n)) ? n : null;
+}
+
+/**
+ * What the generated program depends on: the inputs of `pcrProgram` and nothing else, so a
+ * change elsewhere (a primer renamed, a Tm setting that leaves the annealing temperature
+ * where it was) never marks an edited program as made for another setup.
+ */
+export function programInputKey(o: ProgramInput): string {
+  return JSON.stringify([o.polymerase, o.template, o.length, o.ta, o.taFull ?? null, !!o.twoStage]);
 }
 
 export function readProgram(draft: ProgramDraft): { stages: PcrStage[]; errors: string[]; modified: boolean } {

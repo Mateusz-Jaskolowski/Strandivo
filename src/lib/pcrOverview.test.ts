@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { COMMON_ENZYMES, findCutSites, scanSites, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { digestSequence, fragmentSize } from "./gel.ts";
 import { pcrProduct } from "./pcr.ts";
-import { CHECK_FLANKS, productAdvice, productDigestSizes, productLabels, productOverview, suggestedDigests, tailSiteFlanks } from "./pcrOverview.ts";
+import { CHECK_FLANKS, digestName, HIGH_GC, pickDigest, pickSite, productAdvice, productDigestSizes, productLabels, productOverview, suggestedDigests, tailSiteFlanks } from "./pcrOverview.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
 import { reverseComplement, type SeqData } from "./seqdata.ts";
 const opts: EnzymeOptions = { enzymeSource: "common", enzymeFilter: "unique6", labEnzymes: [], personalEnzymes: [] };
@@ -90,13 +90,49 @@ test("the source chart's exact ends and length limits are held, including mixed 
   assert.equal(PCR_GUIDANCE.onetaq.ends, "3′ A overhangs or blunt");
   assert.equal(PCR_GUIDANCE.taq.ends, "3′ A overhangs");
   assert.equal(PCR_GUIDANCE["q5u"], undefined);
-  assert.deepEqual(productAdvice("q5", "plasmid", 20000, false), []);
-  assert.match(productAdvice("q5", "complex", 10001, false)[0], /10,000 bp/);
-  assert.match(productAdvice("q5", "colony", 10001, false)[0], /10,000 bp/);
-  assert.match(productAdvice("q5", "plasmid", 100, true)[0], /Q5 High GC Enhancer with Q5 Reaction Buffer/);
-  assert.match(productAdvice("unread", "plasmid", 100, true)[0], /no enhancer guidance/);
   assert.equal(CHECK_FLANKS, 6);
   assert.equal(tailSiteFlanks(100, [{ ...hit("X", 20), start: 6, end: 12 }]).length, 0);
+});
+
+test("length warnings follow NEB's simple and complex templates, where a colony is E. coli", () => {
+  assert.deepEqual(productAdvice("q5", "plasmid", 20000, 50), []);
+  // A plasmid and a colony are simple, so only past 20 kb; genomic DNA or cDNA past 10 kb.
+  assert.deepEqual(productAdvice("q5", "colony", 20000, 50), []);
+  assert.deepEqual(productAdvice("q5", "complex", 10000, 50), []);
+  assert.match(productAdvice("q5", "complex", 10001, 50)[0], /10,000 bp maximum for Q5 \(M0491\)/);
+  assert.match(productAdvice("q5", "colony", 20001, 50)[0], /20,000 bp/);
+  assert.match(productAdvice("taq", "plasmid", 5001, 50)[0], /5,000 bp maximum for Taq \(M0273\)/);
+  // A polymerase whose chart row has not been read says nothing rather than guess.
+  assert.deepEqual(productAdvice("q5u", "plasmid", 50000, 50), []);
+});
+
+test("the GC warning is the whole product's, at NEB's 65%, and names an enhancer only where there is one", () => {
+  assert.equal(HIGH_GC, 65);
+  assert.deepEqual(productAdvice("q5", "plasmid", 1000, 64.4), []);
+  // Rounded as the dialog shows it, so a product shown as 65% GC warns.
+  const q5 = productAdvice("q5", "plasmid", 1000, 64.6);
+  assert.match(q5[0], /^The product is 65% GC, which can be hard to amplify\./);
+  assert.match(q5[0], /Q5 High GC Enhancer/);
+  // Phusion has no enhancer in the chart, so the sentence stops at the fact.
+  assert.equal(productAdvice("phusion", "plasmid", 1000, 70)[0], "The product is 70% GC, which can be hard to amplify.");
+  assert.equal(productAdvice("q5u", "plasmid", 1000, 70).length, 1);
+});
+
+test("the digest and site shown are kept while they are still offered", () => {
+  const digests = suggestedDigests(1000, [hit("A", 600), hit("B", 450)], ["A", "B"]);
+  assert.deepEqual(digests.map(digestName), ["A", "B"]);
+  assert.equal(digestName(pickDigest(digests, "B")!), "B");
+  // A choice that is no longer offered falls back to the best, and an empty list to nothing.
+  assert.equal(digestName(pickDigest(digests, "C")!), "A");
+  assert.equal(pickDigest([], "A"), null);
+  const sites = findCutSites("GAATTCAAAAAAAAAAAAAAAAAAAAGGATCC", false, { ...opts, enzymeFilter: "all" });
+  const eco = sites.find(s => s.enzyme === "EcoRI")!;
+  const bam = sites.find(s => s.enzyme === "BamHI")!;
+  assert.equal(pickSite(sites, bam.id, null), bam);
+  // With nothing clicked, a site of the suggested digest comes first, else the leftmost.
+  assert.equal(pickSite(sites, "", { enzymes: ["BamHI"], sizes: [], score: 0 }), bam);
+  assert.equal(pickSite(sites, "gone", null), eco);
+  assert.equal(pickSite([], "", null), null);
 });
 
 test("product label lanes stay inside their bounds without overlapping peers", () => {

@@ -3329,36 +3329,154 @@
 .sv-libwin-more {
   margin: 10px 2px 0;
 }
+/* The Enzyme library window (src/enzymeLibraryWindow.ts): one header with the switch between
+   Lab stock and My enzymes, then the section's own toolbar and list. */
+.sv-enzyme-library > .sv-libwin-head {
+  align-items: center;
+}
+.sv-enzyme-library-body,
+.sv-enzyme-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--panel);
+}
+.sv-enzyme-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px 20px 0;
+}
+.sv-enzyme-toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.sv-enzyme-toolbar-end > [role="status"] {
+  margin-right: 6px;
+}
+.sv-enzyme-search {
+  width: 280px;
+  max-width: 100%;
+}
+.sv-enzyme-toolbar .sv-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.sv-enzyme-section-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 20px 20px;
+}
+main.sv-enzyme-section-body {
+  display: block;
+  overflow: auto;
+}
+.sv-enzyme-add-card {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 10px;
+  margin: 12px 20px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--side);
+}
 .sv-enzyme-add {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 12px;
+}
+@media (max-width: 760px) {
+  .sv-enzyme-add {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .sv-enzyme-add label {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   color: var(--text-2);
   font-size: 12px;
 }
+/* The cut of the enzyme being named; it keeps its line so the form doesn't jump. */
+.sv-enzyme-add-cut {
+  min-height: 15px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
 .sv-enzyme-add-actions {
   grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
-.sv-enzyme-search {
-  width: 300px;
+.sv-enzyme-add-actions p {
+  flex: 1 1 260px;
+  margin: 0 0 0 10px;
 }
 .sv-enzyme-grid {
-  min-width: 720px;
+  min-width: 820px;
 }
-.sv-enzyme-grid td:nth-child(3),
-.sv-enzyme-grid td:nth-child(5) {
-  width: 25%;
+.sv-enzyme-grid .sv-td-enzyme {
+  width: 12%;
 }
-.sv-enzyme-grid td:nth-child(4) {
-  width: 20%;
+.sv-enzyme-grid .sv-td-site {
+  width: 13%;
+}
+.sv-enzyme-grid .sv-td-ends {
+  width: 9%;
+}
+.sv-enzyme-grid .sv-td-product,
+.sv-enzyme-grid .sv-td-notes {
+  width: 24%;
+}
+.sv-enzyme-grid .sv-td-location {
+  width: 18%;
 }
 .sv-enzyme-grid td:first-child .sv-cell-input {
-  min-width: 110px;
+  min-width: 100px;
+  font-weight: 600;
+}
+.sv-enzyme-grid .sv-td-remove {
+  width: 1%;
+  text-align: right;
+}
+/* An enzyme's cut (src/views/enzymeCut.ts): G^AATTC, GGTCTC(1/5), and the ends it leaves. */
+.sv-cut-site {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sv-cut-mark {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.sv-cut-outside {
+  color: var(--text-3);
+}
+.sv-cut-ends {
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sv-cut-ends .sv-mono {
+  font-size: 11.5px;
 }
 /* Which enzymes show (src/views/enzymeControls.ts): the list, then how often they cut. The
    same controls are in the sidebar and in the map's Cut sites menu. */
@@ -3393,74 +3511,94 @@
   flex: 0 0 auto;
   margin-right: 2px;
 }
-.sv-enzyme-library-body {
-  display: flex;
+/* My enzymes (src/views/personalEnzymesPanel.ts): a checklist of thousands, drawn only near
+   the view, so every row and heading is one fixed height and the columns fixed widths. */
+.sv-personal-enzyme-table {
   flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-.sv-enzyme-library-body > .sv-libwin {
-  flex: 1;
-  min-width: 0;
-  height: auto;
-}
-.sv-personal-enzymes {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  padding: 16px 20px;
+  min-height: 100px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.sv-personal-enzyme-head,
+.sv-personal-enzyme-row {
+  display: grid;
+  grid-template-columns: 16px 130px 150px 110px minmax(0, 1fr);
+  align-items: center;
   gap: 12px;
+  padding: 0 14px;
+  box-sizing: border-box;
 }
-.sv-personal-enzyme-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
-}
-.sv-personal-enzyme-tools > input {
-  width: 240px;
-  max-width: 100%;
-}
-.sv-personal-enzyme-tools > label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.sv-personal-enzyme-head {
+  flex: 0 0 auto;
+  height: 32px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
 }
 .sv-personal-enzyme-list {
   flex: 1;
-  min-height: 100px;
+  min-height: 0;
   overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 6px;
   overflow-anchor: none;
 }
 .sv-personal-enzyme-rows {
   position: relative;
 }
-.sv-personal-enzyme-row {
+.sv-personal-enzyme-row,
+.sv-personal-enzyme-group {
   position: absolute;
-  display: grid;
-  grid-template-columns: auto minmax(90px, 1fr) minmax(130px, 2fr) 44px;
-  align-items: center;
-  gap: 10px;
+  left: 0;
   width: 100%;
-  height: 44px;
-  padding: 0 12px;
+  height: 34px;
   border-bottom: 1px solid var(--line);
+}
+.sv-personal-enzyme-row {
   cursor: pointer;
 }
+.sv-personal-enzyme-row:hover,
 .sv-personal-enzyme-row:focus-within {
-  background: var(--side);
+  background: var(--hover);
+}
+.sv-personal-enzyme-row > input {
+  margin: 0;
+}
+.sv-personal-enzyme-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sv-personal-enzyme-name {
   font-weight: 500;
 }
-.sv-personal-enzyme-row > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.sv-personal-enzyme-row > .sv-personal-enzyme-lab {
+  justify-self: start;
+  padding: 1px 7px;
+  font-size: 11px;
+}
+.sv-personal-enzyme-lab:empty {
+  display: none;
+}
+.sv-personal-enzyme-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  background: var(--side);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.sv-personal-enzyme-group-count {
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 /* ---------- task dialogs ---------- */

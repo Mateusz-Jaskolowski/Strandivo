@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, newEnzymeStocks, parseEnzymeLibrary, parseEnzymeTable, unknownEnzymes, type LabEnzyme } from "./enzymeLibrary.ts";
-import { enzymeName, findCutSites, KNOWN_ENZYMES, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { cutNotation, enzymeCut, enzymeName, findCutSites, KNOWN_ENZYMES, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
 
 const labOptions = (names: readonly string[] = [], enzymeFilter: EnzymeFilter = "all"): EnzymeOptions => ({ enzymeSource: "lab", enzymeFilter, labEnzymes: names, personalEnzymes: [] });
 const commonOptions = (labEnzymes: readonly string[], enzymeFilter: EnzymeFilter): EnzymeOptions => ({ enzymeSource: "common", enzymeFilter, labEnzymes, personalEnzymes: [] });
@@ -26,6 +26,28 @@ test("enzyme names: the curated list's own, else any TeselaGen knows, as the use
   assert.equal(enzymeName(""), null);
   assert.ok(KNOWN_ENZYMES.includes("Acc65I") && KNOWN_ENZYMES.indexOf("EcoRI") < KNOWN_ENZYMES.indexOf("Acc65I"), "curated names come first");
   assert.equal(new Set(KNOWN_ENZYMES.map(n => n.toLowerCase())).size, KNOWN_ENZYMES.length);
+});
+
+test("cuts are written as REBASE writes them, with the ends they leave", () => {
+  const cut = (name: string) => {
+    const c = enzymeCut(name);
+    return c && `${cutNotation(c)} ${c.ends}`.trim();
+  };
+  // Same site, other ends: the reason a lab's stock names the isoschizomer it has.
+  assert.equal(cut("KpnI"), "GGTAC^C 3′ GTAC");
+  assert.equal(cut("acc65i"), "G^GTACC 5′ GTAC");
+  assert.equal(cut("EcoRI"), "G^AATTC 5′ AATT");
+  assert.equal(cut("PvuII"), "CAG^CTG Blunt");
+  assert.equal(cut("BglI"), "GCCNNNN^NGGC 3′ NNN");
+  // Outside the site: bases after it on the top and bottom strands.
+  assert.equal(cut("BsaI"), "GGTCTC(1/5) 5′ NNNN");
+  assert.equal(cut("BtsI"), "GCAGTG(2/0) 3′ NN");
+  assert.equal(cut("BsmI"), "GAATGC(1/-1) 3′ CN");
+  // Cuts on both sides of its site, of which TeselaGen keeps one: the site alone.
+  assert.equal(cut("BcgI"), "CGANNNNNNTGC Cuts both sides");
+  // REBASE doesn't know where it cuts; TeselaGen's 1/1 would read as a blunt G^GTACC.
+  assert.equal(cut("BspJ106I"), "GGTACC Cut not known");
+  assert.equal(enzymeCut("EcoRI-HF"), null);
 });
 
 test("a saved list keeps enzymes this version doesn't know, as written, instead of failing", () => {

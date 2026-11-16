@@ -16,6 +16,13 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **A clearer enzyme library**: Lab stock and My enzymes show where each enzyme cuts, as
+  G^AATTC or GGTCTC(1/5), and the ends it leaves, so Acc65I and KpnI are easy to tell
+  apart. My enzymes lists your chosen enzymes first, then your lab's stock, the common
+  enzymes and the rest of the catalogue, each under its heading, instead of opening on rare
+  isoschizomers. Lab stock sorts by enzyme, product or freezer location, and shows the cut
+  of the enzyme you are adding as you type its name.
+
 ## 0.5.0
 
 Strandivo now follows your computer into dark mode, or stays light or dark as you choose

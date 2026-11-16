@@ -281,6 +281,50 @@ export function enzymeSite(name: string): string {
   return aliasedEnzymesByName[name.trim().toLowerCase()]?.site.toUpperCase() ?? "";
 }
 
+/** How an enzyme cuts, for lists of enzymes: where, and the ends it leaves. */
+export interface EnzymeCut {
+  /** Recognition site in upper case ("GAATTC"). */
+  site: string;
+  /** Where in the site the top strand is cut (1 for G^AATTC), or null for a cut outside it. */
+  at: number | null;
+  /** A cut outside the site, written after it as REBASE does: "(1/5)" for BsaI; else "". */
+  outside: string;
+  /** "5′ AATT", "3′ GTAC" or "Blunt"; with no cut marked, "Cuts both sides" or "Cut not known". */
+  ends: string;
+}
+
+/**
+ * The cut of an enzyme TeselaGen knows, or null. Bases of an overhang outside the site are
+ * N. Two kinds get only their site: an enzyme that cuts on both sides of it (BcgI), as
+ * TeselaGen keeps one of its two cuts, and one whose cut REBASE doesn't know, which
+ * TeselaGen writes as 1/1 (about 2,300 rare ones, such as BspJ106I; no common enzyme cuts
+ * there, and for a palindromic site it would be no cut at all).
+ */
+export function enzymeCut(name: string): EnzymeCut | null {
+  const e = aliasedEnzymesByName[name.trim().toLowerCase()];
+  if (!e) return null;
+  const site = e.site.toUpperCase();
+  const top = e.topSnipOffset;
+  const bottom = e.bottomSnipOffset;
+  if (e.usForward !== undefined || e.cutType === 1) return { site, at: null, outside: "", ends: "Cuts both sides" };
+  if (top === 1 && bottom === 1) return { site, at: null, outside: "", ends: "Cut not known" };
+  const n = site.length;
+  const inside = top >= 0 && top <= n && bottom >= 0 && bottom <= n;
+  const from = Math.min(top, bottom);
+  const overhang = Array.from({ length: Math.abs(top - bottom) }, (_, i) => site[from + i] ?? "N").join("");
+  return {
+    site,
+    at: inside ? top : null,
+    outside: inside ? "" : `(${top - n}/${bottom - n})`,
+    ends: top === bottom ? "Blunt" : `${top < bottom ? "5′" : "3′"} ${overhang}`
+  };
+}
+
+/** A cut as text: "G^AATTC", "GGTCTC(1/5)". */
+export function cutNotation(c: EnzymeCut): string {
+  return c.at === null ? c.site + c.outside : `${c.site.slice(0, c.at)}^${c.site.slice(c.at)}`;
+}
+
 /** Enzymes whose site can be added to a primer as written (no N or other ambiguity codes). */
 export const TAIL_ENZYMES: { name: string; site: string }[] = ALL_ENZYMES.filter(e => /^[acgt]{6,}$/i.test(e.site))
   .map(e => ({ name: e.name, site: e.site.toUpperCase() }))

@@ -1,9 +1,11 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Restriction sites, using the enzyme list and site search from TeselaGen's sequence-utils.
+// Restriction sites: the enzymes REBASE lists as sold (src/lib/rebaseEnzymes.ts, built by
+// tools/build-enzymes.mjs), found with the site search from TeselaGen's sequence-utils.
 
-import { aliasedEnzymesByName, getCutsitesFromSequence, type RestrictionEnzyme } from "@teselagen/sequence-utils";
+import { getCutsitesFromSequence, type RestrictionEnzyme } from "@teselagen/sequence-utils";
+import { REBASE_ENZYMES, SUPPLIERS } from "./rebaseEnzymes.ts";
 
 export type EnzymeSource = "common" | "lab" | "personal";
 export type EnzymeFilter = "unique6" | "unique" | "unique2" | "all";
@@ -64,6 +66,41 @@ export interface CutSite {
   cuts: number;
 }
 
+/** An enzyme REBASE lists as sold, in the form the site search takes. */
+interface Enzyme extends RestrictionEnzyme {
+  /** Its cut as REBASE writes it: "G^AATTC", "GGTCTC(1/5)", "(10/12)CGANNNNNNTGC(12/10)". */
+  notation: string;
+  /** Also cuts before its site (BcgI); only the cut after it is searched for. */
+  bothSides: boolean;
+  /** REBASE's codes for the companies that sell it. */
+  suppliers: string;
+}
+
+const BASES: Record<string, string> = { a: "a", c: "c", g: "g", t: "t", r: "ag", y: "ct", s: "cg", w: "at", k: "gt", m: "ac", b: "cgt", d: "agt", h: "act", v: "acg", n: "acgt" };
+const COMPLEMENT: Record<string, string> = { a: "t", c: "g", g: "c", t: "a", r: "y", y: "r", s: "s", w: "w", k: "m", m: "k", b: "v", v: "b", d: "h", h: "d", n: "n" };
+/**
+ * What each letter of a site matches in a sequence: every code standing for some of its
+ * bases, as TeselaGen's own list had it (R matches A, G and R; N matches any letter).
+ */
+const MATCHES: Record<string, string> = Object.fromEntries(
+  Object.entries(BASES).map(([code, bases]) => {
+    const letters = Object.keys(BASES).filter(l => [...BASES[l]].every(b => bases.includes(b))).sort().join("");
+    return [code, letters.length === 1 ? letters : `[${letters}]`];
+  })
+);
+const pattern = (site: string) => [...site].map(c => MATCHES[c]).join("");
+
+const ENZYMES = new Map<string, Enzyme>(
+  REBASE_ENZYMES.trim().split("\n").map(line => {
+    const [name, notation, written, top, bottom, bothSides, suppliers] = line.split("\t");
+    const site = written.toLowerCase();
+    const reverse = [...site].reverse().map(c => COMPLEMENT[c]).join("");
+    const e: Enzyme = { name, site, forwardRegex: pattern(site), reverseRegex: pattern(reverse), topSnipOffset: Number(top), bottomSnipOffset: Number(bottom), notation, bothSides: bothSides === "1", suppliers };
+    return [name.toLowerCase(), e];
+  })
+);
+const known = (name: string) => ENZYMES.get(name.trim().toLowerCase());
+
 /** Length of the recognition site without N's (how specific the enzyme is). */
 export function specificity(e: RestrictionEnzyme): number {
   return e.site.replace(/n/gi, "").length;
@@ -81,43 +118,33 @@ export const COMMON_ENZYMES = (
   "SnaBI SpeI SphI SspI StuI SwaI XbaI XhoI XmaI XmnI"
 ).split(" ");
 
-const ALL_ENZYMES: RestrictionEnzyme[] = COMMON_ENZYMES.flatMap(name => {
-  const e = aliasedEnzymesByName[name.toLowerCase()];
-  return e ? [{ ...e, name }] : [];
-});
-const CURATED = new Map(ALL_ENZYMES.map(e => [e.name.toLowerCase(), e]));
+const ALL_ENZYMES: Enzyme[] = COMMON_ENZYMES.map(name => ENZYMES.get(name.toLowerCase())!);
+const CURATED = new Set(COMMON_ENZYMES.map(n => n.toLowerCase()));
 
 /**
- * The name Strandivo uses for any enzyme TeselaGen knows, or null: the curated list's own
- * name where it has one (BsmBI, not Esp3I), else the alias as the user wrote it (Esp3I).
- * Lab stock may hold any of these, so a lab's Acc65I isn't mistaken for KpnI, whose cut differs.
+ * The name Strandivo uses for an enzyme REBASE lists as sold, written as REBASE writes it,
+ * or null. Isoschizomers keep their own names (Esp3I is not BsmBI), so a lab's Acc65I
+ * isn't mistaken for KpnI, whose cut differs.
  */
 export function enzymeName(name: string): string | null {
-  const lower = name.trim().toLowerCase();
-  if (!lower) return null;
-  const curated = CURATED.get(lower);
-  if (curated) return curated.name;
-  const e = aliasedEnzymesByName[lower];
-  return e ? (e.aliases?.find(a => a.toLowerCase() === lower) ?? e.name) : null;
+  return known(name)?.name ?? null;
 }
 
-/** Every enzyme name TeselaGen knows, the curated ones first, for choosing a lab's stock. */
+/** Every enzyme REBASE lists as sold, the curated ones first, for choosing a lab's stock. */
 export const KNOWN_ENZYMES: readonly string[] = [
   ...COMMON_ENZYMES,
-  ...[...new Set(Object.values(aliasedEnzymesByName).flatMap(e => e.aliases?.length ? e.aliases : [e.name]))]
-    .filter(n => !CURATED.has(n.toLowerCase()))
-    .sort((a, b) => a.localeCompare(b))
+  ...[...ENZYMES.values()].map(e => e.name).filter(n => !CURATED.has(n.toLowerCase())).sort((a, b) => a.localeCompare(b))
 ];
 
-const extraCache = new Map<string, RestrictionEnzyme[]>();
+const extraCache = new Map<string, Enzyme[]>();
 /** The curated enzymes plus any other known enzyme named in `extra` (a lab's stock). */
-function enzymeList(extra: readonly string[]): RestrictionEnzyme[] {
+function enzymeList(extra: readonly string[]): Enzyme[] {
   const names = [...new Set(extra.map(enzymeName).filter((n): n is string => !!n && !CURATED.has(n.toLowerCase())))].sort();
   if (!names.length) return ALL_ENZYMES;
   const key = names.join(" ");
   let list = extraCache.get(key);
   if (!list) {
-    list = [...ALL_ENZYMES, ...names.map(name => ({ ...aliasedEnzymesByName[name.toLowerCase()], name }))];
+    list = [...ALL_ENZYMES, ...names.map(name => ENZYMES.get(name.toLowerCase())!)];
     extraCache.clear();
     extraCache.set(key, list);
   }
@@ -143,9 +170,11 @@ export interface SiteHit {
 }
 
 // Over every known enzyme, so a lab's stock can't outgrow it.
-const MAX_SITE = Math.max(...Object.values(aliasedEnzymesByName).map(e => e.site.length));
+const MAX_SITE = Math.max(...[...ENZYMES.values()].map(e => e.site.length));
+/** Furthest any enzyme cuts from its site (EcoP15I's 27 bases); a test holds it to this. */
+export const MAX_CUT_DISTANCE = 40;
 /** How far from an edit sites are looked for again: longer than any site plus any cut outside it. */
-const MARGIN = MAX_SITE + 40;
+const MARGIN = MAX_SITE + MAX_CUT_DISTANCE;
 
 function search(sequence: string, circular: boolean, enzymes: RestrictionEnzyme[], offset = 0): SiteHit[] {
   let found: ReturnType<typeof getCutsitesFromSequence>;
@@ -267,7 +296,7 @@ export function selectSites(hits: SiteHit[], o: EnzymeOptions): CutSite[] {
   const out: CutSite[] = [];
   for (const h of hits) {
     const cuts = counts.get(h.enzyme)!;
-    const e = aliasedEnzymesByName[h.enzyme.toLowerCase()];
+    const e = ENZYMES.get(h.enzyme.toLowerCase());
     if (!names.has(h.enzyme) || cuts > maxCuts || (e ? specificity(e) : 0) < minSpecificity) continue;
     // Stable ids, so a selected site stays selected when the sites are recomputed.
     out.push({ id: `${h.enzyme}@${h.start}`, ...h, cuts });
@@ -276,53 +305,35 @@ export function selectSites(hits: SiteHit[], o: EnzymeOptions): CutSite[] {
   return out;
 }
 
-/** An enzyme's recognition site in upper case ("GGTCTC" for BsaI), or "" if TeselaGen doesn't know it. */
+/** An enzyme's recognition site as REBASE writes it, without its cut ("GGTCTC" for BsaI), or "" if unknown. */
 export function enzymeSite(name: string): string {
-  return aliasedEnzymesByName[name.trim().toLowerCase()]?.site.toUpperCase() ?? "";
+  return known(name)?.notation.replace(/\(-?\d+\/-?\d+\)|\^/g, "") ?? "";
 }
 
-/** How an enzyme cuts, for lists of enzymes: where, and the ends it leaves. */
+/** How an enzyme cuts, for lists of enzymes. */
 export interface EnzymeCut {
-  /** Recognition site in upper case ("GAATTC"). */
-  site: string;
-  /** Where in the site the top strand is cut (1 for G^AATTC), or null for a cut outside it. */
-  at: number | null;
-  /** A cut outside the site, written after it as REBASE does: "(1/5)" for BsaI; else "". */
-  outside: string;
-  /** "5′ AATT", "3′ GTAC" or "Blunt"; with no cut marked, "Cuts both sides" or "Cut not known". */
+  /** As REBASE writes it: "G^AATTC", "GGTCTC(1/5)" (bases after the site to each strand's cut). */
+  notation: string;
+  /** "5′ AATT", "3′ GTAC", "Blunt", or "Cuts both sides" (BcgI, which cuts a piece out). */
   ends: string;
 }
 
-/**
- * The cut of an enzyme TeselaGen knows, or null. Bases of an overhang outside the site are
- * N. Two kinds get only their site: an enzyme that cuts on both sides of it (BcgI), as
- * TeselaGen keeps one of its two cuts, and one whose cut REBASE doesn't know, which
- * TeselaGen writes as 1/1 (about 2,300 rare ones, such as BspJ106I; no common enzyme cuts
- * there, and for a palindromic site it would be no cut at all).
- */
+/** The cut of an enzyme REBASE lists as sold, or null. Bases of an overhang outside the site are N. */
 export function enzymeCut(name: string): EnzymeCut | null {
-  const e = aliasedEnzymesByName[name.trim().toLowerCase()];
+  const e = known(name);
   if (!e) return null;
-  const site = e.site.toUpperCase();
+  if (e.bothSides) return { notation: e.notation, ends: "Cuts both sides" };
   const top = e.topSnipOffset;
   const bottom = e.bottomSnipOffset;
-  if (e.usForward !== undefined || e.cutType === 1) return { site, at: null, outside: "", ends: "Cuts both sides" };
-  if (top === 1 && bottom === 1) return { site, at: null, outside: "", ends: "Cut not known" };
-  const n = site.length;
-  const inside = top >= 0 && top <= n && bottom >= 0 && bottom <= n;
+  const site = e.site.toUpperCase();
   const from = Math.min(top, bottom);
   const overhang = Array.from({ length: Math.abs(top - bottom) }, (_, i) => site[from + i] ?? "N").join("");
-  return {
-    site,
-    at: inside ? top : null,
-    outside: inside ? "" : `(${top - n}/${bottom - n})`,
-    ends: top === bottom ? "Blunt" : `${top < bottom ? "5′" : "3′"} ${overhang}`
-  };
+  return { notation: e.notation, ends: top === bottom ? "Blunt" : `${top < bottom ? "5′" : "3′"} ${overhang}` };
 }
 
-/** A cut as text: "G^AATTC", "GGTCTC(1/5)". */
-export function cutNotation(c: EnzymeCut): string {
-  return c.at === null ? c.site + c.outside : `${c.site.slice(0, c.at)}^${c.site.slice(c.at)}`;
+/** The companies REBASE says sell an enzyme, by name. */
+export function enzymeSuppliers(name: string): string[] {
+  return [...(known(name)?.suppliers ?? "")].map(code => SUPPLIERS[code] ?? code);
 }
 
 /** Enzymes whose site can be added to a primer as written (no N or other ambiguity codes). */

@@ -1,12 +1,12 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Lab stock and a separate personal selection, shared across documents. Recognition and
-// cut positions come from TeselaGen; stock products, locations and notes are user text.
+// Lab stock and a separate personal selection, shared across documents. Sites and cuts
+// come from REBASE (src/lib/enzymes.ts); stock products, locations and notes are user text.
 
 import "./doc/document.css";
 import { enzymeLibrary } from "./enzymeLibrary.ts";
-import { cutNotation, enzymeCut, enzymeName, KNOWN_ENZYMES } from "./lib/enzymes.ts";
+import { enzymeCut, enzymeName, KNOWN_ENZYMES } from "./lib/enzymes.ts";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, parseEnzymeLibrary, parseEnzymeTable, type EnzymeStock, type LabEnzyme } from "./lib/enzymeLibrary.ts";
 import { chooseSavePath, isDesktop, onEnzymeLibrarySection, pickFiles, saveText, setWindowTitle, type EnzymeLibrarySection } from "./platform.ts";
 import { naturalOrder, nextTableSort, parseTableSort, sortedBy, type TableSort } from "./lib/tableSort.ts";
@@ -78,7 +78,7 @@ function mountLabStock(root: HTMLElement): () => void {
   const search = h("input", { class: "sv-input sv-input-filter", type: "search", placeholder: "Search stock", title: "Search enzymes, products, freezer locations and notes", "aria-label": "Search the enzyme library" }) as HTMLInputElement;
   const table = h("div", { class: "sv-table-wrap sv-libwin-table" });
   const panel = h("div", { class: "sv-enzyme-add-card", hidden: true });
-  // Every name TeselaGen knows, offered as the user types; the curated ones come first.
+  // Every enzyme sold, offered as the user types; the curated ones come first.
   const known = h("datalist", { id: LIST_ID }, KNOWN_ENZYMES.map(name => h("option", { value: name })));
 
   let saving = 0;
@@ -118,7 +118,7 @@ function mountLabStock(root: HTMLElement): () => void {
     const preview = h("span", { class: "sv-enzyme-add-cut", "aria-live": "polite" });
     const showCut = () => {
       const c = enzymeCut(enzyme.value);
-      preview.textContent = c ? `${cutNotation(c)} · ${c.ends}` : "";
+      preview.textContent = c ? `${c.notation} · ${c.ends}` : "";
     };
     enzyme.addEventListener("input", showCut);
     const product = h("input", { class: "sv-input", "aria-label": "New stock product", placeholder: "e.g. NEB EcoRI-HF (R3101)" }) as HTMLInputElement;

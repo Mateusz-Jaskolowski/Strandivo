@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, newEnzymeStocks, parseEnzymeLibrary, parseEnzymeTable, unknownEnzymes, type LabEnzyme } from "./enzymeLibrary.ts";
-import { cutNotation, enzymeCut, enzymeName, findCutSites, KNOWN_ENZYMES, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { enzymeCut, enzymeName, enzymeSite, enzymeSuppliers, findCutSites, KNOWN_ENZYMES, MAX_CUT_DISTANCE, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { REBASE_ENZYMES } from "./rebaseEnzymes.ts";
 
 const labOptions = (names: readonly string[] = [], enzymeFilter: EnzymeFilter = "all"): EnzymeOptions => ({ enzymeSource: "lab", enzymeFilter, labEnzymes: names, personalEnzymes: [] });
 const commonOptions = (labEnzymes: readonly string[], enzymeFilter: EnzymeFilter): EnzymeOptions => ({ enzymeSource: "common", enzymeFilter, labEnzymes, personalEnzymes: [] });
@@ -16,14 +17,17 @@ test("stock exports preserve products, locations and notes when imported", () =>
   assert.deepEqual(parseEnzymeLibrary(formatEnzymeLibrary([])), []);
 });
 
-test("enzyme names: the curated list's own, else any TeselaGen knows, as the user wrote it", () => {
+test("enzyme names: any enzyme REBASE lists as sold, as REBASE writes it", () => {
   assert.equal(enzymeName(" ecori "), "EcoRI");
   assert.equal(enzymeName("bsmbi"), "BsmBI");
   assert.equal(enzymeName("esp3i"), "Esp3I");
   assert.equal(enzymeName("ACC65I"), "Acc65I");
   assert.equal(enzymeName("dpni"), "DpnI");
+  assert.equal(enzymeName("i-scei"), "I-SceI");
   assert.equal(enzymeName("EcoRI-HF"), null);
   assert.equal(enzymeName(""), null);
+  // Isoschizomers no company sells are left out, so the list doesn't open on them.
+  assert.equal(enzymeName("BspJ106I"), null);
   assert.ok(KNOWN_ENZYMES.includes("Acc65I") && KNOWN_ENZYMES.indexOf("EcoRI") < KNOWN_ENZYMES.indexOf("Acc65I"), "curated names come first");
   assert.equal(new Set(KNOWN_ENZYMES.map(n => n.toLowerCase())).size, KNOWN_ENZYMES.length);
 });
@@ -31,7 +35,7 @@ test("enzyme names: the curated list's own, else any TeselaGen knows, as the use
 test("cuts are written as REBASE writes them, with the ends they leave", () => {
   const cut = (name: string) => {
     const c = enzymeCut(name);
-    return c && `${cutNotation(c)} ${c.ends}`.trim();
+    return c && `${c.notation} ${c.ends}`;
   };
   // Same site, other ends: the reason a lab's stock names the isoschizomer it has.
   assert.equal(cut("KpnI"), "GGTAC^C 3′ GTAC");
@@ -43,11 +47,35 @@ test("cuts are written as REBASE writes them, with the ends they leave", () => {
   assert.equal(cut("BsaI"), "GGTCTC(1/5) 5′ NNNN");
   assert.equal(cut("BtsI"), "GCAGTG(2/0) 3′ NN");
   assert.equal(cut("BsmI"), "GAATGC(1/-1) 3′ CN");
-  // Cuts on both sides of its site, of which TeselaGen keeps one: the site alone.
-  assert.equal(cut("BcgI"), "CGANNNNNNTGC Cuts both sides");
-  // REBASE doesn't know where it cuts; TeselaGen's 1/1 would read as a blunt G^GTACC.
-  assert.equal(cut("BspJ106I"), "GGTACC Cut not known");
+  // A site that isn't a palindrome, cut inside it: REBASE counts back from its end.
+  assert.equal(cut("AciI"), "CCGC(-3/-1) 5′ CG");
+  assert.equal(cut("I-SceI"), "TAGGGATAACAGGGTAAT(-9/-13) 3′ ATAA");
+  // Cut outside a palindromic core, on both strands alike.
+  assert.equal(cut("TspRI"), "CASTGNN^ 3′ NNCASTGNN");
+  // TeselaGen's list had A^ATT.
+  assert.equal(cut("MluCI"), "^AATT 5′ AATT");
+  assert.equal(cut("BcgI"), "(10/12)CGANNNNNNTGC(12/10) Cuts both sides");
   assert.equal(enzymeCut("EcoRI-HF"), null);
+  assert.equal(enzymeSite("TspRI"), "CASTGNN");
+  assert.equal(enzymeSite("BcgI"), "CGANNNNNNTGC");
+  assert.deepEqual(enzymeSuppliers("BtsI"), ["New England Biolabs"]);
+});
+
+test("every enzyme sold finds its own site and cuts near it", () => {
+  // Each code as its first base, between flanks longer than any cut is from its site.
+  const FIRST: Record<string, string> = { R: "A", Y: "C", S: "C", W: "A", K: "G", M: "A", B: "C", D: "A", H: "A", V: "A", N: "A" };
+  const flank = "T".repeat(MAX_CUT_DISTANCE + 10);
+  const names = REBASE_ENZYMES.trim().split("\n").map(line => line.split("\t")[0]);
+  assert.ok(names.length > 500 && names.every(n => KNOWN_ENZYMES.includes(n)));
+  for (const name of names) {
+    const site = enzymeSite(name).replace(/[RYSWKMBDHVN]/g, c => FIRST[c]);
+    const sequence = flank + site + flank;
+    const hit = scanSites(sequence, false, [name]).find(h => h.enzyme === name && Math.min(h.start, h.end) <= flank.length && Math.max(h.start, h.end) >= flank.length + site.length - 1);
+    assert.ok(hit, `${name} finds ${site}`);
+    for (const cut of [hit.cut, hit.bottomCut]) {
+      assert.ok(cut >= flank.length - MAX_CUT_DISTANCE && cut <= flank.length + site.length + MAX_CUT_DISTANCE, `${name} cuts within ${MAX_CUT_DISTANCE} bases of its site`);
+    }
+  }
 });
 
 test("a saved list keeps enzymes this version doesn't know, as written, instead of failing", () => {

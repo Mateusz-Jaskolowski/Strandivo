@@ -281,7 +281,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   enums or namespaces.
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
-  list and the regenerated catalog together.
+  list and the regenerated catalog together. `node tools/build-enzymes.mjs` likewise
+  rebuilds the enzymes from REBASE; check the diff of `src/lib/rebaseEnzymes.ts`.
 - `node tools/build-icon.mjs` draws the app icon and writes every file made from it: the
   PNGs, `src-tauri/icons/icon.ico` and `src-tauri/icons/icon.icns`, and the website's icon
   and favicon. Change the drawing there, never the images (the SVGs beside them are its
@@ -398,10 +399,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   unique 6+ cutters, unique, unique and dual, or every site. The common list
   (`src/lib/enzymes.ts`) is curated to avoid duplicate isoschizomers. Lab stock
   (`src/enzymeLibrary.ts`) and the independent personal list (`src/personalEnzymes.ts`)
-  may name any enzyme TeselaGen knows: Acc65I is not KpnI (same site, other ends), and
-  Esp3I keeps its chosen name. Names reach analysis and reaction dialogs through
-  `ViewOptions`, never a global; name arrays remain the same until membership changes,
-  so editing a stock note redraws no map. Source and filter changes prune unavailable
+  may name any enzyme REBASE lists as sold (`src/lib/rebaseEnzymes.ts`, built by
+  `tools/build-enzymes.mjs`; sources, terms and what is left out in
+  `docs/enzyme-data-plan.md`): Acc65I is not KpnI (same site, other ends), and Esp3I
+  keeps its name. Lists show cuts as REBASE writes them (CCGC(-3/-1), not C^CGC). Names
+  reach analysis and reaction dialogs through `ViewOptions`, never a global; name arrays
+  remain the same until membership changes, so editing a stock note redraws no map. Source and filter changes prune unavailable
   enzyme picks; drawing visibility is separate and the outline still lists sites when
   drawing is off. Digest and restriction cloning choose their own source, initially the
   document's, and keep already chosen reaction enzymes available through filter changes.

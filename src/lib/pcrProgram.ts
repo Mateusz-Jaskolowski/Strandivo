@@ -37,22 +37,39 @@ export interface ProgramInput {
 export const FIRST_CYCLES = 5;
 /** A tail is worth a second stage when the whole primers anneal this much higher (°C). */
 export const TWO_STAGE_GAIN = 5;
-/** Not shorter than this however short the product, s. */
+/** Not shorter than this however short the product, unless the protocol gives its own, s. */
 const MIN_EXTENSION = 10;
 
-/** Whether to offer a second stage: the whole primers anneal clearly higher than their pairing parts. */
+/**
+ * Whether to offer a second stage: the whole primers anneal at least `TWO_STAGE_GAIN` higher
+ * than their pairing parts. Compared as NEB gives them, to 0.1 °C: rounding each to a whole
+ * degree first would pass 56.3 and 60.6, which are 4.3 apart.
+ */
 export function offerTwoStages(ta: number, taFull: number | null): boolean {
-  return taFull !== null && Math.round(taFull) - Math.round(ta) >= TWO_STAGE_GAIN;
+  return taFull !== null && taFull - ta > TWO_STAGE_GAIN - 0.05;
 }
 
-/** The extension step's length: NEB's seconds for each kb, rounded up to 5 s. */
-export function extensionSeconds(p: PcrProtocol, template: TemplateKind, length: number): number {
+/** Seconds of extension for each kb: NEB's rate for the template, or its slower one for a long product. */
+export function secondsPerKb(p: PcrProtocol, template: TemplateKind, length: number): number {
   const e = p.extend;
-  const perKb = e.longer && length > e.longer.above ? e.longer.perKb : template === "plasmid" ? e.plasmid : e.complex;
-  return Math.max(MIN_EXTENSION, Math.ceil(((length / 1000) * perKb) / 5) * 5);
+  return e.longer && length > e.longer.above ? e.longer.perKb : template === "plasmid" ? e.plasmid : e.complex;
 }
 
-/** The program, or null for a polymerase whose protocol isn't known. */
+/** The shortest extension: the protocol's own where NEB gives one for short products. */
+const shortest = (p: PcrProtocol) => p.extend.shortest ?? MIN_EXTENSION;
+
+/** The extension step's length: NEB's seconds for each kb, rounded up to 5 s, and not under the shortest. */
+export function extensionSeconds(p: PcrProtocol, template: TemplateKind, length: number): number {
+  return Math.max(shortest(p), Math.ceil(((length / 1000) * secondsPerKb(p, template, length)) / 5) * 5);
+}
+
+/** Whether a second stage can be used: the polymerase has a program, the tails raise annealing enough, and cycles remain after the first. */
+export function twoStagesPossible(o: Pick<ProgramInput, "polymerase" | "template" | "ta" | "taFull">): boolean {
+  const p = PCR_PROTOCOLS[o.polymerase];
+  return !!p && offerTwoStages(o.ta, o.taFull ?? null) && p.cycles[o.template] > FIRST_CYCLES;
+}
+
+/** The program, or null for a polymerase whose protocol isn't known. A second stage is made only where it can be used. */
 export function pcrProgram(o: ProgramInput): PcrStage[] | null {
   const p = PCR_PROTOCOLS[o.polymerase];
   if (!p) return null;
@@ -70,7 +87,7 @@ export function pcrProgram(o: ProgramInput): PcrStage[] | null {
           ])
     ];
   };
-  const second = o.twoStage && o.taFull != null && total > FIRST_CYCLES;
+  const second = !!o.twoStage && twoStagesPossible(o);
   const initial = o.template === "colony" && p.colonyInitial !== undefined ? p.colonyInitial : p.initial.seconds;
   return [
     { cycles: null, steps: [{ name: "Initial denaturation", temp: p.initial.temp, seconds: initial }] },
@@ -88,6 +105,18 @@ export function pcrProgram(o: ProgramInput): PcrStage[] | null {
       ]
     }
   ];
+}
+
+/** The product the program follows, with NEB's number, for beside the program: "OneTaq Hot Start DNA Polymerase · NEB M0481". */
+export function programSource(polymerase: string): string | null {
+  const p = PCR_PROTOCOLS[polymerase];
+  return p ? `${p.product} · NEB ${p.number}` : null;
+}
+
+/** The copied program's first line: the same product and number, then the product's length. */
+export function programTitle(polymerase: string, length: number): string {
+  const p = PCR_PROTOCOLS[polymerase];
+  return `${p ? `${p.product} (NEB ${p.number}), ` : ""}${length.toLocaleString("en")} bp`;
 }
 
 /** "30 s", "1 min", "1 min 30 s". */
@@ -109,16 +138,24 @@ export function programText(stages: PcrStage[], title: string): string {
   return out.join("\n");
 }
 
-/** What the template choice changes for this polymerase, one line each, for the Template's ⓘ. */
-export function templateNotes(polymerase: string): { label: string; text: string }[] {
+/**
+ * What the template choice changes for this polymerase, one sentence each, for the Template's ⓘ.
+ * `length` is the product's, as a long one is extended at its own rate whatever the template.
+ */
+export function templateNotes(polymerase: string, length = 0): { label: string; text: string }[] {
   const p = PCR_PROTOCOLS[polymerase];
   return TEMPLATES.filter(t => t.id !== "colony" || p?.colonyInitial !== undefined).map(t => {
-    if (!p) return { label: t.label, text: t.why };
-    const extra =
+    if (!p) return { label: t.label, text: `${t.because}, so ${t.so}.` };
+    // Where the protocol extends a plasmid and a genomic template alike, there is no difference to point out.
+    const rate = secondsPerKb(p, t.id, length);
+    const numbers = (t.id === "plasmid" || t.id === "complex") && secondsPerKb(p, "plasmid", length) !== secondsPerKb(p, "complex", length) ? `${p.cycles[t.id]} cycles and ${rate} s for each kb` : `${p.cycles[t.id]} cycles`;
+    const so =
       t.id === "colony"
-        ? ` ${durationText(p.colonyInitial!)} at ${p.initial.temp} °C, then ${p.cycles.colony} cycles.`
-        : ` ${p.cycles[t.id]} cycles and ${p.extend[t.id]} s for each kb.`;
-    return { label: t.label, text: `${t.why}${extra}` };
+        ? `it starts with ${durationText(p.colonyInitial!)} at ${p.initial.temp} °C, then ${p.cycles.colony} cycles`
+        : t.id === "plasmid"
+          ? `${numbers} do`
+          : `it takes ${numbers}`;
+    return { label: t.label, text: `${t.because}, so ${so}.` };
   });
 }
 
@@ -126,13 +163,16 @@ export function templateNotes(polymerase: string): { label: string; text: string
 export function programNotes(polymerase: string, length: number, template: TemplateKind): string[] {
   const p = PCR_PROTOCOLS[polymerase];
   if (!p) return [];
-  const kb = p.extend.longer && length > p.extend.longer.above ? p.extend.longer.perKb : template === "plasmid" ? p.extend.plasmid : p.extend.complex;
+  const kb = secondsPerKb(p, template, length);
+  // A very short product is still given the shortest extension.
+  const floored = Math.ceil(((length / 1000) * kb) / 5) * 5 < shortest(p);
   return [
     `Each denaturation is short, ${p.denature.seconds} s at ${p.denature.temp} °C, to spare the enzyme.`,
-    `Extension is ${kb} s for each kb of product at ${p.extend.temp} °C, so ${length.toLocaleString("en")} bp gets ${extensionSeconds(p, template, length)} s.`,
+    `Extension is ${kb} s for each kb of product at ${p.extend.temp} °C, so ${length.toLocaleString("en")} bp gets ${durationText(extensionSeconds(p, template, length))}${floored ? (p.extend.shortest ? ", the least NEB suggests for a short product" : ", the shortest step used") : ""}.`,
     `${p.cycles[template]} cycles is within NEB's ${p.cycleRange[0]}–${p.cycleRange[1]}; more adds errors and smears.`,
     `From ${p.twoStepFrom} °C up, annealing is so close to the extension temperature that the two steps become one.`,
     `The final extension finishes any product still half made.`,
-    `Source: NEB, ${p.source}.`
+    `Source: NEB, ${p.source} (${p.number}).`,
+    `Other products that share this polymerase's Tm rule, such as master mixes, kits or Hot Start forms, can cycle differently, so check their own protocol.`
   ];
 }

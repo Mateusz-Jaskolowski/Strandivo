@@ -2062,8 +2062,12 @@
 }
 .sv-pcr-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+.sv-pcr-source {
+  min-width: 0;
 }
 .sv-pcr-title {
   margin: 0;

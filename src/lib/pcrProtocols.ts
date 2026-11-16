@@ -14,15 +14,20 @@
 /** What the template is, which sets the first denaturation, the cycles and how long to extend. */
 export type TemplateKind = "plasmid" | "complex" | "colony";
 
-export const TEMPLATES: { id: TemplateKind; label: string; why: string }[] = [
-  { id: "plasmid", label: "Plasmid", why: "Plenty of target in a simple background, so fewer cycles and a quicker extension do." },
-  { id: "complex", label: "Genomic DNA or cDNA", why: "The target is rare among a lot of other DNA, so it takes more cycles and a longer extension." },
-  { id: "colony", label: "Colony", why: "The cells have to be opened first, so the first denaturation is longer." }
+/** Each template's note reads "<because>, so <so>.", with the protocol's numbers in place of `so` where there is one. */
+export const TEMPLATES: { id: TemplateKind; label: string; because: string; so: string }[] = [
+  { id: "plasmid", label: "Plasmid", because: "Plenty of target in a simple background", so: "fewer cycles do" },
+  { id: "complex", label: "Genomic DNA or cDNA", because: "The target is rare among a lot of other DNA", so: "it takes more cycles" },
+  { id: "colony", label: "Colony", because: "The cells have to be opened first", so: "the first denaturation is longer" }
 ];
 
 export interface PcrProtocol {
   /** NEB's protocol it follows, as the tests and the next person to check it will want. */
   source: string;
+  /** The product that protocol is for, as NEB names it: shown with the program, as other products may cycle differently. */
+  product: string;
+  /** Its catalogue number, shown beside the program so a user can look it up. */
+  number: string;
   initial: { temp: number; seconds: number };
   /** The first denaturation on a colony; absent where NEB gives none, and the template is not offered. */
   colonyInitial?: number;
@@ -36,6 +41,8 @@ export interface PcrProtocol {
     complex: number;
     /** For products longer than `above` bp, where NEB asks for more. */
     longer?: { above: number; perKb: number };
+    /** The shortest extension NEB gives for a short product, s; the program's own 10 s where absent. */
+    shortest?: number;
   };
   final: { temp: number; seconds: number };
   cycles: { plasmid: number; complex: number; colony: number };
@@ -46,7 +53,9 @@ export interface PcrProtocol {
 }
 
 const Q5: PcrProtocol = {
-  source: "PCR Using Q5 High-Fidelity DNA Polymerase (M0491)",
+  source: "PCR Using Q5 High-Fidelity DNA Polymerase",
+  product: "Q5 High-Fidelity DNA Polymerase",
+  number: "M0491",
   initial: { temp: 98, seconds: 30 },
   denature: { temp: 98, seconds: 10 }, // 5–10 s
   anneal: 20, // 10–30 s
@@ -60,7 +69,9 @@ const Q5: PcrProtocol = {
 };
 
 const PHUSION: PcrProtocol = {
-  source: "PCR Protocol for Phusion High-Fidelity DNA Polymerase (M0530)",
+  source: "PCR Protocol for Phusion High-Fidelity DNA Polymerase",
+  product: "Phusion High-Fidelity DNA Polymerase",
+  number: "M0530",
   initial: { temp: 98, seconds: 30 },
   denature: { temp: 98, seconds: 10 }, // 5–10 s
   anneal: 20, // 10–30 s
@@ -72,26 +83,32 @@ const PHUSION: PcrProtocol = {
 };
 
 const ONETAQ: PcrProtocol = {
-  source: "Protocol for OneTaq Hot Start DNA Polymerase (M0481)",
+  source: "Protocol for OneTaq Hot Start DNA Polymerase",
+  product: "OneTaq Hot Start DNA Polymerase",
+  number: "M0481",
   initial: { temp: 94, seconds: 30 },
   colonyInitial: 180, // 2–5 min "to lyse cells"
   denature: { temp: 94, seconds: 20 }, // 15–30 s
   anneal: 30, // 15–60 s
-  extend: { temp: 68, plasmid: 60, complex: 60 }, // 1 min/kb
-  // Its table says 10 min and its guidelines 5 min; the table is what to follow.
-  final: { temp: 68, seconds: 600 },
+  // 1 min/kb, but 45–60 s below 1 kb (its usage guidelines), so no product gets less than 45 s.
+  extend: { temp: 68, plasmid: 60, complex: 60, shortest: 45 },
+  // NEB's guidelines and one copy of its table say 5 min; an older copy of the table says
+  // 10. The 5 is followed: a long final extension only adds time.
+  final: { temp: 68, seconds: 300 },
   cycles: { plasmid: 25, complex: 30, colony: 30 }, // 30 in the table, 25–35 in the guidelines
   cycleRange: [25, 35],
   twoStepFrom: 68
 };
 
 const TAQ: PcrProtocol = {
-  source: "PCR Protocol for Taq DNA Polymerase with Standard Taq Buffer (M0273)",
+  source: "PCR Protocol for Taq DNA Polymerase with Standard Taq Buffer",
+  product: "Taq DNA Polymerase with Standard Taq Buffer",
+  number: "M0273",
   initial: { temp: 95, seconds: 30 },
   colonyInitial: 300, // "an initial 5-minute denaturation"
   denature: { temp: 95, seconds: 20 }, // 15–30 s
   anneal: 30, // 15–60 s
-  extend: { temp: 68, plasmid: 60, complex: 60 }, // 1 min/kb
+  extend: { temp: 68, plasmid: 60, complex: 60, shortest: 45 }, // 1 min/kb, 45–60 s below 1 kb
   final: { temp: 68, seconds: 300 },
   cycles: { plasmid: 25, complex: 30, colony: 30 }, // 30 in the table, 25–35 in the guidelines
   cycleRange: [25, 35],

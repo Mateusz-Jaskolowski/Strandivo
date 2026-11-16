@@ -676,7 +676,20 @@ async function main() {
     const oneTaq = await s.exec("return document.querySelector('.sv-dialog').textContent");
     check("Picking another polymerase in the dialog offers it for all Tms", /Tms here are for OneTaq, Standard buffer; the rest of the app uses Q5 High-Fidelity/.test(oneTaq) && /Use for all Tms/.test(oneTaq), oneTaq.slice(0, 500));
     check("Its program is OneTaq's, from 94 °C", /94 °C/.test(oneTaq) && /OneTaq, Standard buffer: lower Tm − 5 °C, at most 68 °C/.test(oneTaq), oneTaq.slice(-500));
+    check("The program names the product its protocol is for, beside the program", /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(oneTaq), oneTaq.slice(-500));
     await s.shot("04-pcr-onetaq");
+    // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
+    // whether a menu, a button in the program or one in the footer.
+    const keepsFocus = async (selector, nebPrimer) => {
+      await s.exec(`document.querySelector('.sv-pcr-result').dataset.drawn = '1'; document.querySelector(${JSON.stringify(selector)}).focus();`);
+      await s.exec(`return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: ${nebPrimer} } })`);
+      const redrawn = await s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
+      return redrawn && (await s.exec(`return document.activeElement === document.querySelector(${JSON.stringify(selector)})`));
+    };
+    const menuKept = await keepsFocus("select[aria-label='Template']", 450);
+    const programKept = await keepsFocus("button[data-focus='copy-program']", 400);
+    const footerKept = await keepsFocus("button[data-focus='copy-sequence']", 350);
+    check("A Settings change redraws the PCR dialog and keeps focus where it was", menuKept && programKept && footerKept, `menu ${menuKept}, program ${programKept}, footer ${footerKept}`);
     await s.press(ESCAPE);
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");

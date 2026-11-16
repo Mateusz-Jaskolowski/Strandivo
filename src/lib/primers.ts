@@ -88,12 +88,12 @@ export const currentTmSettings = (): TmSettings => current;
 
 /**
  * `base` with the NEB method for this polymerase (the PCR product dialog's own choice). The
- * primer concentration stays Settings' when it is Settings' polymerase, else is the
- * polymerase's own.
+ * primer concentration stays Settings' when it is Settings' polymerase, even while another
+ * method is chosen, as Settings keep it; for any other it is the polymerase's own.
  */
 export function withNebPolymerase(base: TmSettings, id: string): TmSettings {
   const p = nebPolymerase(id);
-  return { ...base, method: "neb", polymerase: p.id, nebPrimer: base.method === "neb" && base.polymerase === p.id ? base.nebPrimer : p.primer };
+  return { ...base, method: "neb", polymerase: p.id, nebPrimer: nebPolymerase(base.polymerase).id === p.id ? base.nebPrimer : p.primer };
 }
 
 /** How Tm is worked out, for notes under tables, e.g. "SantaLucia 1998 · 50 mM Na⁺ · …". */

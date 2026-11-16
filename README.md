@@ -194,7 +194,10 @@ says how to take part.
 The full licence is in [`LICENSE`](LICENSE). Contact: hello@strandivo.com.
 
 Strandivo uses TeselaGen's bio-parsers and sequence-utils (MIT) and
-[Tauri](https://tauri.app) (MIT/Apache-2.0). Its NEB polymerases and their annealing rules
+[Tauri](https://tauri.app) (MIT/Apache-2.0). Its restriction enzymes come from
+[REBASE](http://rebase.neb.com), an open database: Roberts, R.J., Vincze, T., Posfai, J.,
+Macelis, D. (2023) REBASE: a database for DNA restriction and modification: enzymes, genes
+and genomes. *Nucleic Acids Res.* 51, D629–D630. Its NEB polymerases and their annealing rules
 started from [polymerase-tm](https://github.com/Dioskurides/polymerase-tm) by Dioskurides
 (MIT), and were checked against New England Biolabs' public
 [Tm API](https://tmapi.neb.com/).

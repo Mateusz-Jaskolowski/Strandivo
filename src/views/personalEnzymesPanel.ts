@@ -1,11 +1,11 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// My enzymes: a checklist of every enzyme TeselaGen knows. The chosen ones come first, then
+// My enzymes: a checklist of every enzyme REBASE lists as sold. The chosen ones come first, then
 // the lab's stock, the common enzymes and the rest, each under its heading, so the list
 // doesn't open on obscure isoschizomers. Only the rows near the view are in the page.
 
-import { COMMON_ENZYMES, enzymeName, enzymeSite, KNOWN_ENZYMES } from "../lib/enzymes.ts";
+import { COMMON_ENZYMES, enzymeName, enzymeSite, enzymeSuppliers, KNOWN_ENZYMES } from "../lib/enzymes.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
 import { personalEnzymes } from "../personalEnzymes.ts";
 import { h, toast } from "../ui/dom.ts";
@@ -108,8 +108,9 @@ export function mountPersonalEnzymes(root: HTMLElement): () => void {
     });
     // Emptied rather than hidden, so the row's text says only what it shows.
     const lab = h("span", { class: "sv-pill sv-pill-quiet sv-personal-enzyme-lab" });
-    const cut = cutCells(name) ?? [h("span", { class: "sv-dim" }, enzymeSite(name) || "Unrecognised enzyme"), h("span")];
-    const row = h("label", { class: "sv-personal-enzyme-row" }, checkbox, h("span", { class: "sv-personal-enzyme-name", title: name }, name), ...cut, lab);
+    const cut = cutCells(name) ?? [h("span", { class: "sv-dim" }, "Not in this version's enzyme list"), h("span")];
+    const sellers = enzymeSuppliers(name);
+    const row = h("label", { class: "sv-personal-enzyme-row" }, checkbox, h("span", { class: "sv-personal-enzyme-name", title: sellers.length ? `${name}, sold by ${sellers.join(", ")}` : name }, name), ...cut, lab);
     return { row, checkbox, lab };
   }
 

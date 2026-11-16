@@ -24,6 +24,7 @@ import { sweep, sweptRange } from "../lib/mapDrag.ts";
 import { gcRuns, joinAtOrigin, overviewWindow, type GcRun } from "../lib/gc.ts";
 import { GC_CHIP_LABEL, gcChipTitle, gcRunTitle, gcWindowText } from "./gcStrip.ts";
 import { layoutName, LENGTH_SIZE, type NameLines } from "../lib/mapName.ts";
+import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
 
 
 interface LabelItem {
@@ -1339,6 +1340,8 @@ export class MapView {
     let last = 0;
     let swept = 0;
     let namePressed = -Infinity;
+    // What the last press was on, as the double-click after it arrives on the whole map.
+    let pressed: Focus | null = null;
     const rangeTo = (a: number, b: number): Range | null => {
       const g = this.geom;
       if (g && !g.circular) return a === b ? null : { start: Math.min(a, b), end: Math.max(a, b) - 1 };
@@ -1349,6 +1352,7 @@ export class MapView {
     };
     this.svgHost.addEventListener("pointerdown", e => {
       const on = e.target as Element;
+      pressed = null;
       // The rename field is a text field like any other.
       if (on.closest(".sv-map-name-edit")) return;
       // Any other press finishes renaming, also one whose default the map prevents below.
@@ -1373,6 +1377,7 @@ export class MapView {
         e.preventDefault();
         return;
       }
+      pressed = target;
       // Empty space away from the sequence selects nothing, as on a drawing; it clears the
       // selection but leaves the cursor where it was.
       if (!target && !this.nearTrack(e.clientX, e.clientY)) {
@@ -1416,6 +1421,13 @@ export class MapView {
       }
     };
     this.svgHost.addEventListener("pointerup", end);
+    // A double-click on a CDS, one of its regions or an ORF opens Protein details, after its
+    // second click has selected it. The browser's own, unlike the name's timed presses, so
+    // the two clicks must land together at the system's speed, with nothing between them.
+    this.svgHost.addEventListener("dblclick", e => {
+      const p = pressed && !e.shiftKey && !e.metaKey && !e.ctrlKey ? proteinAt(this.ctx, pressed) : null;
+      if (p) openProteinDialog(this.ctx, p.feature, p.of);
+    });
     this.svgHost.addEventListener("pointercancel", e => {
       this.hoverRegion(null);
       end(e);

@@ -114,9 +114,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   from the library) is a dialog (`openDialog` in `src/ui/modal.ts`, see
   `src/views/primerDialogs.ts`); so is a closer look at one thing too big for the
   inspector, such as a protein (`src/views/proteinDialog.ts`: its figure, numbered sequence
-  and properties), opened from its section there and its right-click menu, never by a
-  double-click. The inspector keeps that thing's summary and actions, and there is one
-  such dialog per kind of thing, not one per section: a second wish grows the first.
+  and properties), opened from its section there, its right-click menu, or a double-click
+  on the thing itself on the map or in the Sequence tab (a CDS's arc, name or regions, or
+  an ORF: `proteinAt`), never on bases or on the amino acids that codons are picked by
+  (`docs/enzyme-data-plan.md` says why). The inspector keeps that thing's summary and
+  actions, and there is one such dialog per kind of thing, not one per section: a second
+  wish grows the first.
   Something not tied to one file gets its own window, like
   Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
@@ -281,7 +284,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   enums or namespaces.
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
-  list and the regenerated catalog together.
+  list and the regenerated catalog together. `node tools/build-enzymes.mjs` likewise
+  rebuilds the enzymes from REBASE; check the diff of `src/lib/rebaseEnzymes.ts`.
 - `node tools/build-icon.mjs` draws the app icon and writes every file made from it: the
   PNGs, `src-tauri/icons/icon.ico` and `src-tauri/icons/icon.icns`, and the website's icon
   and favicon. Change the drawing there, never the images (the SVGs beside them are its
@@ -398,11 +402,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   unique 6+ cutters, unique, unique and dual, or every site. The common list
   (`src/lib/enzymes.ts`) is curated to avoid duplicate isoschizomers. Lab stock
   (`src/enzymeLibrary.ts`) and the independent personal list (`src/personalEnzymes.ts`)
-  may name any enzyme TeselaGen knows: Acc65I is not KpnI (same site, other ends), and
-  Esp3I keeps its chosen name. Names reach analysis and reaction dialogs through
-  `ViewOptions`, never a global; name arrays remain the same until membership changes,
-  so editing a stock note redraws no map. Source and filter changes prune unavailable
-  enzyme picks; drawing visibility is separate and the outline still lists sites when
+  may name any enzyme REBASE lists as sold (`src/lib/rebaseEnzymes.ts`, built by
+  `tools/build-enzymes.mjs`; sources, terms and what is left out in
+  `docs/enzyme-data-plan.md`): Acc65I is not KpnI (same site, other ends), and Esp3I
+  keeps its name. Lists mark the top strand's cut with ^ and Ns out to a cut past the
+  site, with the ends beside it: C^CGC and GGTCTCN^NNNN, which REBASE writes CCGC(-3/-1)
+  and GGTCTC(1/5), and GGATG(N)9^NNNN past five Ns (`enzymeCut`).
+  Names reach analysis and reaction dialogs through `ViewOptions`, never a global; name
+  arrays remain the same until membership changes, so editing a stock note redraws no
+  map. Source and filter changes prune unavailable enzyme picks; drawing visibility is
+  separate and the outline still lists sites when
   drawing is off. Digest and restriction cloning choose their own source, initially the
   document's, and keep already chosen reaction enzymes available through filter changes.
   Product names are user text, never read for recognition or reaction conditions.

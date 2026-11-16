@@ -131,6 +131,10 @@ class Session {
   async clickAt([x, y]) {
     await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
   }
+  async doubleClickAt([x, y]) {
+    const click = [{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }];
+    await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, ...click, { type: "pause", duration: 50 }, ...click], { release: true });
+  }
   /** Drags the mouse between two points of the page (CSS pixels from its top left). */
   async drag(from, to) {
     const at = ([x, y], duration = 0) => ({ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport", duration });
@@ -196,7 +200,10 @@ const addTouching = `${doc} const lac = s.data.features.find(f => f.name === "la
   s.apply({ ...s.data, features: [...s.data.features, { id: "e2e-touch", name: "lac promoter", type: "promoter", start: lac.end + 1, end: lac.end + 31, strand: -1, notes: {}, raw: {} }] }, "Add feature");
   return lac.id;`;
 
-/** Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS. */
+/**
+ * Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS.
+ * A double-click on its amino acids opens nothing, as they are clicked to pick codons.
+ */
 async function checkCodonClicks(s, root, label) {
   const c = await s.exec(`${doc}
     const el = document.querySelector(arguments[0] + ' .sv-codon');
@@ -211,8 +218,8 @@ async function checkCodonClicks(s, root, label) {
   const single = await selected();
   check(`${label}: one click selects the codon's three bases without selecting the feature`, single.range?.start === c.start && single.range?.end === c.end && !single.focus && (c.end - c.start + c.length) % c.length === 2, JSON.stringify(single));
   await s.doubleClick(hit);
-  const double = await selected();
-  check(`${label}: a double-click selects the whole feature`, double.range?.start === c.featureStart && double.range?.end === c.featureEnd && double.focus?.id === c.id, JSON.stringify(double));
+  const double = { ...await selected(), dialog: await s.exec("return !!document.querySelector('.sv-dialog');") };
+  check(`${label}: a double-click selects the whole feature and opens nothing`, double.range?.start === c.featureStart && double.range?.end === c.featureEnd && double.focus?.id === c.id && !double.dialog, JSON.stringify(double));
   await s.click(hit);
   await s.click(`${root} [data-id="${c.id}"] .sv-feature-caption, ${root} .sv-feature-caption[data-id="${c.id}"]`);
   const caption = await selected();
@@ -389,6 +396,24 @@ async function main() {
     await s.press(ESCAPE);
     await s.exec(`${doc} s.undo();`);
     check("Undo brings the old name back", await s.exec(`${doc} return s.data.name === arguments[0] && ${mapName} === arguments[0];`, nameBefore));
+    // A double-click on a CDS opens its Protein details, as its right-click menu does.
+    const ampAt = await s.exec(`${doc}
+      const f = s.data.features.find(f => f.name === 'AmpR');
+      for (const el of document.querySelectorAll('.sv-map-svg [data-kind="feature"][data-id="' + f.id + '"]:not([data-region])')) {
+        const b = el.getBoundingClientRect();
+        for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) {
+          const x = b.left + (b.width * i) / 10, y = b.top + (b.height * j) / 10;
+          if (document.elementFromPoint(x, y)?.closest('[data-kind]') === el) return [x, y];
+        }
+      }
+      return null;`);
+    check("A point on AmpR is found on the map", !!ampAt);
+    if (ampAt) {
+      await s.doubleClickAt(ampAt);
+      check("Double-clicking a CDS on the map opens its Protein details", await s.waitFor("document.querySelector('.sv-dialog .sv-protein-seq') && document.querySelector('.sv-dialog')?.textContent.includes('AmpR')", 3000));
+      await s.press(ESCAPE);
+      await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    }
     // A long name wraps inside the ruler's numbers instead of running across them.
     await s.exec(`${doc} s.apply({ ...s.data, name: 'testing how it works and seeing how the long text works' }, 'Rename');`);
     await sleep(300);
@@ -429,6 +454,10 @@ async function main() {
     check("Protein translation is shown under coding features", await s.exec("return document.querySelectorAll('.sv-aa').length > 0"));
     const captions = await s.exec("return { captions: Array.from(document.querySelectorAll('.sv-seq .sv-feature-caption')).map(c => c.textContent), margin: document.querySelectorAll('.sv-seq .sv-gutter-label').length };");
     check("Coding features are named under their amino acids, not in the margin", captions.captions.some(c => /AmpR ←|lacZ/.test(c)) && captions.margin === 0, JSON.stringify(captions));
+    await s.doubleClick(".sv-seq .sv-feature-caption");
+    check("Double-clicking a CDS's name in the Sequence tab opens its Protein details", await s.waitFor("document.querySelector('.sv-dialog .sv-protein-seq')", 3000));
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await checkCodonClicks(s, ".sv-seq", "Sequence translation");
     await checkCodonGestures(s, ".sv-seq", "Sequence translation");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");

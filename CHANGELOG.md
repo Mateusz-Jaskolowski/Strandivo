@@ -17,11 +17,12 @@ with Unreleased's notes and leaves them where they are.
 ## Unreleased
 
 - **A clearer enzyme library**: Lab stock and My enzymes show where each enzyme cuts, as
-  G^AATTC or GGTCTC(1/5), and the ends it leaves, so Acc65I and KpnI are easy to tell
-  apart. My enzymes lists your chosen enzymes first, then your lab's stock, the common
-  enzymes and the rest of the catalogue, each under its heading, instead of opening on rare
-  isoschizomers. Lab stock sorts by enzyme, product or freezer location, and shows the cut
-  of the enzyme you are adding as you type its name.
+  G^AATTC or GGTCTCN^NNNN, and the ends it leaves, so Acc65I and KpnI are easy to tell
+  apart. My enzymes keeps your chosen enzymes in a box of their own, updated as you tick,
+  above all enzymes: your lab's stock, the common enzymes and the rest, each under its
+  heading, instead of opening on rare isoschizomers. One search looks through both, and
+  either box folds away. Lab stock sorts by enzyme, product or freezer location, and shows
+  the cut of the enzyme you are adding as you type its name.
 - **Enzymes from REBASE**: the enzyme library now offers the 588 enzymes on sale today,
   taken from REBASE, instead of thousands of names nobody sells. It adds enzymes that were
   missing, such as PaqCI and I-SceI, corrects MluCI's cut and TaqII's site, and shows

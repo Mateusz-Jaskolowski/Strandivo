@@ -23,8 +23,11 @@ and an “In lab only” filter are deferred.
   and Sequence; the outline remains available to browse the chosen list.
 - Give the Enzyme Library Lab stock and My enzymes sections. Stock products, locations,
   notes and import/export stay in Lab stock. My enzymes is a searchable checklist with
-  names, recognition sites, an In lab indicator and Selected only. Selected names come
-  first, alphabetically within each group; render only visible rows.
+  names, recognition sites and an In lab indicator, in two boxes that fold: My selected
+  enzymes, which follows every tick at once, over All enzymes (lab stock, common enzymes,
+  the rest), whose rows never move when ticked. One search filters both; render only
+  visible rows. (Until 16 November 2026 it was one list with Selected only, whose order
+  was fixed when it opened, so a tick moved nothing until it was opened again.)
 - Start My enzymes empty. Edit My enzymes… opens its section whether the library is new
   or already open, on desktop and in the browser. Distinguish an empty personal list,
   enzymes that do not cut and results excluded by the cut-site filter. Never silently

@@ -476,11 +476,13 @@ My enzymes — `src/views/personalEnzymesPanel.ts`, and the cut — `src/views/e
 
 | Line | Where | Text |
 |------|-------|------|
-| 18 | group headings | "Selected" / "In lab stock" / "Common enzymes" / "Other enzymes" |
-| 27 | search | "Search by name or site" |
-| 111 | unknown enzyme | "Not in this version's enzyme list" |
-| 113 | name tooltip | "…, sold by …" (suppliers as REBASE names them) |
-| 236 | empty | "No enzyme matches “…”." / "No enzymes selected yet." |
+| 21 | group headings (All enzymes) | "In lab stock" / "Common enzymes" / "Other enzymes" |
+| 47 | search | "Search by name or site" |
+| 148 | unknown enzyme | "Not in this version's enzyme list" |
+| 150 | name tooltip | "…, sold by …" (suppliers as REBASE names them) |
+| 244 | box titles | "My selected enzymes" / "All enzymes" (each with its count, "… of …" while searching) |
+| 282 | empty (My selected enzymes) | "No selected enzyme matches “…”." / "No enzymes selected yet." |
+| 286 | no match (All enzymes) | "No enzyme matches “…”." |
 | 20 (enzymeCut) | tooltip, cuts both sides | "Bases from the site to the cut, top strand/bottom strand" |
 | 28 (enzymeCut) | tooltip, cut rewritten | "REBASE writes …" |
 | `src/lib/enzymes.ts` | ends, cutting both sides | "Cuts both sides" |

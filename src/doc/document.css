@@ -3512,16 +3512,86 @@ main.sv-enzyme-section-body {
   flex: 0 0 auto;
   margin-right: 2px;
 }
-/* My enzymes (src/views/personalEnzymesPanel.ts): a checklist of thousands, drawn only near
-   the view, so every row and heading is one fixed height and the columns fixed widths. */
-.sv-personal-enzyme-table {
+/* My enzymes (src/views/personalEnzymesPanel.ts): the chosen enzymes' box over every
+   enzyme's. The first grows with its rows to two fifths of the window, then scrolls;
+   folding either box gives the other the space. Each is a checklist drawn only near the
+   view, so every row and heading is one fixed height and the columns fixed widths. */
+.sv-personal-enzyme-boxes {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 100px;
+  gap: 16px;
+  min-height: 0;
+}
+.sv-personal-enzyme-box {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sv-personal-enzyme-box-selected {
+  flex: 0 1 auto;
+  max-height: 40vh;
+}
+.sv-personal-enzyme-boxes.sv-personal-enzymes-all-folded > .sv-personal-enzyme-box-selected {
+  max-height: none;
+}
+.sv-personal-enzyme-box-all {
+  flex: 1 1 0;
+  min-height: 140px;
+}
+.sv-personal-enzyme-box.sv-folded {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.sv-personal-enzyme-heading {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sv-personal-enzyme-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 2px 6px 2px 2px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.sv-personal-enzyme-title:hover {
+  background: var(--hover);
+}
+.sv-personal-enzyme-title > .sv-icon {
+  color: var(--text-3);
+  transition: transform 0.12s ease;
+}
+.sv-personal-enzyme-title[aria-expanded="false"] > .sv-icon {
+  transform: rotate(-90deg);
+}
+.sv-personal-enzyme-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.sv-personal-enzyme-table {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 10px;
+}
+.sv-personal-enzyme-empty {
+  margin: 0;
+  padding: 10px 14px;
 }
 .sv-personal-enzyme-head,
 .sv-personal-enzyme-row {
@@ -3541,7 +3611,7 @@ main.sv-enzyme-section-body {
   color: var(--text-3);
 }
 .sv-personal-enzyme-list {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   overflow-anchor: none;

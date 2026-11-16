@@ -266,14 +266,26 @@ async function main(outDir) {
     await s.click("//button[normalize-space()='My enzymes']");
     await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
     check("The full enzyme catalogue renders only its visible rows", await s.exec("return document.querySelectorAll('[data-personal-enzyme]').length > 0 && document.querySelectorAll('[data-personal-enzyme]').length < 100;"));
-    check("My enzymes opens on the common enzymes, under their heading, before the rest of the catalogue", await s.waitFor("document.querySelector('.sv-personal-enzyme-group')?.firstChild?.textContent === 'Common enzymes' && document.querySelector('[data-personal-enzyme]')?.dataset.personalEnzyme === 'AatII'", 5000));
+    check("My enzymes opens on the common enzymes, under their heading, before the rest of the catalogue", await s.waitFor("document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-group')?.firstChild?.textContent === 'Common enzymes' && document.querySelector('.sv-personal-enzyme-box-all [data-personal-enzyme]')?.dataset.personalEnzyme === 'AatII' && document.querySelector('.sv-personal-enzyme-box-selected')?.textContent.includes('No enzymes selected yet.')", 5000));
     for (const name of ["EcoRI", "Acc65I", "PvuII"]) {
       await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = arguments[0]; q.dispatchEvent(new Event('input'));", name);
-      await s.click(`//input[@data-personal-enzyme='${name}']`);
-      check(`The browser saves ${name} in My enzymes`, await s.waitFor(`document.querySelector('input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
+      await s.click(`//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='${name}']`);
+      check(`The browser saves ${name} in My enzymes and lists it under My selected enzymes`, await s.waitFor(`document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
     }
-    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input')); document.querySelector('[aria-label=\"Selected only\"]').click();");
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = 'Pvu'; q.dispatchEvent(new Event('input'));");
+    check("A search filters both boxes", await s.exec("return Array.from(document.querySelectorAll('.sv-personal-enzyme-box-selected [data-personal-enzyme]'), i => i.dataset.personalEnzyme).join() === 'PvuII' && document.querySelector('.sv-personal-enzyme-box-selected .sv-personal-enzyme-count')?.textContent === '1 of 3' && /^\\d+ of \\d+$/.test(document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-count')?.textContent) && Array.from(document.querySelectorAll('.sv-personal-enzyme-box-all [data-personal-enzyme]')).every(i => i.dataset.personalEnzyme.toLowerCase().includes('pvu'));"));
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input'));");
+    await s.click("//*[contains(@class,'sv-personal-enzyme-box-selected')]//input[@data-personal-enzyme='Acc65I']");
+    check("Unticking in My selected enzymes takes the row out at once", await s.waitFor("!document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"Acc65I\"]') && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'", 5000));
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = 'Acc65I'; q.dispatchEvent(new Event('input'));");
+    check("…and unticks it in All enzymes", await s.exec("return document.querySelector('.sv-personal-enzyme-box-all [data-personal-enzyme=\"Acc65I\"]')?.checked === false;"));
+    await s.click("//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='Acc65I']");
+    check("Ticking it again in All enzymes brings it back", await s.waitFor("document.querySelector('.sv-personal-enzyme-box-all [data-personal-enzyme=\"Acc65I\"]')?.checked && !!document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"Acc65I\"]') && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'", 5000));
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input'));");
+    await s.click("//button[normalize-space()='All enzymes']");
+    check("All enzymes folds from its title, and the choice is kept", await s.exec("return document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-title')?.getAttribute('aria-expanded') === 'false' && document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-table')?.hidden && JSON.parse(localStorage.getItem('strandivo.myEnzymesFolds') || '{}').all === true;"));
     await s.shot("00a-my-enzymes");
+    await s.click("//button[normalize-space()='All enzymes']");
     await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     // The list is a row of buttons (Common, Lab, Mine); how often they cut is a select.
     const enzymeChoice = async (label, value) => s.exec("const el = document.querySelector('[aria-label=\"' + arguments[0] + '\"]'); if (el.tagName === 'SELECT') { el.value = arguments[1]; el.dispatchEvent(new Event('change', { bubbles: true })); } else el.querySelector('[data-value=\"' + arguments[1] + '\"]').click();", label, value);
@@ -318,8 +330,7 @@ async function main(outDir) {
     check("The personal list, source and filter survive reopening", await s.waitFor("document.querySelector('[aria-label=\"Which map enzymes to show\"] [aria-checked=\"true\"]')?.dataset.value === 'personal' && document.querySelector('[aria-label=\"Map cut-site filter\"]')?.value === 'unique' && document.querySelectorAll('.sv-enzyme-chip').length === 2", 15000));
     await s.click("//button[@aria-label='Enzyme library']");
     await s.click("//button[normalize-space()='My enzymes']");
-    await s.click("//input[@aria-label='Selected only']");
-    check("The reopened checklist keeps all personal selections", await s.waitFor("Array.from(document.querySelectorAll('[data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).sort().join() === 'Acc65I,EcoRI,PvuII'", 5000));
+    check("The reopened checklist keeps all personal selections", await s.waitFor("Array.from(document.querySelectorAll('.sv-personal-enzyme-box-selected [data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).join() === 'Acc65I,EcoRI,PvuII'", 5000));
     await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     check("Personal enzyme changes do not mark the sequence as edited", await s.exec("return !window.__strandivo.isDirty();"));
     await enzymeChoice("Which map enzymes to show", "common");

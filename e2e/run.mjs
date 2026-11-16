@@ -1050,15 +1050,15 @@ async function main() {
       await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
       for (const name of ["EcoRI", "Acc65I", "PvuII"]) {
         await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = arguments[0]; q.dispatchEvent(new Event('input'));", name);
-        await s.click(`input[data-personal-enzyme='${name}']`);
-        check(`My enzymes saves ${name}`, await s.waitFor(`document.querySelector('input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
+        await s.click(`.sv-personal-enzyme-box-all input[data-personal-enzyme='${name}']`);
+        check(`My enzymes saves ${name} and lists it under My selected enzymes at once`, await s.waitFor(`document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-box-all input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
       }
-      await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input')); document.querySelector('[aria-label=\"Selected only\"]').click();");
-      check("The personal checklist shows selected names and lab membership", await s.exec("return document.querySelectorAll('[data-personal-enzyme]').length === 3 && Array.from(document.querySelectorAll('.sv-personal-enzyme-row')).filter(r => r.textContent.includes('In lab')).length === 2;"));
-      await s.exec("document.querySelector('[data-personal-enzyme=\"Acc65I\"]').focus();");
+      await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input'));");
+      check("My selected enzymes shows the chosen names and lab membership", await s.exec("const rows = document.querySelectorAll('.sv-personal-enzyme-box-selected .sv-personal-enzyme-row'); return Array.from(rows, r => r.querySelector('[data-personal-enzyme]').dataset.personalEnzyme).join() === 'Acc65I,EcoRI,PvuII' && Array.from(rows).filter(r => r.textContent.includes('In lab')).length === 2;"));
+      await s.exec("document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"Acc65I\"]').focus();");
       await s.press("\uE015");
-      check("The personal checklist keeps keyboard navigation between rows", await s.exec("return document.activeElement?.dataset.personalEnzyme === 'EcoRI';"));
-      check("Only the current checklist row is in the Tab order, so Tab leaves the list", await s.exec("return document.querySelectorAll('[data-personal-enzyme][tabindex=\"0\"]').length === 1 && document.activeElement?.getAttribute('tabindex') === '0';"));
+      check("The personal checklist keeps keyboard navigation between rows", await s.exec("return document.activeElement?.dataset.personalEnzyme === 'EcoRI' && !!document.activeElement.closest('.sv-personal-enzyme-box-selected');"));
+      check("Only the current row of each box is in the Tab order, so Tab leaves the list", await s.exec("return ['selected', 'all'].every(box => document.querySelectorAll(`.sv-personal-enzyme-box-${box} [data-personal-enzyme][tabindex=\"0\"]`).length === 1) && document.activeElement?.getAttribute('tabindex') === '0';"));
       await s.shot("10e-my-enzymes");
       await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_enzyme_library', { section: 'lab' }).then(done);");
       await s.waitFor("document.querySelector('[aria-label=\"New stock enzyme\"]') || document.querySelector('.sv-enzyme-grid')", 5000);

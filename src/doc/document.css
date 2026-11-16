@@ -3458,7 +3458,7 @@ main.sv-enzyme-section-body {
   width: 1%;
   text-align: right;
 }
-/* An enzyme's cut (src/views/enzymeCut.ts): G^AATTC, GGTCTC(1/5), and the ends it leaves. */
+/* An enzyme's cut (src/views/enzymeCut.ts): G^AATTC, GGTCTCN^NNNN, and the ends it leaves. */
 .sv-cut-site {
   font-size: 12px;
   white-space: nowrap;
@@ -3467,7 +3467,8 @@ main.sv-enzyme-section-body {
   color: var(--accent-text);
   font-weight: 700;
 }
-.sv-cut-outside {
+.sv-cut-outside,
+.sv-cut-spacer {
   color: var(--text-3);
 }
 .sv-cut-ends {

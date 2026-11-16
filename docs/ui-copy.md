@@ -469,7 +469,7 @@ assembled, with the line of the first part.
 | 201 | confirm (start new) | "The unreadable file will be kept alongside the new list as a backup." |
 | 309 | empty | "Track your lab's restriction enzymes and freezer locations. Choose “Lab enzymes” on a map to show only their cut sites." |
 | 322 | no match | "No stock matches “…”." |
-| 326 | column tooltip | "^ marks the cut in the top strand. GGTCTC(1/5) cuts 1 base after the site in the top strand, 5 in the bottom." |
+| 326 | column tooltip | "^ marks the cut in the top strand; N is any base, and (N)9 nine of them." |
 | 338 | unknown enzyme in list | "Not in this version's enzyme list" |
 
 My enzymes — `src/views/personalEnzymesPanel.ts`, and the cut — `src/views/enzymeCut.ts`
@@ -481,7 +481,8 @@ My enzymes — `src/views/personalEnzymesPanel.ts`, and the cut — `src/views/e
 | 111 | unknown enzyme | "Not in this version's enzyme list" |
 | 113 | name tooltip | "…, sold by …" (suppliers as REBASE names them) |
 | 236 | empty | "No enzyme matches “…”." / "No enzymes selected yet." |
-| 24 (enzymeCut) | tooltip | "Bases from the site to the cut, top strand/bottom strand" |
+| 20 (enzymeCut) | tooltip, cuts both sides | "Bases from the site to the cut, top strand/bottom strand" |
+| 28 (enzymeCut) | tooltip, cut rewritten | "REBASE writes …" |
 | `src/lib/enzymes.ts` | ends, cutting both sides | "Cuts both sides" |
 
 ---

@@ -32,7 +32,7 @@ test("enzyme names: any enzyme REBASE lists as sold, as REBASE writes it", () =>
   assert.equal(new Set(KNOWN_ENZYMES.map(n => n.toLowerCase())).size, KNOWN_ENZYMES.length);
 });
 
-test("cuts are marked with ^ inside the site, else written as REBASE writes them, with the ends they leave", () => {
+test("cuts are marked with ^, with Ns out to a cut past the site, and the ends they leave", () => {
   const cut = (name: string) => {
     const c = enzymeCut(name);
     return c && `${c.notation} ${c.ends}`;
@@ -43,10 +43,18 @@ test("cuts are marked with ^ inside the site, else written as REBASE writes them
   assert.equal(cut("EcoRI"), "G^AATTC 5′ AATT");
   assert.equal(cut("PvuII"), "CAG^CTG Blunt");
   assert.equal(cut("BglI"), "GCCNNNN^NGGC 3′ NNN");
-  // Outside the site: bases after it on the top and bottom strands.
-  assert.equal(cut("BsaI"), "GGTCTC(1/5) 5′ NNNN");
-  assert.equal(cut("BtsI"), "GCAGTG(2/0) 3′ NN");
-  assert.equal(cut("BsmI"), "GAATGC(1/-1) 3′ CN");
+  // Past the site (REBASE's GGTCTC(1/5) and so on): Ns out to the further cut, so for a 5′
+  // overhang the Ns after the ^ are the overhang.
+  assert.equal(cut("BsaI"), "GGTCTCN^NNNN 5′ NNNN");
+  assert.equal(cut("BbsI"), "GAAGACNN^NNNN 5′ NNNN");
+  assert.equal(cut("PaqCI"), "CACCTGCNNNN^NNNN 5′ NNNN");
+  assert.equal(cut("BtsI"), "GCAGTGNN^ 3′ NN");
+  assert.equal(cut("BsmI"), "GAATGCN^ 3′ CN");
+  // More than five Ns are counted, as NEB writes them.
+  assert.equal(cut("FokI"), "GGATG(N)9^NNNN 5′ NNNN");
+  assert.equal(cut("MmeI"), "TCCRAC(N)20^ 3′ NN");
+  assert.equal(cut("EcoP15I"), "CAGCAG(N)25^NN 5′ NN");
+  assert.deepEqual(enzymeCut("BsaI") && { site: enzymeCut("BsaI")!.site, rebase: enzymeCut("BsaI")!.rebase }, { site: "GGTCTC", rebase: "GGTCTC(1/5)" });
   // A site that isn't a palindrome, cut inside it: REBASE counts back from its end
   // (CCGC(-3/-1)), a ^ reads at a glance and the ends give the bottom strand.
   assert.equal(cut("AciI"), "C^CGC 5′ CG");

@@ -405,8 +405,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   may name any enzyme REBASE lists as sold (`src/lib/rebaseEnzymes.ts`, built by
   `tools/build-enzymes.mjs`; sources, terms and what is left out in
   `docs/enzyme-data-plan.md`): Acc65I is not KpnI (same site, other ends), and Esp3I
-  keeps its name. Lists mark a cut inside the site with ^ (C^CGC, which REBASE writes
-  CCGC(-3/-1)) and one outside it as REBASE does (GGTCTC(1/5)), with the ends beside it.
+  keeps its name. Lists mark the top strand's cut with ^ and Ns out to a cut past the
+  site, with the ends beside it: C^CGC and GGTCTCN^NNNN, which REBASE writes CCGC(-3/-1)
+  and GGTCTC(1/5), and GGATG(N)9^NNNN past five Ns (`enzymeCut`).
   Names reach analysis and reaction dialogs through `ViewOptions`, never a global; name
   arrays remain the same until membership changes, so editing a stock note redraws no
   map. Source and filter changes prune unavailable enzyme picks; drawing visibility is

@@ -323,7 +323,7 @@ function mountLabStock(root: HTMLElement): () => void {
     table.replaceChildren(h("table", { class: "sv-table sv-libwin-grid sv-enzyme-grid" },
       h("thead", null, h("tr", null,
         header("Enzyme", "enzyme", "sv-td-enzyme"),
-        h("th", { scope: "col", class: "sv-td-site", title: "^ marks the cut in the top strand. GGTCTC(1/5) cuts 1 base after the site in the top strand, 5 in the bottom." }, "Recognition site"),
+        h("th", { scope: "col", class: "sv-td-site", title: "^ marks the cut in the top strand; N is any base, and (N)9 nine of them." }, "Recognition site"),
         h("th", { scope: "col", class: "sv-td-ends" }, "Ends"),
         header("Product / supplier", "product", "sv-td-product"),
         header("Freezer location", "location", "sv-td-location"),

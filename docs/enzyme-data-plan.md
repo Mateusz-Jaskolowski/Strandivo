@@ -49,10 +49,13 @@ per-enzyme literature, not a file. So methylation sensitivity comes with the pro
   a site it can't read rather than guess.
 - **Cuts on both sides** (BcgI's (10/12)CGANNNNNNTGC(12/10)): only the cut after the site
   is searched for, as before; lists say "Cuts both sides".
-- **A ^ where the cut is inside the site**, as it reads at a glance: AciI is C^CGC,
-  though REBASE writes CCGC(-3/-1), as a ^ can't say where the bottom strand of a site
-  that isn't a palindrome is cut. The ends beside it (5′ CG) say that. A cut outside the
-  site keeps REBASE's numbers, GGTCTC(1/5), and the generated file keeps REBASE's own.
+- **A ^ at the cut, with Ns out to a cut past the site**, as it reads at a glance where
+  REBASE's numbers have to be worked out: AciI is C^CGC (REBASE's CCGC(-3/-1)), BsaI
+  GGTCTCN^NNNN (GGTCTC(1/5)), so the Ns after the ^ of a 5′ overhang are the overhang.
+  Past five, Ns are counted as NEB writes them: FokI is GGATG(N)9^NNNN, MmeI
+  TCCRAC(N)20^. A ^ marks only the top strand's cut; the ends beside it give the rest.
+  Enzymes that cut both sides of their site keep REBASE's notation, as Ns on both sides
+  would bury the site. The generated file keeps REBASE's own, and lists show it on hover.
 - **Plain HTTP**: REBASE's HTTPS certificate doesn't verify in Node (an incomplete
   chain), so the generator downloads over HTTP. Check the regenerated file's diff before
   committing it.

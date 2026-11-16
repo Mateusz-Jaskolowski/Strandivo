@@ -313,30 +313,44 @@ export function enzymeSite(name: string): string {
 /** How an enzyme cuts, for lists of enzymes. */
 export interface EnzymeCut {
   /**
-   * The site with a ^ where the top strand is cut inside it ("G^AATTC", and "C^CGC" for
-   * AciI, which REBASE writes CCGC(-3/-1)); a cut outside it as REBASE writes it, with the
-   * bases after the site to each strand's cut ("GGTCTC(1/5)"). The ends say the rest.
+   * The site with a ^ at the top strand's cut, and Ns past it out to the further cut:
+   * "G^AATTC", "C^CGC" for AciI (REBASE's CCGC(-3/-1)), "GGTCTCN^NNNN" for BsaI (its
+   * GGTCTC(1/5)), "GGATG(N)9^NNNN" for FokI. An enzyme that cuts both sides of its site
+   * keeps REBASE's notation. The ends say where the bottom strand is cut.
    */
   notation: string;
+  /** The recognition site as REBASE writes it, which `notation` starts with ("GGTCTC"). */
+  site: string;
+  /** As REBASE writes it ("GGTCTC(1/5)"), to check against REBASE. */
+  rebase: string;
   /** "5′ AATT", "3′ GTAC", "Blunt", or "Cuts both sides" (BcgI, which cuts a piece out). */
   ends: string;
 }
+
+/** Ns beyond a site: more than five are written as NEB writes them, (N)9, to be read at a glance. */
+const spacer = (k: number) => (k > 5 ? `(N)${k}` : "N".repeat(k));
 
 /** The cut of an enzyme REBASE lists as sold, or null. Bases of an overhang outside the site are N. */
 export function enzymeCut(name: string): EnzymeCut | null {
   const e = known(name);
   if (!e) return null;
-  if (e.bothSides) return { notation: e.notation, ends: "Cuts both sides" };
+  const written = e.notation.replace(/\(-?\d+\/-?\d+\)|\^/g, "");
+  if (e.bothSides) return { notation: e.notation, site: written, rebase: e.notation, ends: "Cuts both sides" };
   const top = e.topSnipOffset;
   const bottom = e.bottomSnipOffset;
   const site = e.site.toUpperCase();
   const from = Math.min(top, bottom);
   const overhang = Array.from({ length: Math.abs(top - bottom) }, (_, i) => site[from + i] ?? "N").join("");
-  // REBASE marks a cut inside a site that isn't a palindrome by counting back from its end;
-  // a ^ reads at a glance. Then the site searched for is the one REBASE writes.
-  const inside = !e.notation.includes("^") && top >= 0 && top <= site.length;
-  const notation = inside ? `${site.slice(0, top)}^${site.slice(top)}` : e.notation;
-  return { notation, ends: top === bottom ? "Blunt" : `${top < bottom ? "5′" : "3′"} ${overhang}` };
+  const ends = top === bottom ? "Blunt" : `${top < bottom ? "5′" : "3′"} ${overhang}`;
+  // A ^ in REBASE's own notation (G^AATTC, TspRI's CASTGNN^) is kept. Otherwise REBASE
+  // counts from the site's end (m/n), and the site searched for is the one it writes:
+  // REBASE always puts the cuts after the site, so Ns run on from it to the further cut.
+  if (e.notation.includes("^")) return { notation: e.notation, site: written, rebase: e.notation, ends };
+  const end = Math.max(top, bottom, site.length);
+  const notation = top <= site.length
+    ? `${site.slice(0, top)}^${site.slice(top)}${spacer(end - site.length)}`
+    : `${site}${spacer(top - site.length)}^${spacer(end - top)}`;
+  return { notation, site: written, rebase: e.notation, ends };
 }
 
 /** The companies REBASE says sell an enzyme, by name. */

@@ -69,6 +69,27 @@ and CI checks that they exist.
   What the dialog decides before drawing (the starting polymerase, the strip that says its
   Tms differ from Settings, the whole primers' annealing temperature) is in
   `src/lib/pcrPlan.ts`, so tests reach it.
+  The overview analyses the final **linear product**, including tails and primer edits;
+  its positions are product positions, while the template span and its cut counts are
+  separate. Its enzyme source and filter start from the document's, then stay independent;
+  membership changes refresh them through ViewOptions. The filter affects drawing only:
+  suggested digests consider the whole chosen list, favour one enzyme and try pairs when
+  single digests give small or similar fragments. Their sizes are top-strand lengths;
+  incomplete Type IIS cuts and overlapping overhangs are not suggested. This is a size
+  comparison, not a buffer-compatibility check or proof of product identity. Tail-flank
+  checks prompt users to check the enzyme's requirements; 6 bp is NEB's general fallback,
+  never an enzyme-specific minimum. Polymerase end/length/enhancer guidance is separately
+  sourced in `src/lib/pcrGuidance.ts`; do not fill missing entries from the Tm family.
+  The program's connected line is schematic: widths and slopes encode neither time nor
+  ramp rate. Temperatures, durations and cycle counts are native text fields, including
+  both optional stages; the final hold stays indefinite. Raw drafts in
+  `src/lib/pcrProgramEdit.ts` survive redraws, even unfinished text. Copy is blocked while
+  any field is invalid. A custom program keeps its original protocol and context when
+  inputs change; Escape restores the field's last accepted value before closing the dialog.
+  Regeneration is offered; untouched programs follow new inputs.
+  Reset regenerates from the current inputs, and edits never change Settings. Controls
+  need unique aria-labels or data-focus keys; restore their caret as well as their focus,
+  and disconnect the overview/program ResizeObservers when redrawn or closed.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

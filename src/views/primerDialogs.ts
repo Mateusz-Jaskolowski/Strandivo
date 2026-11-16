@@ -19,17 +19,23 @@ import { annealingTemp, bindingTm, changesText, crossDimer, currentTmSettings, D
 import { alignPrimer } from "../lib/primerAlign.ts";
 import { NEB_POLYMERASES, nebPolymerase } from "../lib/polymerases.ts";
 import { PCR_PROTOCOLS, TEMPLATES, templatesFor, type TemplateKind } from "../lib/pcrProtocols.ts";
-import { durationText, FIRST_CYCLES, pcrProgram, programNotes, programSource, programText, programTitle, templateNotes, twoStagesPossible, type PcrStage } from "../lib/pcrProgram.ts";
+import { FIRST_CYCLES, pcrProgram, programNotes, programSource, programTitle, templateNotes, twoStagesPossible } from "../lib/pcrProgram.ts";
 import { followsSettings, startPolymerase, tmStrip, wholePrimerTa } from "../lib/pcrPlan.ts";
 import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
 import { COMMON_SEQUENCING_PRIMERS, libraryHits, type LibraryHit } from "../lib/library.ts";
 import { allProducts, pcrProduct, productDocument, type PcrProduct, type PlacedPrimer } from "../lib/pcr.ts";
 import { DEFAULT_DESIGN, designPairs, type DesignedPair, type DesignOptions } from "../lib/design.ts";
 import { TM_APART } from "../lib/primerPairs.ts";
-import { cutCounts, TAIL_ENZYMES } from "../lib/enzymes.ts";
+import { cutCounts, ENZYME_FILTERS, TAIL_ENZYMES, type EnzymeSource, type EnzymeFilter } from "../lib/enzymes.ts";
 import { newId, rangeLength, rangeWithin, rangesOverlap, type Range, type SeqData, type SeqPrimer } from "../lib/seqdata.ts";
 import { orderText, primerListText, type ExportRow, type OrderFormat } from "../lib/primerTable.ts";
 import { copyText } from "./inspector.ts";
+import { editableProgram } from "./pcrProgramView.ts";
+import { pcrOverviewView, type ProductViewChoice } from "./pcrOverviewView.ts";
+import { enzymeSourceSelect } from "./enzymeControls.ts";
+import { programDraft, syncProgram, type ProgramDraft, type ProgramSnapshot } from "../lib/pcrProgramEdit.ts";
+import { productAdvice, productOverview } from "../lib/pcrOverview.ts";
+import { PCR_GUIDANCE } from "../lib/pcrGuidance.ts";
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
 /** Where a primer binds, with its direction: "379–395 →" or "← 465–481". */
@@ -382,40 +388,11 @@ function infoButton(label: string, open: boolean, onclick: () => void): HTMLElem
   return h("button", { type: "button", class: `sv-info-btn${open ? " sv-on" : ""}`, "aria-label": label, "aria-expanded": String(open), title: label, onclick }, iconSvg("info", 15));
 }
 
-/** The program as columns, each step's bar as tall as its temperature; repeated steps sit in a box with their count. */
-function programView(stages: PcrStage[]): HTMLElement {
-  const bar = (t: number) => `${6 + ((t - 4) / 94) * 30}px`;
-  return h(
-    "div",
-    { class: "sv-prog" },
-    ...stages.map(st =>
-      h(
-        "div",
-        { class: `sv-prog-stage${st.cycles === null ? "" : " sv-prog-cycles"}` },
-        st.cycles === null ? null : h("div", { class: "sv-prog-count" }, `${st.cycles} cycles`),
-        h(
-          "div",
-          { class: "sv-prog-steps" },
-          ...st.steps.map(s =>
-            h(
-              "div",
-              { class: "sv-prog-step" },
-              h("div", { class: "sv-prog-bars" }, h("div", { class: "sv-prog-bar", style: { height: bar(s.temp) } })),
-              h("div", { class: "sv-prog-temp" }, `${s.temp} °C`),
-              h("div", { class: "sv-prog-time" }, s.seconds === null ? "hold" : durationText(s.seconds)),
-              h("div", { class: "sv-prog-name" }, s.name)
-            )
-          )
-        )
-      )
-    )
-  );
-}
-
 export function openPcrDialog(ctx: DocContext, preset: { forward?: string; reverse?: string } = {}) {
   const d0 = ctx.store.data;
   let off = () => {};
-  const dlg = openDialog({ title: "PCR product", note: `Check the product amplified from ${d0.name || "this sequence"} by two primers.`, width: 760, onClose: () => off() });
+  let cancelProgramEdit = () => false;
+  const dlg = openDialog({ title: "PCR product", note: `Check the product amplified from ${d0.name || "this sequence"} by two primers.`, width: 760, onClose: () => off(), onEscape: () => cancelProgramEdit() });
   const pick = { forward: preset.forward ?? "", reverse: preset.reverse ?? "" };
   // With a primer selected, start from it.
   const focus = ctx.store.selection.focus;
@@ -432,8 +409,17 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
   // A control that goes away when used gives focus to this one (by its aria-label).
   let focusAfter: string | null = null;
 
+  let draft: ProgramDraft | null = null;
+  let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
+  let enzymeFilter: EnzymeFilter = ctx.options.enzymeFilter;
+  const overviewChoice: ProductViewChoice = { site: "", digest: "" };
+  let disposeViews: (() => void)[] = [];
+  const redraw = () => requestAnimationFrame(refresh);
   let counted = false;
   const render = () => {
+    disposeViews.forEach(dispose => dispose());
+    disposeViews = [];
+    cancelProgramEdit = () => false;
     const d = ctx.store.data;
     const n = d.sequence.length;
     const opts = primerOptions(d);
@@ -543,6 +529,15 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       const canStage = !!input && twoStagesPossible(input);
       const useTwo = twoStage && canStage;
       const stages = input && PCR_PROTOCOLS[polymerase] ? pcrProgram({ ...input, twoStage: useTwo }) : null;
+      const programInputKey = JSON.stringify({ polymerase, template, twoStage: useTwo, sequence: product.sequence, forward: f, reverse: r, ta: anneal?.ta, taFull, conf });
+      const generated: ProgramSnapshot | null = stages ? { key: programInputKey, stages, title: programTitle(polymerase, product.length), source: programSource(polymerase)!, context: `${TEMPLATES.find(t => t.id === template)!.label} · ${fmt(product.length)} bp`, notes: programNotes(polymerase, product.length, template) } : null;
+      draft = syncProgram(draft, generated);
+      const overview = productOverview(product, d.sequence, d.circular, { ...ctx.options, enzymeSource, enzymeFilter });
+      const sourceSelect = enzymeSourceSelect(enzymeSource, "Product enzyme list", source => { enzymeSource = source; redraw(); });
+      const filterSelect = h("select", { class: "sv-select-quiet", "aria-label": "Product cut-site filter", onchange: (e: Event) => { enzymeFilter = (e.target as HTMLSelectElement).value as EnzymeFilter; redraw(); } }, ENZYME_FILTERS.map(f => h("option", { value: f.id, selected: f.id === enzymeFilter }, f.label)));
+      const overviewView = pcrOverviewView(product, overview, overviewChoice, sourceSelect, filterSelect);
+      disposeViews.push(overviewView.dispose);
+      const guidance = PCR_GUIDANCE[polymerase];
       const annealText = anneal ? `${Math.round(anneal.ta)} °C${useTwo ? `, then ${Math.round(taFull!)} °C` : ""}` : "";
       const annealRow: [string, Node][] = anneal ? [["Anneal at", h("span", null, annealText, h("span", { class: "sv-dim" }, ` · ${anneal.polymerase}: ${anneal.rule}`))]] : [];
       // Products are told apart by where the primers' 3′ ends sit.
@@ -551,13 +546,13 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       const partly = d.features.filter(x => !rangeWithin(x, product.span, n) && rangesOverlap(x, product.span, n));
       const tmText = tmF !== null && tmR !== null ? `${tmF.toFixed(1)} °C and ${tmR.toFixed(1)} °C · ${Math.abs(tmF - tmR).toFixed(1)} °C apart` : "—";
       const facts: [string, Node | string][] = [
-        ["Size", h("strong", null, `${fmt(product.length)} bp`)],
-        ["Region", `${fmt(product.span.start + 1)}–${fmt(product.span.end + 1)}${product.span.start > product.span.end ? " (across the origin)" : ""}`],
+        ["Template", h("span", null, `${fmt(product.span.start + 1)}–${fmt(product.span.end + 1)} of ${fmt(n)} bp${product.span.start > product.span.end ? " (across the origin)" : ""}`, productBar(n, product))],
+        ["Ends", guidance ? `${guidance.ends} · ${guidance.product}` : "No end guidance for this polymerase yet"],
         ["Tm", h("span", null, tmText, sameAsSettings ? null : h("span", { class: "sv-dim" }, ` · NEB, ${poly.name}`))],
         ...annealRow,
         ["Contains", inside.length ? inside.map(x => x.name).join(", ") + (partly.length ? `; part of ${partly.map(x => x.name).join(", ")}` : "") : partly.length ? `Part of ${partly.map(x => x.name).join(", ")}` : "No features"]
       ];
-      const warnings: string[] = [];
+      const warnings: string[] = productAdvice(polymerase, template, product.length, overview.highGc.length > 0);
       if (tmF !== null && tmR !== null && Math.abs(tmF - tmR) > TM_APART) warnings.push(`The two Tms are more than ${TM_APART} °C apart.`);
       // Either 3′ end extending on the other primer makes primer dimer instead of product.
       const dimer = crossDimer(f.bases, r.bases);
@@ -585,25 +580,15 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
             h("label", { class: "sv-check-row" }, stageBox, "Anneal in two stages")
           ]
         : [];
-      const program = !anneal
-        ? h("p", { class: "sv-small sv-dim" }, "A primer's Tm is unknown, so there is no program.")
-        : stages
-          ? h(
-              "div",
-              { class: "sv-pcr-program" },
-              h(
-                "div",
-                { class: "sv-pcr-head" },
-                h("h3", { class: "sv-pcr-title" }, "Program"),
-                infoButton("About the program", info === "program", () => toggleInfo("program")),
-                h("span", { class: "sv-small sv-dim sv-pcr-source" }, programSource(polymerase)),
-                h("button", { type: "button", class: "sv-btn sv-btn-small sv-pcr-copy", "data-focus": "copy-program", onclick: () => void copyText(programText(stages, programTitle(polymerase, product.length)), "the program") }, iconSvg("copy", 14), "Copy program")
-              ),
-              info === "program" ? h("div", { class: "sv-info-pop" }, ...programNotes(polymerase, product.length, template).map(t => h("p", null, t))) : null,
-              programView(stages)
-            )
-          : h("p", { class: "sv-small sv-dim" }, `There is no program for ${poly.name} yet.`);
-      result = [productBar(n, product), h("dl", { class: "sv-facts sv-pcr-facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)])), ...warnings.map(w => h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " ", w)), ...stageNote, program];
+      const programView = draft ? editableProgram(draft, generated, programInputKey,
+        infoButton("About the program", info === "program", () => toggleInfo("program")),
+        info === "program" ? h("div", { class: "sv-info-pop" }, h("p", null, "These notes describe the generated starting program."), ...(draft.original.notes ?? []).map(t => h("p", null, t))) : null,
+        () => { if (generated) { draft = programDraft(generated); redraw(); } },
+        text => void copyText(text, "the program")) : null;
+      if (programView) disposeViews.push(programView.dispose);
+      if (programView) cancelProgramEdit = programView.cancelEdit;
+      const program = programView?.el ?? h("p", { class: "sv-small sv-dim" }, !anneal ? "A primer's Tm is unknown, so there is no program." : `There is no program for ${poly.name} yet.`);
+      result = [overviewView.el, h("dl", { class: "sv-facts sv-pcr-facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)])), ...warnings.map(w => h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " ", w)), ...stageNote, program];
       actions.push(
         h(
           "button",
@@ -653,20 +638,25 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     const had = document.activeElement;
     const inside = !!had && dlg.el.contains(had);
     const key = had?.getAttribute("aria-label") ?? had?.getAttribute("data-focus") ?? "";
+    const caret = had instanceof HTMLInputElement ? [had.selectionStart, had.selectionEnd] : null;
     const handoff = focusAfter !== null;
     render();
     if (!inside || handoff || had!.isConnected) return;
     const same = key ? (dlg.el.querySelector(`[aria-label="${CSS.escape(key)}"], [data-focus="${CSS.escape(key)}"]`) as HTMLElement | null) : null;
     (same ?? (dlg.body.querySelector("select") as HTMLElement | null))?.focus();
+    if (same instanceof HTMLInputElement && caret && caret[0] !== null && caret[1] !== null) same.setSelectionRange(caret[0], caret[1]);
   };
   const offStore = ctx.store.subscribe(c => c.data && refresh());
   const offLibrary = primerLibrary.onChange(refresh);
   const offSettings = onSettingsChanged(refresh);
+  const offOptions = ctx.onOptions(refresh);
   off = () => {
     closed = true;
     offStore();
     offLibrary();
     offSettings();
+    offOptions();
+    disposeViews.forEach(dispose => dispose());
   };
   render();
 }

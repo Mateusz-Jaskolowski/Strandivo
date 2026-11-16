@@ -389,7 +389,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   the Primers tab's) and offers to make it the Tm method for the whole app
   (`withNebPolymerase`). The program (`src/lib/pcrProgram.ts`) follows NEB's own protocol
   for the polymerase (`src/lib/pcrProtocols.ts`, tested): a polymerase whose protocol has
-  not been read has none, and the dialog says so rather than guess. The polymerases and
+  not been read has none, and the dialog says so rather than guess. Users may edit the
+  generated program; custom values are labelled and keep the source they started from.
+  Changing inputs offers regeneration without overwriting edits. The polymerases and
   rules started from polymerase-tm (MIT), whose numbers were in part wrong, so every salt
   and rule was fitted to NEB's own Tm API instead and `src/lib/polymerases.test.ts` keeps
   its answers: change them only from new answers of that API. The app never asks NEB: Tm

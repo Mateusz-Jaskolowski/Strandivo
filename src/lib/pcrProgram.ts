@@ -121,7 +121,7 @@ export function programTitle(polymerase: string, length: number): string {
 
 /** "30 s", "1 min", "1 min 30 s". */
 export function durationText(seconds: number): string {
-  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 60 || !Number.isInteger(seconds)) return `${seconds} s`;
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return s ? `${m} min ${s} s` : `${m} min`;

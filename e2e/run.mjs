@@ -648,9 +648,9 @@ async function main() {
     await choose("Forward primer", "AmpR-XhoI-R");
     await sleep(300);
     await choose("Reverse primer", "AmpR-NdeI-F");
-    await s.waitFor("/Size/.test(document.querySelector('.sv-pcr-result')?.textContent)", 5000);
+    await s.waitFor("document.querySelector('[data-product-length]')", 5000);
     const pcr = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
-    const size = Number(/Size\s*([\d,]+) bp/.exec(pcr)?.[1].replace(/,/g, ""));
+    const size = Number(await s.exec("return document.querySelector('[data-product-length]')?.dataset.productLength"));
     check("PCR product is AmpR plus the two tails", size === ampR.end - ampR.start + 1 + 17, `${size} bp`);
     check("No side products are reported", !/other product/.test(pcr), pcr.slice(0, 200));
     await s.shot("04-pcr");
@@ -669,15 +669,34 @@ async function main() {
     const nebPcr = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
     check("With NEB's Q5 as the Tm method, a PCR product says where to anneal", /Anneal at\s*\d+ °C · Q5 High-Fidelity: lower Tm \+ 1 °C, at most 72 °C/.test(nebPcr), nebPcr.slice(0, 300));
     await s.shot("04-pcr-neb");
-    check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && /\d+ cycles/.test(nebPcr) && /Final extension/.test(nebPcr), nebPcr.slice(-400));
+    check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && (await s.exec("return document.querySelector('[data-focus=\"program-1:0:cycles\"]')?.value")) === "25" && /Final extension/.test(nebPcr), nebPcr.slice(-400));
+    check("The final product has a GC strip and a suggested digest", await s.exec("return !!document.querySelector('.sv-pcr-gc .sv-gc') && document.querySelector('.sv-pcr-digest')?.textContent.includes('564 + 314 bp')"));
+    const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
+      const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
+      edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');
+      document.querySelector('[data-focus="copy-program"]').click(); return window.__pcrCopied;`);
+    check("Copy program uses edited temperatures, times and counts, including the last typed field", /Modified PCR program/.test(copiedProgram) && /30 cycles:/.test(copiedProgram) && /Anneal: 64 °C, 1 min 30 s/.test(copiedProgram), copiedProgram);
+    await s.exec("delete navigator.clipboard; delete window.__pcrCopied;");
+    await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
+    await s.shot("04-pcr-edited");
     // Another polymerase picked in the dialog gets its own Tms and program, and offers to become the Tm method.
     await choose("Polymerase", "OneTaq, Standard buffer");
     await s.waitFor("/Tms here are for OneTaq/.test(document.querySelector('.sv-dialog')?.textContent)", 5000);
+    check("Changing polymerase preserves the custom program and offers regeneration", await s.exec("return document.querySelector('[data-focus=\"program-1:1:temp\"]')?.value === '64' && !!document.querySelector('[data-focus=regenerate-program]')"));
+    await s.click("button[data-focus=regenerate-program]");
+    await s.waitFor("!document.querySelector('[data-focus=regenerate-program]')", 5000);
     const oneTaq = await s.exec("return document.querySelector('.sv-dialog').textContent");
     check("Picking another polymerase in the dialog offers it for all Tms", /Tms here are for OneTaq, Standard buffer; the rest of the app uses Q5 High-Fidelity/.test(oneTaq) && /Use for all Tms/.test(oneTaq), oneTaq.slice(0, 500));
-    check("Its program is OneTaq's, from 94 °C", /94 °C/.test(oneTaq) && /OneTaq, Standard buffer: lower Tm − 5 °C, at most 68 °C/.test(oneTaq), oneTaq.slice(-500));
+    check("Its program is OneTaq's, from 94 °C", (await s.exec("return document.querySelector('[data-focus=\"program-0:0:temp\"]')?.value")) === "94" && /OneTaq, Standard buffer: lower Tm − 5 °C, at most 68 °C/.test(oneTaq), oneTaq.slice(-500));
     check("The program names the product its protocol is for, beside the program", /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(oneTaq), oneTaq.slice(-500));
     await s.shot("04-pcr-onetaq");
+    const invalidProgram = await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); const previous = el.value; el.value = 'unfinished'; el.dispatchEvent(new Event('input')); el.focus(); el.setSelectionRange(2, 5); return {previous, blocked:document.querySelector('[data-focus="copy-program"]').disabled};`);
+    await s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 475 } })");
+    check("An unfinished program field blocks copying and keeps its text, focus and caret on redraw", invalidProgram.blocked && await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); return el.value === 'unfinished' && document.activeElement === el && el.selectionStart === 2 && el.selectionEnd === 5;`));
+    await s.press(ESCAPE);
+    check("Escape cancels unfinished text without closing the PCR dialog", await s.exec(`return document.querySelector('[data-focus="program-1:0:seconds"]')?.value`) === invalidProgram.previous);
+    await s.click("button[data-focus=reset-program]");
+    await s.waitFor("!document.querySelector('.sv-prog-modified') || document.querySelector('.sv-prog-modified').hidden", 5000);
     // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
     // whether a menu, a button in the program or one in the footer.
     const keepsFocus = async (selector, nebPrimer) => {
@@ -779,7 +798,7 @@ async function main() {
     check("Pairs lists what each forward and reverse primer would amplify", await s.waitFor("/Product/.test(document.querySelector('.sv-primer-table thead')?.textContent || '') && document.querySelectorAll('.sv-primer-table tbody tr').length >= 1", 5000));
     await s.shot("04b-primer-pairs");
     await s.exec("document.querySelector('.sv-primer-table tbody tr').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
-    check("Clicking a pair opens it in the PCR product dialog", await s.waitFor("document.querySelector('.sv-dialog') && /Size/.test(document.querySelector('.sv-pcr-result')?.textContent || '')", 5000));
+    check("Clicking a pair opens it in the PCR product dialog", await s.waitFor("document.querySelector('.sv-dialog [data-product-length]')", 5000));
     await s.press(ESCAPE);
     // Copy for ordering follows the file while Pairs shows: a primer removed there is gone.
     const before = await s.exec(`${doc} return s.data.primers.length;`);
@@ -2192,6 +2211,15 @@ async function main() {
         await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
       } else check("In dark, Digest opens its dialog", false);
     } else check("The library's parent opens again for the dark screenshots", false);
+    await s.exec(`${doc} const n = s.data.sequence.length; const rc = bases => bases.split('').reverse().map(b => ({A:'T',T:'A',G:'C',C:'G'})[b.toUpperCase()] || 'N').join(''); s.apply({...s.data, primers:[...s.data.primers, {id:'dark-pcr-f',name:'Dark PCR F',start:0,end:24,strand:1,bases:s.data.sequence.slice(0,25),notes:{},raw:{}},{id:'dark-pcr-r',name:'Dark PCR R',start:n-25,end:n-1,strand:-1,bases:rc(s.data.sequence.slice(-25)),notes:{},raw:{}}]}, 'Add PCR example'); window.__strandivo.setView('primers');`);
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]", "xpath");
+    await choose("Forward primer", "Dark PCR F"); await sleep(150); await choose("Reverse primer", "Dark PCR R");
+    if (await s.waitFor("document.querySelector('.sv-pcr-program .sv-prog-trace')", 5000)) {
+      await s.shot("13-dark-pcr");
+      await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
+      await s.shot("13-dark-pcr-program");
+    } else check("In dark, the PCR program opens", false);
+    await s.press(ESCAPE);
     await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");
     check("Choosing Light turns it back", await s.waitFor("document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(238, 240, 243)'", 5000));
   } catch (e) {

@@ -30,6 +30,11 @@ with Unreleased's notes and leaves them where they are.
   My enzymes to see who sells it.
 - **Double-click a protein**: on the map or in the Sequence tab, a double-click on a CDS,
   one of its regions or an ORF opens its Protein details.
+- **Regions stay on their residues while you edit**: bases typed or deleted one at a time
+  inside a CDS now move the regions after them (before, typing three codons left every
+  later region three residues off), and replacing bases no longer trims a feature, primer
+  or region that starts or ends there. Replace a whole region, like a CDR, and the region
+  keeps the new bases.
 
 ## 0.5.0
 

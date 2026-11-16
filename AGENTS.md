@@ -98,6 +98,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   never change `store.data` or arrays it holds in place. Steps with the same `key` within
   1.5 s merge into one undo step (typing). Views compare data by reference, so the same
   goes for read results: replace lists, don't mutate them.
+- **Replacing bases** is not a deletion and then an insertion, which left new bases at an
+  annotation's edge outside it (`replaceRange` in `src/lib/seqdata.ts`). As many bases as
+  were selected move nothing. Otherwise, annotation by annotation (features, primers,
+  protein regions): one holding the whole selection holds the new bases; one crossing an
+  edge of it keeps only its part outside, as which side new bases belong to can't be
+  known; one inside a larger selection goes; the rest move with their bases. Inserting at
+  a caret on an annotation's edge still leaves the new bases outside it.
 - **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.

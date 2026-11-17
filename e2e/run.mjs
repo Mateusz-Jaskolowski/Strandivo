@@ -863,6 +863,47 @@ async function main() {
     await redraws(() => s.click(twoStageBox));
     const backToOne = await s.exec(programStages);
     check("Unticking it goes back to one stage of 25 cycles", backToOne.length === 3 && backToOne[1].cycles === "25 cycles" && !(await s.exec(`return document.querySelector("${twoStageBox}").checked;`)), JSON.stringify(backToOne));
+    // A site with fewer than 6 bases beyond it in a tail (XhoI and NdeI here, 4 each, as the tails' extra bases are GCGC)
+    // is listed in a fold, which stays as it was left when the dialog is drawn again.
+    const flanks = () => s.exec("const d = document.querySelector('.sv-pcr-flanks'); return d ? { open: d.open, text: d.textContent } : null;");
+    const flanksShut = await flanks();
+    check(
+      "Sites in the tails with fewer than 6 bases beyond them are listed, in a fold that starts shut",
+      flanksShut && !flanksShut.open && /Bases beyond the sites in the tails/.test(flanksShut.text) && /XhoI: 4 bp between its site and the nearest end of the product\./.test(flanksShut.text) && /NdeI: 4 bp between its site/.test(flanksShut.text),
+      JSON.stringify(flanksShut)
+    );
+    await s.click(".sv-pcr-flanks summary");
+    check("Clicking its heading opens it", await s.waitFor("document.querySelector('.sv-pcr-flanks')?.open", 3000));
+    await redraws(() => s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 525 } })"));
+    check("It stays open when the dialog is drawn again", (await flanks())?.open === true, JSON.stringify(await flanks()));
+    await s.click(".sv-pcr-flanks summary");
+    check("And clicking its heading again shuts it, as the checks below expect", await s.waitFor("document.querySelector('.sv-pcr-flanks') && !document.querySelector('.sv-pcr-flanks').open", 3000));
+    await redraws(() => s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 500 } })"));
+    // The product's own enzyme list and filter decide the sites it draws; the suggested digest is looked for in the whole list.
+    const chipTotal = "return Array.from(document.querySelectorAll('.sv-pcr-cut')).reduce((n, b) => n + (b.dataset.more ? Number(b.textContent.replace('+', '')) : 1), 0);";
+    const menuValue = label => s.exec(`return document.querySelector(".sv-dialog select[aria-label='${label}']")?.value ?? null;`);
+    const listAtStart = await menuValue("Product enzyme list");
+    const filterAtStart = await menuValue("Product cut-site filter");
+    const chipsAtStart = await s.exec(chipTotal);
+    await redraws(() => choose("Product cut-site filter", "all"));
+    const chipsEvery = await s.exec(chipTotal);
+    const digestText = () => s.exec("return document.querySelector('.sv-pcr-digest')?.textContent ?? ''");
+    check("Choosing Every site in the product's own filter draws more sites, and the digest follows the list, not the filter", chipsEvery > chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${chipsAtStart} → ${chipsEvery} sites, ${await digestText()}`);
+    await redraws(() => choose("Product enzyme list", "lab"));
+    const labText = await s.exec("return document.querySelector('.sv-pcr-overview').textContent");
+    check("A lab list with no enzymes draws none, says so and suggests no digest", (await s.exec(chipTotal)) === 0 && /No cut sites match this list and filter/.test(labText) && /No digest from this list gives fragments worth running/.test(labText), labText.slice(0, 300));
+    await redraws(() => choose("Product enzyme list", listAtStart));
+    await redraws(() => choose("Product cut-site filter", filterAtStart));
+    check("Putting both menus back draws the sites it started with", (await s.exec(chipTotal)) === chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${await s.exec(chipTotal)} sites`);
+    // Enter accepts a field's value and leaves focus in it, with the dialog open and nothing else taking the key.
+    const enterField = '[data-focus="program-1:1:temp"]';
+    const enterBefore = await s.exec(`const el = document.querySelector('${enterField}'); const previous = el.value; el.value = String(Number(previous) + 1); el.dispatchEvent(new Event('input')); el.focus(); return previous;`);
+    await s.press(ENTER);
+    const enterAfter = await s.exec(`const el = document.querySelector('${enterField}'); return { focused: document.activeElement === el, value: el.value, dialog: !!document.querySelector('.sv-dialog'), modified: !document.querySelector('.sv-prog-modified')?.hidden };`);
+    check("Enter in a program field keeps focus there, with the dialog open and the change made", enterAfter.focused && enterAfter.dialog && enterAfter.modified && enterAfter.value === String(Number(enterBefore) + 1), JSON.stringify(enterAfter));
+    await s.exec(`const el = document.querySelector('${enterField}'); el.value = '${enterBefore}'; el.dispatchEvent(new Event('input'));`);
+    await s.press(ENTER);
+    check("Typing the generated value back and pressing Enter leaves the program unmodified, focus still there", (await s.waitFor("document.querySelector('.sv-prog-modified')?.hidden", 3000)) && (await s.exec(`return document.activeElement === document.querySelector('${enterField}');`)));
     const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
       const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
       edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');
@@ -948,6 +989,29 @@ async function main() {
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");
     await sleep(300);
+
+    // --- a GC-rich product warns: 300 bases of G and C in place of 1,001–1,300, with a primer at each end ---
+    check("A product of ordinary GC has no GC warning", !/% GC, which can be hard to amplify/.test(pcr), pcr.slice(0, 200));
+    const beforeGc = await s.exec(`${doc} return s.data.sequence;`);
+    await s.exec(`${doc} let x = 12345;
+      const gc = Array.from({ length: 300 }, () => { x = (x * 1103515245 + 12345) % 2147483648; return (x >> 16) & 1 ? 'G' : 'C'; }).join('');
+      const rc = bases => [...bases].reverse().map(c => ({ G: 'C', C: 'G' })[c]).join('');
+      s.apply({ ...s.data, sequence: s.data.sequence.slice(0, 1000) + gc + s.data.sequence.slice(1300), primers: [...s.data.primers,
+        { id: 'e2e-gc-f', name: 'GC-F', start: 1000, end: 1019, strand: 1, bases: gc.slice(0, 20), notes: {}, raw: {} },
+        { id: 'e2e-gc-r', name: 'GC-R', start: 1280, end: 1299, strand: -1, bases: rc(gc.slice(280)), notes: {}, raw: {} }] }, 'Add GC-rich product');`);
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]", "xpath");
+    await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Forward primer']\")", 5000);
+    await choose("Forward primer", "GC-F");
+    await sleep(300);
+    await choose("Reverse primer", "GC-R");
+    await s.waitFor("document.querySelector('[data-product-length]')?.dataset.productLength === '300'", 5000);
+    const gcText = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check("A GC-rich product says so, with the GC to one decimal and Q5's enhancer", /The product is 100\.0% GC, which can be hard to amplify\./.test(gcText) && /Q5 High GC Enhancer/.test(gcText) && /100\.0% GC/.test(await s.exec("return document.querySelector('.sv-pcr-overview .sv-pcr-head').textContent")), gcText.slice(0, 400));
+    await s.shot("04-pcr-gc-rich");
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.exec(`${doc} s.undo();`);
+    check("Undo takes the GC-rich bases and their primers out again", (await s.exec(`${doc} return s.data.sequence;`)) === beforeGc && !(await state()).primers.some(name => name.startsWith("GC-")));
 
     // --- mutagenesis: a codon of AmpR to alanine, from the right-click menu ---
     await s.click("button[data-tab=sequence]");

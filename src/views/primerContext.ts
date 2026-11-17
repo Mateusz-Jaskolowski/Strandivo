@@ -619,6 +619,9 @@ export class PrimerContextView {
 
   private startDrag(e: PointerEvent, side: "left" | "right", p: SeqPrimer) {
     e.preventDefault();
+    // Taken by hand, as the press is cancelled and WebKit never focuses a clicked button:
+    // the arrow keys then move this end.
+    (e.currentTarget as HTMLElement).focus({ preventScroll: true });
     this.dragging = { side, from: p, last: `${p.start}:${p.end}` };
     const move = (ev: PointerEvent) => this.dragTo(ev);
     const up = () => {

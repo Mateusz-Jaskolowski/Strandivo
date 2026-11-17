@@ -57,6 +57,10 @@ with Unreleased's notes and leaves them where they are.
   without moving it, so it can be pulled back from that region's end.
 - **Arrow keys on a primer's ends**: click an end of a primer in the Primers tab, and the
   arrow keys now extend or trim it, as the hint there says.
+- **No stray N in a PCR product**: where a primer binds over an N or another ambiguous
+  base in your template, the product now has the primer's base there, as it would in the
+  tube, instead of keeping the N. Its GC content, the sites found in it and a product
+  opened as a new file all follow.
 
 ## 0.5.0
 

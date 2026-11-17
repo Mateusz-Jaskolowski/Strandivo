@@ -741,6 +741,10 @@
   padding: 16px 16px 14px;
   border-bottom: 1px solid var(--line);
 }
+.sv-feature-head p,
+.sv-region-detail p {
+  margin: 0;
+}
 .sv-insp-title {
   display: flex;
   align-items: center;
@@ -894,9 +898,15 @@
   margin-left: -10px;
   white-space: nowrap;
 }
+.sv-insp-section .sv-count {
+  text-transform: none;
+}
 .sv-insp-section.sv-folded {
   padding-top: 9px;
   padding-bottom: 9px;
+}
+.sv-add-note {
+  align-self: flex-start;
 }
 .sv-section-actions {
   display: flex;
@@ -4837,7 +4847,7 @@ main.sv-enzyme-section-body {
 .sv-outline-feature-head > .sv-list-row { min-width: 0; }
 .sv-outline-feature-head > .sv-icon-btn { margin-left: 2px; }
 .sv-outline-regions .sv-list-row { font-size: 11px; }
-.sv-protein-diagram { margin: 8px 0 10px; }
+.sv-protein-diagram { margin: 2px 0; }
 .sv-protein-ruler { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3); margin-bottom: 5px; }
 .sv-protein-tracks { position: relative; border-top: 2px solid var(--line); margin: 0 2px; }
 .sv-protein-region {
@@ -4846,8 +4856,31 @@ main.sv-enzyme-section-body {
   color: #fff; font: 600 10px var(--sans); overflow: hidden; white-space: nowrap;
   text-overflow: ellipsis; cursor: pointer;
 }
-.sv-protein-region:hover { filter: brightness(1.1); }
+.sv-protein-region:is(:hover, .sv-region-highlight):not(.sv-selected) {
+  outline: 1px solid var(--text-2);
+  outline-offset: 1px;
+  z-index: 1;
+}
 .sv-protein-region.sv-selected { outline: 2px solid var(--text); outline-offset: 2px; z-index: 1; }
+.sv-region-list-head { padding: 0; }
+.sv-region-list-item {
+  position: relative;
+}
+.sv-region-list .sv-list-row {
+  padding-block: 4px;
+  gap: 6px;
+}
+.sv-region-list-nested .sv-list-row { padding-left: 24px; }
+.sv-region-list .sv-list-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.sv-region-list .sv-list-row.sv-region-highlight:not(.sv-selected) { background: var(--hover); }
+.sv-region-group-toggle {
+  position: absolute;
+  top: 3px;
+}
+.sv-region-group-toggle[aria-expanded="false"] > .sv-icon { transform: rotate(-90deg); }
 /* Expand…: the protein as a figure (src/lib/proteinFigure.ts), on white as it is saved. */
 .sv-figure-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 12.5px; color: var(--text-2); }
 .sv-figure-control { display: inline-flex; align-items: center; gap: 7px; }
@@ -4936,10 +4969,20 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   gap: 4px 14px;
 }
 .sv-region-detail {
+  gap: 8px;
+}
+.sv-region-detail .sv-insp-heading { overflow-wrap: anywhere; }
+.sv-region-path {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 5px;
+  color: var(--text-3);
+}
+.sv-region-path .sv-link {
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 .sv-region-actions {
   display: grid;

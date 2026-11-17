@@ -463,6 +463,8 @@ async function main() {
     // Unfolded here, it stays open in every file, which the ORF and region checks below rely on.
     await s.click(".sv-inspector [data-fold='translation']");
     check("Clicking its heading unfolds the translation", await s.waitFor("/MSIQHFRV/.test(document.querySelector('.sv-inspector')?.textContent) && document.querySelector('.sv-inspector [data-fold=\"translation\"]').getAttribute('aria-expanded') === 'true'", 3000));
+    check("The CDS starts with a compact protein summary", await s.exec("const p = document.querySelector('.sv-inspector [data-fold=protein]'); return p.getAttribute('aria-expanded') === 'false' && p.textContent.includes('31.6 kDa');"));
+    await s.click(".sv-inspector [data-fold='protein']");
     // ExPASy ProtParam gives AmpR 31,557.28 Da, ε280 27,960 reduced and 28,085 with its one cystine.
     const proteinFacts = await s.exec("return document.querySelector('.sv-inspector [data-section=\"protein\"]')?.textContent || ''");
     check("The inspector shows the protein's mass and ε280, as ProtParam does", /31\.6 kDa/.test(proteinFacts) && /27,960 M⁻¹ cm⁻¹/.test(proteinFacts) && /28,085 with disulfides/.test(proteinFacts) && /0\.886 at 1 mg\/mL/.test(proteinFacts), proteinFacts);
@@ -1222,6 +1224,8 @@ async function main() {
     // A feature's note is typed in the inspector and saved as its /note, quotes and all.
     const typedNote = 'Says "stop" here, and goes on long enough to wrap onto another line of the file';
     await s.exec(`${doc} const f = s.data.features[0]; s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+    await s.waitFor("document.querySelector('.sv-add-note, [aria-label=\"Feature note\"]')", 5000);
+    await s.exec("document.querySelector('.sv-add-note')?.click();");
     await s.waitFor("document.querySelector('[aria-label=\"Feature note\"]')", 5000);
     // Cleared without an event, so the first key press replaces any note the feature had.
     await s.exec("const note = document.querySelector('[aria-label=\"Feature note\"]'); note.value = ''; note.scrollIntoView({ block: 'nearest' });");
@@ -1601,9 +1605,11 @@ async function main() {
     // The map only draws while it shows.
     await s.exec("window.__strandivo.command('show-map')");
     check("They are drawn inside the CDS", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
-    check("The inspector draws them with their list folded", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2 && document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'false'", 3000));
+    check("The inspector draws both regions", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2", 3000));
     check("Independent regions need no top-level/all choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     check("The entry goes in the file's cross-references", await s.exec(`${doc} return s.data.features.find(f => f.id === window.__strandivoCds).notes.db_xref.includes("UniProtKB/Swiss-Prot:P62593");`));
+    await s.click(".sv-inspector .sv-protein-region");
+    check("An imported region labels both coordinate systems", await s.waitFor("/Construct residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent) && /UniProtKB P62593 · residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent)", 3000));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
 
@@ -1630,7 +1636,7 @@ async function main() {
       const actions = document.querySelector('.sv-region-actions');
       const buttons = Array.from(actions.querySelectorAll('button'));
       const bounds = actions.getBoundingClientRect();
-      return buttons.map(b => b.textContent.trim()).join('|') === 'Edit region…|Copy AA sequence|Add as feature|Remove' &&
+      return buttons.map(b => b.textContent.trim()).join('|') === 'Edit region…|Copy AA sequence|Add as feature|Remove region' &&
         buttons.every((button, i) => Math.abs(button.getBoundingClientRect()[i % 2 ? 'right' : 'left'] - bounds[i % 2 ? 'right' : 'left']) < 1);
     `));
     const domainId = await s.exec(`${doc} return JSON.parse(decodeURIComponent(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions[0].split('|')[5])).id;`);
@@ -1666,10 +1672,29 @@ async function main() {
     await fillProteinRegion("CDR1 edited", "CDR", 9, 19, domainId);
     await s.click("//button[normalize-space(.)='Save region']", "xpath");
     check("A region's bounds and name can be edited", await s.waitFor("Array.from(document.querySelectorAll('.sv-outline [data-region]')).some(r => r.textContent.includes('CDR1 edited') && r.textContent.includes('9–19'))", 5000));
+    check("The inspector names the selected region and links back to its parent", await s.waitFor(`(() => {
+      const panel = document.querySelector('.sv-inspector');
+      return panel.querySelector('.sv-insp-heading')?.textContent === 'CDR1 edited' &&
+        Array.from(panel.querySelectorAll('.sv-region-path button')).map(b => b.textContent).join('/') === 'AmpR/Test domain' &&
+        !panel.querySelector('[aria-label="Feature name"]') && !panel.textContent.includes('Delete feature');
+    })()`, 5000));
+    check("The region list opens when the diagram label clips", await s.waitFor("document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'true' && document.querySelector('.sv-region-list [aria-pressed=true]')?.textContent.includes('CDR1 edited')", 5000));
+    const rangeBeforeJump = await s.exec(`${doc} return s.selection.range;`);
+    const regionKept = `${doc} const r = s.selection.range, before = arguments[0]; return !!before && s.selection.focus?.region === 1 && r?.start === before.start && r?.end === before.end && r.end - r.start + 1 === 33;`;
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='View in sequence']", "xpath");
+    check("Viewing the region in Sequence keeps its own bases selected", await s.waitFor("document.querySelectorAll('.sv-row').length > 0", 5000) && await s.exec(regionKept, rangeBeforeJump));
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='View on map']", "xpath");
+    check("Viewing the region back on Map keeps its bases selected", await s.exec(regionKept, rangeBeforeJump));
+    await s.click(".sv-region-path button:last-child");
+    check("The parent link selects the enclosing region", await s.waitFor("document.querySelector('.sv-region-detail h2')?.textContent === 'Test domain'", 5000));
+    await s.click(".sv-region-group-toggle");
+    check("The list can fold a region's children", await s.exec("return document.querySelector('.sv-region-list [role=group]').hidden;"));
+    await s.click(".sv-inspector .sv-protein-region[aria-label^='CDR1 edited,']");
+    check("Picking a child in the diagram reveals it in the list", await s.waitFor("document.querySelector('.sv-region-list [aria-pressed=true]')?.textContent.includes('CDR1 edited') && !document.querySelector('.sv-region-list [role=group]').hidden", 5000));
     await s.shot("11-protein-regions");
 
     // Protein details draw the protein as a figure: a nested region is a bracket under its parts.
-    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Details…']", "xpath");
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Protein details…']", "xpath");
     const figureNames = `
       const names = Array.from(document.querySelectorAll('.sv-figure text[data-region]')).map(t => t.getBoundingClientRect());
       const apart = names.every((a, i) => names.every((b, j) => i <= j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));`;
@@ -1856,7 +1881,7 @@ async function main() {
     await s.exec(`${doc} s.undo(); window.__strandivo.command('show-sequence');`);
 
     await s.exec(`${doc} s.undo(); s.selectRange({ start: s.data.features.find(f => f.id === window.__strandivoCds).start, end: s.data.features.find(f => f.id === window.__strandivoCds).end }, { kind: "feature", id: window.__strandivoCds, region: 1 }, "e2e"); window.__strandivo.command('show-map');`);
-    await s.click("//button[normalize-space(.)='Remove']", "xpath");
+    await s.click("//button[normalize-space(.)='Remove region']", "xpath");
     check("Removing a region keeps its CDS", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 1", 5000));
     check("Removing the last nested region hides the map detail choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     await s.exec(`${doc} s.undo(); s.undo(); s.undo(); s.undo();`);

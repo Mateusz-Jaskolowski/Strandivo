@@ -244,16 +244,16 @@ export type ProteinDetail = "none" | "domains" | "all";
 export function regionTree(regions: ProteinRegion[]) {
   const rows = regions.map((region, index) => ({ region, index }));
   const seen = new Set<number>();
-  const out: { region: ProteinRegion; index: number; depth: number }[] = [];
+  const out: { region: ProteinRegion; index: number; depth: number; parent: number | null }[] = [];
   const parentOf = (r: ProteinRegion) => rows.find(x => x.region.id && x.region.id === r.parentId && x.region !== r && x.region.start <= r.start && x.region.end >= r.end);
-  const visit = (row: typeof rows[number], depth: number) => {
+  const visit = (row: typeof rows[number], depth: number, parent: number | null) => {
     if (seen.has(row.index)) return;
     seen.add(row.index);
-    out.push({ ...row, depth });
-    for (const child of rows) if (parentOf(child.region) === row) visit(child, depth + 1);
+    out.push({ ...row, depth, parent });
+    for (const child of rows) if (parentOf(child.region) === row) visit(child, depth + 1, row.index);
   };
-  for (const row of rows) if (!parentOf(row.region)) visit(row, 0);
-  for (const row of rows) visit(row, 0);
+  for (const row of rows) if (!parentOf(row.region)) visit(row, 0, null);
+  for (const row of rows) visit(row, 0, null);
   return out;
 }
 

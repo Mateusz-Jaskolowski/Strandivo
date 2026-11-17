@@ -208,10 +208,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (`src/views/inspector.ts`), folded or opened by clicking the heading. The choice is kept
   per kind of section for the whole app, not per file, in local storage
   (`src/inspectorFolds.ts`). Long ones seldom wanted at a glance (a CDS's translation, its
-  qualifiers, what lies inside a feature, the list under a protein's diagram) start folded,
-  and a section nobody has touched follows its default. Folding never hides a problem or
-  what is selected: warnings go in the head, and a picked region's details stay under
-  its folded heading (`keep`).
+  qualifiers, what lies inside a feature) start folded. A section nobody has touched
+  follows its default, which can depend on what is shown: the list under a protein's
+  diagram opens when its names don't fit. A feature's type, strand and location are
+  summarised in the header and edited together under Edit feature. Folding never hides
+  a warning or the current selection's identity.
 - **Canvases** never take the full height of what they draw: the alignment's reads draw
   only the rows near the pane, as a canvas above 268 million pixels draws blank in WebKit
   (the Mac app) and a plate of traces would take hundreds of megabytes.

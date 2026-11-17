@@ -7,15 +7,15 @@
 
 import { h } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
-import { openDialog } from "../ui/modal.ts";
+import type { DocContext } from "../doc/context.ts";
 import type { VariableDesign } from "../lib/types.ts";
 import { versionsFromText } from "../lib/variable.ts";
 
 type Versions = Extract<VariableDesign, { kind: "alternatives" }>;
 
 /** The versions of `name`'s design, one per line; `save` gets the new design. */
-export function openVersionsDialog(name: string, design: Versions, save: (d: VariableDesign) => void) {
-  const dlg = openDialog({ title: "Edit versions", note: `${name}: one version per line, as name: ${design.protein ? "amino acids" : "DNA bases"}.`, width: 640 });
+export function openVersionsDialog(ctx: DocContext, name: string, design: Versions, save: (d: VariableDesign) => void) {
+  const dlg = ctx.openDialog({ title: "Edit versions", note: `${name}: one version per line, as name: ${design.protein ? "amino acids" : "DNA bases"}.`, width: 640 });
   const count = design.options.length;
   const text = h("textarea", { class: "sv-input sv-mono sv-versions-edit", rows: "14", "aria-label": "Versions, one per line", spellcheck: "false", readonly: true, placeholder: `Loading ${fmt(count)} ${count === 1 ? "version" : "versions"}…` }) as HTMLTextAreaElement;
   const error = h("p", { class: "sv-small sv-text-warn sv-region-message", role: "alert" });

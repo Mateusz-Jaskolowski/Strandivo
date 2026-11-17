@@ -7,7 +7,6 @@
 
 import { h } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
-import { openDialog } from "../ui/modal.ts";
 import { fetchUniprotEntry } from "../platform.ts";
 import { featureStyles, protein } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -34,7 +33,7 @@ const percent = (x: number) => `${(x * 100).toFixed(x > 0.99 && x < 1 ? 1 : 0)}%
 
 export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
   let closed = false;
-  const dlg = openDialog({
+  const dlg = ctx.openDialog({
     title: "Get regions from UniProt",
     note: `Domains, membrane regions, signal peptides and other protein annotations for ${f.name}.`,
     width: 640,

@@ -14,7 +14,6 @@ import { enzymeLibrary } from "../enzymeLibrary.ts";
 import { personalEnzymes } from "../personalEnzymes.ts";
 import { h, toast } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
-import { openDialog } from "../ui/modal.ts";
 import { openDigestDialog } from "./digestDialog.ts";
 import type { DocContext } from "../doc/context.ts";
 
@@ -66,7 +65,7 @@ export function openEnzymeDialog(ctx: DocContext, written: string) {
   const sites = enzymeSites(d.sequence, d.circular, name);
   const digest = sites.length ? digestSequence(d, [name]) : null;
   let saving = false;
-  const dlg = openDialog({ title: name, note: "Site, cut and suppliers from REBASE.", width: 640, onClose: () => (offPersonal(), offLab()) });
+  const dlg = ctx.openDialog({ title: name, note: "Site, cut and suppliers from REBASE.", width: 640, onClose: () => (offPersonal(), offLab()) });
   const facts = (rows: [string, Node | string][]) => h("dl", { class: "sv-facts sv-enzyme-facts" }, rows.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)]));
   const section = (title: string, ...body: (Node | null)[]) =>
     h("section", { class: "sv-protein-section", "aria-label": title }, h("div", { class: "sv-section-head sv-protein-head" }, h("h3", { class: "sv-section-title" }, title)), ...body);

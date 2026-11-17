@@ -158,6 +158,61 @@ test("a PCR product carries the primers' changes, not the template's bases", () 
   assert.equal(p2.sequence, seq.slice(1000, 1200) + revChanged);
 });
 
+test("a template base left ambiguous under a primer is the primer's base in the product", () => {
+  const seq = puc19();
+  const doc: SeqData = { name: "pUC19", description: "", circular: true, sequence: seq, features: [], primers: [], sources: [] };
+  const forward: PlacedPrimer = { name: "F", bases: seq.slice(1000, 1030), start: 1000, end: 1029, strand: 1 };
+  const reverse: PlacedPrimer = { name: "R", bases: reverseComplement(seq.slice(1200, 1230)), start: 1200, end: 1229, strand: -1 };
+  const clean = pcrProduct(seq, true, forward, reverse)!;
+  assert.equal(clean.length, 230);
+  const put = (at: number, base: string) => seq.slice(0, at) + base + seq.slice(at + 1);
+  // One N under each primer, near its 5′ end and further in; a code that fits the base too.
+  const fits: Record<string, string> = { A: "R", C: "Y", G: "S", T: "W" };
+  for (const at of [1010, 1012, 1029, 1200, 1215, 1217, 1229]) {
+    for (const code of ["N", fits[seq[at]]]) {
+      const template = put(at, code);
+      const p = pcrProduct(template, true, forward, reverse)!;
+      assert.equal(p.sequence, clean.sequence, `${code} at ${at}`);
+      assert.ok(!p.sequence.includes(code), `${code} at ${at}`);
+      assert.equal(gcContent(p.sequence), gcContent(clean.sequence));
+      // Opened as a new file it is the same product.
+      assert.equal(productDocument({ ...doc, sequence: template }, p).sequence, clean.sequence, `${code} at ${at}`);
+    }
+  }
+  // The primer's bases are written as they are in the product, whatever their case.
+  const lower: PlacedPrimer = { ...forward, bases: forward.bases.toLowerCase() };
+  assert.equal(pcrProduct(put(1010, "N"), true, lower, reverse)!.sequence, clean.sequence);
+  // On a template that is not circular too.
+  const linear = pcrProduct(put(1010, "N"), false, forward, reverse)!;
+  assert.equal(linear.sequence, clean.sequence);
+  // Next to a base the primer inserts, the insertion and the primer's base go in together.
+  const site = seq.slice(1000, 1033);
+  const inserting: PlacedPrimer = { name: "F", bases: "GGATCC" + site.slice(0, 15) + "TAG" + site.slice(15), start: 1000, end: 1032, strand: 1 };
+  const expected = "GGATCC" + site.slice(0, 15) + "TAG" + site.slice(15) + seq.slice(1033, 1230);
+  assert.equal(pcrProduct(seq, true, inserting, reverse)!.sequence, expected);
+  for (const at of [1014, 1015]) assert.equal(pcrProduct(put(at, "N"), true, inserting, reverse)!.sequence, expected, `N at ${at}`);
+});
+
+test("an ambiguous base in a primer leaves the product as it is", () => {
+  const seq = puc19();
+  const doc: SeqData = { name: "pUC19", description: "", circular: true, sequence: seq, features: [], primers: [], sources: [] };
+  const forward: PlacedPrimer = { name: "F", bases: seq.slice(1000, 1030), start: 1000, end: 1029, strand: 1 };
+  const reverse: PlacedPrimer = { name: "R", bases: reverseComplement(seq.slice(1200, 1230)), start: 1200, end: 1229, strand: -1 };
+  const clean = pcrProduct(seq, true, forward, reverse)!;
+  const put = (s: string, at: number, base: string) => s.slice(0, at) + base + s.slice(at + 1);
+  // An N in the primer over a definite template base: the template's base stays.
+  const nForward: PlacedPrimer = { ...forward, bases: put(forward.bases, 14, "N") };
+  assert.equal(pcrProduct(seq, true, nForward, reverse)!.sequence, clean.sequence);
+  const nReverse: PlacedPrimer = { ...reverse, bases: put(reverse.bases, 14, "N") };
+  assert.equal(pcrProduct(seq, true, forward, nReverse)!.sequence, clean.sequence);
+  assert.equal(productDocument(doc, pcrProduct(seq, true, nForward, nReverse)!).sequence, clean.sequence);
+  // An N in the primer over an N in the template: nothing definite to write, the N stays.
+  const t = put(put(seq, 1014, "N"), 1215, "N");
+  const both = pcrProduct(t, true, nForward, nReverse)!;
+  assert.equal(both.sequence, put(put(clean.sequence, 14, "N"), 215, "N"));
+  assert.equal(productDocument({ ...doc, sequence: t }, both).sequence, both.sequence);
+});
+
 test("design avoids a primer that binds twice, and reports one when it can't", () => {
   // A deterministic sequence with a 24 bp stretch repeated: a primer of up to 24 bases
   // starting at the second copy binds both, a longer one reaches unique bases.

@@ -19,8 +19,8 @@ The rest of the guide is split by area, so an agent reads only what its task nee
 changing code in an area, read its guide; their rules are as binding as this file's.
 
 - Reads, clones, mutations, translation of reads and the Reads tab: `docs/agents/reads.md`.
-- Primers, primer pairs, mutagenesis primers and the primer library:
-  `docs/agents/primers.md`.
+- Primers, primer pairs, mutagenesis primers, the primer library and the PCR product
+  dialog with its cycling program: `docs/agents/primers.md`.
 - Protein regions and UniProt: `docs/agents/proteins.md`.
 - Anything the app sends or fetches, updates, feedback, crash reports, usage statistics and
   the welcome window: `docs/agents/updates-and-reports.md`.
@@ -46,7 +46,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - `src/doc/store.ts` holds the document: immutable `SeqData` snapshots, the selection and
   undo history. Views get a `DocContext` (`src/doc/context.ts`) and subscribe to changes.
 - `src/views/` has one class per part of the window (map, sequence, primers, reads with its
-  canvas trace view, outline, inspector, search). Each builds its own DOM or SVG.
+  canvas trace view, outline, inspector, search). Each builds its own DOM or SVG. One
+  renderer draws every simulated gel (`src/views/gelDraw.ts`): the Digest dialog's lanes
+  and the PCR product's own, with the ladder they share.
 - `src/lib/` is pure logic with unit tests: the sequence model and edits
   (`src/lib/seqdata.ts`), primers and Tm, enzymes, primer design, PCR products, primer
   lists, alignment layout, codon effects, construct summaries for Home, cloning simulation
@@ -96,8 +98,35 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   interface shows positions 1-based.
 - **Edits** go through `store.apply(next, label, selection?, key?)` with a new `SeqData`;
   never change `store.data` or arrays it holds in place. Steps with the same `key` within
-  1.5 s merge into one undo step (typing). Views compare data by reference, so the same
-  goes for read results: replace lists, don't mutate them.
+  1.5 s merge into one undo step (typing a note, dragging a primer's or region's end).
+  Views compare data by reference, so the same goes for read results: replace lists, don't
+  mutate them.
+- **Replacing bases** is not a deletion and then an insertion, which left new bases at an
+  annotation's edge outside it (`replaceRange` in `src/lib/seqdata.ts`). As many bases as
+  were selected move nothing. Otherwise, annotation by annotation (features, primers,
+  protein regions): one holding the whole selection holds the new bases; one inside a
+  larger selection goes; the rest move with their bases. New bases at an edge, inserted
+  there or replacing bases an annotation crosses the edge of, belong to neither side
+  unless the user chose one (`EdgeSide`), as which side they belong to can't be known:
+  `"before"` gives them to the features and regions before the edge, `"after"` to those
+  after it, and otherwise each keeps only its own bases. A primer never takes them, as its
+  bases are the oligo's.
+- **Edits to bases from the keyboard** wait in a card (`src/views/editCard.ts`) instead of
+  happening at once, so a region never takes or loses bases unseen and a stray key deletes
+  nothing: bases typed or pasted at the cursor or over a selection, Backspace or Delete at
+  the cursor (one more base struck through with each press; typing then replaces them),
+  and Delete or Cut with bases selected, where a second press deletes them unless bases
+  were typed into the card. Enter makes the edit as one undo step and Esc leaves the
+  sequence as it is, silently unless a Cut already copied the bases. The card shows how many bases for how many (green when they match),
+  each CDS's protein change and frameshift, and what holds, loses or goes without the new
+  bases (`describeEdit` in `src/lib/baseEdit.ts`); at an edge it asks which side takes new
+  bases, Neither unless Tab changes it. Anything else done meanwhile (a click elsewhere, a
+  key that moves the selection, another edit) closes it and says so, offering the edit
+  while the sequence is unchanged. It is not a dialog: it belongs to the selection and
+  must leave the keyboard with the sequence, which sends it keys. What the user chose on
+  purpose stays at once: Delete bases from a right-click or the inspector (which says when
+  it shifts a CDS's frame, `deleteAtOnce` in `src/lib/deletion.ts`), picked codons and
+  Use read base.
 - **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.
@@ -142,7 +171,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   live in the store so both panels share them; ordinary selections clear them.
 - **Delete with something clicked** (a feature, primer, protein region, cut site or ORF)
   first deletes that thing, or for a cut site or ORF only drops it from the selection, and
-  leaves its bases selected; the next press deletes the bases (`src/lib/deletion.ts`). A
+  leaves its bases selected; the next press opens the card for deleting the bases, and one
+  more deletes them (`src/lib/deletion.ts`). A
   view that gets a Delete key keeps to this, as one press used to take a feature's bases
   along when the user meant the feature.
 - **Messages** (`toast` in `src/ui/dom.ts`) are for what the user can't see happen: side
@@ -386,15 +416,24 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (`src/main.ts`), so `meltingTemp` without arguments follows it; tests pass settings.
 - **NEB polymerases** (Nov 2026): the "neb" Tm method gives NEB's Tm Calculator's numbers
   for a polymerase chosen in Settings (`src/lib/polymerases.ts`), as people compare with
-  it and primer3's conditions come out 3–8 °C below its Q5. Only then does the PCR product
-  dialog show an annealing temperature, as NEB's calculator has a rule for each
-  polymerase; other methods have none to follow. The polymerases and rules started from
-  polymerase-tm (MIT), whose numbers were in part wrong, so every salt and rule was fitted
-  to NEB's own Tm API instead and `src/lib/polymerases.test.ts` keeps its answers: change
-  them only from new answers of that API. The app never asks NEB: Tm is worked out here,
-  as sequences stay on the computer. Ta comes from the same bases as the Tms (`tmBases`),
-  as Vent's rule depends on their length. NEB rounds Ta to 0.1 °C, then its calculator
-  to a whole degree; rounding once gives a different degree near a half.
+  it and primer3's conditions come out 3–8 °C below its Q5. The PCR product dialog has a
+  polymerase menu of its own, starting as Settings have it (Q5 under another Tm method),
+  and always works its Tms, annealing temperature and cycling program in NEB's way for the
+  one picked, as only NEB's calculator has a rule for each polymerase to follow. It says
+  whenever that differs from Settings (a user of another Tm method sees its Tms differ from
+  the Primers tab's) and offers to make it the Tm method for the whole app
+  (`withNebPolymerase`). The program (`src/lib/pcrProgram.ts`) follows NEB's own protocol
+  for the polymerase (`src/lib/pcrProtocols.ts`, tested): a polymerase whose protocol has
+  not been read has none, and the dialog says so rather than guess. Users may edit the
+  generated program; custom values are labelled and keep the source they started from.
+  Changing inputs offers regeneration without overwriting edits. The polymerases and
+  rules started from polymerase-tm (MIT), whose numbers were in part wrong, so every salt
+  and rule was fitted to NEB's own Tm API instead and `src/lib/polymerases.test.ts` keeps
+  its answers: change them only from new answers of that API. The app never asks NEB: Tm
+  is worked out here, as sequences stay on the computer. Ta comes from the same bases as
+  the Tms (`tmBases`), as Vent's rule depends on their length. NEB rounds Ta to 0.1 °C,
+  then its calculator to a whole degree; rounding once gives a different degree near a
+  half.
 - **Amber suppression** (TAG read as Q, for phage display in TG1 or XL1-Blue) is a setting
   applied the same way (`useAmberSuppression`), so everything that translates through
   `translateCodon` follows it. ORF stops get it in `OrfOptions`, and caches of
@@ -472,7 +511,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Only the current tab is in the page**: other files' views are taken out (`setActive`),
   so `document.querySelector` in tests finds the current file's elements. A document must
   not measure or draw while inactive, and anything it subscribes to outside itself
-  (settings, the primer library) must be undone in `dispose`, or closed tabs leak.
+  (settings, the primer library) must be undone in `dispose`, or closed tabs leak. A
+  dialog for a file belongs to its tab: open it with `ctx.openDialog` (`DocContext`), which
+  closes it, as Cancel does, when the tab closes or another becomes current; the plain
+  `openDialog` is for what no file owns (welcome, updates, feedback).
 - **The inspector rebuilds on every change**, so a field edited live (a primer's sequence)
   would lose focus to its own edit: mark it `data-keep` and `render()` in
   `src/views/inspector.ts` moves focus, caret and unapplied keystrokes to the new one.

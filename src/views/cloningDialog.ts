@@ -8,7 +8,6 @@
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
-import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import { enzymeSourceSelect } from "./enzymeControls.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -124,7 +123,7 @@ export function openCloningDialog(ctx: DocContext) {
   const sources: Source[] = ctx.otherSequences().map(s => ({ title: s.data.name || s.title, data: s.data, selection: s.selection }));
   let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
   let offOptions = () => {};
-  const dlg = openDialog({ onClose: () => offOptions(), title: "Simulate cloning", note: `Assemble inserts into ${vector.name || "this vector"}.`, width: 820 });
+  const dlg = ctx.openDialog({ onClose: () => offOptions(), title: "Simulate cloning", note: `Assemble inserts into ${vector.name || "this vector"}.`, width: 820 });
 
   let method: Method = memory.method;
   let vectorEnzymes: [string, string] = ["", ""];

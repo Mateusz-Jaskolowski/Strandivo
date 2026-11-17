@@ -27,7 +27,6 @@ import { noteText, otherQualifiers, withNote } from "../lib/featureNotes.ts";
 import {
   basesIn,
   complement,
-  deleteRange,
   FEATURE_TYPES,
   newId,
   rangeLength,
@@ -52,6 +51,7 @@ import { openDigestDialog } from "./digestDialog.ts";
 import { openEnzymeDialog } from "./enzymeDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
+import { deleteAtOnce } from "../lib/deletion.ts";
 import type { InspectorFold } from "../lib/inspectorFolds.ts";
 import { sectionFolded, toggleSection } from "../inspectorFolds.ts";
 
@@ -305,7 +305,7 @@ export class Inspector {
       if (patch.start === undefined && patch.end === undefined && patch.strand === undefined) return next;
       // Residues count from the CDS's start, so moving an end or turning it renumbers its regions.
       const moved = patch.start !== undefined || patch.end !== undefined ? withSpan(next, next.start, next.end) : next;
-      return carryRegions(f, moved, d.sequence.length, d.sequence.length, p => p);
+      return carryRegions(f, moved, d.sequence.length, d.sequence.length, r => r);
     };
     this.ctx.store.apply({ ...d, features: d.features.map(f => (f.id === id ? update(f) : f)) }, label, {
       range: { start: patch.start ?? d.features.find(f => f.id === id)!.start, end: patch.end ?? d.features.find(f => f.id === id)!.end },
@@ -725,7 +725,7 @@ export class Inspector {
               h("button", { type: "button", class: "sv-link", onclick: () => this.actions.copy(design.options.map(line).join("\n"), `${fmt(count)} versions`) }, iconSvg("copy", 13), "Copy")
             ),
             h("div", { class: "sv-code sv-versions-preview" }, ...design.options.slice(0, 3).map(o => h("div", null, line(o))), h("div", { class: "sv-dim" }, `and ${fmt(count - 3)} more`)),
-            this.button("Edit versions…", () => openVersionsDialog(f.name || "This feature", design, d => set(d, "Change variable design")), { wide: true })
+            this.button("Edit versions…", () => openVersionsDialog(this.ctx, f.name || "This feature", design, d => set(d, "Change variable design")), { wide: true })
           );
         }
         body.push(...matchChoice(!!design.exact, { count, letters, protein: !!design.protein }, exact => set({ ...design, exact: exact || undefined }, exact ? "Match exact versions" : "Match closest versions")));
@@ -1044,7 +1044,11 @@ export class Inspector {
         len <= 60 ? this.button("Add primer", () => this.ctx.addPrimerFromSelection(), { icon: "primerAdd" }) : this.button("Design primers", () => this.actions.designPrimers(r, "PCR"), { icon: "pcr" }),
         this.button("Mutagenesis primers…", () => openMutagenesisDialog(this.ctx), { wide: true }),
         r.start <= r.end && this.button("Reverse-complement", () => this.ctx.command("reverse-complement"), { wide: true }),
-        this.button("Delete bases", () => this.ctx.store.apply(deleteRange(d, r), "Delete", { caret: r.start <= r.end ? r.start : 0 }), { icon: "trash", danger: true, wide: true })
+        this.button("Delete bases", () => {
+          const del = deleteAtOnce(d, r);
+          this.ctx.store.apply(del.data, "Delete", { caret: del.caret });
+          if (del.note) this.ctx.noteEdit(del.note);
+        }, { icon: "trash", danger: true, wide: true })
       )
     );
     return out;

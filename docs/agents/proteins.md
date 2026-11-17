@@ -17,15 +17,21 @@ and CI checks that they exist.
   translated. They are numbered in residues of the CDS, so rotating, turning round and
   cloning need no code; only what changes the CDS's length or first base does (`carryRegions`):
   edits (from `mapAnnotations`), moving an end or turning it round in the inspector, and a
-  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Ends round to the nearest
-  codon, not down: replacing a base is a deletion and an insertion, and rounding down would
-  creep everything downstream a residue per base typed over. A replacement across a region's
-  edge can still move that edge, as it clips a feature's own end. Each also keeps the
+  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Each region's
+  bases go through an edit as a feature's do, so the rules for replacing bases (`AGENTS.md`)
+  hold for regions too. A base typed or deleted at a time is a third of a residue, which
+  rounding to residues would lose every time (three codons typed left everything
+  downstream three residues off), so a region left between codons keeps its exact bases
+  (`codingBases`, coding bases from 1, in the optional JSON) beside its nearest residues
+  until it is back on whole ones. They count only while they round to its residues:
+  anything that sets the residues alone (the region editor, a version that doesn't know
+  them) makes them stale, and then the residues win. Each also keeps the
   entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
   makes a real one for files going to other software.
 - **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
   after the original qualifier fields holds stable ids, colour, a parent id, a library
-  design and the user's note (lines joined by line breaks); keep reading the original
+  design, the user's note (lines joined by line breaks) and, for a region between codons,
+  its exact bases; keep reading the original
   four/five-field form. Keys this version doesn't know are kept in `more` and written
   back, so a field added later survives this version rewriting the CDS's regions. Versions
   up to 0.4.0 keep only what they know: they drop every note on a CDS when they rewrite
@@ -96,6 +102,24 @@ and CI checks that they exist.
   saved or not (`onClose` of `openProteinRegionDialog`); opened from the inspector, the
   editor closes to the window. Stacking the editor over it was the alternative, but it
   would darken the window twice and leave numbers from before the edit showing beneath.
+- **Dragging a region's ends** (`src/lib/regionEdges.ts`): in the Sequence tab a selected
+  region has a handle at each end, as a selected primer has in the Primers tab, and a drag
+  or the arrow keys move that end a codon at a time, as regions are numbered in residues.
+  Only a CDS has regions, so nothing here moves a base at a time; a part of a feature that
+  is DNA, like a promoter's −10 box, is a feature of its own. A handle moves an edge
+  between residues: its region's end, and a region on the same level (the same parent, or
+  none) that meets it there, so regions that met (FR1 and CDR1) still meet; with ⌥ (Alt)
+  held, even partway through a drag, its region's end moves alone, which parts them. Only
+  the tooltip of a handle that moves two regions says so, as elsewhere ⌥ changes nothing,
+  and nothing else needs to: a region that meets it snaps back as ⌥ is pressed. Some Linux
+  desktops take Alt-drag for moving the window, but Alt with the arrow keys still works
+  there. A parent or child ending there too stays put and only limits the move: moving it
+  along once coupled a child pulled up to its parent's end to it for good. A child can't
+  leave its parent, a parent can't leave out a child, and every region keeps a residue.
+  Nor do two regions on one level that overlap and end together move together. An end that
+  didn't move keeps its exact bases. An imported region's entry numbers move by as much as
+  it does, and it counts as edited, so the next import of its entry keeps it. The moves of
+  a drag are one undo step.
 - **Regions from a selection** use `selectedProteinResidues` for both the inspector and
   right-click menu: coordinates follow the CDS's direction and splicing, partial codons
   expand to whole residues, and a terminal stop is excluded. When several CDSs contain

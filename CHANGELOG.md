@@ -34,6 +34,53 @@ with Unreleased's notes and leaves them where they are.
   right-click menu or the inspector, to see the enzyme's cut drawn on both strands, who
   sells it, its isoschizomers and neoschizomers (Acc65I for KpnI), where it cuts your
   sequence and the fragments, and your lab's stock of it.
+- **Regions stay on their residues while you edit**: bases typed or deleted one at a time
+  inside a CDS now move the regions after them (before, typing three codons left every
+  later region three residues off), and replacing bases no longer trims a feature, primer
+  or region that starts or ends there. Replace a whole region, like a CDR, and the region
+  keeps the new bases.
+- **See every edit to bases before it happens**: in the Sequence tab, typing, pasting,
+  Backspace and Delete open a small card at the cursor or above the selected bases. It
+  shows the bases going in or out (those going are struck through in the sequence), how
+  many for how many (green when they match), the change to the protein, like I15A, and a
+  warning when the edit shifts a gene's frame. Press Enter to make the edit or Esc to leave
+  the sequence as it is; with bases selected, pressing Delete again deletes them too.
+  Typing between two features or regions, such as FR1 and CDR1, asks which one the new
+  bases belong to, or neither; press Tab to choose. Clicking elsewhere leaves the sequence
+  as it is, and the message that says so can still make the edit. Delete bases from the
+  right-click menu or the inspector still deletes at once, and says when it shifts a
+  gene's frame.
+- **Drag a region's ends**: in the Sequence tab, a selected protein region has a handle at
+  each end. Drag it, or press the arrow keys, to move that end a codon at a time. Where two
+  regions meet, such as FR1 and CDR1, both move together; hold ⌥ (Alt on Windows and Linux)
+  to move only the selected region's end. A region stays inside the one it belongs to
+  without moving it, so it can be pulled back from that region's end.
+- **Arrow keys on a primer's ends**: click an end of a primer in the Primers tab, and the
+  arrow keys now extend or trim it, as the hint there says.
+- **Check and adjust a PCR before you run it**: the product dialog now draws the product
+  with its cut sites and GC content, suggests a digest to check it by and runs the
+  product, uncut and cut, on a gel, beside the template when it is a plasmid or a
+  colony, so you can see which bands to expect and where leftover template would run. It
+  warns about a GC-rich product or one longer than the polymerase is made for, and lists
+  the sites in a tail with too few bases beyond them. The cycling program is drawn as a
+  line you can edit: change a temperature, a time or a number of cycles, copy the
+  program as it stands, or put it back the way the protocol has it.
+- **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
+  genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
+  it, with the annealing temperature and an extension time worked out from the product's
+  length, ready to copy. It covers Q5, Phusion, OneTaq and Taq so far. The dialog's Tms
+  follow the polymerase you pick there, and it offers to make it the Tm for the whole
+  app. When 5′ tails raise how well the primers anneal, you can use two stages of
+  annealing.
+- **No stray N in a PCR product**: where a primer binds over an N or another ambiguous
+  base in your template, the product now has the primer's base there, as it would in the
+  tube, instead of keeping the N. Its GC content, the sites found in it and a product
+  opened as a new file all follow.
+- **Dialogs stay with their file**: a dialog opened for a file, such as Digest, PCR
+  product or Design primers, now closes when you switch to another tab or Home, open a
+  file or close that file's tab, instead of staying over the next file and acting on the
+  first. Two dialogs open at once now close one at a time, the top one first, when you
+  press Esc.
 
 ## 0.5.0
 

@@ -8,7 +8,6 @@
 // `src/lib/foldRegions.ts`.
 
 import { h, toast } from "../ui/dom.ts";
-import { openDialog } from "../ui/modal.ts";
 import { fmt } from "../ui/format.ts";
 import type { DocContext } from "../doc/context.ts";
 import { featureStyles } from "../doc/analysis.ts";
@@ -36,7 +35,7 @@ export function openFoldDialog(ctx: DocContext, cds: SeqFeature, only?: string) 
   const d = ctx.store.data;
   const fills = featureStyles(d);
   const rows = foldRows(d, cds, fills);
-  const dlg = openDialog({ title: "Turn features into regions", note: `Each ticked feature becomes a region of ${cds.name} and is deleted as a feature.`, width: 760 });
+  const dlg = ctx.openDialog({ title: "Turn features into regions", note: `Each ticked feature becomes a region of ${cds.name} and is deleted as a feature.`, width: 760 });
   if (!rows.length) {
     dlg.body.replaceChildren(h("div", { class: "sv-empty sv-detect-empty" }, h("p", null, "No feature inside this CDS can become one of its regions.")));
     dlg.footer.replaceChildren(h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Close"));
@@ -135,7 +134,7 @@ export function openFoldFromFeature(ctx: DocContext, feature: SeqFeature) {
     openFoldDialog(ctx, targets[0].cds, feature.id);
     return;
   }
-  const dlg = openDialog({ title: "Turn into region", note: `Choose which coding sequence ${feature.name} belongs to.`, width: 520 });
+  const dlg = ctx.openDialog({ title: "Turn into region", note: `Choose which coding sequence ${feature.name} belongs to.`, width: 520 });
   dlg.body.append(
     h(
       "div",

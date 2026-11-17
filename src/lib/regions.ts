@@ -10,7 +10,7 @@
 // Pure, so it is unit-tested.
 
 import { codingPositions, featurePositions, translateCodon } from "./genetics.ts";
-import { complement, inRange, rangeWithin, type Range, type SeqData, type SeqFeature } from "./seqdata.ts";
+import { complement, inRange, rangeLength, rangeWithin, type Range, type SeqData, type SeqFeature } from "./seqdata.ts";
 import type { Feature, VariableDesign } from "./types.ts";
 import { formatDesign, parseDesign } from "./variable.ts";
 
@@ -72,6 +72,13 @@ export interface ProteinRegion {
   /** The user's own words about it, one line per GenBank /note value when exported. */
   note?: string;
   /**
+   * Where it is to the base, in coding bases of the CDS from 1, only while an edit has left
+   * it between codons (a base typed or deleted at a time); `start` and `end` are then its
+   * nearest residues. Without it a region runs from its first residue's first base to its
+   * last residue's last.
+   */
+  codingBases?: Range;
+  /**
    * Metadata this version doesn't know, written back as it was read, so what a newer
    * version adds survives an older one editing the CDS's regions.
    */
@@ -85,12 +92,31 @@ interface Noted {
 const clean = (s: string) => s.replace(/\|/g, "/").trim();
 
 /** Keys of the optional metadata this version reads; any other is kept in `more`. */
-const METADATA = new Set(["id", "color", "parentId", "variable", "edited", "sourceKey", "note"]);
+const METADATA = new Set(["id", "color", "parentId", "variable", "edited", "sourceKey", "note", "codingBases"]);
+
+/** The residues a stretch of coding bases (0-based offsets) rounds to. */
+function nearestResidues(first: number, last: number) {
+  const start = Math.round(first / 3) + 1;
+  return { start, end: Math.max(start, Math.round((last + 1) / 3)) };
+}
+
+/**
+ * A region's exact bases if they still round to its residues. Anything that sets the
+ * residues without them (the region editor, a version that doesn't know them) leaves them
+ * out of step, and then the residues are what counts.
+ */
+function exactBases(r: Pick<ProteinRegion, "start" | "end" | "codingBases">): Range | undefined {
+  const b = r.codingBases;
+  if (!b || b.start < 1 || b.end < b.start) return undefined;
+  const near = nearestResidues(b.start - 1, b.end - 1);
+  return near.start === r.start && near.end === r.end ? b : undefined;
+}
 
 /** `TM1|Transmembrane|13-33|Q9UKG4:13-33|predicted` */
 export function formatRegion(r: ProteinRegion): string {
   const parts = [clean(r.name), clean(r.kind), `${r.start}-${r.end}`, `${r.accession}:${r.sourceStart}-${r.sourceEnd}`];
-  const metadata = { ...r.more, id: r.id, color: r.color, parentId: r.parentId, variable: r.variable ? formatDesign(r.variable) : undefined, edited: r.edited, sourceKey: r.sourceKey, note: r.note || undefined };
+  const exact = exactBases(r);
+  const metadata = { ...r.more, id: r.id, color: r.color, parentId: r.parentId, variable: r.variable ? formatDesign(r.variable) : undefined, edited: r.edited, sourceKey: r.sourceKey, note: r.note || undefined, codingBases: exact ? `${exact.start}-${exact.end}` : undefined };
   if (Object.values(metadata).some(v => v !== undefined)) return [...parts, r.predicted ? "predicted" : "", encodeURIComponent(JSON.stringify(metadata))].join("|");
   return (r.predicted ? [...parts, "predicted"] : parts).join("|");
 }
@@ -115,6 +141,9 @@ export function parseRegion(value: string): ProteinRegion | null {
         ...(typeof m.note === "string" && m.note.trim() ? { note: m.note } : {}),
         ...(Object.keys(more).length ? { more } : {})
       };
+      const exact = typeof m.codingBases === "string" ? /^(\d+)-(\d+)$/.exec(m.codingBases) : null;
+      const codingBases = exact ? exactBases({ start: Number(at[1]), end: Number(at[2]), codingBases: { start: Number(exact[1]), end: Number(exact[2]) } }) : undefined;
+      if (codingBases) extra.codingBases = codingBases;
     }
   } catch { /* Keep the annotation even if its optional metadata cannot be read. */ }
   return {
@@ -361,45 +390,48 @@ export function regionRange(f: Located & Noted, r: ProteinRegion, n: number): Ra
   return spans.length ? { start: spans[0].start, end: spans[spans.length - 1].end } : null;
 }
 
-const nearestResidue = (offset: number) => Math.round(offset / 3);
-
 /**
- * Regions after an edit, where `next` is the feature as the edit left it and `move` takes a
- * base's old position to its new one (null if it was deleted). A region keeps the bases it
- * had: an indel upstream moves it, one inside grows or shrinks it, and it goes when none
- * are left. Ends round to the nearest codon rather than down, so replacing a base (a
- * deletion and then an insertion) leaves every region just where it was, and a frameshift
- * doesn't creep regions downstream of it one residue at a time.
+ * Regions after an edit, where `next` is the feature as the edit left it and `map` is what
+ * the edit did to every stretch of bases (`mapAnnotations` in seqdata.ts), null for one it
+ * removed. Each region's bases go through it as a feature's would, so a region keeps the
+ * bases it had: an indel upstream moves it, one inside grows or shrinks it, a replacement
+ * it holds whole gives it the new bases, and it goes when none are left. A region left
+ * between codons keeps its exact bases (`codingBases`) with its nearest residues, so three
+ * bases typed one at a time move what is downstream by a residue, not by nothing.
  */
-export function carryRegions<T extends Located & Noted>(before: T, next: T, n: number, nextLength: number, move: (pos: number) => number | null): T {
+export function carryRegions<T extends Located & Noted>(before: T, next: T, n: number, nextLength: number, map: (r: Range) => Range | null): T {
   const regions = regionsOf(before);
   if (!regions.length) return next;
   const old = codingPositions(before, n);
   const now = codingPositions(next, nextLength);
   // Same length from the same first base: every residue is where it was.
-  if (old.length === now.length && move(old[0]) === now[0]) return next;
+  if (old.length === now.length && map({ start: old[0], end: old[0] })?.start === now[0]) return next;
   const offsetAt = new Int32Array(nextLength).fill(-1);
   now.forEach((p, i) => (offsetAt[p] = i));
-  const offset = (i: number) => {
-    const p = move(old[i]);
-    return p === null ? -1 : offsetAt[p];
-  };
+  const forward = (before as { strand?: number }).strand !== -1;
   const kept: ProteinRegion[] = [];
   for (const r of regions) {
-    const from = (r.start - 1) * 3;
-    const to = Math.min(old.length, r.end * 3) - 1;
+    const exact = exactBases(r);
+    const from = exact ? exact.start - 1 : (r.start - 1) * 3;
+    const to = Math.min(old.length, exact ? exact.end : r.end * 3) - 1;
     let first = -1;
     let last = -1;
-    for (let i = from; i <= to; i++) {
-      const o = offset(i);
-      if (o < 0) continue;
-      if (first < 0 || o < first) first = o;
-      if (o > last) last = o;
+    for (const run of runs(old.slice(from, to + 1), n, forward)) {
+      const moved = map(run);
+      if (!moved) continue;
+      const length = rangeLength(moved, nextLength);
+      for (let k = 0; k < length; k++) {
+        const o = offsetAt[(moved.start + k) % nextLength];
+        if (o < 0) continue;
+        if (first < 0 || o < first) first = o;
+        if (o > last) last = o;
+      }
     }
     if (first < 0) continue;
-    const start = nearestResidue(first) + 1;
-    const end = Math.max(start, nearestResidue(last + 1));
-    kept.push({ ...r, start, end, ...(!r.accession ? { sourceStart: start, sourceEnd: end } : {}) });
+    const { start, end } = nearestResidues(first, last);
+    const onResidues = first === (start - 1) * 3 && last === Math.min(now.length, end * 3) - 1;
+    const { codingBases: _old, ...rest } = r;
+    kept.push({ ...rest, start, end, ...(onResidues ? {} : { codingBases: { start: first + 1, end: last + 1 } }), ...(!r.accession ? { sourceStart: start, sourceEnd: end } : {}) });
   }
   return { ...next, notes: withRegions(next.notes ?? {}, kept) };
 }

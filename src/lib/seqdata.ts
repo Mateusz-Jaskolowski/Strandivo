@@ -205,6 +205,36 @@ function mapThroughDelete<T extends Positioned>(x: T, a: number, b: number, n: n
 }
 
 /**
+ * Maps an annotation through replacing [a, b] (not crossing the origin) of a sequence of
+ * length n with `len` bases, a different number from what was there (as many move nothing:
+ * `replaceRange` doesn't call this). What held the whole range holds the new bases, so a
+ * codon typed over keeps its feature; what crossed one of its edges keeps only its part
+ * outside, as which side the new bases belong to can't be known; what lay inside it goes.
+ * Everything else moves with its bases. Returns null if nothing of it is left.
+ */
+function mapThroughReplace<T extends Positioned>(x: T, a: number, b: number, len: number, n: number): T | null {
+  const delta = len - (b - a + 1);
+  const n2 = n + delta;
+  const after = (p: number) => (p > b ? p + delta : p);
+  const to = (s: number, e: number) => ({ ...x, start: ((s % n2) + n2) % n2, end: ((e % n2) + n2) % n2 });
+  const { start: s, end: e } = x;
+  if (s <= e) {
+    if (e < a || s > b) return to(after(s), after(e));
+    if (s <= a && e >= b) return e + delta < s ? null : to(s, e + delta);
+    if (s >= a && e <= b) return null;
+    return s < a ? to(s, a - 1) : to(a + len, e + delta);
+  }
+  // Crosses the origin: [start, n-1] and [0, end]. The range can reach into either piece.
+  const inFirst = b >= s;
+  const inSecond = a <= e;
+  if (!inFirst && !inSecond) return to(after(s), e);
+  // The range takes in the gap between the two pieces: both keep their part outside it.
+  if (inFirst && inSecond) return a === 0 && b === n - 1 ? null : to(a + len, a - 1);
+  if (inFirst) return a >= s ? to(s, e) : to(a + len, e);
+  return b <= e ? to(s + delta, e + delta) : to(s + delta, a - 1);
+}
+
+/**
  * Applies a position mapping to an annotation and to each of its parts. A part that
  * disappears is dropped; the annotation disappears when nothing of it is left.
  */
@@ -223,10 +253,9 @@ function mapLocated<T extends Located>(x: T, f: (r: Positioned) => Positioned | 
 function mapAnnotations(d: SeqData, f: (r: Positioned) => Positioned | null, nextLength = d.sequence.length): Pick<SeqData, "features" | "primers" | "sources"> {
   const all = <T extends Located>(xs: T[]) => xs.map(x => mapLocated(x, f)).filter((x): x is T => !!x);
   const n = d.sequence.length;
-  const move = (pos: number) => f({ start: pos, end: pos })?.start ?? null;
   const features = d.features.flatMap(x => {
     const next = mapLocated(x, f);
-    return next ? [carryRegions(x, next, n, nextLength, move)] : [];
+    return next ? [carryRegions(x, next, n, nextLength, f)] : [];
   });
   return { features, primers: all(d.primers), sources: all(d.sources) };
 }
@@ -260,13 +289,47 @@ export function deleteRange(d: SeqData, r: Range): SeqData {
   };
 }
 
-/** Replaces the bases in a range; returns the new data and where the inserted bases are. */
+/**
+ * Replaces the bases in a range; returns the new data and where the inserted bases are.
+ * As many bases as were there is a substitution: every annotation keeps its place. Any
+ * other number maps them with `mapThroughReplace`, never as a deletion and then an
+ * insertion, which leaves new bases at an annotation's edge outside it.
+ */
 export function replaceRange(d: SeqData, r: Range, bases: string): { data: SeqData; inserted: Range | null; caret: number } {
-  const after = deleteRange(d, r);
-  // Across the origin, the bases before the origin now end the sequence: insert there.
-  const at = r.start > r.end ? after.sequence.length : r.start;
-  const data = insertBases(after, at, bases);
-  return { data, inserted: bases ? { start: at, end: at + bases.length - 1 } : null, caret: at + bases.length };
+  const n = d.sequence.length;
+  const across = r.start > r.end;
+  if (!bases || !n) {
+    const data = deleteRange(d, r);
+    // Across the origin, the bases before it now end the sequence.
+    const at = across ? data.sequence.length : Math.min(r.start, data.sequence.length);
+    return { data, inserted: null, caret: at };
+  }
+  const length = rangeLength(r, n);
+  if (bases.length === length) {
+    const tail = n - r.start;
+    const sequence = across
+      ? bases.slice(tail) + d.sequence.slice(r.end + 1, r.start) + bases.slice(0, tail)
+      : d.sequence.slice(0, r.start) + bases + d.sequence.slice(r.end + 1);
+    return { data: { ...d, sequence }, inserted: r, caret: r.end + 1 };
+  }
+  if (across) {
+    // Turn the sequence so the range starts it, then so the new bases end it, as they always have.
+    const turned = replaceRange(setOrigin(d, r.start), { start: 0, end: length - 1 }, bases).data;
+    const n2 = turned.sequence.length;
+    return { data: setOrigin(turned, bases.length % n2), inserted: { start: n2 - bases.length, end: n2 - 1 }, caret: n2 };
+  }
+  const a = Math.max(0, r.start);
+  const b = Math.min(n - 1, r.end);
+  const n2 = n - (b - a + 1) + bases.length;
+  return {
+    data: {
+      ...d,
+      sequence: d.sequence.slice(0, a) + bases + d.sequence.slice(b + 1),
+      ...mapAnnotations(d, x => mapThroughReplace(x, a, b, bases.length, n), n2)
+    },
+    inserted: { start: a, end: a + bases.length - 1 },
+    caret: a + bases.length
+  };
 }
 
 /** The bases a feature covers on the top strand, joining its parts and skipping gaps. */

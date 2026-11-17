@@ -305,7 +305,7 @@ export class Inspector {
       if (patch.start === undefined && patch.end === undefined && patch.strand === undefined) return next;
       // Residues count from the CDS's start, so moving an end or turning it renumbers its regions.
       const moved = patch.start !== undefined || patch.end !== undefined ? withSpan(next, next.start, next.end) : next;
-      return carryRegions(f, moved, d.sequence.length, d.sequence.length, p => p);
+      return carryRegions(f, moved, d.sequence.length, d.sequence.length, r => r);
     };
     this.ctx.store.apply({ ...d, features: d.features.map(f => (f.id === id ? update(f) : f)) }, label, {
       range: { start: patch.start ?? d.features.find(f => f.id === id)!.start, end: patch.end ?? d.features.find(f => f.id === id)!.end },

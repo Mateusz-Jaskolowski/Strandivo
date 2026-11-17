@@ -34,6 +34,11 @@ with Unreleased's notes and leaves them where they are.
   right-click menu or the inspector, to see the enzyme's cut drawn on both strands, who
   sells it, its isoschizomers and neoschizomers (Acc65I for KpnI), where it cuts your
   sequence and the fragments, and your lab's stock of it.
+- **Regions stay on their residues while you edit**: bases typed or deleted one at a time
+  inside a CDS now move the regions after them (before, typing three codons left every
+  later region three residues off), and replacing bases no longer trims a feature, primer
+  or region that starts or ends there. Replace a whole region, like a CDR, and the region
+  keeps the new bases.
 
 ## 0.5.0
 

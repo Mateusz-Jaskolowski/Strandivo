@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { COMMON_ENZYMES, findCutSites, scanSites, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { digestSequence, fragmentSize } from "./gel.ts";
+import { gcPercent } from "./labinfo.ts";
 import { pcrProduct } from "./pcr.ts";
 import {
   CHECK_FLANKS,
@@ -135,6 +136,31 @@ test("the GC warning is the whole product's, at NEB's 65%, and names an enhancer
   // Phusion has no enhancer in the chart, so the sentence stops at the fact.
   assert.equal(productAdvice("phusion", "plasmid", 1000, 70)[0], "The product is 70.0% GC, which can be hard to amplify.");
   assert.equal(productAdvice("q5u", "plasmid", 1000, 70).length, 1);
+});
+
+test("the overview's GC is the whole product's, not the highest stretch of it", () => {
+  // 6,000 bp of A and T with a G/C block of 120 in the middle, which a window on the strip sees as all GC.
+  let seed = 7;
+  const at = (n: number) => Array.from({ length: n }, () => ((seed = (seed * 1103515245 + 12345) % 2147483648), (seed >> 16) & 1 ? "A" : "T")).join("");
+  const template = at(2940) + "GC".repeat(60) + at(2940);
+  assert.equal(template.length, 6000);
+  const f = { name: "F", start: 0, end: 19, strand: 1 as const, bases: template.slice(0, 20) };
+  const r = { name: "R", start: 5980, end: 5999, strand: -1 as const, bases: reverseComplement(template.slice(5980)) };
+  const product = pcrProduct(template, false, f, r)!;
+  assert.equal(product.length, 6000);
+  const data = productOverview(product, template, false, opts);
+  assert.equal(data.gcPercent, gcPercent(product.sequence));
+  assert.ok(Math.abs(data.gcPercent - 2) < 1e-9, String(data.gcPercent));
+  // The strip does see the block as all GC, and that is not what the warning is about.
+  assert.equal(Math.max(...data.gc), 1);
+  assert.deepEqual(productAdvice("q5", "plasmid", product.length, data.gcPercent), []);
+  // Another product from the same template, over the block and 20 bases either side: 75% GC, which does warn.
+  const inner = pcrProduct(template, false, { ...f, start: 2920, end: 2939, bases: template.slice(2920, 2940) }, { ...r, start: 3060, end: 3079, bases: reverseComplement(template.slice(3060, 3080)) })!;
+  assert.equal(inner.length, 160);
+  const innerData = productOverview(inner, template, false, opts);
+  assert.equal(innerData.gcPercent, gcPercent(inner.sequence));
+  assert.ok(Math.abs(innerData.gcPercent - 75) < 1e-9, String(innerData.gcPercent));
+  assert.match(productAdvice("q5", "plasmid", inner.length, innerData.gcPercent)[0], /^The product is 75\.0% GC/);
 });
 
 test("the digest and site shown are kept while they are still offered", () => {

@@ -66,6 +66,8 @@ const Q5: PcrProtocol = {
   // > 6 kb, it is often helpful to increase the extension time to 40–50 seconds/kb". A
   // plasmid gets the top of its ranges, 15 and 30, not the 10; complex 30, and 45 above 6 kb.
   extend: { temp: 72, plasmid: 15, complex: 30, longer: { above: 6000, plasmid: 30, complex: 45 } },
+  // M0491: "A final extension of 2 minutes at 72°C is recommended". NEB's thermophilic
+  // polymerase guidelines page tabulates 5 minutes; the protocol is the one followed.
   final: { temp: 72, seconds: 120 },
   cycles: { plasmid: 25, complex: 30, colony: 30 }, // 25–35, genomic 30–35
   cycleRange: [25, 35],
@@ -99,7 +101,9 @@ const ONETAQ: PcrProtocol = {
   // NEB's guidelines and one copy of its table say 5 min; an older copy of the table says
   // 10. The 5 is followed: a long final extension only adds time.
   final: { temp: 68, seconds: 300 },
-  cycles: { plasmid: 25, complex: 30, colony: 30 }, // 30 in the table, 25–35 in the guidelines
+  // 30 in the protocol's table; its own General Guidelines say "Generally, 25–35 cycles
+  // yield sufficient product".
+  cycles: { plasmid: 25, complex: 30, colony: 30 },
   cycleRange: [25, 35],
   twoStepFrom: 68
 };
@@ -108,13 +112,18 @@ const TAQ: PcrProtocol = {
   source: "PCR Protocol for Taq DNA Polymerase with Standard Taq Buffer",
   product: "Taq DNA Polymerase with Standard Taq Buffer",
   number: "M0273",
+  // M0273: "An initial denaturation of 30 seconds at 95°C is sufficient for most amplicons
+  // from pure DNA templates". NEB's Taq guidelines page says 2 minutes; the protocol is the
+  // one followed.
   initial: { temp: 95, seconds: 30 },
   colonyInitial: 300, // "an initial 5-minute denaturation"
   denature: { temp: 95, seconds: 20 }, // 15–30 s
   anneal: 30, // 15–60 s
   extend: { temp: 68, plasmid: 60, complex: 60, shortest: 45 }, // 1 min/kb, 45–60 s below 1 kb
   final: { temp: 68, seconds: 300 },
-  cycles: { plasmid: 25, complex: 30, colony: 30 }, // 30 in the table, 25–35 in the guidelines
+  // 25–30 in the protocol's table; its own General Guidelines say "Generally, 25–35 cycles
+  // yield sufficient product".
+  cycles: { plasmid: 25, complex: 30, colony: 30 },
   cycleRange: [25, 35],
   // "Above 65 °C", and annealing temperatures are shown in whole degrees.
   twoStepFrom: 66

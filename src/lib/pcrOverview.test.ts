@@ -63,6 +63,38 @@ test("a circular template's crossing-origin site is not invented across the line
   assert.equal(data.hits.filter(s => s.enzyme === "EcoRI").length, 0);
 });
 
+test("a product across a circular template's origin has positions of its own, and tails at both ends", () => {
+  // 80 bp circle: the forward primer starts at 71 and runs over the origin, the reverse one ends at 50.
+  const template = "ACGT".repeat(20);
+  const f = { name: "F", start: 70, end: 9, strand: 1 as const, bases: "AAAAGAATTC" + template.slice(70) + template.slice(0, 10) };
+  const r = { name: "R", start: 30, end: 49, strand: -1 as const, bases: "AAAAGGATCC" + reverseComplement(template.slice(30, 50)) };
+  const product = pcrProduct(template, true, f, r)!;
+  assert.equal(product.length, 80);
+  assert.deepEqual(product.span, { start: 70, end: 49 });
+  const data = productOverview(product, template, true, opts);
+  assert.deepEqual(data.tails, { left: 10, right: 10 });
+  // Positions are the product's, not the plasmid's: EcoRI in the left tail, BamHI in the right one.
+  assert.deepEqual(
+    data.sites.map(s => [s.enzyme, s.start, s.end]),
+    [["EcoRI", 4, 9], ["BamHI", 70, 75]]
+  );
+  assert.equal(data.templateCounts.get("EcoRI") ?? 0, 0);
+  assert.equal(data.templateCounts.get("BamHI") ?? 0, 0);
+  // Each site's bases beyond it, to the nearer end: 4 either way, and 70 or 4 to the far one.
+  assert.deepEqual(
+    tailSiteFlanks(product.length, data.tailSites).map(x => [x.site.enzyme, x.left, x.right]),
+    [["EcoRI", 4, 70], ["BamHI", 70, 4]]
+  );
+  // The repeat also makes BsiWI sites at the tails' edges: tail sites, but 9 bases from an end is more than the 6 asked, so not listed above.
+  assert.deepEqual(data.tailSites.map(s => [s.enzyme, s.start, s.end]), [["EcoRI", 4, 9], ["BsiWI", 9, 14], ["BsiWI", 65, 70], ["BamHI", 70, 75]]);
+  // The circle has a BsiWI every 4 bases, 20 round the origin; the linear product 15, as none is made across its ends.
+  assert.equal(data.templateCounts.get("BsiWI"), 20);
+  assert.equal(data.hits.filter(h => h.enzyme === "BsiWI").length, 15);
+  // Both tails' cuts cut the 80 bases into pieces that add up.
+  const both = data.hits.filter(h => h.enzyme === "EcoRI" || h.enzyme === "BamHI");
+  assert.deepEqual(productDigestSizes(product.length, both), [66, 9, 5]);
+});
+
 test("digest sizes match the existing digest's top-strand lengths, including Type IIS and 3′ cuts", () => {
   const seq = "ACGT".repeat(20) + "GAATTCCCGAGCTCGGTCTCAAAAAACCCCCCCCCCC" + "ACGT".repeat(35);
   for (const enzymes of [["EcoRI"], ["SacI"], ["BsaI"], ["EcoRI", "SacI"], ["BsaI", "SacI"]]) {

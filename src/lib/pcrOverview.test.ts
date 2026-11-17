@@ -372,7 +372,9 @@ test("sites past the last lane are counted where they cut, one chip for each cro
     700,
     sites.map(() => 60)
   );
-  assert.equal(lanes, MAX_LABEL_LANES);
+  // Five lanes, written out: the constant moving must fail this, not follow it.
+  assert.equal(MAX_LABEL_LANES, 5);
+  assert.equal(lanes, 5);
   assert.equal(crowds.length, 2);
   // Every site is either named or counted, once.
   assert.deepEqual(
@@ -381,7 +383,7 @@ test("sites past the last lane are counted where they cut, one chip for each cro
   );
   for (const crowd of crowds) {
     const xs = crowd.sites.map(m => m.anchor);
-    assert.ok(crowd.anchor >= Math.min(...xs) && crowd.anchor <= Math.max(...xs));
+    assert.equal(crowd.anchor, xs.reduce((sum, x) => sum + x, 0) / xs.length);
     assert.ok(crowd.sites.every(m => m.site.enzyme === crowd.sites[0].site.enzyme));
   }
   assert.ok(crowds[0].anchor < crowds[1].anchor);
@@ -389,6 +391,24 @@ test("sites past the last lane are counted where they cut, one chip for each cro
   const roomy = productLabels(sites.slice(0, 3), seq.length, 700, [60, 60, 60]);
   assert.equal(roomy.crowds.length, 0);
   assert.equal(roomy.labels.length, 3);
+});
+
+test("the chip over a crowd sits at the mean of the anchors it counts, not at its first or last", () => {
+  // Five sites cut together fill the five lanes; three more cut at 110, 120 and 131 of 1,000, so
+  // they have no lane and are one crowd, as they are within 40 px of each other.
+  const site = (enzyme: string, cut: number) => ({ id: `${enzyme}@${cut - 3}`, enzyme, site: "", start: cut - 3, end: cut + 2, cut, bottomCut: cut, forward: true, overhang: "", cuts: 1 });
+  const named = [100, 101, 102, 103, 104].map((cut, i) => site(`N${i}`, cut));
+  const crowded = [site("A", 110), site("B", 120), site("C", 131)];
+  const { labels, crowds, lanes } = productLabels([...named, ...crowded], 1000, 1000, [...named, ...crowded].map(() => 60));
+  assert.equal(lanes, 5);
+  assert.deepEqual(labels.map(l => l.site.enzyme).sort(), ["N0", "N1", "N2", "N3", "N4"]);
+  assert.equal(crowds.length, 1);
+  assert.deepEqual(crowds[0].sites.map(m => m.anchor), [110, 120, 131]);
+  assert.equal(crowds[0].anchor, (110 + 120 + 131) / 3);
+  // A fourth, past 40 px from the others (and with a name wide enough to find no lane), is a crowd of its own.
+  const wide = [...named, ...crowded, site("D", 200)];
+  const far = productLabels(wide, 1000, 1000, wide.map(s => (s.enzyme === "D" ? 200 : 60)));
+  assert.deepEqual(far.crowds.map(c => [c.sites.length, c.anchor]), [[3, (110 + 120 + 131) / 3], [1, 200]]);
 });
 
 test("product label lanes stay inside their bounds without overlapping peers", () => {

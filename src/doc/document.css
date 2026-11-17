@@ -2433,7 +2433,7 @@
   padding: 2px 4px;
   border: 0;
   border-radius: 3px;
-  color: var(--cut);
+  color: var(--text-3);
   background: var(--panel);
   font: 11px var(--mono);
   cursor: pointer;

@@ -40,7 +40,12 @@ test("final-product sites include both tails and differ from the template's coun
   assert.equal(data.templateCounts.get("EcoRI") ?? 0, 0);
   assert.deepEqual(data.tails, { left: 10, right: 10 });
   assert.deepEqual(data.tailSites.map(s => s.enzyme).sort(), ["BamHI", "EcoRI"]);
-  assert.equal(tailSiteFlanks(product.length, data.tailSites).length, 2);
+  // 88 bp: EcoRI starts 4 bases in and BamHI ends 4 from the other end, each 78 from the far one.
+  assert.equal(product.length, 88);
+  assert.deepEqual(
+    tailSiteFlanks(product.length, data.tailSites).map(x => [x.site.enzyme, x.left, x.right]),
+    [["EcoRI", 4, 78], ["BamHI", 78, 4]]
+  );
   const lab = productOverview(product, template, false, { ...opts, enzymeSource: "lab", labEnzymes: ["EcoRI"] });
   assert.deepEqual(
     lab.sites.map(s => s.enzyme),
@@ -51,6 +56,62 @@ test("final-product sites include both tails and differ from the template's coun
     ["EcoRI"]
   );
   assert.ok(lab.digests.every(d => d.enzymes.every(e => e === "EcoRI")));
+});
+
+/** A linear 80 bp template, a forward primer from `fs` and a reverse one from `rs`, each 20 bases paired, with these tails. */
+const tailed = (forwardTail: string, reverseTail: string, template = "ACGT".repeat(20), fs = 4, rs = 52) => {
+  const f = { name: "F", start: fs, end: fs + 19, strand: 1 as const, bases: forwardTail + template.slice(fs, fs + 20) };
+  const r = { name: "R", start: rs, end: rs + 19, strand: -1 as const, bases: reverseTail + reverseComplement(template.slice(rs, rs + 20)) };
+  const product = pcrProduct(template, false, f, r)!;
+  return { product, template, data: productOverview(product, template, false, opts) };
+};
+const flanksOf = (x: ReturnType<typeof tailed>) => tailSiteFlanks(x.product.length, x.data.tailSites).map(f => [f.site.enzyme, f.left, f.right]);
+
+test("a site with 5 bases beyond it in a tail is listed, one with 6 is not, on either end", () => {
+  // EcoRI after n bases in the left tail, BamHI before m bases in the right one.
+  const case_ = (n: number, m: number) => flanksOf(tailed("A".repeat(n) + "GAATTC", "A".repeat(m) + "GGATCC"));
+  assert.deepEqual(case_(5, 5), [["EcoRI", 5, 79], ["BamHI", 79, 5]]);
+  assert.deepEqual(case_(5, 6), [["EcoRI", 5, 80]]);
+  assert.deepEqual(case_(6, 5), [["BamHI", 80, 5]]);
+  assert.deepEqual(case_(6, 6), []);
+  assert.equal(CHECK_FLANKS, 6);
+  // The same asked of the sites themselves: the smaller side counts, from either end.
+  const at = (start: number, end: number) => [{ ...hit("X", start + 1), start, end }];
+  assert.deepEqual(tailSiteFlanks(100, at(5, 10)).map(f => [f.left, f.right]), [[5, 89]]);
+  assert.deepEqual(tailSiteFlanks(100, at(6, 11)), []);
+  assert.deepEqual(tailSiteFlanks(100, at(80, 94)).map(f => [f.left, f.right]), [[80, 5]]);
+  assert.deepEqual(tailSiteFlanks(100, at(80, 93)), []);
+});
+
+test("a site made across a tail's edge is a tail site and is listed", () => {
+  // The tail TTAAGAATT ends in GAATT, and the template's next base is C: GAATTC, 4–9, half in each.
+  const x = tailed("TTAAGAATT", "", "ACGT".repeat(20), 1, 52);
+  assert.equal(x.template[1], "C");
+  assert.deepEqual(x.data.tails, { left: 9, right: 0 });
+  assert.equal(x.product.sequence.slice(4, 10), "GAATTC");
+  assert.deepEqual(x.data.tailSites.map(s => [s.enzyme, s.start, s.end]), [["EcoRI", 4, 9]]);
+  assert.deepEqual(flanksOf(x), [["EcoRI", 4, 70]]);
+  // The same site wholly in the template is not one the tails made.
+  const inside = tailed("AAAA", "", "ACGT".repeat(5) + "GAATTC" + "ACGT".repeat(14), 4, 52);
+  assert.deepEqual(inside.data.sites.map(s => s.enzyme), ["EcoRI"]);
+  assert.deepEqual(inside.data.tailSites, []);
+});
+
+test("the tails' sites are looked for under every filter, not the one chosen for the strip", () => {
+  // EcoRI is in the left tail and also inside the template, so it cuts twice and a unique filter hides it.
+  const template = "ACGT".repeat(10) + "GAATTC" + "ACGT".repeat(10) + "ACGTAC";
+  const x = tailed("AAAAGAATTC", "AAAAGGATCC", template, 4, 40);
+  assert.equal(x.data.hits.filter(h => h.enzyme === "EcoRI").length, 2);
+  assert.deepEqual(x.data.sites.map(s => s.enzyme), ["BamHI"]);
+  assert.deepEqual(x.data.tailSites.map(s => [s.enzyme, s.start]), [["EcoRI", 4], ["BsiWI", 61], ["BamHI", 66]]);
+  for (const enzymeFilter of ["unique6", "unique", "unique2", "all"] as const) {
+    const again = productOverview(x.product, template, false, { ...opts, enzymeFilter });
+    assert.deepEqual(again.tailSites, x.data.tailSites, enzymeFilter);
+  }
+  // The list chosen still counts: a Lab list with only BamHI has no EcoRI to name.
+  const lab = productOverview(x.product, template, false, { ...opts, enzymeSource: "lab", labEnzymes: ["BamHI"] });
+  assert.deepEqual(lab.tailSites.map(s => s.enzyme), ["BamHI"]);
+  assert.deepEqual(flanksOf(x), [["EcoRI", 4, 66], ["BamHI", 66, 4]]);
 });
 
 test("a circular template's crossing-origin site is not invented across the linear product ends", () => {

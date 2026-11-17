@@ -164,6 +164,8 @@ export class SequenceView {
   private lastWidth = 0;
   /** Open while an edit to bases from the keyboard waits to be applied (AGENTS.md). */
   private card: EditCard | null = null;
+  /** The card a Cut opened, if it is the last one shown. */
+  private cutCard: EditCard | null = null;
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
@@ -1240,7 +1242,7 @@ export class SequenceView {
       return;
     }
     const { range } = store.selection;
-    if (range) this.showCard(this.newCard({ range, at: range.start, bases: "", side: "neither" }, true));
+    if (range) this.showCard(this.newCard({ range, at: range.start, bases: "", side: "neither" }, true), label === "Cut");
   }
 
   // ---------- the edit card ----------
@@ -1250,14 +1252,16 @@ export class SequenceView {
     const caseOf = (t: string) => (o.caseMode === "uppercase" ? t.toUpperCase() : o.caseMode === "lowercase" ? t.toLowerCase() : t);
     const card: EditCard = new EditCard(this.ctx.store.data, edit, fixed, caseOf, {
       apply: () => this.applyCard(card),
-      cancel: () => this.closeCard(),
+      cancel: () => this.dismissCard(card),
       changed: () => this.cardChanged()
     });
     return card;
   }
 
-  private showCard(card: EditCard) {
+  /** `cut`: a Cut opened it, so its bases are on the clipboard whether it deletes them or not. */
+  private showCard(card: EditCard, cut = false) {
     this.card = card;
+    this.cutCard = cut ? card : null;
     this.canvas.appendChild(card.el);
     this.cardChanged();
     card.el.scrollIntoView({ block: "nearest" });
@@ -1299,6 +1303,22 @@ export class SequenceView {
     this.focus();
   }
 
+  /**
+   * Esc, its button or Undo: the user sees the sequence stay as it is, so nothing is said,
+   * except after a Cut, whose bases were copied all the same.
+   */
+  private dismissCard(card: EditCard) {
+    const cut = card === this.cutCard;
+    if (this.card === card) this.closeCard();
+    if (cut) toast(`${this.copiedText(card)}.`, "info", { key: "edit-card" });
+  }
+
+  private copiedText(card: EditCard): string {
+    const { range } = card.pending;
+    const k = range ? rangeLength(range, card.data.sequence.length) : 0;
+    return `Copied ${fmt(k)} ${k === 1 ? "base but didn't delete it" : "bases but didn't delete them"}`;
+  }
+
   /** Closed by anything but Esc: says so, offering to make the edit all the same while nothing else changed. */
   private cancelCard(why: "moved" | "changed") {
     const card = this.card;
@@ -1311,7 +1331,14 @@ export class SequenceView {
     const verb = verbOf(e);
     const what = e.bases.length > 12 ? `${fmt(e.bases.length)} bases` : e.bases;
     const where = e.range ? fmtRange(e.range.start + 1, e.range.end + 1) : "";
-    const text = verb === "Insert" ? `Didn't insert ${what} ${e.at ? `after ${fmt(e.at)}` : "at the start"}` : verb === "Delete" ? `Didn't delete ${where}` : `Didn't replace ${where} with ${what}`;
+    const text =
+      verb === "Insert"
+        ? `Didn't insert ${what} ${e.at ? `after ${fmt(e.at)}` : "at the start"}`
+        : verb === "Delete"
+          ? card === this.cutCard
+            ? this.copiedText(card)
+            : `Didn't delete ${where}`
+          : `Didn't replace ${where} with ${what}`;
     if (why === "changed") toast(`${text}, as the sequence changed.`, "info", { key: "edit-card" });
     else toast(`${text}.`, "info", { key: "edit-card", action: { label: verb, run: () => this.applyCard(card) } });
   }
@@ -1339,7 +1366,7 @@ export class SequenceView {
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      this.closeCard();
+      this.dismissCard(card);
       return true;
     }
     // Tab chooses which side takes new bases at an edge, and never leaves the sequence.
@@ -1358,7 +1385,7 @@ export class SequenceView {
     // Undo takes back the card, not an edit before it.
     if (mod && !e.altKey && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
       e.preventDefault();
-      this.closeCard();
+      this.dismissCard(card);
       return true;
     }
     if (e.key.length === 1 && !mod && !e.altKey) {

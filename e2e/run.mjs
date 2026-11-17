@@ -587,6 +587,19 @@ async function main() {
     const afterBack = (await state()).len;
     check("Enter deletes them", afterBack === beforeBack - 3, `${beforeBack} → ${afterBack} bp`);
     await s.exec(`${doc} s.undo();`);
+    // Cut copies the selected bases at once and waits in the card to delete them; Esc keeps them.
+    const cutText = await s.exec(`${doc} s.select({ range: { start: 199, end: 208 }, caret: 209, anchor: 199 }, 'e2e');
+      const area = document.querySelector('.sv-clipboard'); area.focus();
+      const dt = new DataTransfer();
+      area.dispatchEvent(new ClipboardEvent('cut', { clipboardData: dt, bubbles: true, cancelable: true }));
+      return dt.getData('text/plain');`);
+    await sleep(200);
+    const cutCard = await editCard();
+    check("Cut waits in the card to delete the bases", /Delete 200–209/.test(cutCard.text) && cutCard.len === beforeBack, JSON.stringify({ ...cutCard, copied: cutText }));
+    await s.press(ESCAPE);
+    await sleep(200);
+    check("Esc keeps them", (await state()).len === beforeBack && !(await editCard()).open);
+    check("It says they were copied all the same", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /Copied 10 bases but didn't delete them/.test(t.textContent))", 2000), `copied “${cutText}”`);
     // --- Pasting what a database copies: a FASTA header, and text that isn't a sequence ---
     const pasteLen = async (text) => {
       const before = await s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');

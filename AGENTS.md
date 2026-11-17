@@ -114,7 +114,7 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   the cursor (one more base struck through with each press; typing then replaces them),
   and Delete or Cut with bases selected, where a second press deletes them unless bases
   were typed into the card. Enter makes the edit as one undo step and Esc leaves the
-  sequence as it is. The card shows how many bases for how many (green when they match),
+  sequence as it is, silently unless a Cut already copied the bases. The card shows how many bases for how many (green when they match),
   each CDS's protein change and frameshift, and what holds, loses or goes without the new
   bases (`describeEdit` in `src/lib/baseEdit.ts`); at an edge it asks which side takes new
   bases, Neither unless Tab changes it. Anything else done meanwhile (a click elsewhere, a

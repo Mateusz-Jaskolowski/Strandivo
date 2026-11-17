@@ -45,6 +45,16 @@ test("only enzymes someone sells are kept, and those of no use on a map are name
   assert.match(render(r), /^EcoRI\tG\^AATTC\tGAATTC\t1\t5\t0\tBN$/m);
 });
 
+test("a supplier's name can't break out of its string in the generated file", () => {
+  // A backslash before the quote would swallow the escape added for it, and one at the end
+  // would swallow the closing quote.
+  const name = 'Evil\\"; globalThis.pwned = 1; // \\';
+  const r = selectEnzymes(file(["EcoRI", "G^AATTC", "B"]).replace("Thermo Fisher Scientific", name));
+  assert.equal(r.suppliers.B, name);
+  const written = /^ {2}B: (.*?),?$/m.exec(render(r))[1];
+  assert.equal(JSON.parse(written), name);
+});
+
 test("the committed list cites REBASE, as its terms ask", () => {
   const list = readFileSync(new URL("../src/lib/rebaseEnzymes.ts", import.meta.url), "utf8");
   assert.match(list, /REBASE, The Restriction Enzyme Database, http:\/\/rebase\.neb\.com, is an open database/);

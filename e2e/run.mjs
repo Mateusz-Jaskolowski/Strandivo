@@ -414,6 +414,25 @@ async function main() {
       await s.press(ESCAPE);
       await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     }
+    // …and one on a cut site opens its Enzyme details.
+    const kpnAt = await s.exec(`
+      const el = document.querySelector('.sv-map-svgel text[data-id^="KpnI@"]');
+      const b = el?.getBoundingClientRect();
+      if (!b) return null;
+      const x = b.left + b.width / 2, y = b.top + b.height / 2;
+      return document.elementFromPoint(x, y)?.closest('[data-kind]') === el.closest('[data-kind]') ? [x, y] : null;`);
+    check("A point on KpnI's name is found on the map", !!kpnAt);
+    if (kpnAt) {
+      await s.doubleClickAt(kpnAt);
+      check("Double-clicking a cut site on the map opens its Enzyme details", await s.waitFor("document.querySelector('.sv-dialog .sv-enzyme-cut-figure')?.dataset.enzyme === 'KpnI' && document.querySelector('.sv-dialog-title')?.textContent === 'KpnI'", 3000));
+      check("Enzyme details give KpnI's cut, its ends, who sells it and its neoschizomer", await s.exec("const t = document.querySelector('.sv-dialog')?.textContent || ''; return t.includes('GGTAC^C') && t.includes('3′ GTAC') && t.includes('Sold by') && t.includes('Neoschizomers') && t.includes('Acc65I') && t.includes('In this sequence');"));
+      await s.click("//*[contains(@class,'sv-dialog-body')]//button[normalize-space(.)='Acc65I']", "xpath");
+      check("A neoschizomer's name opens its own details in their place", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && document.querySelector('.sv-dialog-title')?.textContent === 'Acc65I' && document.querySelector('.sv-dialog').textContent.includes('G^GTACC') && !!document.querySelector('.sv-dialog .sv-facts')?.textContent.includes('KpnI')", 3000));
+      check("Enzyme details find Acc65I's site though the map's list leaves it out", await s.exec("return /Site\\d/.test(document.querySelector('.sv-dialog [aria-label=\"In this sequence\"]')?.textContent.replace(/\\s+/g, '') || '');"));
+      await s.shot("01b-enzyme-details");
+      await s.press(ESCAPE);
+      await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    }
     // A long name wraps inside the ruler's numbers instead of running across them.
     await s.exec(`${doc} s.apply({ ...s.data, name: 'testing how it works and seeing how the long text works' }, 'Rename');`);
     await sleep(300);
@@ -456,6 +475,10 @@ async function main() {
     check("Coding features are named under their amino acids, not in the margin", captions.captions.some(c => /AmpR ←|lacZ/.test(c)) && captions.margin === 0, JSON.stringify(captions));
     await s.doubleClick(".sv-seq .sv-feature-caption");
     check("Double-clicking a CDS's name in the Sequence tab opens its Protein details", await s.waitFor("document.querySelector('.sv-dialog .sv-protein-seq')", 3000));
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.doubleClick(".sv-seq .sv-cut-label");
+    check("Double-clicking a cut site in the Sequence tab opens its Enzyme details", await s.waitFor("!!document.querySelector('.sv-dialog .sv-enzyme-cut-figure')", 3000));
     await s.press(ESCAPE);
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await checkCodonClicks(s, ".sv-seq", "Sequence translation");
@@ -1002,6 +1025,7 @@ async function main() {
       document.querySelector('.sv-map-svgel text[data-id^="EcoRI@"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
       return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
     check("Right-clicking a picked enzyme keeps the pick and digests with them all", digestMenu.includes("Digest with BglI, EcoRI and BamHI…"), digestMenu.join(" | "));
+    check("A cut site's right-click menu offers its Enzyme details", digestMenu.includes("Enzyme details…"), digestMenu.join(" | "));
     await s.exec("window.__e2eMenu.find(e => e.label.startsWith('Digest with')).run(); delete window.__strandivoMenu;");
     await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
     const ticked = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog input[data-enzyme]:checked')).map(i => i.dataset.enzyme).sort()");

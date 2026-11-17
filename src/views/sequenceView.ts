@@ -22,6 +22,7 @@ import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
+import { openEnzymeDialog } from "./enzymeDialog.ts";
 import { firstDelete } from "../lib/deletion.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
@@ -993,6 +994,7 @@ export class SequenceView {
       const hit = el?.dataset.kind ? hitOf(el) : target;
       if (!hit) return;
       this.selectAnnotation(hit);
+      if (hit.kind === "cutsite") return openEnzymeDialog(this.ctx, enzymeOf(hit.id));
       // A CDS's name or bar, one of its regions or an ORF opens Protein details. Its amino
       // acids, clicked to pick codons, only select it.
       const p = (el ?? pressed)?.dataset.codonIndex === undefined ? proteinAt(this.ctx, hit) : null;

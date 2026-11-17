@@ -49,6 +49,7 @@ import { proteinDiagram } from "./proteinDiagram.ts";
 import { openProteinDialog } from "./proteinDialog.ts";
 import { absorbance, extinctionNote, kilodaltons, proteinProperties } from "../lib/proteinProperties.ts";
 import { openDigestDialog } from "./digestDialog.ts";
+import { openEnzymeDialog } from "./enzymeDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
 import type { InspectorFold } from "../lib/inspectorFolds.ts";
@@ -963,6 +964,7 @@ export class Inspector {
         "div",
         { class: "sv-insp-actions" },
         this.button(`Digest with ${c.enzyme}…`, () => openDigestDialog(this.ctx, [c.enzyme]), { icon: "gel", wide: true }),
+        this.button("Enzyme details…", () => openEnzymeDialog(this.ctx, c.enzyme), { wide: true }),
         h("p", { class: "sv-dim sv-small" }, `${pickKeyName} and click other cut sites to digest with several enzymes.`)
       )
     ];

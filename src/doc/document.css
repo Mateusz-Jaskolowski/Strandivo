@@ -4300,6 +4300,18 @@ main.sv-enzyme-section-body {
 }
 .sv-figure { display: block; width: 100%; min-width: 640px; height: auto; }
 /* Protein details (src/views/proteinDialog.ts): properties, regions and the sequence. */
+/* Enzyme details (src/views/enzymeDialog.ts): the cut drawn on both strands, scrolled
+   sideways when an enzyme cuts far from its site. */
+.sv-enzyme-cut { overflow-x: auto; }
+.sv-enzyme-cut-figure { display: block; }
+.sv-enzyme-cut-site { fill: var(--accent-soft); }
+.sv-enzyme-cut-base { fill: var(--text); font: 500 14px var(--mono); }
+.sv-enzyme-cut-n { fill: var(--text-3); font-weight: 400; }
+.sv-enzyme-cut-end { fill: var(--text-3); font-size: 11px; }
+.sv-enzyme-cut-line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+.sv-enzyme-facts { grid-template-columns: 110px minmax(0, 1fr); }
+.sv-enzyme-names { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.sv-enzyme-tubes { margin: 0; padding-left: 18px; font-size: 12.5px; }
 .sv-protein-section { display: flex; flex-direction: column; gap: 8px; }
 .sv-protein-section + .sv-protein-section { padding-top: 12px; border-top: 1px solid var(--line); }
 .sv-protein-head { padding: 0; }

@@ -121,10 +121,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   from the library) is a dialog (`openDialog` in `src/ui/modal.ts`, see
   `src/views/primerDialogs.ts`); so is a closer look at one thing too big for the
   inspector, such as a protein (`src/views/proteinDialog.ts`: its figure, numbered sequence
-  and properties), opened from its section there, its right-click menu, or a double-click
-  on the thing itself on the map or in the Sequence tab (a CDS's arc, name or regions, or
-  an ORF: `proteinAt`), never on bases or on the amino acids that codons are picked by
-  (`docs/enzyme-data-plan.md` says why). The inspector keeps that thing's summary and
+  and properties) and a restriction enzyme (`src/views/enzymeDialog.ts`: its cut on both
+  strands, suppliers, isoschizomers and sites), opened from its section there, its
+  right-click menu, or a double-click on the thing itself on the map or in the Sequence
+  tab (a CDS's arc, name or regions, or an ORF: `proteinAt`; a cut site), never on bases
+  or on the amino acids that codons are picked by (`docs/enzyme-data-plan.md` says why). The inspector keeps that thing's summary and
   actions, and there is one such dialog per kind of thing, not one per section: a second
   wish grows the first.
   Something not tied to one file gets its own window, like

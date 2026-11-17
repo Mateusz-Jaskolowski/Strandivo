@@ -705,7 +705,10 @@ async function main() {
       return { head: Array.from(document.querySelectorAll('.sv-mix-table th')).map(th => th.textContent.trim()), total: Array.from(document.querySelector('.sv-mix-table tfoot tr').children).map(td => td.textContent.trim()), warn: document.querySelectorAll('.sv-mix-notes .sv-text-warn').length };`);
     check(
       "Eight reactions make a master mix a tenth over, and the volume is no longer small",
-      JSON.stringify(mixMany) === JSON.stringify({ head: ["Component", "Per reaction, µl", "Mix for 8.8, µl", "Final"], total: ["Master mix", "24", "211.2", ""], warn: 0 }),
+      // Field by field: what comes back from the browser keeps its arrays in order, not its keys.
+      JSON.stringify(mixMany.head) === JSON.stringify(["Component", "Per reaction, µl", "Mix for 8.8, µl", "Final"]) &&
+        JSON.stringify(mixMany.total) === JSON.stringify(["Master mix", "24", "211.2", ""]) &&
+        mixMany.warn === 0,
       JSON.stringify(mixMany)
     );
     const copiedMix = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__mixCopied = text; } } });

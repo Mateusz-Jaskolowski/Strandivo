@@ -101,10 +101,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Replacing bases** is not a deletion and then an insertion, which left new bases at an
   annotation's edge outside it (`replaceRange` in `src/lib/seqdata.ts`). As many bases as
   were selected move nothing. Otherwise, annotation by annotation (features, primers,
-  protein regions): one holding the whole selection holds the new bases; one crossing an
-  edge of it keeps only its part outside, as which side new bases belong to can't be
-  known; one inside a larger selection goes; the rest move with their bases. Inserting at
-  a caret on an annotation's edge still leaves the new bases outside it.
+  protein regions): one holding the whole selection holds the new bases; one inside a
+  larger selection goes; the rest move with their bases. New bases at an edge, inserted
+  there or replacing bases an annotation crosses the edge of, belong to neither side
+  unless the user chose one (`EdgeSide`), as which side they belong to can't be known:
+  `"before"` gives them to the features and regions before the edge, `"after"` to those
+  after it, and otherwise each keeps only its own bases. A primer never takes them, as its
+  bases are the oligo's.
 - **Typing over a selection** opens a card above it (`src/views/replaceCard.ts`) instead
   of replacing at once, so a region never takes or loses bases unseen: typed and pasted
   bases collect there, Enter replaces them as one step and Esc keeps the selected ones. It

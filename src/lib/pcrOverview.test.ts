@@ -116,7 +116,7 @@ test("length warnings follow NEB's simple and complex templates, where a colony 
   assert.match(productAdvice("q5", "complex", 10001, 50)[0], /10,000 bp maximum for Q5 \(M0491\)/);
   assert.match(productAdvice("q5", "colony", 20001, 50)[0], /20,000 bp/);
   assert.match(productAdvice("taq", "plasmid", 5001, 50)[0], /5,000 bp maximum for Taq \(M0273\)/);
-  // A polymerase whose chart row has not been read says nothing rather than guess.
+  // A polymerase whose chart row has not been read gets no length warning rather than a guess.
   assert.deepEqual(productAdvice("q5u", "plasmid", 50000, 50), []);
 });
 
@@ -135,6 +135,8 @@ test("the GC warning is the whole product's, at NEB's 65%, and names an enhancer
   assert.match(productAdvice("q5", "plasmid", 1000, 67.26)[0], /^The product is 67\.3% GC/);
   // Phusion has no enhancer in the chart, so the sentence stops at the fact.
   assert.equal(productAdvice("phusion", "plasmid", 1000, 70)[0], "The product is 70.0% GC, which can be hard to amplify.");
+  // The GC sentence is about the product, so a polymerase with no row gets it too, without an enhancer.
+  assert.equal(productAdvice("q5u", "plasmid", 1000, 70)[0], "The product is 70.0% GC, which can be hard to amplify.");
   assert.equal(productAdvice("q5u", "plasmid", 1000, 70).length, 1);
 });
 

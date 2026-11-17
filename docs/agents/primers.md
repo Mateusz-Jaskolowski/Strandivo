@@ -89,8 +89,11 @@ and CI checks that they exist.
   frame later, or focus would go looking for a control the first drawing didn't have. It says what to expect on a gel, never that the
   product is the right one or that two enzymes share a buffer. What is said about the
   polymerase comes from `src/lib/pcrGuidance.ts` alone (the ends it leaves, NEB's longest
-  product, the GC enhancer): a polymerase whose row has not been read says nothing, and
-  nothing is taken from another member of its Tm family. GC is the whole product's against
+  product, the GC enhancer), and only where NEB's row for it has been read: the Ends row
+  then says "No end guidance for this polymerase yet", there is no length limit or
+  enhancer to name, and nothing is taken from another member of its Tm family. The GC
+  sentence is about the product, so every polymerase gets it, with the enhancer named
+  only where there is one. GC is the whole product's, as counted and not rounded, against
   NEB's 65% (`HIGH_GC`), as the enhancer is described for an amplicon, while the strip
   shows where it runs high inside; a colony is a simple template, being E. coli, so only
   genomic DNA or cDNA takes the complex limit.

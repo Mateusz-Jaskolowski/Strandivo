@@ -154,7 +154,12 @@ export const HIGH_GC = 65;
  */
 const isSimple = (template: TemplateKind) => template !== "complex";
 
-/** What NEB says about this product for the polymerase picked, and nothing the app has no source for. */
+/**
+ * What is said about this product for the polymerase picked. The GC sentence is about the
+ * product, so every polymerase gets it. What comes from `PCR_GUIDANCE` (the longest product,
+ * the enhancer) is said only where NEB's row for the polymerase has been read, and
+ * nothing is borrowed from another member of its Tm family.
+ */
 export function productAdvice(polymerase: string, template: TemplateKind, length: number, gcPercent: number): string[] {
   const guidance = PCR_GUIDANCE[polymerase];
   const out: string[] = [];

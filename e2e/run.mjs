@@ -883,8 +883,11 @@ async function main() {
     check("The program names the product its protocol is for, beside the program", /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(oneTaq), oneTaq.slice(-500));
     await s.shot("04-pcr-onetaq");
     const invalidProgram = await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); const previous = el.value; el.value = 'unfinished'; el.dispatchEvent(new Event('input')); el.focus(); el.setSelectionRange(2, 5); return {previous, blocked:document.querySelector('[data-focus="copy-program"]').disabled};`);
+    // The marker goes with the old program view when the dialog is drawn again, so the field is read only after a redraw.
+    await s.exec("document.querySelector('.sv-pcr-program').dataset.drawn = '1';");
     await s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 475 } })");
-    check("An unfinished program field blocks copying and keeps its text, focus and caret on redraw", invalidProgram.blocked && await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); return el.value === 'unfinished' && document.activeElement === el && el.selectionStart === 2 && el.selectionEnd === 5;`));
+    const invalidRedrawn = await s.waitFor("!document.querySelector('.sv-pcr-program')?.dataset.drawn", 5000);
+    check("An unfinished program field blocks copying and keeps its text, focus and caret on redraw", invalidProgram.blocked && invalidRedrawn && await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); return el.value === 'unfinished' && document.activeElement === el && el.selectionStart === 2 && el.selectionEnd === 5;`));
     await s.press(ESCAPE);
     check("Escape cancels unfinished text without closing the PCR dialog", await s.exec(`return document.querySelector('[data-focus="program-1:0:seconds"]')?.value`) === invalidProgram.previous);
     // Reset is for a program that was changed, so change one first: with the program as the

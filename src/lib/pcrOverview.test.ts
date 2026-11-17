@@ -255,6 +255,25 @@ test("a lab list's names are matched as the drawn sites match them, whatever the
   assert.deepEqual(overview.digests.map(digestName), ["EcoRI"]);
 });
 
+test("the template's counts are kept for one template, but follow the list when it changes between calls", () => {
+  // BcgI and PaqCI are in no common list, so each is counted only when a list names it. The cache
+  // is keyed by the extra enzymes the list brings, and one template is asked again for each list.
+  const seq = "AT".repeat(100) + "CGA" + "AAAAAA" + "TGC" + "AT".repeat(100) + "CACCTGC" + "AT".repeat(50) + "CACCTGC" + "AT".repeat(100);
+  const product = pcrProduct(seq, false, { name: "F", start: 0, end: 19, strand: 1, bases: seq.slice(0, 20) }, { name: "R", start: seq.length - 20, end: seq.length - 1, strand: -1, bases: reverseComplement(seq.slice(-20)) })!;
+  const counts = (labEnzymes: string[], enzymeSource: "lab" | "common" = "lab") => {
+    const { templateCounts } = productOverview(product, seq, false, { ...opts, enzymeSource, labEnzymes });
+    return [templateCounts.get("BcgI") ?? 0, templateCounts.get("PaqCI") ?? 0];
+  };
+  assert.deepEqual(counts(["BcgI"]), [1, 0]);
+  assert.deepEqual(counts(["PaqCI"]), [0, 2]);
+  assert.deepEqual(counts(["BcgI", "PaqCI"]), [1, 2]);
+  assert.deepEqual(counts([], "common"), [0, 0]);
+  // And back to the first, which was replaced in the cache and is counted again.
+  assert.deepEqual(counts(["BcgI"]), [1, 0]);
+  // The same list asked again is the same answer.
+  assert.deepEqual(counts(["BcgI"]), [1, 0]);
+});
+
 test("no digest of fragments too small for a gel is called far enough apart, but pairs are still tried", () => {
   // Read from the ladders, so a ladder with a smaller band moves it.
   assert.equal(SMALLEST_BAND, 100);

@@ -48,7 +48,9 @@ export function cancelProgramValue(draft: ProgramDraft, key: string): boolean {
  * What a program field may hold. A cycler's block holds from about 4 °C, where a program's
  * own hold step sits, and denatures below 100 °C; a protocol runs 1–99 cycles and no step
  * lasts an hour. A value outside these is a slip ("980" for 98.0, "3000" cycles), not a
- * choice.
+ * choice. Only a product longer than any polymerase here is made for (over about 60 kb)
+ * gets a generated extension past an hour; its field then reads as refused, which is
+ * accepted rather than given an exception.
  */
 export const MIN_TEMP = 4;
 export const MAX_TEMP = 100;

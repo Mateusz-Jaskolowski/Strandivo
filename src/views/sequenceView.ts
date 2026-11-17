@@ -42,7 +42,8 @@ import {
 } from "../lib/seqdata.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { EditCard } from "./editCard.ts";
-import { applyEdit, verbOf, type PendingEdit } from "../lib/baseEdit.ts";
+import { applyEdit, names, verbOf, type PendingEdit } from "../lib/baseEdit.ts";
+import { edgeNear, moveRegionEdge, regionEdge, type RegionEdge } from "../lib/regionEdges.ts";
 
 const FONT_PX = 13;
 const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
@@ -842,6 +843,7 @@ export class SequenceView {
     // The selected cut site, and the other sites of its enzyme or of the picked ones.
     const { focus } = this.ctx.store.selection;
     markRegionSelection(r.el, focus);
+    this.placeRegionHandles(r.el, row);
     markCodonSelection(r.el, this.ctx.store.selection);
     const picked = pickedEnzymes(this.ctx.store.selection);
     for (const el of Array.from(r.el.querySelectorAll<HTMLElement>('[data-kind="cutsite"]'))) {
@@ -850,6 +852,129 @@ export class SequenceView {
       el.classList.toggle("sv-cut-focused", on);
       el.classList.toggle("sv-cut-related", !on && picked.includes(enzymeOf(id)));
     }
+  }
+
+  // ---------- dragging a region's ends ----------
+
+  /**
+   * Handles at both ends of the selected region, where its first and last bases are in this
+   * row. Each moves the region's end a codon at a time, with a region on the same level
+   * that meets it there (`regionEdge`), or alone with ⌥ (Alt), which only the tooltip of a
+   * handle that moves two regions mentions.
+   */
+  private placeRegionHandles(el: HTMLElement, row: RowLayout) {
+    for (const old of Array.from(el.querySelectorAll(".sv-region-handle"))) old.remove();
+    const focus = this.ctx.store.selection.focus;
+    if (focus?.kind !== "feature" || focus.region === undefined) return;
+    const index = focus.region;
+    const bar = row.regions.find(t => t.item.f.id === focus.id && t.item.index === index);
+    const track = el.querySelector<HTMLElement>(".sv-row-track");
+    if (!bar || !track) return;
+    const { sequence } = this.ctx.store.data;
+    const { f, region } = bar.item;
+    const spans = regionSpans(f, region, sequence.length);
+    if (!spans.length) return;
+    const forward = f.strand !== -1;
+    const handle = (column: number, side: "left" | "right") => {
+      const end = (side === "left") === forward ? "start" : "end";
+      const edge = regionEdge(f, sequence, index, end);
+      if (!edge) return;
+      const { alone } = edge;
+      const moves = [...edge.ends.map(i => `${edge.regions[i].name} ends`), ...edge.starts.map(i => `${edge.regions[i].name} starts`)];
+      const own = `${region.name} ${end === "start" ? "starts" : "ends"}`;
+      const label = `Move where ${own} (arrow keys)`;
+      const b = h("button", {
+        type: "button",
+        class: "sv-region-handle",
+        "aria-label": label,
+        title: `Drag to move where ${names(moves)}, a codon at a time${moves.length > 1 ? `; ${isMac ? "⌥" : "Alt"}-drag moves only where ${own}` : ""}`,
+        style: { left: `${Math.round(column * this.chPx * 100) / 100 - 6}px`, top: `${bar.y - 5}px` }
+      });
+      b.addEventListener("pointerdown", e => this.dragRegionEdge(e, f, edge, alone, index, label));
+      b.addEventListener("keydown", e => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        e.stopPropagation();
+        const moved = e.altKey ? alone : edge;
+        // On the other strand the protein runs from right to left.
+        const to = moved.at + ((e.key === "ArrowRight") === forward ? 1 : -1);
+        if (to >= moved.min && to <= moved.max) this.applyRegionEdge(f, moved, index, to, label);
+      });
+      track.appendChild(b);
+    };
+    const first = spans[0];
+    const last = spans[spans.length - 1];
+    if (first.start >= row.start && first.start <= row.end) handle(first.start - row.start, "left");
+    if (last.end >= row.start && last.end <= row.end) handle(last.end + 1 - row.start, "right");
+  }
+
+  /**
+   * Follows the pointer from the CDS as the press found it, so pressing or letting go of ⌥
+   * (Alt) partway puts a region that met this one back, or takes it along again, at once.
+   */
+  private dragRegionEdge(e: PointerEvent, f: SeqFeature, edge: RegionEdge, alone: RegionEdge, index: number, label: string) {
+    // Control-click is a right-click on a Mac.
+    if (e.button !== 0 || (e.ctrlKey && isMac)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Taken by hand, as the press is cancelled and WebKit never focuses a clicked button:
+    // the arrow keys then move this end.
+    (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+    const { sequence, circular } = this.ctx.store.data;
+    let want = edge.at;
+    let altKey = e.altKey;
+    // Where the edge is and whether it moves alone; both ways, an edge where it was is the CDS as it was.
+    let shown = `${edge.at}`;
+    const follow = () => {
+      const moved = altKey ? alone : edge;
+      const at = Math.max(moved.min, Math.min(moved.max, want));
+      const now = at === edge.at ? `${at}` : `${at}${altKey ? " alone" : ""}`;
+      if (now === shown) return;
+      shown = now;
+      this.applyRegionEdge(f, moved, index, at, label);
+    };
+    const move = (ev: PointerEvent) => {
+      this.autoScroll(ev.clientY);
+      want = edgeNear(f, sequence.length, circular, this.boundaryAt(ev.clientX, ev.clientY));
+      altKey = ev.altKey;
+      follow();
+    };
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== "Alt") return;
+      // Windows would take a lone Alt to the menu bar.
+      ev.preventDefault();
+      altKey = ev.type === "keydown";
+      follow();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("keyup", key);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("keydown", key);
+    window.addEventListener("keyup", key);
+  }
+
+  /**
+   * Moves the edge from where the drag or key press found it, as one undo step while the
+   * moves keep coming (as a primer's ends do), keeping the region selected and the keyboard
+   * on its handle, as the change draws the rows again.
+   */
+  private applyRegionEdge(f: SeqFeature, edge: RegionEdge, index: number, at: number, handle: string) {
+    const store = this.ctx.store;
+    const d = store.data;
+    const next = moveRegionEdge(f, edge, at);
+    const regions = regionsOf(next);
+    const now = regions.findIndex(r => r.id === edge.regions[index].id);
+    const range = now >= 0 ? regionRange(next, regions[now], d.sequence.length) : null;
+    const selection = range ? { range, caret: range.end + 1, focus: { kind: "feature" as const, id: f.id, region: now } } : undefined;
+    store.apply({ ...d, features: d.features.map(x => (x.id === f.id ? next : x)) }, "Move region end", selection, `region-edge:${f.id}`);
+    requestAnimationFrame(() => this.canvas.querySelector<HTMLElement>(`.sv-region-handle[aria-label="${CSS.escape(handle)}"]`)?.focus({ preventScroll: true }));
   }
 
   /** Scrolls so the selection (or caret) is on screen. */
@@ -1012,7 +1137,7 @@ export class SequenceView {
       if (t) this.ctx.contextMenu(t, { x: e.clientX, y: e.clientY });
     });
     this.canvas.addEventListener("dblclick", e => {
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || (e.target as Element).closest(".sv-region-handle")) return;
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       // Pointer capture can send the double-click to the canvas instead of the hit area.
       const hit = el?.dataset.kind ? hitOf(el) : target;

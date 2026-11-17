@@ -119,8 +119,8 @@ and CI checks that they exist.
   then says "No end guidance for this polymerase yet", there is no length limit or
   enhancer to name, and nothing is taken from another member of its Tm family. The GC
   sentence is about the product, so every polymerase gets it, with the enhancer named
-  only where there is one. GC is the whole product's, as counted and not rounded, against
-  NEB's 65% (`HIGH_GC`), as the enhancer is described for an amplicon, while the strip
+  only where there is one. GC is the whole product's, to the one decimal the header shows,
+  against NEB's 65% (`HIGH_GC`), as the enhancer is described for an amplicon, while the strip
   shows where it runs high inside; a colony is a simple template, being E. coli, so only
   genomic DNA or cDNA takes the complex limit.
   The **program**'s line is schematic: its widths and slopes are neither time nor ramp

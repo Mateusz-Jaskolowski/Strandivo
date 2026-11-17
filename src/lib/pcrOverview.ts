@@ -238,9 +238,10 @@ const isSimple = (template: TemplateKind) => template !== "complex";
 export function productAdvice(polymerase: string, template: TemplateKind, length: number, gcPercent: number): string[] {
   const guidance = PCR_GUIDANCE[polymerase];
   const out: string[] = [];
-  // Compared as counted, not rounded: NEB's 65% is a threshold, so 64.6% is below it. The
-  // warning gives one decimal, as the header above the strip does.
-  if (gcPercent >= HIGH_GC) out.push(`The product is ${gcPercent.toFixed(1)}% GC, which can be hard to amplify.${guidance?.enhancer ? ` ${guidance.enhancer}` : ""}`);
+  // Compared as the header above the strip shows it, to one decimal: NEB's 65% is a
+  // threshold, so 64.6% is below it, and a product headed 65.0% is never left without it.
+  const shown = gcPercent.toFixed(1);
+  if (Number(shown) >= HIGH_GC) out.push(`The product is ${shown}% GC, which can be hard to amplify.${guidance?.enhancer ? ` ${guidance.enhancer}` : ""}`);
   if (guidance) {
     const max = isSimple(template) ? guidance.maxLength.simple : guidance.maxLength.complex;
     if (length > max) out.push(`The product is longer than NEB’s ${max.toLocaleString("en")} bp maximum for ${guidance.product} on this template.`);

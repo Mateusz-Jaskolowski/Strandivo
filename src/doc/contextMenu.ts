@@ -11,11 +11,12 @@ import { primerLibrary } from "../primerLibrary.ts";
 import { personalEnzymes } from "../personalEnzymes.ts";
 import { enzymeOf } from "../lib/enzymePick.ts";
 import { digestEnzymes, menuFor, type MenuEntry, type MenuItem, type MenuTarget } from "../lib/contextMenu.ts";
-import { basesIn, deleteRange, featureBases, inRange, rangeLength, reverseComplement, type Range } from "../lib/seqdata.ts";
+import { basesIn, featureBases, inRange, rangeLength, reverseComplement, type Range } from "../lib/seqdata.ts";
 import { proteinRegionTargets, regionSpans, regionsOf, withRegions } from "../lib/regions.ts";
 import { openProteinRegionDialog, openProteinRegionFromSelection } from "../views/proteinRegionDialog.ts";
 import { openFoldDialog, openFoldFromFeature } from "../views/foldRegionsDialog.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
+import { deleteAtOnce } from "../lib/deletion.ts";
 import { cutSites, orfFeature, orfs, protein } from "./analysis.ts";
 import type { DocContext, Tab } from "./context.ts";
 import type { Focus } from "./store.ts";
@@ -156,7 +157,11 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
         store.apply(next.data, "Delete", { caret: next.caret });
         return;
       }
-      if (range) store.apply(deleteRange(d, range), "Delete", { caret: range.start <= range.end ? range.start : 0 });
+      if (range) {
+        const del = deleteAtOnce(d, range);
+        store.apply(del.data, "Delete", { caret: del.caret });
+        if (del.note) ctx.noteEdit(del.note);
+      }
       return;
     case "copy-dna":
       if (feature) {

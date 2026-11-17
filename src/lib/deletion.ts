@@ -9,8 +9,9 @@
 // Cut sites and ORFs are found from the sequence, so their first press only makes them
 // plain bases.
 
+import { deletionNote } from "./baseEdit.ts";
 import { regionsOf, withRegions } from "./regions.ts";
-import type { Range, SeqData, SeqFeature, SeqPrimer } from "./seqdata.ts";
+import { deleteRange, type Range, type SeqData, type SeqFeature, type SeqPrimer } from "./seqdata.ts";
 
 /** The parts of a selection that decide what Delete does. */
 export interface PickedSelection {
@@ -123,4 +124,17 @@ function group(items: { name: string }[], noun: string, both: boolean): string {
 /** "a", "a and b", "a, b and c". */
 function listed(names: string[]): string {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Bases deleted at once, from a right-click or the inspector's Delete bases, where the
+ * user asked for it and no card asks again. The message names what went with them and
+ * any CDS whose frame shifted, as neither shows where they are looking; null when nothing
+ * did. The document reports what went on its own, which this replaces with both.
+ */
+export function deleteAtOnce(d: SeqData, r: Range): { data: SeqData; caret: number; note: string | null } {
+  const data = deleteRange(d, r);
+  const shift = deletionNote(d, r);
+  const lost = shift && lostWith(d, data);
+  return { data, caret: r.start <= r.end ? r.start : 0, note: lost ? `${describeLost(lost)} ${shift}` : shift };
 }

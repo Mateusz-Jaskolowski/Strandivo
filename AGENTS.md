@@ -121,8 +121,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   key that moves the selection, another edit) closes it and says so, offering the edit
   while the sequence is unchanged. It is not a dialog: it belongs to the selection and
   must leave the keyboard with the sequence, which sends it keys. What the user chose on
-  purpose stays at once: Delete bases from a right-click or the inspector, picked codons
-  and Use read base.
+  purpose stays at once: Delete bases from a right-click or the inspector (which says when
+  it shifts a CDS's frame, `deleteAtOnce` in `src/lib/deletion.ts`), picked codons and
+  Use read base.
 - **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.

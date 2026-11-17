@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { applyEdit, describeEdit, shiftedFrames, type PendingEdit } from "./baseEdit.ts";
+import { applyEdit, deletionNote, describeEdit, shiftedFrames, type PendingEdit } from "./baseEdit.ts";
 import { regionsOf, withRegions, type ProteinRegion } from "./regions.ts";
 import { insertBases, replaceRange, reverseComplement, type EdgeSide, type Range, type SeqData, type SeqFeature, type Strand } from "./seqdata.ts";
 
@@ -147,6 +147,9 @@ test("deleted bases name the protein change and what loses bases or goes", () =>
   assert.deepEqual(notes(doc(), remove(residues(2, 6))), ["⚠ Removes TM1"]);
   assert.deepEqual(shiftedFrames(doc(), remove({ start: before(4), end: before(4) })), ["gene"]);
   assert.deepEqual(shiftedFrames(doc(), remove(residues(4, 4))), []);
+  assert.equal(deletionNote(doc(), { start: before(4), end: before(4) + 1 }), "Deleting 2 bases shifted gene's frame.");
+  assert.equal(deletionNote(doc(), residues(4, 4)), null);
+  assert.equal(deletionNote(doc(), { start: 0, end: 3 }), null);
 });
 
 test("new bases between two regions go to the side chosen, or to neither", () => {

@@ -27,7 +27,6 @@ import { noteText, otherQualifiers, withNote } from "../lib/featureNotes.ts";
 import {
   basesIn,
   complement,
-  deleteRange,
   FEATURE_TYPES,
   newId,
   rangeLength,
@@ -51,6 +50,7 @@ import { absorbance, extinctionNote, kilodaltons, proteinProperties } from "../l
 import { openDigestDialog } from "./digestDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
+import { deleteAtOnce } from "../lib/deletion.ts";
 import type { InspectorFold } from "../lib/inspectorFolds.ts";
 import { sectionFolded, toggleSection } from "../inspectorFolds.ts";
 
@@ -1042,7 +1042,11 @@ export class Inspector {
         len <= 60 ? this.button("Add primer", () => this.ctx.addPrimerFromSelection(), { icon: "primerAdd" }) : this.button("Design primers", () => this.actions.designPrimers(r, "PCR"), { icon: "pcr" }),
         this.button("Mutagenesis primers…", () => openMutagenesisDialog(this.ctx), { wide: true }),
         r.start <= r.end && this.button("Reverse-complement", () => this.ctx.command("reverse-complement"), { wide: true }),
-        this.button("Delete bases", () => this.ctx.store.apply(deleteRange(d, r), "Delete", { caret: r.start <= r.end ? r.start : 0 }), { icon: "trash", danger: true, wide: true })
+        this.button("Delete bases", () => {
+          const del = deleteAtOnce(d, r);
+          this.ctx.store.apply(del.data, "Delete", { caret: del.caret });
+          if (del.note) this.ctx.noteEdit(del.note);
+        }, { icon: "trash", danger: true, wide: true })
       )
     );
     return out;

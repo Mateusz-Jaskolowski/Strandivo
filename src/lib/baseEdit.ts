@@ -77,6 +77,16 @@ export function shiftedFrames(d: SeqData, e: PendingEdit): string[] {
   return codingChanges(d, applyEdit(d, e).data, e).shifts;
 }
 
+/**
+ * The message for bases deleted at once, from a right-click or the inspector rather than
+ * the card: which CDSs it shifts the frame of, as nothing else says so. Null when none.
+ */
+export function deletionNote(d: SeqData, r: Range): string | null {
+  const shifts = shiftedFrames(d, { range: r, at: r.start, bases: "", side: "neither" });
+  if (!shifts.length) return null;
+  return `Deleting ${bases(rangeLength(r, d.sequence.length))} shifted ${shifts.length === 1 ? `${shifts[0]}'s frame` : `the frame of ${names(shifts)}`}.`;
+}
+
 /** How the edit changes each CDS it reaches. */
 function codingChanges(d: SeqData, after: SeqData, e: PendingEdit) {
   const n = d.sequence.length;

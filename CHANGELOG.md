@@ -44,7 +44,8 @@ with Unreleased's notes and leaves them where they are.
   Typing between two features or regions, such as FR1 and CDR1, asks which one the new
   bases belong to, or neither; press Tab to choose. Clicking elsewhere leaves the sequence
   as it is, and the message that says so can still make the edit. Delete bases from the
-  right-click menu or the inspector still deletes at once.
+  right-click menu or the inspector still deletes at once, and says when it shifts a
+  gene's frame.
 
 ## 0.5.0
 

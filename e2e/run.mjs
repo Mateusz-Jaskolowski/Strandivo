@@ -671,6 +671,13 @@ async function main() {
     await s.shot("04-pcr-neb");
     check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && (await s.exec("return document.querySelector('[data-focus=\"program-1:0:cycles\"]')?.value")) === "25" && /Final extension/.test(nebPcr), nebPcr.slice(-400));
     check("The final product has a GC strip and a suggested digest", await s.exec("return !!document.querySelector('.sv-pcr-gc .sv-gc') && document.querySelector('.sv-pcr-digest')?.textContent.includes('564 + 314 bp')"));
+    // The digest is there to be run, so the gel shows it: the whole product in one lane and
+    // its fragments in the next, beside the ladder the Digest dialog uses.
+    const gelBands = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-gel .sv-gel-band[data-size]')).map(b => b.dataset.size)");
+    check("The gel runs the whole product beside the digest's fragments", JSON.stringify(gelBands) === '["878","564","314"]', JSON.stringify(gelBands));
+    await choose("Ladder", "100 bp ladder");
+    check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
+    await choose("Ladder", "1 kb ladder");
     const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
       const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
       edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');

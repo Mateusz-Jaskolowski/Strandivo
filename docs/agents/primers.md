@@ -78,7 +78,10 @@ and CI checks that they exist.
   where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
   bar). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
   complete on both strands or whose overhangs overlap another's makes no suggestion rather
-  than a band that wouldn't be there. Names stack in `MAX_LABEL_LANES` lanes at most: a
+  than a band that wouldn't be there. Beside the suggestion a gel runs the whole product in
+  one lane and that digest's fragments in the next, drawn by the renderer the Digest dialog
+  uses (`src/views/gelDraw.ts`); fragments within the gel's resolution run as one band, and
+  the ladder is the one chosen in either dialog, kept for as long as the window is open. Names stack in `MAX_LABEL_LANES` lanes at most: a
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
   the product, its GC and the digest out of the dialog, so the sites past those lanes keep
   their marks where they cut and a chip over each crowd counts them, naming them under the

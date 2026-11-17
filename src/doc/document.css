@@ -2246,10 +2246,27 @@
 }
 .sv-pcr-digest {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: flex-start;
+  gap: 16px;
   border-top: 1px solid var(--line);
   padding-top: 10px;
+}
+.sv-pcr-digest-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sv-pcr-gel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.sv-pcr-gel > select {
+  max-width: 100%;
 }
 .sv-pcr-flanks summary {
   cursor: pointer;

@@ -7,6 +7,8 @@ import { fmt } from "../ui/format.ts";
 import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pickDigest, pickSite, productLabels, tailSiteFlanks, type LabelCrowd, type productOverview } from "../lib/pcrOverview.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
+import { bands } from "../lib/gel.ts";
+import { currentLadder, gelSvg, ladderSelect, type GelLane } from "./gelDraw.ts";
 
 /** What the user chose here, kept while the dialog is open, as it is drawn anew on every change. */
 export interface ProductViewChoice {
@@ -38,8 +40,35 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
   };
   const digestSizes = h("span", { class: "sv-mono sv-small" });
   const digestNote = h("p", { class: "sv-small sv-dim" });
+  const gelFigure = h("div", { class: "sv-pcr-gel-figure" });
+  // The product as it would run beside the digest: one band for the whole of it, and the
+  // digest's fragments in the next lane, those within the gel's resolution running as one.
+  const drawGel = () => {
+    const d = pickDigest(data.digests, choice.digest);
+    const lanes: GelLane[] = [{ label: "Uncut", bands: [{ size: product.length, mass: product.length, title: `The product, ${fmt(product.length)} bp` }] }];
+    if (d)
+      lanes.push({
+        label: "Cut",
+        bands: bands(d.sizes).map(b => ({
+          size: b.size,
+          mass: b.mass,
+          title: b.fragments.length > 1 ? `${b.fragments.length} fragments of about ${fmt(Math.round(b.size))} bp` : `${fmt(b.size)} bp`
+        }))
+      });
+    gelFigure.replaceChildren(
+      gelSvg(lanes, currentLadder(), {
+        height: 160,
+        laneWidth: 40,
+        labelWidth: 46,
+        ariaLabel: d ? `The ${fmt(product.length)} bp product on a gel, uncut and cut with ${digestName(d)}` : `The ${fmt(product.length)} bp product on a gel, uncut`
+      })
+    );
+  };
+  // The ladder is made once, so changing it keeps the focus on its own menu.
+  const gel = h("div", { class: "sv-pcr-gel" }, gelFigure, ladderSelect("sv-select-quiet", drawGel));
   const updateDigest = () => {
     const d = pickDigest(data.digests, choice.digest);
+    drawGel();
     digestSizes.textContent = d ? `${d.sizes.map(fmt).join(" + ")} bp` : "";
     digestNote.textContent = d
       ? d.score >= DISTINCT_DIGEST
@@ -73,7 +102,12 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
     h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Cut sites"), source, filter),
     map,
     detail,
-    h("div", { class: "sv-pcr-digest" }, h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Suggested digest"), digest ? digestSelect : null, digestSizes), digestNote),
+    h(
+      "div",
+      { class: "sv-pcr-digest" },
+      h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Suggested digest"), digest ? digestSelect : null, digestSizes), digestNote),
+      gel
+    ),
     flanks.length
       ? h(
           "details",

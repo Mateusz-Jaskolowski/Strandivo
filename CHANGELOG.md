@@ -35,11 +35,16 @@ with Unreleased's notes and leaves them where they are.
   later region three residues off), and replacing bases no longer trims a feature, primer
   or region that starts or ends there. Replace a whole region, like a CDR, and the region
   keeps the new bases.
-- **See a replacement before it happens**: with bases selected, typing or pasting opens a
-  small card above them with the old and new bases, how many for how many (green when they
-  match), the change to the protein, like I15A, and which regions and features take the
-  new bases. Press Enter to replace them or Esc to keep the old ones. Clicking elsewhere
-  keeps them too, and the message that says so can still replace them.
+- **See every edit to bases before it happens**: in the Sequence tab, typing, pasting,
+  Backspace and Delete open a small card at the cursor or above the selected bases. It
+  shows the bases going in or out (those going are struck through in the sequence), how
+  many for how many (green when they match), the change to the protein, like I15A, and a
+  warning when the edit shifts a gene's frame. Press Enter to make the edit or Esc to leave
+  the sequence as it is; with bases selected, pressing Delete again deletes them too.
+  Typing between two features or regions, such as FR1 and CDR1, asks which one the new
+  bases belong to, or neither; press Tab to choose. Clicking elsewhere leaves the sequence
+  as it is, and the message that says so can still make the edit. Delete bases from the
+  right-click menu or the inspector still deletes at once.
 
 ## 0.5.0
 

@@ -96,8 +96,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   interface shows positions 1-based.
 - **Edits** go through `store.apply(next, label, selection?, key?)` with a new `SeqData`;
   never change `store.data` or arrays it holds in place. Steps with the same `key` within
-  1.5 s merge into one undo step (typing). Views compare data by reference, so the same
-  goes for read results: replace lists, don't mutate them.
+  1.5 s merge into one undo step (typing a note, dragging a primer's end). Views compare
+  data by reference, so the same goes for read results: replace lists, don't mutate them.
 - **Replacing bases** is not a deletion and then an insertion, which left new bases at an
   annotation's edge outside it (`replaceRange` in `src/lib/seqdata.ts`). As many bases as
   were selected move nothing. Otherwise, annotation by annotation (features, primers,
@@ -108,16 +108,21 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `"before"` gives them to the features and regions before the edge, `"after"` to those
   after it, and otherwise each keeps only its own bases. A primer never takes them, as its
   bases are the oligo's.
-- **Typing over a selection** opens a card above it (`src/views/replaceCard.ts`) instead
-  of replacing at once, so a region never takes or loses bases unseen: typed and pasted
-  bases collect there, Enter replaces them as one step and Esc keeps the selected ones. It
-  shows how many for how many (green when they match), each CDS's protein change and, for
-  another length, what holds the new bases, what they fall outside and what goes
-  (`describeReplacement` in `src/lib/replacement.ts`). Anything else done meanwhile (a
-  click elsewhere, a key that moves the selection, another edit) closes it and says so,
-  offering Replace while the sequence is unchanged. It is not a dialog: it belongs to the
-  selection and must leave the keyboard with the sequence, which sends it keys. With only
-  a caret, typing inserts at once.
+- **Edits to bases from the keyboard** wait in a card (`src/views/editCard.ts`) instead of
+  happening at once, so a region never takes or loses bases unseen and a stray key deletes
+  nothing: bases typed or pasted at the cursor or over a selection, Backspace or Delete at
+  the cursor (one more base struck through with each press; typing then replaces them),
+  and Delete or Cut with bases selected, where a second press deletes them unless bases
+  were typed into the card. Enter makes the edit as one undo step and Esc leaves the
+  sequence as it is. The card shows how many bases for how many (green when they match),
+  each CDS's protein change and frameshift, and what holds, loses or goes without the new
+  bases (`describeEdit` in `src/lib/baseEdit.ts`); at an edge it asks which side takes new
+  bases, Neither unless Tab changes it. Anything else done meanwhile (a click elsewhere, a
+  key that moves the selection, another edit) closes it and says so, offering the edit
+  while the sequence is unchanged. It is not a dialog: it belongs to the selection and
+  must leave the keyboard with the sequence, which sends it keys. What the user chose on
+  purpose stays at once: Delete bases from a right-click or the inspector, picked codons
+  and Use read base.
 - **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.
@@ -161,7 +166,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   live in the store so both panels share them; ordinary selections clear them.
 - **Delete with something clicked** (a feature, primer, protein region, cut site or ORF)
   first deletes that thing, or for a cut site or ORF only drops it from the selection, and
-  leaves its bases selected; the next press deletes the bases (`src/lib/deletion.ts`). A
+  leaves its bases selected; the next press opens the card for deleting the bases, and one
+  more deletes them (`src/lib/deletion.ts`). A
   view that gets a Delete key keeps to this, as one press used to take a feature's bases
   along when the user meant the feature.
 - **Messages** (`toast` in `src/ui/dom.ts`) are for what the user can't see happen: side

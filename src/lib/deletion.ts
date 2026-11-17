@@ -5,8 +5,9 @@
 //
 // Clicking a feature or primer selects its bases, so Delete used to delete them, and the
 // feature with them, when the user meant only the feature. Now the first press deletes what
-// was clicked and leaves its bases selected; the next press deletes the bases. Cut sites and
-// ORFs are found from the sequence, so their first press only makes them plain bases.
+// was clicked and leaves its bases selected; the next press asks before deleting the bases.
+// Cut sites and ORFs are found from the sequence, so their first press only makes them
+// plain bases.
 
 import { regionsOf, withRegions } from "./regions.ts";
 import type { Range, SeqData, SeqFeature, SeqPrimer } from "./seqdata.ts";

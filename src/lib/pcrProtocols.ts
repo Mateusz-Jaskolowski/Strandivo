@@ -6,7 +6,8 @@
 // publishes for that polymerase (read in Nov 2026, from copies of its PDFs, as NEB's site
 // refuses scripts): the temperatures and the lengths of the steps are NEB's, and where NEB
 // gives a range (cycles, extension per kb, annealing time) the value is one inside it.
-// pcrProgram.test.ts holds the numbers, so change them only from NEB's protocol pages.
+// pcrProtocols.test.ts holds every number with the NEB value it comes from, so change them
+// only from NEB's protocol pages, and that test with them.
 //
 // A polymerase with no entry here has no program: its protocol has not been read yet, and
 // a lab tool should not guess at one. The dialog says so.
@@ -94,7 +95,7 @@ const ONETAQ: PcrProtocol = {
   number: "M0481",
   initial: { temp: 94, seconds: 30 },
   colonyInitial: 180, // 2–5 min "to lyse cells"
-  denature: { temp: 94, seconds: 20 }, // 15–30 s
+  denature: { temp: 94, seconds: 20 }, // 10–30 s
   anneal: 30, // 15–60 s
   // 1 min/kb, but 45–60 s below 1 kb (its usage guidelines), so no product gets less than 45 s.
   extend: { temp: 68, plasmid: 60, complex: 60, shortest: 45 },

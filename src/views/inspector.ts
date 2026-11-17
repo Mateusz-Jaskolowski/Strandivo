@@ -17,7 +17,7 @@ import { frameLabel, type Orf } from "../lib/orfs.ts";
 import { gcPercent } from "../lib/labinfo.ts";
 import { changesText, findBindingSites, placeEdited, primerReport, selectionTmText, tmLabel, type Placement } from "../lib/primers.ts";
 import { translateCodon } from "../lib/genetics.ts";
-import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionFeatureNotes, regionFeatureType, regionLabel, regionRange, regionSpans, regionsOf, regionTitle, regionTree, withRegions, type ProteinRegion } from "../lib/regions.ts";
+import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionFeatureNotes, regionFeatureType, regionRange, regionSpans, regionsOf, regionTree, withRegions, type ProteinRegion } from "../lib/regions.ts";
 import type { VariableDesign } from "../lib/types.ts";
 import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER, versionsFromText } from "../lib/variable.ts";
 import { matchChoice } from "./versionMatchChoice.ts";
@@ -44,16 +44,16 @@ import { openUniprotDialog } from "./uniprotDialog.ts";
 import { openProteinRegionDialog, openProteinRegionFromSelection } from "./proteinRegionDialog.ts";
 import { openFoldDialog } from "./foldRegionsDialog.ts";
 import { foldOffered, foldRows } from "../lib/foldRegions.ts";
-import { proteinDiagram } from "./proteinDiagram.ts";
+import { proteinRegionBrowser, regionReference } from "./proteinDiagram.ts";
 import { openProteinDialog } from "./proteinDialog.ts";
-import { absorbance, extinctionNote, kilodaltons, proteinProperties } from "../lib/proteinProperties.ts";
+import { absorbance, extinctionNote, kilodaltons, proteinProperties, type ProteinProperties } from "../lib/proteinProperties.ts";
 import { openDigestDialog } from "./digestDialog.ts";
 import { openEnzymeDialog } from "./enzymeDialog.ts";
 import { enzymesText } from "../lib/enzymePick.ts";
 import { deleteSelected, selectedBases } from "../lib/selection.ts";
 import { deleteAtOnce } from "../lib/deletion.ts";
 import type { InspectorFold } from "../lib/inspectorFolds.ts";
-import { sectionFolded, toggleSection } from "../inspectorFolds.ts";
+import { sectionFolded, setSectionFolded } from "../inspectorFolds.ts";
 
 /** The key held to pick enzymes, as the interface names it. */
 const pickKeyName = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "Hold ⌘" : "Hold Ctrl";
@@ -95,6 +95,10 @@ export class Inspector {
   private actions: InspectorActions;
   private pending = false;
   private lastKey = "";
+  private lastFeature = "";
+  private collapsedRegionGroups = new Map<string, Set<string>>();
+  private updateRegionList = () => {};
+  private resize: ResizeObserver;
 
   private offLibrary: () => void;
 
@@ -102,6 +106,8 @@ export class Inspector {
     this.ctx = ctx;
     this.actions = actions;
     this.el = h("aside", { class: "sv-inspector", "aria-label": "Inspector" });
+    this.resize = new ResizeObserver(() => this.updateRegionList());
+    this.resize.observe(this.el);
     ctx.store.subscribe(c => {
       if (c.data) this.schedule(true);
       else if (c.selection) this.schedule(false);
@@ -123,6 +129,7 @@ export class Inspector {
   /** Stops listening to the app's primer library (the document's tab closed). */
   dispose() {
     this.offLibrary();
+    this.resize.disconnect();
   }
 
   private schedule(force: boolean) {
@@ -147,6 +154,7 @@ export class Inspector {
     // Don't rebuild (and lose focus in a field) when nothing relevant changed.
     if (key === this.lastKey && this.el.childElementCount) return;
     this.lastKey = key;
+    this.updateRegionList = () => {};
     const d = this.ctx.store.data;
     let content: Node[];
     if (ranges) content = this.multipleRanges(ranges);
@@ -170,7 +178,14 @@ export class Inspector {
     // across the redraw its own edit causes, and keystrokes made since it last applied.
     const active = document.activeElement;
     const kept = (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement) && this.el.contains(active) && active.dataset.keep ? active : null;
+    const regionControl = active instanceof HTMLElement && this.el.contains(active) ? active.dataset.regionControl : undefined;
+    const feature = focus?.kind === "feature" ? `${focus.id}:${focus.region ?? ""}` : "";
     this.el.replaceChildren(...content);
+    this.updateRegionList();
+    const regionButton = regionControl ? this.el.querySelector<HTMLButtonElement>(`[data-region-control="${CSS.escape(regionControl)}"]`) : null;
+    if (feature !== this.lastFeature && !regionButton) this.el.scrollTop = 0;
+    this.lastFeature = feature;
+    if (regionButton && !regionButton.closest("[hidden]")) regionButton.focus({ preventScroll: true });
     if (kept) {
       const next = this.el.querySelector<HTMLTextAreaElement | HTMLInputElement>(`[data-keep="${CSS.escape(kept.dataset.keep!)}"]`);
       if (next) {
@@ -201,18 +216,19 @@ export class Inspector {
   private foldSection(
     id: InspectorFold,
     title: string,
-    opts: { count?: number; actions?: (Node | null | false)[]; keep?: (Node | null | false)[] },
+    opts: { count?: number; actions?: (Node | null | false)[]; keep?: (Node | null | false)[]; defaultFolded?: boolean; summary?: string },
     ...children: (Node | null | false)[]
   ) {
-    const open = !sectionFolded(id);
+    const open = !sectionFolded(id, opts.defaultFolded);
     const actions = (opts.actions ?? []).filter((a): a is Node => !!a);
+    const summary = opts.count === undefined ? !open && opts.summary : fmt(opts.count);
     return h(
       "section",
       { class: `sv-insp-section${open ? "" : " sv-folded"}`, "data-section": id },
       h(
         "div",
         { class: "sv-section-head" },
-        this.foldToggle(id, open, "sv-section-toggle", h("h3", { class: "sv-section-title" }, title, opts.count === undefined ? null : [" ", h("span", { class: "sv-count" }, fmt(opts.count))])),
+        this.foldToggle(id, open, h("h3", { class: "sv-section-title" }, title, summary ? [" ", h("span", { class: "sv-count" }, summary)] : null)),
         actions.length ? h("div", { class: "sv-section-actions" }, actions) : null
       ),
       ...(open ? children : opts.keep ?? [])
@@ -220,17 +236,17 @@ export class Inspector {
   }
 
   /** The button that folds or unfolds `id`. It keeps the keyboard across the redraw. */
-  private foldToggle(id: InspectorFold, open: boolean, cls: string, label: Node) {
+  private foldToggle(id: InspectorFold, open: boolean, label: Node) {
     return h(
       "button",
       {
         type: "button",
-        class: cls,
+        class: "sv-section-toggle",
         "data-fold": id,
         "aria-expanded": String(open),
         title: open ? "Fold" : "Unfold",
         onclick: () => {
-          toggleSection(id);
+          setSectionFolded(id, open);
           this.refresh();
           this.el.querySelector<HTMLElement>(`[data-fold="${id}"]`)?.focus();
         }
@@ -264,8 +280,9 @@ export class Inspector {
   /** Buttons to see the selection in the map or the sequence: the one that isn't showing, or both. */
   private viewOther(range: Range): HTMLElement {
     const go = (tab: "map" | "sequence") => () => {
+      const { focus } = this.ctx.store.selection;
       this.ctx.showTab(tab);
-      this.ctx.store.selectRange(range, this.ctx.store.selection.focus, "inspector");
+      this.ctx.store.selectRange(range, focus, "inspector");
     };
     const onMap = this.button("View on map", go("map"), { icon: "map" });
     const inSequence = this.button("View in sequence", go("sequence"), { icon: "lines" });
@@ -321,25 +338,7 @@ export class Inspector {
 
   // ---------- feature ----------
 
-  private feature(f: SeqFeature): Node[] {
-    const d = this.ctx.store.data;
-    const n = d.sequence.length;
-    const st = featureStyles(d).get(f.id);
-    // A feature in parts covers only its parts, not the gaps between them.
-    const bases = featureBases(d.sequence, f);
-    const len = bases.length;
-    const parts = f.locations && f.locations.length > 1 ? ` in ${f.locations.length} parts` : "";
-    const prot = isCds(f) ? protein(f, d.sequence) : "";
-
-    const name = h("input", { class: "sv-insp-name", value: f.name, "aria-label": "Feature name", spellcheck: "false" }) as HTMLInputElement;
-    name.addEventListener("change", () => {
-      const v = name.value.trim();
-      if (v && v !== f.name) this.updateFeature(f.id, { name: v }, "Rename feature");
-    });
-    name.addEventListener("keydown", e => e.key === "Enter" && name.blur());
-    const color = h("input", { type: "color", class: "sv-color", value: st?.fill || "#a3a9b4", "aria-label": "Feature colour", title: "Colour" }) as HTMLInputElement;
-    color.addEventListener("change", () => this.updateFeature(f.id, { color: color.value }, "Change colour"));
-
+  private featureFields(f: SeqFeature, n: number): Node {
     const types = FEATURE_TYPES.includes(f.type) ? FEATURE_TYPES : [f.type, ...FEATURE_TYPES];
     const type = h(
       "select",
@@ -372,31 +371,57 @@ export class Inspector {
       h("span", { class: "sv-dim" }, "to"),
       posInput(f.end, "End", v => this.updateFeature(f.id, { end: v }, "Move feature"))
     );
+    return this.foldSection("feature-fields", "Edit feature", {}, h("div", { class: "sv-insp-row" }, type, strand), this.facts([["Location", location]]));
+  }
+
+  private feature(f: SeqFeature): Node[] {
+    const d = this.ctx.store.data;
+    const n = d.sequence.length;
+    const cds = isCds(f);
+    const prot = cds ? protein(f, d.sequence) : "";
+    const picked = this.ctx.store.selection.focus?.region;
+    if (cds && picked !== undefined && regionsOf(f)[picked]) return this.region(f, prot, picked);
+    const properties = cds ? proteinProperties(prot) : null;
+
+    const st = featureStyles(d).get(f.id);
+    // A feature in parts covers only its parts, not the gaps between them.
+    const bases = featureBases(d.sequence, f);
+    const len = bases.length;
+    const parts = f.locations && f.locations.length > 1 ? ` in ${f.locations.length} parts` : "";
+    const direction = f.strand === 0 ? "No direction" : f.strand === 1 ? "Forward" : "Reverse";
+
+    const name = h("input", { class: "sv-insp-name", value: f.name, "aria-label": "Feature name", spellcheck: "false" }) as HTMLInputElement;
+    name.addEventListener("change", () => {
+      const v = name.value.trim();
+      if (v && v !== f.name) this.updateFeature(f.id, { name: v }, "Rename feature");
+    });
+    name.addEventListener("keydown", e => e.key === "Enter" && name.blur());
+    const color = h("input", { type: "color", class: "sv-color", value: st?.fill || "#a3a9b4", "aria-label": "Feature colour", title: "Colour" }) as HTMLInputElement;
+    color.addEventListener("change", () => this.updateFeature(f.id, { color: color.value }, "Change colour"));
 
     const out: Node[] = [];
     out.push(
       h(
         "div",
-        { class: "sv-insp-head" },
+        { class: "sv-insp-head sv-feature-head" },
         h("div", { class: "sv-insp-title" }, color, name),
-        h("div", { class: "sv-insp-row" }, type, strand),
         this.facts([
-          ["Location", location],
-          ["Length", isCds(f) ? `${fmt(len)} bp${parts} · ${fmt(Math.floor(len / 3) - (prot.endsWith("*") ? 1 : 0))} aa` : `${fmt(len)} bp${parts}`],
+          ["Type", `${f.type} · ${direction}`],
+          ["Location", loc(f)],
+          ["Length", `${fmt(len)} bp${parts}${cds ? ` · ${fmt(prot.replace(/\*$/, "").length)} aa` : ""}`],
           ["GC", `${gcPercent(bases).toFixed(1)}%`]
         ]),
         // Problems with the reading frame show here, as the translation is often folded.
-        isCds(f) && len % 3 !== 0 ? h("p", { class: "sv-small sv-text-warn" }, `Length isn't a multiple of 3 (${fmt(len)} bp).`) : null,
-        isCds(f) && !prot.startsWith("M") ? h("p", { class: "sv-small sv-dim" }, "Doesn't start with ATG.") : null,
+        cds && len % 3 !== 0 ? h("p", { class: "sv-small sv-text-warn" }, `Length isn't a multiple of 3 (${fmt(len)} bp).`) : null,
+        cds && !prot.startsWith("M") ? h("p", { class: "sv-small sv-dim" }, "Doesn't start with ATG.") : null,
+        properties?.earlyStop != null ? this.earlyStopWarning(properties.earlyStop) : null,
+        properties?.unknown ? h("p", { class: "sv-small sv-text-warn" }, extinctionNote(properties)) : null,
         this.viewOther({ start: f.start, end: f.end })
       )
     );
-    // A selected protein region shows its own details, not the CDS's note.
-    const ownFocus = this.ctx.store.selection.focus?.region === undefined;
-    if (ownFocus) out.push(...this.noteSections(f));
-    if (isCds(f)) out.push(this.proteinSection(prot, () => openProteinDialog(this.ctx, f)));
-    if (isCds(f)) out.push(this.regionsSection(f));
-    if (isCds(f)) {
+    if (properties) out.push(this.regionsSection(f, prot), this.proteinSection(properties, () => openProteinDialog(this.ctx, f), true));
+    out.push(...this.noteSections(f), this.featureFields(f, n));
+    if (cds) {
       out.push(
         this.foldSection(
           "translation",
@@ -406,7 +431,7 @@ export class Inspector {
         )
       );
     }
-    if (ownFocus) out.push(this.variableSection(f, bases));
+    out.push(this.variableSection(f, bases));
     // What lies inside this feature.
     const inside: Node[] = [];
     const styles = featureStyles(d);
@@ -471,8 +496,7 @@ export class Inspector {
    * Cys, as which applies depends on where the protein folds. A note about the numbers
    * stays while the section is folded.
    */
-  private proteinSection(prot: string, details: () => void): Node {
-    const p = proteinProperties(prot);
+  private proteinSection(p: ProteinProperties, details: () => void, compact = false): Node {
     const rows: [string, Node | string][] = [];
     if (p.mass !== null) rows.push(["Mass", kilodaltons(p.mass)]);
     if (p.reduced !== null && p.mass !== null && (p.trp || p.tyr || p.cys)) {
@@ -486,18 +510,27 @@ export class Inspector {
     }
     const note = extinctionNote(p);
     const notes = [
-      p.earlyStop !== null ? h("p", { class: "sv-small sv-text-warn" }, `Up to the stop at codon ${fmt(p.earlyStop)}, where the protein ends.`) : null,
-      note ? h("p", { class: p.unknown ? "sv-small sv-text-warn" : "sv-small sv-dim" }, note) : null
+      !compact && p.earlyStop !== null ? this.earlyStopWarning(p.earlyStop) : null,
+      note && (!compact || !p.unknown) ? h("p", { class: p.unknown ? "sv-small sv-text-warn" : "sv-small sv-dim" }, note) : null
     ];
     const head = this.facts(rows);
     head.title = "Worked out as ExPASy ProtParam does: ε280 from Trp, Tyr and cystines (Pace et al. 1995).";
     return this.foldSection(
       "protein",
       "Protein",
-      { actions: [h("button", { type: "button", class: "sv-link", onclick: details }, "Details…")], keep: notes },
+      {
+        actions: [h("button", { type: "button", class: "sv-link", onclick: details }, "Details…")],
+        defaultFolded: compact,
+        summary: compact && p.mass !== null ? kilodaltons(p.mass) : undefined,
+        keep: compact ? [] : notes
+      },
       rows.length ? head : null,
       ...notes
     );
+  }
+
+  private earlyStopWarning(codon: number) {
+    return h("p", { class: "sv-small sv-text-warn" }, `The protein ends at the stop at codon ${fmt(codon)}.`);
   }
 
   /**
@@ -507,7 +540,8 @@ export class Inspector {
    * elsewhere. A CDS's /translation is left out: Translation shows the protein.
    */
   private noteSections(f: SeqFeature): Node[] {
-    const note = h("textarea", { class: "sv-input sv-insp-note", rows: "2", placeholder: "Add a note", "aria-label": "Feature note", "data-keep": `feature-note:${f.id}` }) as HTMLTextAreaElement;
+    const keep = `feature-note:${f.id}`;
+    const note = h("textarea", { class: "sv-input sv-insp-note", rows: "2", placeholder: "Add a note", "aria-label": "Feature note", "data-keep": keep });
     note.value = noteText(f.notes);
     const fit = () => {
       note.style.height = "auto";
@@ -531,9 +565,23 @@ export class Inspector {
       timer = window.setTimeout(() => apply(false), 300);
     });
     note.addEventListener("change", () => apply(true));
+    note.addEventListener("blur", () => {
+      if (!note.value.trim() && note.isConnected) this.schedule(true);
+    });
     note.addEventListener(FLUSH, () => apply(false));
     const others = otherQualifiers(f.notes).filter(q => !(isCds(f) && q.name === "translation"));
-    const out: Node[] = [this.foldSection("note", "Note", {}, note)];
+    const editing = document.activeElement instanceof HTMLTextAreaElement && document.activeElement.dataset.keep === keep;
+    const add = h("button", {
+      type: "button", class: "sv-link sv-add-note",
+      onclick: () => {
+        setSectionFolded("note", false);
+        addSection.replaceWith(this.foldSection("note", "Note", {}, note));
+        fit();
+        note.focus();
+      }
+    }, "Add note");
+    const addSection = this.section(add);
+    const out: Node[] = [note.value.trim() || editing ? this.foldSection("note", "Note", {}, note) : addSection];
     if (others.length)
       out.push(
         this.foldSection(
@@ -551,85 +599,84 @@ export class Inspector {
   }
 
   /** A protein's regions, kept inside the CDS (`src/lib/regions.ts`), and getting them. */
-  private regionsSection(f: SeqFeature): Node {
-    const { store } = this.ctx;
-    const n = store.data.sequence.length;
+  private regionsSection(f: SeqFeature, prot: string, picked?: number): Node {
     const regions = regionsOf(f);
-    const focus = store.selection.focus;
-    const picked = focus?.kind === "feature" && focus.id === f.id && focus.region !== undefined ? regions[focus.region] : undefined;
-    const accessions = [...new Set(regions.map(r => r.accession).filter(Boolean))];
-    const offered = foldOffered(foldRows(store.data, f));
-    const pick = (index: number) => {
-      const range = regionRange(f, regions[index], n);
-      if (range) store.selectRange(range, { kind: "feature", id: f.id, region: index }, "inspector");
-    };
-    const rows = regionTree(regions).map(({ region: r, index, depth }) =>
-      h(
-        "button",
-        {
-          type: "button",
-          class: `sv-list-row${r === picked ? " sv-selected" : ""}`,
-          style: { paddingLeft: `${8 + depth * 14}px` },
-          title: regionTitle(r),
-          onclick: () => pick(index),
-          ondblclick: () => openProteinRegionDialog(this.ctx, f, index)
-        },
-        h("span", { class: "sv-swatch", style: { background: regionColor(r) } }),
-        h("span", { class: "sv-list-name" }, r.name),
-        r.variable ? h("span", { class: "sv-region-tag" }, "varies") : null,
-        r.predicted ? h("span", { class: "sv-region-tag" }, "predicted") : null,
-        h("span", { class: "sv-list-meta sv-mono" }, regionLabel(r))
-      )
-    );
-    // The diagram shows and picks every region, so the list under it starts folded.
-    const listOpen = !sectionFolded("region-list");
-    const detail = picked ? this.regionDetail(f, picked) : null;
+    const offered = picked === undefined ? foldOffered(foldRows(this.ctx.store.data, f)) : 0;
+    let browser: ReturnType<typeof proteinRegionBrowser> | undefined;
+    if (regions.length && !sectionFolded("regions")) {
+      const collapsed = this.collapsedRegionGroups.get(f.id) ?? new Set<string>();
+      this.collapsedRegionGroups.set(f.id, collapsed);
+      browser = proteinRegionBrowser(
+        regions, prot.replace(/\*$/, "").length || 1, f.id, picked, collapsed,
+        index => this.pickRegion(f, index), index => openProteinRegionDialog(this.ctx, f, index)
+      );
+      this.updateRegionList = browser.updateList;
+    }
+    const details = picked === undefined ? null : h("button", { type: "button", class: "sv-link", onclick: () => openProteinDialog(this.ctx, f) }, "Protein details…");
     return this.foldSection(
       "regions",
       "Protein regions",
       {
         count: regions.length || undefined,
-        actions: [
-          h("button", { type: "button", class: "sv-link", onclick: () => openProteinRegionDialog(this.ctx, f) }, "Add region…")
-        ],
-        keep: [detail]
+        actions: [h("button", { type: "button", class: "sv-link", onclick: () => openProteinRegionDialog(this.ctx, f) }, "Add region…")],
+        keep: [!browser && details]
       },
-      regions.length ? proteinDiagram(regions, protein(f, store.data.sequence).replace(/\*$/, "").length || 1, focus?.region, pick) : h("p", { class: "sv-small sv-dim" }, "Mark domains, helices, linkers or CDRs within this protein."),
-      regions.length ? this.foldToggle("region-list", listOpen, "sv-fold-link", h("span", null, listOpen ? "Hide list" : "Show list")) : null,
-      regions.length && listOpen ? h("div", { class: "sv-list sv-list-flush" }, rows) : null,
-      detail,
-      // Where else regions come from: UniProt, and features marked inside the CDS.
-      h(
+      browser?.diagram ?? null,
+      browser ? h("div", { class: "sv-section-head sv-region-list-head" }, browser.toggle, details) : null,
+      browser?.list ?? null,
+      picked === undefined && h(
         "div",
         { class: "sv-region-sources" },
         h("button", { type: "button", class: "sv-link", onclick: () => openUniprotDialog(this.ctx, f) }, "Get from UniProt…"),
         offered ? h("button", { type: "button", class: "sv-link", onclick: () => openFoldDialog(this.ctx, f) }, offered === 1 ? "Turn 1 feature into a region…" : `Turn ${fmt(offered)} features into regions…`) : null
-      ),
-      accessions.length ? h("p", { class: "sv-small sv-dim" }, `From UniProtKB ${accessions.join(", ")}.`) : null
+      )
     );
   }
 
-  private regionDetail(f: SeqFeature, r: ProteinRegion): Node {
-    const here = `Residues ${fmt(r.start)}–${fmt(r.end)} of this CDS`;
+  private pickRegion(f: SeqFeature, index: number) {
+    const range = regionRange(f, regionsOf(f)[index], this.ctx.store.length);
+    if (range) this.ctx.store.selectRange(range, { kind: "feature", id: f.id, region: index }, "inspector");
+  }
+
+  private region(f: SeqFeature, prot: string, index: number): Node[] {
+    const regions = regionsOf(f);
+    const r = regions[index];
+    const range = regionRange(f, r, this.ctx.store.length);
+    const parents = new Map(regionTree(regions).map(row => [row.index, row.parent]));
+    const path: Node[] = [];
+    for (let parent = parents.get(index); parent != null; parent = parents.get(parent)) {
+      const at = parent;
+      path.unshift(iconSvg("chevronRight", 12), h("button", { type: "button", class: "sv-link", onclick: () => this.pickRegion(f, at) }, regions[at].name));
+    }
+    const goToCds = () => this.ctx.store.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "inspector");
+    const aa = prot.slice(r.start - 1, r.end);
     // The region on its own, as for a domain expressed by itself.
-    const own = proteinProperties(protein(f, this.ctx.store.data.sequence).slice(r.start - 1, r.end));
+    const own = proteinProperties(aa);
     const ownEps = own.reduced !== null && (own.trp || own.tyr || own.cys) ? ` · ε280 ${fmt(own.reduced)}${own.cys >= 2 ? ` (${fmt(own.cystines!)} with disulfides)` : ""} M⁻¹ cm⁻¹` : "";
-    return h(
+    const head = h(
       "div",
-      { class: "sv-region-detail" },
-      h("p", { class: "sv-small sv-dim" }, `${r.kind} · ${here}${r.accession && isClipped(r) ? ` · length differs from UniProt ${fmt(r.sourceStart)}–${fmt(r.sourceEnd)}` : ""}`),
-      r.note ? h("p", { class: "sv-small sv-region-note" }, r.note) : null,
-      own.mass !== null ? h("p", { class: "sv-small sv-dim" }, `On its own: ${kilodaltons(own.mass)}${ownEps}`) : null,
-      r.variable ? h("p", { class: "sv-small sv-dim" }, `Varies between clones · ${r.variable.kind === "any" ? "any sequence" : r.variable.kind === "pattern" ? r.variable.pattern : r.variable.protein ? "protein versions" : "DNA versions"}`) : null,
+      { class: "sv-insp-head sv-region-detail" },
+      h("nav", { class: "sv-region-path", "aria-label": "Parent annotations" },
+        h("button", { type: "button", class: "sv-link", onclick: goToCds }, f.name), path),
+      h("div", { class: "sv-insp-title" },
+        h("span", { class: "sv-swatch", style: { background: regionColor(r) } }),
+        h("h2", { class: "sv-insp-heading" }, r.name)),
+      h("p", { class: "sv-small sv-dim" }, `${r.kind ? `${r.kind} · ` : ""}Construct residues ${fmtRange(r.start, r.end)} · ${fmt(r.end - r.start + 1)} aa`),
+      r.accession ? h("p", { class: "sv-small sv-dim" }, `${regionReference(r)}${r.predicted ? " · predicted" : ""}${isClipped(r) ? " · length differs" : ""}`) : null,
+      range ? this.viewOther(range) : null,
       h(
         "div",
         { class: "sv-region-actions" },
-        this.button("Edit region…", () => openProteinRegionDialog(this.ctx, f, regionsOf(f).indexOf(r))),
-        this.button("Copy AA sequence", () => this.actions.copy(protein(f, this.ctx.store.data.sequence).slice(r.start - 1, r.end), r.name), { icon: "copy" }),
+        this.button("Edit region…", () => openProteinRegionDialog(this.ctx, f, index)),
+        this.button("Copy AA sequence", () => this.actions.copy(aa, r.name)),
         this.button("Add as feature", () => this.addRegionAsFeature(f, r), { icon: "featureAdd" }),
-        this.button("Remove", () => this.removeRegion(f, r), { icon: "trash", danger: true })
-      )
+        this.button("Remove region", () => this.removeRegion(f, r), { icon: "trash", danger: true })
+      ),
+      r.note ? h("p", { class: "sv-small sv-region-note" }, r.note) : null,
+      own.mass !== null ? h("p", { class: "sv-small sv-dim" }, `On its own: ${kilodaltons(own.mass)}${ownEps}`) : null,
+      r.variable ? h("p", { class: "sv-small sv-dim" }, `Varies between clones · ${r.variable.kind === "any" ? "any sequence" : r.variable.kind === "pattern" ? r.variable.pattern : r.variable.protein ? "protein versions" : "DNA versions"}`) : null
     );
+    return [head, this.regionsSection(f, prot, index)];
   }
 
   /** A real feature of the region's own, for a file that goes to other software. */
@@ -989,7 +1036,7 @@ export class Inspector {
         ]),
         this.viewOther(o)
       ),
-      this.proteinSection(prot, () => openProteinDialog(this.ctx, orfFeature(o), "ORF")),
+      this.proteinSection(proteinProperties(prot), () => openProteinDialog(this.ctx, orfFeature(o), "ORF")),
       this.foldSection(
         "translation",
         "Translation",

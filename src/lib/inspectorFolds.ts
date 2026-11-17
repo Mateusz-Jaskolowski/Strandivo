@@ -8,6 +8,7 @@
 
 export type InspectorFold =
   | "note"
+  | "feature-fields"
   | "qualifiers"
   | "protein"
   | "regions"
@@ -22,10 +23,11 @@ export type InspectorFold =
   | "locations";
 
 /** Folded until opened: long, and seldom what a click on the thing was for. */
-const FOLDED_FIRST: ReadonlySet<InspectorFold> = new Set(["qualifiers", "region-list", "translation", "inside"]);
+const FOLDED_FIRST: ReadonlySet<InspectorFold> = new Set(["feature-fields", "qualifiers", "region-list", "translation", "inside"]);
 
 const KNOWN: ReadonlySet<string> = new Set<InspectorFold>([
   "note",
+  "feature-fields",
   "qualifiers",
   "protein",
   "regions",
@@ -51,8 +53,8 @@ export function readFolds(raw: unknown): FoldState {
   return out;
 }
 
-export function foldedIn(state: FoldState, id: InspectorFold): boolean {
-  return state[id] ?? FOLDED_FIRST.has(id);
+export function foldedIn(state: FoldState, id: InspectorFold, defaultFolded = FOLDED_FIRST.has(id)): boolean {
+  return state[id] ?? defaultFolded;
 }
 
 export function withFold(state: FoldState, id: InspectorFold, folded: boolean): FoldState {

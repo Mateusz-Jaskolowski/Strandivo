@@ -26,8 +26,9 @@ and CI checks that they exist.
   until it is back on whole ones. They count only while they round to its residues:
   anything that sets the residues alone (the region editor, a version that doesn't know
   them) makes them stale, and then the residues win. Each also keeps the
-  entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
-  makes a real one for files going to other software.
+  entry's numbers, which can differ from the construct's in a fusion. The inspector
+  browses regions in construct residues and labels the entry's coordinates separately.
+  "Add as feature" makes a real one for files going to other software.
 - **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
   after the original qualifier fields holds stable ids, colour, a parent id, a library
   design, the user's note (lines joined by line breaks) and, for a region between codons,
@@ -54,7 +55,10 @@ and CI checks that they exist.
   Regions toggle hides or shows them without changing its top-level/all detail choice.
   Visibility and detail are remembered separately. Nested
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
-  whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
+  whole CDS. A selected region has its own inspector header and a path back to its
+  enclosing region and CDS. View in sequence and View on map carry its own range across.
+  The inspector's list opens by default if diagram labels clip, with collapsible groups
+  that reopen when a descendant is selected. The editor is in `src/views/proteinRegionDialog.ts`.
   Both map modes draw a region as a stripe in its colour along its CDS's outer edge (the
   linear map's bar's bottom edge), inside the band and cut to its shape, so the CDS keeps
   its colour and its name in the rest of the band. Filling the arrow with segments was

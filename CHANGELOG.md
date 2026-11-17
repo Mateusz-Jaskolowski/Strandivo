@@ -16,6 +16,12 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Inspect protein regions by name**: a selected region has its own heading, residue
+  range and actions, with a link back to its CDS and the same bases selected on the map
+  and in the sequence. Regions sit near the top of the CDS, with a list that opens when a
+  diagram label won't fit and separate residue numbers for the construct and UniProt.
+- **Edit a feature's location**: use Edit feature in the inspector to change its type,
+  direction or positions.
 - **A clearer enzyme library**: Lab stock and My enzymes show where each enzyme cuts, as
   G^AATTC or GGTCTCN^NNNN, and the ends it leaves, so Acc65I and KpnI are easy to tell
   apart. My enzymes keeps your chosen enzymes in a box of their own, updated as you tick,

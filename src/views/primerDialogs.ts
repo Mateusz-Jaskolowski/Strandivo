@@ -538,7 +538,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       const overview = productOverview(product, d.sequence, d.circular, { ...ctx.options, enzymeSource, enzymeFilter });
       const sourceSelect = enzymeSourceSelect(enzymeSource, "Product enzyme list", source => { enzymeSource = source; redraw(); });
       const filterSelect = h("select", { class: "sv-select-quiet", "aria-label": "Product cut-site filter", onchange: (e: Event) => { enzymeFilter = (e.target as HTMLSelectElement).value as EnzymeFilter; redraw(); } }, ENZYME_FILTERS.map(f => h("option", { value: f.id, selected: f.id === enzymeFilter }, f.label)));
-      const overviewView = pcrOverviewView(product, overview, overviewChoice, sourceSelect, filterSelect);
+      const overviewView = pcrOverviewView(product, d, template, overview, overviewChoice, sourceSelect, filterSelect);
       disposeViews.push(overviewView.dispose);
       measureViews.push(overviewView.measure);
       const guidance = PCR_GUIDANCE[polymerase];

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { COMMON_ENZYMES, cutsBothSides, findCutSites, scanSites, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
-import { digestSequence, fragmentSize } from "./gel.ts";
+import { digestSequence, fragmentSize, SUPERCOILED_RUNS_AS } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
 import { pcrProduct } from "./pcr.ts";
 import {
@@ -13,6 +13,7 @@ import {
   digestName,
   HIGH_GC,
   MAX_LABEL_LANES,
+  pcrGelLanes,
   pickDigest,
   pickSite,
   productAdvice,
@@ -20,8 +21,11 @@ import {
   productLabels,
   productOverview,
   SMALLEST_BAND,
+  smallestGelBand,
   suggestedDigests,
-  tailSiteFlanks
+  tailSiteFlanks,
+  templateDigestSizes,
+  type PcrGelLane
 } from "./pcrOverview.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
 import { reverseComplement, type SeqData } from "./seqdata.ts";
@@ -464,4 +468,150 @@ test("product label lanes stay inside their bounds without overlapping peers", (
       for (const q of placed) if (p !== q && p.row === q.row) assert.ok(p.left + p.width < q.left || q.left + q.width < p.left);
     }
   }
+});
+
+test("the template's own digest is the lane that runs beside the product's", () => {
+  const pad = "ACGT".repeat(25); // 100 bp holding no site of either enzyme
+  const sequence = pad + "GAATTC" + pad + "GAATTC" + pad;
+  const circular: SeqData = { ...doc(sequence), circular: true };
+  const sizes = templateDigestSizes(circular, ["EcoRI"]);
+  // Kept while the template and the enzymes are the same, as the dialog is drawn again on every change.
+  assert.equal(templateDigestSizes(circular, ["EcoRI"]), sizes);
+  assert.equal(sizes.length, 2);
+  assert.equal(
+    sizes.reduce((a, b) => a + b, 0),
+    sequence.length
+  );
+  // Cut once, a plasmid is only opened up: one fragment, its whole length.
+  assert.deepEqual(templateDigestSizes({ ...doc(pad + "GAATTC" + pad), circular: true }, ["EcoRI"]), [206]);
+  // A site a primer's 5′ tail brought into the product is not in the template, so nothing cuts.
+  assert.deepEqual(templateDigestSizes(circular, ["BamHI"]), []);
+  // A linear template the enzymes leave whole comes back as itself, which the lane for it takes for uncut.
+  assert.deepEqual(templateDigestSizes(doc(pad), ["EcoRI"]), [pad.length]);
+});
+
+// The gel's lanes: 100 bp pads with no site of either enzyme, EcoRI between them, so a
+// template of one site is 206 bp and one of two sites is 312 bp.
+const pad = "ACGT".repeat(25);
+const oneSite = pad + "GAATTC" + pad;
+const twoSites = pad + "GAATTC" + pad + "GAATTC" + pad;
+const digestOf = (enzymes: string[], sizes: number[]) => ({ enzymes, sizes, score: 1 });
+
+test("a different digest of the same template is worked out again, not taken from the last", () => {
+  // Cut once by each, a plasmid is only opened up, and by both it is two fragments.
+  const plasmid: SeqData = { ...doc(pad + "GAATTC" + pad + "GGATCC" + pad), circular: true };
+  const fresh = (enzymes: string[]) => digestSequence(plasmid, enzymes).fragments.map(fragmentSize);
+  const eco = templateDigestSizes(plasmid, ["EcoRI"]);
+  const both = templateDigestSizes(plasmid, ["EcoRI", "BamHI"]);
+  assert.deepEqual(eco, [plasmid.sequence.length]);
+  assert.equal(both.length, 2);
+  assert.deepEqual(both, fresh(["EcoRI", "BamHI"]));
+  // Going back is a third digest in a row, and enzymes in another order are the same digest.
+  assert.deepEqual(templateDigestSizes(plasmid, ["EcoRI"]), eco);
+  assert.deepEqual(templateDigestSizes(plasmid, ["BamHI", "EcoRI"]), both);
+  assert.deepEqual(templateDigestSizes(plasmid, ["EcoRI"]), fresh(["EcoRI"]));
+  // The same enzymes on another sequence, or on the same one linear, are not the last digest either.
+  const longer: SeqData = { ...plasmid, sequence: plasmid.sequence + pad };
+  assert.deepEqual(templateDigestSizes(longer, ["EcoRI"]), [longer.sequence.length]);
+  const linear: SeqData = { ...longer, circular: false };
+  assert.deepEqual(templateDigestSizes(linear, ["EcoRI"]), digestSequence(linear, ["EcoRI"]).fragments.map(fragmentSize));
+  assert.equal(templateDigestSizes(linear, ["EcoRI"]).length, 2);
+});
+const shape = (lanes: PcrGelLane[]) => lanes.map(l => [l.what, l.sizes]);
+
+test("a circular template cut once runs supercoiled, then opened up, beside the product's two lanes", () => {
+  const lanes = pcrGelLanes({ ...doc(oneSite), circular: true }, "plasmid", 500, digestOf(["EcoRI"], [300, 200]));
+  assert.deepEqual(shape(lanes), [
+    ["Template, supercoiled", [206]],
+    ["Template, EcoRI", [206]],
+    ["Product, uncut", [500]],
+    ["Product, EcoRI", [300, 200]]
+  ]);
+  // Only the uncut plasmid is drawn ahead of its length.
+  assert.deepEqual(
+    lanes.map(l => l.runsAs),
+    [206 * SUPERCOILED_RUNS_AS, undefined, undefined, undefined]
+  );
+  assert.ok(lanes[0].runsAs! < 206);
+  // Cut twice it is two fragments, which add up to the plasmid.
+  const twice = pcrGelLanes({ ...doc(twoSites), circular: true }, "plasmid", 500, digestOf(["EcoRI"], [300, 200]));
+  assert.equal(twice[1].sizes.length, 2);
+  assert.equal(
+    twice[1].sizes.reduce((a, b) => a + b, 0),
+    twoSites.length
+  );
+});
+
+test("a circular template the digest doesn't cut has no cut lane, as a site came in with a tail", () => {
+  const lanes = pcrGelLanes({ ...doc(oneSite), circular: true }, "plasmid", 500, digestOf(["BamHI"], [300, 200]));
+  assert.deepEqual(shape(lanes), [
+    ["Template, supercoiled", [206]],
+    ["Product, uncut", [500]],
+    ["Product, BamHI", [300, 200]]
+  ]);
+  // With no digest suggested there is nothing to cut either.
+  assert.deepEqual(shape(pcrGelLanes({ ...doc(oneSite), circular: true }, "plasmid", 500, null)), [
+    ["Template, supercoiled", [206]],
+    ["Product, uncut", [500]]
+  ]);
+});
+
+test("a linear template as long as the product has no uncut lane, as it would run where the product does", () => {
+  const same = doc(oneSite);
+  assert.equal(same.sequence.length, 206);
+  assert.deepEqual(shape(pcrGelLanes(same, "plasmid", 206, digestOf(["EcoRI"], [150, 56]))), [
+    ["Template, EcoRI", [105, 101]],
+    ["Product, uncut", [206]],
+    ["Product, EcoRI", [150, 56]]
+  ]);
+  // Left whole by the digest too, it is the product's own lane and nothing else is drawn for it.
+  assert.deepEqual(shape(pcrGelLanes(same, "plasmid", 206, digestOf(["BamHI"], [150, 56]))), [
+    ["Product, uncut", [206]],
+    ["Product, BamHI", [150, 56]]
+  ]);
+});
+
+test("a linear template of another length runs uncut, and cut only into two pieces or more", () => {
+  const lanes = pcrGelLanes(doc(oneSite), "plasmid", 500, digestOf(["EcoRI"], [300, 200]));
+  assert.deepEqual(shape(lanes), [
+    ["Template, uncut", [206]],
+    ["Template, EcoRI", [105, 101]],
+    ["Product, uncut", [500]],
+    ["Product, EcoRI", [300, 200]]
+  ]);
+  assert.ok(lanes.every(l => l.runsAs === undefined));
+  // Whole after the digest, it comes back as itself, which the uncut lane shows already.
+  assert.deepEqual(shape(pcrGelLanes(doc(oneSite), "plasmid", 500, digestOf(["BamHI"], [300, 200]))), [
+    ["Template, uncut", [206]],
+    ["Product, uncut", [500]],
+    ["Product, BamHI", [300, 200]]
+  ]);
+});
+
+test("genomic DNA or cDNA leaves the template's lanes out, as the open file isn't in the tube", () => {
+  const digest = digestOf(["EcoRI"], [300, 200]);
+  const product = [
+    ["Product, uncut", [500]],
+    ["Product, EcoRI", [300, 200]]
+  ];
+  // The plasmid open here would be drawn supercoiled and cut, and neither is in the reaction.
+  assert.deepEqual(shape(pcrGelLanes({ ...doc(oneSite), circular: true }, "complex", 500, digest)), product);
+  assert.deepEqual(shape(pcrGelLanes(doc(oneSite), "complex", 500, digest)), product);
+  assert.deepEqual(shape(pcrGelLanes(doc(oneSite), "complex", 500, null)), [["Product, uncut", [500]]]);
+  // A plasmid and a colony, which holds the plasmid, keep them.
+  for (const kind of ["plasmid", "colony"] as const) {
+    const lanes = pcrGelLanes({ ...doc(oneSite), circular: true }, kind, 500, digest);
+    assert.deepEqual(lanes.map(l => l.of), ["template", "template", "product", "product"]);
+  }
+});
+
+test("the gel's smallest band is where one runs, so a supercoiled plasmid counts by its drawn position", () => {
+  const digest = digestOf(["EcoRI"], [300, 200]);
+  // A linear template cut into 105 and 101 bp has a smaller band than the product's 200.
+  assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "plasmid", 500, digest)), 101);
+  // Supercoiled it runs as 206 × SUPERCOILED_RUNS_AS, which is under every other band here.
+  assert.equal(smallestGelBand(pcrGelLanes({ ...doc(oneSite), circular: true }, "plasmid", 500, digest)), 206 * SUPERCOILED_RUNS_AS);
+  // A product alone has its own sizes to go by.
+  assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "complex", 500, digest)), 200);
+  assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "complex", 500, null)), 500);
 });

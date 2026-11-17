@@ -4,9 +4,13 @@
 import { h } from "../ui/dom.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pickDigest, pickSite, productLabels, tailSiteFlanks, type LabelCrowd, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
+import { bands, ladderReaching } from "../lib/gel.ts";
+import type { TemplateKind } from "../lib/pcrProtocols.ts";
+import type { SeqData } from "../lib/seqdata.ts";
+import { currentLadder, gelSvg, ladderSelect, type GelBand, type GelLane } from "./gelDraw.ts";
 
 /** What the user chose here, kept while the dialog is open, as it is drawn anew on every change. */
 export interface ProductViewChoice {
@@ -16,7 +20,10 @@ export interface ProductViewChoice {
   digest: string;
   flanks: boolean;
 }
-export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
+/** Up to this many fragments the key names one by one; more are counted instead. */
+const KEY_SIZES = 4;
+
+export function pcrOverviewView(product: PcrProduct, template: SeqData, templateKind: TemplateKind, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
   const digest = pickDigest(data.digests, choice.digest);
   choice.digest = digest ? digestName(digest) : "";
   const detail = h("p", { class: "sv-small sv-dim sv-pcr-site-detail", "aria-live": "polite" });
@@ -37,11 +44,78 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
     map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(!!site && b.dataset.site === site.id)));
     map.querySelectorAll<HTMLElement>("button[data-more]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.more === choice.more)));
   };
-  const digestSizes = h("span", { class: "sv-mono sv-small" });
   const digestNote = h("p", { class: "sv-small sv-dim" });
+  const gelFigure = h("div", { class: "sv-pcr-gel-figure" });
+  const laneKey = h("ul", { class: "sv-pcr-lane-key sv-small" });
+  // About the template's lanes, so it goes with them.
+  const leftover = h("p", { class: "sv-small sv-dim" }, "Template left over from the reaction runs far fainter than the product.");
+  const templateLength = template.sequence.length;
+  const bandsOf = (sizes: number[]): GelBand[] =>
+    bands(sizes).map(b => ({
+      size: b.size,
+      mass: b.mass,
+      title: b.fragments.length > 1 ? `${b.fragments.length} fragments of about ${fmt(Math.round(b.size))} bp` : `${fmt(b.size)} bp`
+    }));
+  const sizeText = (sizes: number[]) => (sizes.length <= KEY_SIZES ? `${sizes.map(size => fmt(Math.round(size))).join(" + ")} bp` : `${sizes.length} fragments, ${fmt(sizes.reduce((a, b) => a + b, 0))} bp in all`);
+  /** A lane's bands. Fragments within the gel's resolution run as one band. */
+  const laneBands = (lane: PcrGelLane): GelBand[] =>
+    lane.runsAs === undefined
+      ? bandsOf(lane.sizes)
+      : [
+          {
+            size: lane.sizes[0],
+            runsAs: lane.runsAs,
+            mass: lane.sizes[0],
+            class: "sv-gel-uncut",
+            title: `Uncut template, ${fmt(templateLength)} bp. Supercoiled DNA runs faster than linear DNA of the same length.`
+          }
+        ];
+  /** Hovering a lane in the key picks it out of the gel; the ladder stays as it is. */
+  const fade = (lane: number | null) => gelFigure.querySelectorAll<SVGElement>("[data-lane]").forEach(el => el.classList.toggle("sv-gel-fade", lane !== null && el.dataset.lane !== String(lane)));
+  const drawGel = () => {
+    const d = pickDigest(data.digests, choice.digest);
+    const rows = pcrGelLanes(template, templateKind, product.length, d);
+    leftover.hidden = !rows.some(r => r.of === "template");
+    // Until a ladder is picked, the gel opens on one that reaches its smallest band. What it
+    // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.
+    const ladder = currentLadder(ladderReaching(smallestGelBand(rows)));
+    ladderMenu.value = ladder.id;
+    gelFigure.replaceChildren(
+      gelSvg(
+        rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })),
+        ladder,
+        {
+          height: 160,
+          laneWidth: 40,
+          labelWidth: 46,
+          ariaLabel: `A gel of ${rows.some(r => r.of === "template") ? "the template and " : ""}the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
+        }
+      )
+    );
+    laneKey.replaceChildren(
+      ...rows.map((r, i) =>
+        h(
+          "li",
+          { onmouseenter: () => fade(i + 1), onmouseleave: () => fade(null) },
+          h("span", { class: "sv-pcr-lane-no" }, String(i + 1)),
+          h("span", { class: "sv-pcr-lane-what" }, r.what),
+          h("span", { class: "sv-mono" }, sizeText(r.sizes))
+        )
+      )
+    );
+  };
+  // The ladder is made once, so changing it keeps the focus on its own menu.
+  const ladderMenu = ladderSelect("sv-select-quiet", drawGel);
+  const lanes = h(
+    "div",
+    { class: "sv-pcr-lanes" },
+    h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderMenu),
+    laneKey,
+    leftover
+  );
   const updateDigest = () => {
     const d = pickDigest(data.digests, choice.digest);
-    digestSizes.textContent = d ? `${d.sizes.map(fmt).join(" + ")} bp` : "";
+    drawGel();
     digestNote.textContent = d
       ? d.score >= DISTINCT_DIGEST
         ? "Its fragments are far enough apart to tell on a gel; check the enzymes’ buffer and temperature."
@@ -75,7 +149,12 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
     h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Cut sites"), source, filter),
     map,
     detail,
-    h("div", { class: "sv-pcr-digest" }, h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Suggested digest"), digest ? digestSelect : null, digestSizes), digestNote),
+    h(
+      "div",
+      { class: "sv-pcr-digest" },
+      h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Suggested digest"), digest ? digestSelect : null), digestNote, lanes),
+      h("div", { class: "sv-pcr-gel" }, gelFigure)
+    ),
     flanks.length
       ? h(
           "details",

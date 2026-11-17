@@ -82,7 +82,30 @@ and CI checks that they exist.
   100 bp today, reaches). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
   complete on both strands or whose overhangs overlap another's makes no suggestion rather
   than a band that wouldn't be there, and neither does an enzyme that cuts on both sides
-  of its site (BcgI, `cutsBothSides`), as only its cut after the site is found. Names stack in `MAX_LABEL_LANES` lanes at most: a
+  of its site (BcgI, `cutsBothSides`), as only its cut after the site is found. Beside the
+  suggestion a gel runs up to four lanes in the order they would be loaded: the template
+  uncut and cut by that digest, then the product uncut and cut, drawn by the renderer the
+  Digest dialog uses (`src/views/gelDraw.ts`). The template is there because carry-over
+  from the reaction is what an extra band in a product usually is, and it is cut too
+  because every site inside the product is in the template as well, unless a 5′ tail
+  brought it in. It is the open file, so it is drawn for a plasmid or a colony, which
+  holds the plasmid, and left out for genomic DNA or cDNA, where that plasmid isn't in the
+  tube: the dialog passes the Template menu's choice on, so the gel never shows a template
+  the reaction doesn't have. Its sizes come from the same digest the Digest dialog runs
+  (`templateDigestSizes`, kept while the template and the enzymes stay the same, as the
+  dialog is drawn again on every change); a circular template cut once gives one fragment
+  of its whole length. Which lanes exist is `pcrGelLanes`, not the view: a circular
+  template runs supercoiled, and cut only when the digest cuts it; a linear one runs uncut
+  only when its length differs from the product's and cut only in two pieces or more, as a
+  lane that would only repeat the one above it is left out. Fragments within the gel's
+  resolution run as one band, lanes are numbered and named in a key beside the gel, and
+  the ladder is the one chosen in either dialog, kept for as long as the window is open.
+  Until one is chosen the Digest dialog opens on the first, and this gel on the first that
+  reaches its smallest band (`ladderReaching`, in `src/lib/gel.ts`), or on the one that goes
+  lowest when none does, following the digest chosen, as the 1 kb ladder draws every band
+  of 312 bp or less on the bottom edge.
+  Brightness is a band's share of its own lane, so the gel says where things run, not how
+  much of each was loaded. Names stack in `MAX_LABEL_LANES` lanes at most: a
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
   the product, its GC and the digest out of the dialog, so the sites past those lanes keep
   their marks where they cut and a chip over each crowd counts them, naming them under the

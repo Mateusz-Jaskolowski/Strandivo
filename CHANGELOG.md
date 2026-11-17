@@ -50,6 +50,13 @@ with Unreleased's notes and leaves them where they are.
   as it is, and the message that says so can still make the edit. Delete bases from the
   right-click menu or the inspector still deletes at once, and says when it shifts a
   gene's frame.
+- **Drag a region's ends**: in the Sequence tab, a selected protein region has a handle at
+  each end. Drag it, or press the arrow keys, to move that end a codon at a time. Where two
+  regions meet, such as FR1 and CDR1, both move together; hold ⌥ (Alt on Windows and Linux)
+  to move only the selected region's end. A region stays inside the one it belongs to
+  without moving it, so it can be pulled back from that region's end.
+- **Arrow keys on a primer's ends**: click an end of a primer in the Primers tab, and the
+  arrow keys now extend or trim it, as the hint there says.
 - **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
   genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
   it, with the annealing temperature and an extension time worked out from the product's

@@ -4328,8 +4328,10 @@ main.sv-enzyme-section-body {
 .sv-ctx-site {
   background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
-/* A thin grip on the boundary between two bases, with a wider invisible hit area. */
-.sv-ctx-handle {
+/* A thin grip on the boundary between two bases, with a wider invisible hit area: a
+   primer's ends here, a selected protein region's in the Sequence tab. */
+.sv-ctx-handle,
+.sv-region-handle {
   position: absolute;
   z-index: 2;
   width: 12px;
@@ -4340,7 +4342,11 @@ main.sv-enzyme-section-body {
   cursor: ew-resize;
   touch-action: none;
 }
-.sv-ctx-handle::before {
+.sv-region-handle {
+  height: 16px;
+}
+.sv-ctx-handle::before,
+.sv-region-handle::before {
   content: "";
   position: absolute;
   left: 4px;
@@ -4351,7 +4357,9 @@ main.sv-enzyme-section-body {
   background: var(--accent);
 }
 .sv-ctx-handle:hover::before,
-.sv-ctx-handle:focus-visible::before {
+.sv-ctx-handle:focus-visible::before,
+.sv-region-handle:hover::before,
+.sv-region-handle:focus-visible::before {
   left: 3px;
   width: 6px;
 }

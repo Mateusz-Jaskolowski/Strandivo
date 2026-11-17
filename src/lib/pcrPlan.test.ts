@@ -86,3 +86,46 @@ test("there is no whole-primer temperature without a tail, with changes or with 
   const d = alignPrimer(forward(degenerate), template);
   assert.equal(wholePrimerTa(degenerate, rBases, d, plainR, conf), null);
 });
+
+test("a tail on the reverse primer alone also gives a whole-primer temperature", () => {
+  const conf = withNebPolymerase(DEFAULT_TM, "q5");
+  const rBases = TAIL + reverseComplement(site.r);
+  const plainF = alignPrimer(forward(site.f), template);
+  const b = alignPrimer(reverse(rBases), template);
+  assert.equal(b.tail, TAIL);
+  const paired = annealingTemp(tmBases(plainF), tmBases(b), conf)!.ta;
+  const whole = wholePrimerTa(site.f, rBases, plainF, b, conf)!;
+  assert.ok(whole > paired, `${whole} should be above ${paired}`);
+});
+
+test("a changed base in either primer leaves no whole-primer temperature, whichever primer has the tail", () => {
+  const conf = withNebPolymerase(DEFAULT_TM, "q5");
+  const flip = (base: string) => (base === "A" ? "C" : "A");
+  const plainF = alignPrimer(forward(site.f), template);
+  const rBases = reverseComplement(site.r);
+  const changedR = rBases.slice(0, 10) + flip(rBases[10]) + rBases.slice(11);
+  const changedF = site.f.slice(0, 10) + flip(site.f[10]) + site.f.slice(11);
+
+  // A changed base in the reverse primer, the forward primer having the tail.
+  const tailedF = TAIL + site.f;
+  const a = alignPrimer(forward(tailedF), template);
+  const b = alignPrimer(reverse(changedR), template);
+  assert.equal(a.tail, TAIL);
+  assert.ok(b.substitutions > 0);
+  assert.equal(wholePrimerTa(tailedF, changedR, a, b, conf), null);
+
+  // The same changed base, with the tail on the reverse primer itself.
+  const tailedChangedR = TAIL + changedR;
+  const c = alignPrimer(reverse(tailedChangedR), template);
+  assert.equal(c.tail, TAIL);
+  assert.ok(c.substitutions > 0);
+  assert.equal(wholePrimerTa(site.f, tailedChangedR, plainF, c, conf), null);
+
+  // A changed base in the forward primer, the reverse primer having the tail.
+  const tailedR = TAIL + rBases;
+  const d = alignPrimer(forward(changedF), template);
+  const e = alignPrimer(reverse(tailedR), template);
+  assert.ok(d.substitutions > 0);
+  assert.equal(e.tail, TAIL);
+  assert.equal(wholePrimerTa(changedF, tailedR, d, e, conf), null);
+});

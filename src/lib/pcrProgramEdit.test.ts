@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pcrProgram } from "./pcrProgram.ts";
+import { pcrProgram, programText } from "./pcrProgram.ts";
 import { PCR_PROTOCOLS, templatesFor } from "./pcrProtocols.ts";
 import {
   acceptProgramValue,
@@ -60,6 +60,28 @@ test("edited temperatures, durations and counts are copied from the current raw 
   assert.equal(original.stages[1].steps[1].temp, 66);
   d.values[programKey(1, 1, "seconds")] = "90.1";
   assert.match(editedProgramText(d)!, /90.1 s/);
+});
+
+test("copying a program nobody has edited gives it as generated, with no mention of changes", () => {
+  for (const twoStage of [false, true]) {
+    const original = snapshot("untouched", twoStage);
+    const d = programDraft(original);
+    const text = editedProgramText(d)!;
+    assert.equal(text, programText(original.stages, "Q5 (NEB M0491), 878 bp\nPlasmid · 878 bp"));
+    assert.match(text, /^Q5 \(NEB M0491\), 878 bp\nPlasmid · 878 bp\nInitial denaturation: 98 °C, 30 s\n/);
+    assert.doesNotMatch(text, /Modified|based on/i);
+    if (twoStage) assert.match(text, /\n5 cycles:\n[^]*\n20 cycles:\n/);
+    else assert.match(text, /\n25 cycles:\n/);
+    // The same numbers written another way are still the program as generated.
+    d.values[programKey(0, 0, "temp")] = "98.0";
+    d.values[programKey(0, 0, "seconds")] = "0 min 30 s";
+    assert.equal(editedProgramText(d), text);
+    // Changing one and putting it back is no change either.
+    d.values[programKey(1, 0, "cycles")] = "30";
+    assert.match(editedProgramText(d)!, /^Modified PCR program; based on Q5/);
+    d.values[programKey(1, 0, "cycles")] = String(original.stages[1].cycles);
+    assert.equal(editedProgramText(d), text);
+  }
 });
 
 test("unfinished and invalid fields prevent copying and survive input changes", () => {

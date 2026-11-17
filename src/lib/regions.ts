@@ -17,14 +17,20 @@ import { formatDesign, parseDesign } from "./variable.ts";
 /** The GenBank qualifier that holds a CDS's regions, one value per region. */
 export const REGIONS_QUALIFIER = "strandivo_regions";
 
+/** Residues of a CDS's protein, not counting a stop codon at its end. */
+export function proteinLength(f: SeqFeature, sequence: string): number {
+  const positions = codingPositions(f, sequence.length);
+  const length = Math.floor(positions.length / 3);
+  const lastCodon = positions.slice((length - 1) * 3, length * 3)
+    .map(p => f.strand === -1 ? complement(sequence[p]) : sequence[p]).join("");
+  return length && translateCodon(lastCodon) === "*" ? length - 1 : length;
+}
+
 /** Map selected DNA into the CDS's frame, including whole codons at either edge. */
 export function selectedProteinResidues(f: SeqFeature, range: Range, sequence: string) {
   if (!rangeWithin(range, f, sequence.length)) return null;
   const positions = codingPositions(f, sequence.length);
-  let length = Math.floor(positions.length / 3);
-  const lastCodon = positions.slice((length - 1) * 3, length * 3)
-    .map(p => f.strand === -1 ? complement(sequence[p]) : sequence[p]).join("");
-  if (translateCodon(lastCodon) === "*") length--;
+  const length = proteinLength(f, sequence);
   let first = -1;
   let last = -1;
   for (let i = 0; i < length * 3; i++) {

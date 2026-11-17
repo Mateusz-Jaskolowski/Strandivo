@@ -48,6 +48,8 @@ export function templateDigestSizes(template: SeqData, enzymes: readonly string[
 
 /** One lane of the PCR product's gel. */
 export interface PcrGelLane {
+  /** Whose DNA it holds. */
+  of: "template" | "product";
   /** What the key calls it. */
   what: string;
   /** Top-strand sizes of the fragments in it. */
@@ -63,16 +65,21 @@ export interface PcrGelLane {
  * enzymes cut it; a linear one runs uncut only when its length differs from the product's,
  * as one the product's length would run where the product does, and is cut only if the
  * enzymes leave it in two pieces or more, as whole it is the lane above.
+ *
+ * The template is the open file, which is what is in the tube for a plasmid or a colony, as
+ * the plasmid is in the cells. For genomic DNA or cDNA it is not, so only the product runs.
  */
-export function pcrGelLanes(template: SeqData, productLength: number, digest: SuggestedDigest | null): PcrGelLane[] {
+export function pcrGelLanes(template: SeqData, kind: TemplateKind, productLength: number, digest: SuggestedDigest | null): PcrGelLane[] {
   const length = template.sequence.length;
   const lanes: PcrGelLane[] = [];
-  if (template.circular) lanes.push({ what: "Template, supercoiled", sizes: [length], runsAs: length * SUPERCOILED_RUNS_AS });
-  else if (length !== productLength) lanes.push({ what: "Template, uncut", sizes: [length] });
-  const cut = digest ? templateDigestSizes(template, digest.enzymes) : [];
-  if (digest && (template.circular ? cut.length > 0 : cut.length > 1)) lanes.push({ what: `Template, ${digestName(digest)}`, sizes: cut });
-  lanes.push({ what: "Product, uncut", sizes: [productLength] });
-  if (digest) lanes.push({ what: `Product, ${digestName(digest)}`, sizes: digest.sizes });
+  if (kind !== "complex") {
+    if (template.circular) lanes.push({ of: "template", what: "Template, supercoiled", sizes: [length], runsAs: length * SUPERCOILED_RUNS_AS });
+    else if (length !== productLength) lanes.push({ of: "template", what: "Template, uncut", sizes: [length] });
+    const cut = digest ? templateDigestSizes(template, digest.enzymes) : [];
+    if (digest && (template.circular ? cut.length > 0 : cut.length > 1)) lanes.push({ of: "template", what: `Template, ${digestName(digest)}`, sizes: cut });
+  }
+  lanes.push({ of: "product", what: "Product, uncut", sizes: [productLength] });
+  if (digest) lanes.push({ of: "product", what: `Product, ${digestName(digest)}`, sizes: digest.sizes });
   return lanes;
 }
 

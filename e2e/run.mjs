@@ -993,8 +993,19 @@ async function main() {
     await redraws(() => choose("Polymerase", "Q5 High-Fidelity"));
     const q5Source = await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? null;");
     check("Picking Q5, which has no colony, falls back to a plasmid", (await s.exec(templateOptions)) === "plasmid,complex" && (await s.exec(templateNow)) === "plasmid" && /Q5 High-Fidelity DNA Polymerase · NEB M0491/.test(q5Source), `${await s.exec(templateOptions)}; ${await s.exec(templateNow)}; ${q5Source}`);
+    // Genomic DNA or cDNA is not the plasmid open here, so its gel runs the product's lanes alone and drops the note about leftover template.
+    const laneKeyText = () => s.exec("return Array.from(document.querySelectorAll('.sv-pcr-lane-key li')).map(li => li.textContent)");
+    await redraws(() => choose("Template", "complex"));
+    const complexKey = await laneKeyText();
+    check(
+      "With genomic DNA or cDNA as the template, the gel runs the product's lanes without the plasmid's",
+      complexKey.length === 2 && /^1Product, uncut/.test(complexKey[0]) && /^2Product, \S/.test(complexKey[1]) && (await s.exec("return document.querySelector('.sv-pcr-lanes > p')?.hidden === true")),
+      JSON.stringify(complexKey)
+    );
     // The choice is kept between dialogs, so a plasmid is chosen again.
     await redraws(() => choose("Template", "plasmid"));
+    const plasmidKey = await laneKeyText();
+    check("Back on a plasmid the gel has the template's lanes again", plasmidKey.length === 4 && /^1Template, supercoiled/.test(plasmidKey[0]) && (await s.exec("return document.querySelector('.sv-pcr-lanes > p')?.hidden === false")), JSON.stringify(plasmidKey));
     // A polymerase whose protocol has not been read has no program, and the dialog says so.
     await redraws(() => choose("Polymerase", "Q5U Hot Start"));
     const noProgram = await s.exec("return document.querySelector('.sv-pcr-result').textContent");

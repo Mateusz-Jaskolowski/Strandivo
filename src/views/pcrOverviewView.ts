@@ -8,6 +8,7 @@ import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, pickDigest, pic
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
 import { bands } from "../lib/gel.ts";
+import type { TemplateKind } from "../lib/pcrProtocols.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelBand, type GelLane } from "./gelDraw.ts";
 
@@ -22,7 +23,7 @@ export interface ProductViewChoice {
 /** Up to this many fragments the key names one by one; more are counted instead. */
 const KEY_SIZES = 4;
 
-export function pcrOverviewView(product: PcrProduct, template: SeqData, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
+export function pcrOverviewView(product: PcrProduct, template: SeqData, templateKind: TemplateKind, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
   const digest = pickDigest(data.digests, choice.digest);
   choice.digest = digest ? digestName(digest) : "";
   const detail = h("p", { class: "sv-small sv-dim sv-pcr-site-detail", "aria-live": "polite" });
@@ -46,6 +47,8 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
   const digestNote = h("p", { class: "sv-small sv-dim" });
   const gelFigure = h("div", { class: "sv-pcr-gel-figure" });
   const laneKey = h("ul", { class: "sv-pcr-lane-key sv-small" });
+  // About the template's lanes, so it goes with them.
+  const leftover = h("p", { class: "sv-small sv-dim" }, "Template left over from the reaction runs far fainter than the product.");
   const templateLength = template.sequence.length;
   const bandsOf = (sizes: number[]): GelBand[] =>
     bands(sizes).map(b => ({
@@ -71,7 +74,8 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
   const fade = (lane: number | null) => gelFigure.querySelectorAll<SVGElement>("[data-lane]").forEach(el => el.classList.toggle("sv-gel-fade", lane !== null && el.dataset.lane !== String(lane)));
   const drawGel = () => {
     const d = pickDigest(data.digests, choice.digest);
-    const rows = pcrGelLanes(template, product.length, d);
+    const rows = pcrGelLanes(template, templateKind, product.length, d);
+    leftover.hidden = !rows.some(r => r.of === "template");
     gelFigure.replaceChildren(
       gelSvg(
         rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })),
@@ -80,7 +84,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
           height: 160,
           laneWidth: 40,
           labelWidth: 46,
-          ariaLabel: `A gel of the template and the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
+          ariaLabel: `A gel of ${rows.some(r => r.of === "template") ? "the template and " : ""}the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
         }
       )
     );
@@ -102,7 +106,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
     { class: "sv-pcr-lanes" },
     h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderSelect("sv-select-quiet", drawGel)),
     laneKey,
-    h("p", { class: "sv-small sv-dim" }, "Template left over from the reaction runs far fainter than the product.")
+    leftover
   );
   const updateDigest = () => {
     const d = pickDigest(data.digests, choice.digest);

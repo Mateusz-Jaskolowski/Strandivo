@@ -435,3 +435,37 @@ test("a report the database didn't count gives no place back when GitHub turns i
   assert.deepEqual(db.rows(), []);
   assert.equal(s.calls.mail.length, 3);
 });
+
+test("a lone half of a surrogate pair is replaced before the issue and the email are made", async () => {
+  const { calls, send } = service();
+  // JSON.stringify spells a lone half as an escape ("\ud83d"), which is plain ASCII on the wire:
+  // it reaches the Worker as a lone half, and reportProblem has nothing to say about it.
+  const high = "\uD83D";
+  const low = "\uDE00";
+  const crash = { version: "0.4.0", at: "2026-11-06T09:30:00.000Z", thread: `t${high}`, location: `l${low}`, message: `m${high}` };
+  const res = await send({ ...report, summary: `Map ${high} blank`, details: `a${low}b`, name: `J${high}`, errors: [`TypeError ${high}`], crash, email: `a${high}@lab.example.org`, file: { name: `p${high}.gb`, contents: `LOCUS ${low}` } });
+  assert.equal(res.status, 200);
+  const [{ init, body }] = calls.github;
+  // GitHub is sent text it can read: no escaped half, and U+FFFD where there was one.
+  assert.doesNotMatch(init.body, /\\ud[89a-f][0-9a-f]{2}/i);
+  assert.equal(body.title, "Map \uFFFD blank");
+  assert.ok(body.body.isWellFormed());
+  for (const text of ["a\uFFFDb", "Sent by: `J\uFFFD`", "TypeError \uFFFD", "Thread: t\uFFFD", "At: l\uFFFD", "\nm\uFFFD\n"]) assert.ok(body.body.includes(text), text);
+  // The email's headers, written raw, carry U+FFFD too.
+  assert.ok(calls.mail[0].isWellFormed());
+  assert.ok(calls.mail[0].includes("Reply-To: <a\uFFFD@lab.example.org>"));
+  assert.ok(calls.mail[0].includes('filename="p\uFFFD.gb"'));
+  // A low half before a high one are two lone halves, not a pair.
+  await send({ ...report, summary: `${low}${high}` });
+  assert.equal(calls.github[1].body.title, "\uFFFD\uFFFD");
+});
+
+test("whole emoji and other text go through as they are", async () => {
+  const { calls, send } = service();
+  const text = "Map \u{1F600} blank, żółw, 日本語, \u{1F9EC}";
+  assert.equal((await send({ ...report, summary: text, details: text, name: "Zoë \u{1F9EC}" })).status, 200);
+  const { title, body } = calls.github[0].body;
+  assert.equal(title, text);
+  assert.ok(body.includes(`\n${text}\n`));
+  assert.ok(body.includes("Sent by: `Zoë \u{1F9EC}`"));
+});

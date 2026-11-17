@@ -324,6 +324,13 @@ async function sendWithBinding(env, raw) {
   await env.MAILER.send(new EmailMessage(FROM, env.MAINTAINER_EMAIL, raw));
 }
 
+/**
+ * Text with each lone half of a surrogate pair as U+FFFD, as encoding it as UTF-8 would. JSON
+ * can spell one as an escape ("\ud83d"), plain ASCII on the wire, so it passes every check;
+ * GitHub may not take it, and a header can't carry it.
+ */
+const wellFormed = text => text.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, pair => (pair.length === 2 ? pair : "\uFFFD"));
+
 export async function handle(request, env, deps = {}) {
   const fetchFn = deps.fetch ?? fetch;
   const sendMail = deps.sendMail ?? sendWithBinding;
@@ -345,7 +352,7 @@ export async function handle(request, env, deps = {}) {
   if (text.length > MAX_BYTES) return answer(413, { error: "The report is too big." });
   let report;
   try {
-    report = JSON.parse(text);
+    report = JSON.parse(text, (_key, value) => (typeof value === "string" ? wellFormed(value) : value));
   } catch {
     return answer(400, { error: "The report isn't JSON." });
   }

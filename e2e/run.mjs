@@ -675,9 +675,17 @@ async function main() {
     // loaded: the template uncut and cut, then the product uncut and cut. ScaI cuts pUC19
     // once, so the plasmid is only opened up, and its lane says its whole length too.
     const gelBands = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-gel .sv-gel-band[data-size]')).map(b => b.dataset.size)");
-    check("The gel runs the template and the product, uncut and cut", JSON.stringify(gelBands) === '["2686","2686","878","564","314"]', JSON.stringify(gelBands));
+    // The template is this file as it now stands, which is pUC19 plus the bases typed earlier,
+    // so the two template lanes are asked for its length rather than the plasmid's own 2,686.
+    const templateLength = await s.exec("return window.__strandivo.store.data.sequence.length");
+    check("The gel runs the template and the product, uncut and cut", JSON.stringify(gelBands) === JSON.stringify([String(templateLength), String(templateLength), "878", "564", "314"]), JSON.stringify(gelBands));
     const laneKey = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-lane-key li')).map(li => li.textContent)");
-    check("The key names what each lane holds", JSON.stringify(laneKey) === JSON.stringify(["1Template, supercoiled2,686 bp", "2Template, ScaI2,686 bp", "3Product, uncut878 bp", "4Product, ScaI564 + 314 bp"]), JSON.stringify(laneKey));
+    const templateSize = templateLength.toLocaleString("en");
+    check(
+      "The key names what each lane holds",
+      JSON.stringify(laneKey) === JSON.stringify([`1Template, supercoiled${templateSize} bp`, `2Template, ScaI${templateSize} bp`, "3Product, uncut878 bp", "4Product, ScaI564 + 314 bp"]),
+      JSON.stringify(laneKey)
+    );
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
     await choose("Ladder", "1 kb ladder");

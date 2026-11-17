@@ -131,6 +131,10 @@ class Session {
   async clickAt([x, y]) {
     await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
   }
+  async doubleClickAt([x, y]) {
+    const click = [{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }];
+    await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, ...click, { type: "pause", duration: 50 }, ...click], { release: true });
+  }
   /** Drags the mouse between two points of the page (CSS pixels from its top left). */
   async drag(from, to) {
     const at = ([x, y], duration = 0) => ({ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport", duration });
@@ -165,6 +169,7 @@ const ARROW_RIGHT = "\uE014";
 const ESCAPE = "\uE00C";
 const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
+const TAB = "\uE004";
 const PAGE_UP = "\uE00E";
 
 /** Drawn width of the first row's bases relative to the width the layout gives them (1.0 = lined up). */
@@ -196,7 +201,10 @@ const addTouching = `${doc} const lac = s.data.features.find(f => f.name === "la
   s.apply({ ...s.data, features: [...s.data.features, { id: "e2e-touch", name: "lac promoter", type: "promoter", start: lac.end + 1, end: lac.end + 31, strand: -1, notes: {}, raw: {} }] }, "Add feature");
   return lac.id;`;
 
-/** Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS. */
+/**
+ * Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS.
+ * A double-click on its amino acids opens nothing, as they are clicked to pick codons.
+ */
 async function checkCodonClicks(s, root, label) {
   const c = await s.exec(`${doc}
     const el = document.querySelector(arguments[0] + ' .sv-codon');
@@ -211,8 +219,8 @@ async function checkCodonClicks(s, root, label) {
   const single = await selected();
   check(`${label}: one click selects the codon's three bases without selecting the feature`, single.range?.start === c.start && single.range?.end === c.end && !single.focus && (c.end - c.start + c.length) % c.length === 2, JSON.stringify(single));
   await s.doubleClick(hit);
-  const double = await selected();
-  check(`${label}: a double-click selects the whole feature`, double.range?.start === c.featureStart && double.range?.end === c.featureEnd && double.focus?.id === c.id, JSON.stringify(double));
+  const double = { ...await selected(), dialog: await s.exec("return !!document.querySelector('.sv-dialog');") };
+  check(`${label}: a double-click selects the whole feature and opens nothing`, double.range?.start === c.featureStart && double.range?.end === c.featureEnd && double.focus?.id === c.id && !double.dialog, JSON.stringify(double));
   await s.click(hit);
   await s.click(`${root} [data-id="${c.id}"] .sv-feature-caption, ${root} .sv-feature-caption[data-id="${c.id}"]`);
   const caption = await selected();
@@ -389,6 +397,43 @@ async function main() {
     await s.press(ESCAPE);
     await s.exec(`${doc} s.undo();`);
     check("Undo brings the old name back", await s.exec(`${doc} return s.data.name === arguments[0] && ${mapName} === arguments[0];`, nameBefore));
+    // A double-click on a CDS opens its Protein details, as its right-click menu does.
+    const ampAt = await s.exec(`${doc}
+      const f = s.data.features.find(f => f.name === 'AmpR');
+      for (const el of document.querySelectorAll('.sv-map-svg [data-kind="feature"][data-id="' + f.id + '"]:not([data-region])')) {
+        const b = el.getBoundingClientRect();
+        for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) {
+          const x = b.left + (b.width * i) / 10, y = b.top + (b.height * j) / 10;
+          if (document.elementFromPoint(x, y)?.closest('[data-kind]') === el) return [x, y];
+        }
+      }
+      return null;`);
+    check("A point on AmpR is found on the map", !!ampAt);
+    if (ampAt) {
+      await s.doubleClickAt(ampAt);
+      check("Double-clicking a CDS on the map opens its Protein details", await s.waitFor("document.querySelector('.sv-dialog .sv-protein-seq') && document.querySelector('.sv-dialog')?.textContent.includes('AmpR')", 3000));
+      await s.press(ESCAPE);
+      await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    }
+    // …and one on a cut site opens its Enzyme details.
+    const kpnAt = await s.exec(`
+      const el = document.querySelector('.sv-map-svgel text[data-id^="KpnI@"]');
+      const b = el?.getBoundingClientRect();
+      if (!b) return null;
+      const x = b.left + b.width / 2, y = b.top + b.height / 2;
+      return document.elementFromPoint(x, y)?.closest('[data-kind]') === el.closest('[data-kind]') ? [x, y] : null;`);
+    check("A point on KpnI's name is found on the map", !!kpnAt);
+    if (kpnAt) {
+      await s.doubleClickAt(kpnAt);
+      check("Double-clicking a cut site on the map opens its Enzyme details", await s.waitFor("document.querySelector('.sv-dialog .sv-enzyme-cut-figure')?.dataset.enzyme === 'KpnI' && document.querySelector('.sv-dialog-title')?.textContent === 'KpnI'", 3000));
+      check("Enzyme details give KpnI's cut, its ends, who sells it and its neoschizomer", await s.exec("const t = document.querySelector('.sv-dialog')?.textContent || ''; return t.includes('GGTAC^C') && t.includes('3′ GTAC') && t.includes('Sold by') && t.includes('Neoschizomers') && t.includes('Acc65I') && t.includes('In this sequence');"));
+      await s.click("//*[contains(@class,'sv-dialog-body')]//button[normalize-space(.)='Acc65I']", "xpath");
+      check("A neoschizomer's name opens its own details in their place", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && document.querySelector('.sv-dialog-title')?.textContent === 'Acc65I' && document.querySelector('.sv-dialog').textContent.includes('G^GTACC') && !!document.querySelector('.sv-dialog .sv-facts')?.textContent.includes('KpnI')", 3000));
+      check("Enzyme details find Acc65I's site though the map's list leaves it out", await s.exec("return /Site\\d/.test(document.querySelector('.sv-dialog [aria-label=\"In this sequence\"]')?.textContent.replace(/\\s+/g, '') || '');"));
+      await s.shot("01b-enzyme-details");
+      await s.press(ESCAPE);
+      await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    }
     // A long name wraps inside the ruler's numbers instead of running across them.
     await s.exec(`${doc} s.apply({ ...s.data, name: 'testing how it works and seeing how the long text works' }, 'Rename');`);
     await sleep(300);
@@ -429,6 +474,14 @@ async function main() {
     check("Protein translation is shown under coding features", await s.exec("return document.querySelectorAll('.sv-aa').length > 0"));
     const captions = await s.exec("return { captions: Array.from(document.querySelectorAll('.sv-seq .sv-feature-caption')).map(c => c.textContent), margin: document.querySelectorAll('.sv-seq .sv-gutter-label').length };");
     check("Coding features are named under their amino acids, not in the margin", captions.captions.some(c => /AmpR ←|lacZ/.test(c)) && captions.margin === 0, JSON.stringify(captions));
+    await s.doubleClick(".sv-seq .sv-feature-caption");
+    check("Double-clicking a CDS's name in the Sequence tab opens its Protein details", await s.waitFor("document.querySelector('.sv-dialog .sv-protein-seq')", 3000));
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.doubleClick(".sv-seq .sv-cut-label");
+    check("Double-clicking a cut site in the Sequence tab opens its Enzyme details", await s.waitFor("!!document.querySelector('.sv-dialog .sv-enzyme-cut-figure')", 3000));
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await checkCodonClicks(s, ".sv-seq", "Sequence translation");
     await checkCodonGestures(s, ".sv-seq", "Sequence translation");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
@@ -448,28 +501,139 @@ async function main() {
     const focused = await s.exec("return document.activeElement?.classList.contains('sv-clipboard')");
     check("Clicking the sequence puts the cursor there", focused);
     const n0 = (await state()).len;
+    const editCard = () => s.exec(`${doc} const c = document.querySelector('.sv-edit');
+      return { open: !!c, text: c?.textContent ?? '', on: c?.querySelector('.sv-edit-side-on')?.textContent ?? '', struck: document.querySelectorAll('.sv-gone-band').length, len: s.data.sequence.length };`);
     await s.press("GAT");
-    await sleep(1800); // a pause ends one typing step
-    await s.press("TACA");
+    await sleep(200);
+    const waiting = await editCard();
+    check("Typing at the cursor waits in a card", waiting.open && /Insert after 5/.test(waiting.text) && /3 bases/.test(waiting.text) && waiting.len === n0, JSON.stringify(waiting));
+    await s.press(ENTER);
+    await sleep(200);
+    await s.press(`TACA${ENTER}`);
     await sleep(300);
     const typed = await state();
-    check("Typing inserts bases", typed.len === n0 + 7 && typed.dirty, `${n0} → ${typed.len} bp`);
+    check("Enter inserts them", typed.len === n0 + 7 && typed.dirty, `${n0} → ${typed.len} bp`);
     await s.press("z", [CTRL]);
     await sleep(400);
     const undone = (await state()).len;
-    check("Ctrl+Z undoes one typing step", undone === n0 + 3, `${typed.len} → ${undone} bp`);
+    check("Ctrl+Z undoes one insertion", undone === n0 + 3, `${typed.len} → ${undone} bp`);
     await s.press("z", [CTRL]);
     await sleep(400);
     await s.press("y", [CTRL]);
     await sleep(400);
     const redone = (await state()).len;
     check("Ctrl+Y redoes it", redone === n0 + 3, `${undone} → ${n0} → ${redone} bp`);
+    // --- Typing over selected bases: a card asks first, and nothing changes until Replace ---
+    const over = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR');
+      const at = Math.floor((f.start + f.end) / 2);
+      s.select({ range: { start: at, end: at + 2 }, caret: at + 3, anchor: at }, 'e2e');
+      document.querySelector('.sv-clipboard').focus();
+      return { at, was: s.data.sequence.slice(at, at + 3).toUpperCase(), len: s.data.sequence.length };`);
+    const reselect = `${doc} s.select({ range: { start: ${over.at}, end: ${over.at + 2} }, caret: ${over.at + 3}, anchor: ${over.at} }, 'e2e'); document.querySelector('.sv-clipboard').focus();`;
+    const swap = [...over.was].map(c => ({ A: "T", T: "A", G: "C", C: "G" })[c] ?? "A").join("");
+    const card = () => s.exec(`${doc} const c = document.querySelector('.sv-edit');
+      return { open: !!c, text: c?.textContent ?? '', len: s.data.sequence.length, bases: s.data.sequence.slice(${over.at}, ${over.at} + 3).toUpperCase() };`);
+    await s.press(swap[0]);
+    await sleep(200);
+    const one = await card();
+    check("Typing over selected bases opens a card and changes nothing yet", one.open && /1 of 3 bases/.test(one.text) && one.len === over.len && one.bases === over.was, JSON.stringify(one));
+    await s.press(swap.slice(1));
+    await sleep(200);
+    const three = await card();
+    check("The card counts the bases and names the protein change", /3 bases for 3 · same length/.test(three.text) && /AmpR · /.test(three.text), three.text);
+    await s.shot("03-replace-card");
+    await s.press(ENTER);
+    await sleep(300);
+    const replaced = await card();
+    check("Enter replaces them in one step", !replaced.open && replaced.bases === swap && replaced.len === over.len, JSON.stringify(replaced));
+    await s.exec(`${doc} s.undo();`);
+    check("One undo brings the old bases back", (await card()).bases === over.was);
+    // A click elsewhere cancels, and the message can still replace them.
+    await s.exec(reselect);
+    await s.press("GG");
+    await sleep(200);
+    const selRow = await s.exec("return document.querySelector('.sv-sel-band')?.closest('.sv-row')?.dataset.row");
+    await s.click(`.sv-row[data-row="${selRow}"] .sv-row-track`);
+    await sleep(300);
+    const away = await card();
+    check("A click elsewhere closes the card and keeps the bases", !away.open && away.bases === over.was && away.len === over.len, JSON.stringify(away));
+    check("It says so, with Replace", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /Didn't replace/.test(t.textContent) && t.querySelector('.ps-toast-action'))", 2000));
+    await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Replace']", "xpath");
+    await sleep(300);
+    const late = await card();
+    check("Replace in the message replaces them after all", late.len === over.len - 1, `${over.len} → ${late.len} bp`);
+    await s.exec(`${doc} s.undo();`);
+    // A paste over a selection waits in the card too, and Esc keeps the bases.
+    await s.exec(`${reselect} window.__strandivo.paste('ACGTA');`);
+    await sleep(200);
+    const pasted = await card();
+    check("Pasting over selected bases waits in the card", pasted.open && /5 bases for 3/.test(pasted.text) && pasted.len === over.len, pasted.text);
+    await s.press(ESCAPE);
+    await sleep(200);
+    const kept = await card();
+    check("Esc closes it and keeps the bases", !kept.open && kept.bases === over.was && kept.len === over.len, JSON.stringify(kept));
+    // At a feature's edge the card asks which side takes new bases: neither, unless Tab chooses.
+    const ampEdge = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR');
+      s.select({ range: null, caret: f.end + 1, anchor: f.end + 1 }, 'e2e');
+      document.querySelector('.sv-clipboard').focus();
+      return { id: f.id, end: f.end };`);
+    const ampEnd = () => s.exec(`${doc} return s.data.features.find(x => x.id === ${JSON.stringify(ampEdge.id)})?.end;`);
+    await s.press("GCT");
+    await sleep(200);
+    const edge = await editCard();
+    check("At a feature's edge the card asks where new bases go, Neither first", /New bases go in/.test(edge.text) && /AmpR/.test(edge.text) && edge.on === "Neither", JSON.stringify(edge));
+    await s.shot("03-edit-card-edge");
+    await s.press(ENTER);
+    await sleep(300);
+    const outside = await ampEnd();
+    check("Neither leaves them outside the feature", outside === ampEdge.end, `${ampEdge.end} → ${outside}`);
+    await s.exec(`${doc} s.undo(); s.select({ range: null, caret: ${ampEdge.end + 1}, anchor: ${ampEdge.end + 1} }, 'e2e'); document.querySelector('.sv-clipboard').focus();`);
+    await s.press(`GCT${TAB}`);
+    await sleep(200);
+    const chosen = await editCard();
+    check("Tab picks the feature", /AmpR/.test(chosen.on), JSON.stringify(chosen));
+    await s.press(ENTER);
+    await sleep(300);
+    const inside = await ampEnd();
+    check("It then takes the new bases", inside === ampEdge.end + 3, `${ampEdge.end} → ${inside}`);
+    await s.exec(`${doc} s.undo();`);
+    // Backspace at the cursor marks bases to delete, one more with each press, and Enter deletes them.
+    await s.exec(`${doc} s.select({ range: null, caret: 200, anchor: 200 }, 'e2e'); document.querySelector('.sv-clipboard').focus();`);
+    const beforeBack = (await state()).len;
+    await s.press(BACKSPACE + BACKSPACE + BACKSPACE);
+    await sleep(200);
+    const marked = await editCard();
+    check("Backspace at the cursor marks bases to delete, one more with each press", /Delete 198–200/.test(marked.text) && marked.struck > 0 && marked.len === beforeBack, JSON.stringify(marked));
+    await s.shot("03-edit-card-delete");
+    await s.press(ENTER);
+    await sleep(300);
+    const afterBack = (await state()).len;
+    check("Enter deletes them", afterBack === beforeBack - 3, `${beforeBack} → ${afterBack} bp`);
+    await s.exec(`${doc} s.undo();`);
+    // Cut copies the selected bases at once and waits in the card to delete them; Esc keeps them.
+    const cutText = await s.exec(`${doc} s.select({ range: { start: 199, end: 208 }, caret: 209, anchor: 199 }, 'e2e');
+      const area = document.querySelector('.sv-clipboard'); area.focus();
+      const dt = new DataTransfer();
+      area.dispatchEvent(new ClipboardEvent('cut', { clipboardData: dt, bubbles: true, cancelable: true }));
+      return dt.getData('text/plain');`);
+    await sleep(200);
+    const cutCard = await editCard();
+    check("Cut waits in the card to delete the bases", /Delete 200–209/.test(cutCard.text) && cutCard.len === beforeBack, JSON.stringify({ ...cutCard, copied: cutText }));
+    await s.press(ESCAPE);
+    await sleep(200);
+    check("Esc keeps them", (await state()).len === beforeBack && !(await editCard()).open);
+    check("It says they were copied all the same", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /Copied 10 bases but didn't delete them/.test(t.textContent))", 2000), `copied “${cutText}”`);
     // --- Pasting what a database copies: a FASTA header, and text that isn't a sequence ---
-    const pasteLen = async (text) =>
-      s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');
-        const before = s.data.sequence.length;
+    const pasteLen = async (text) => {
+      const before = await s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');
+        document.querySelector('.sv-clipboard').focus();
         window.__strandivo.paste(${JSON.stringify(text)});
-        return { grew: s.data.sequence.length - before, start: s.data.sequence.slice(0, 8) };`);
+        return s.data.sequence.length;`);
+      await sleep(100);
+      await s.press(ENTER);
+      await sleep(200);
+      return s.exec(`${doc} return { grew: s.data.sequence.length - ${before}, start: s.data.sequence.slice(0, 8) };`);
+    };
     const fasta = await pasteLen(">pUC19 cloning vector, complete sequence\nacgtacgu\n");
     check("Pasting a FASTA entry puts in its bases alone, U as T", fasta.grew === 8 && fasta.start === "ACGTACGT", JSON.stringify(fasta));
     await s.exec(`${doc} s.undo();`);
@@ -481,7 +645,7 @@ async function main() {
     const shiftSel = (await state()).sel.range;
     check("Shift+arrows select bases", shiftSel && shiftSel.end - shiftSel.start === 2, JSON.stringify(shiftSel));
 
-    // --- Delete with a feature selected: the feature goes first, its bases on the next press ---
+    // --- Delete with a feature selected: the feature goes first, then its bases wait in the card ---
     const lacZ = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'lacZ-alpha');
       s.select({ range: { start: f.start, end: f.end }, caret: f.end + 1, focus: { kind: 'feature', id: f.id } }, 'e2e');
       document.querySelector('.sv-clipboard').focus();
@@ -501,8 +665,12 @@ async function main() {
     await s.shot("03-delete-feature");
     await s.press(BACKSPACE);
     await sleep(300);
+    const asked = await editCard();
+    check("The next Delete asks before deleting its bases", asked.open && /Delete /.test(asked.text) && /or Delete again/.test(asked.text) && asked.len === beforeDelete.len, JSON.stringify(asked));
+    await s.press(BACKSPACE);
+    await sleep(300);
     const secondPress = await state();
-    check("The next Delete deletes its bases", secondPress.len === beforeDelete.len - (lacZ.end - lacZ.start + 1), `${beforeDelete.len} → ${secondPress.len} bp`);
+    check("Delete again deletes them", secondPress.len === beforeDelete.len - (lacZ.end - lacZ.start + 1), `${beforeDelete.len} → ${secondPress.len} bp`);
     check("It says the feature inside them went too", await s.waitFor(toastWith("/The feature MCS was inside the deleted bases/"), 2000));
     await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Undo']", "xpath");
     await sleep(300);
@@ -994,6 +1162,7 @@ async function main() {
       document.querySelector('.sv-map-svgel text[data-id^="EcoRI@"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
       return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
     check("Right-clicking a picked enzyme keeps the pick and digests with them all", digestMenu.includes("Digest with BglI, EcoRI and BamHI…"), digestMenu.join(" | "));
+    check("A cut site's right-click menu offers its Enzyme details", digestMenu.includes("Enzyme details…"), digestMenu.join(" | "));
     await s.exec("window.__e2eMenu.find(e => e.label.startsWith('Digest with')).run(); delete window.__strandivoMenu;");
     await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
     const ticked = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog input[data-enzyme]:checked')).map(i => i.dataset.enzyme).sort()");
@@ -1031,20 +1200,26 @@ async function main() {
       await s.waitFor("document.querySelector('[role=status]')?.textContent === 'Saved'", 5000);
       const stockSaved = await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('load_app_data', { name: 'enzyme-library' }).then(raw => done(JSON.parse(raw)), e => done(String(e)));");
       check("Product, freezer location and edited notes are kept in the JSON file", stockSaved?.version === 1 && ["EcoRI", "PvuII"].every(enzyme => stockSaved.entries.some(e => e.enzyme === enzyme && e.product === `E2E ${enzyme}` && e.location === "Freezer 2, box A" && e.notes === (enzyme === "EcoRI" ? "Updated spare tube" : "Spare tube"))), JSON.stringify(stockSaved));
+      check("Stock rows show each enzyme's cut and the ends it leaves", await s.exec("const row = document.querySelector('input[aria-label=\"Product of E2E EcoRI\"]').closest('tr'); return row.querySelector('.sv-cut-site')?.textContent === 'G^AATTC' && row.querySelector('.sv-cut-ends')?.textContent === '5′ AATT';"));
+      const sortStock = label => s.exec("Array.from(document.querySelectorAll('.sv-enzyme-grid th button')).find(b => b.textContent.startsWith(arguments[0])).click();", label);
+      await sortStock("Product");
+      await sortStock("Product");
+      check("The stock table sorts by a clicked column, both ways", await s.exec("const products = Array.from(document.querySelectorAll('.sv-enzyme-grid input[data-field=\"product\"]')).map(i => i.value); return products.indexOf('E2E PvuII') >= 0 && products.indexOf('E2E PvuII') < products.indexOf('E2E EcoRI');"));
+      await sortStock("Enzyme");
       await s.shot("10c-enzyme-library");
       await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Enzyme library section\"] button')).find(b => b.textContent === 'My enzymes').click();");
       await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
       for (const name of ["EcoRI", "Acc65I", "PvuII"]) {
         await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = arguments[0]; q.dispatchEvent(new Event('input'));", name);
-        await s.click(`input[data-personal-enzyme='${name}']`);
-        check(`My enzymes saves ${name}`, await s.waitFor(`document.querySelector('input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
+        await s.click(`.sv-personal-enzyme-box-all input[data-personal-enzyme='${name}']`);
+        check(`My enzymes saves ${name} and lists it under My selected enzymes at once`, await s.waitFor(`document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-box-all input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
       }
-      await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input')); document.querySelector('[aria-label=\"Selected only\"]').click();");
-      check("The personal checklist shows selected names and lab membership", await s.exec("return document.querySelectorAll('[data-personal-enzyme]').length === 3 && Array.from(document.querySelectorAll('.sv-personal-enzyme-row')).filter(r => r.textContent.includes('In lab')).length === 2;"));
-      await s.exec("document.querySelector('[data-personal-enzyme=\"Acc65I\"]').focus();");
+      await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input'));");
+      check("My selected enzymes shows the chosen names and lab membership", await s.exec("const rows = document.querySelectorAll('.sv-personal-enzyme-box-selected .sv-personal-enzyme-row'); return Array.from(rows, r => r.querySelector('[data-personal-enzyme]').dataset.personalEnzyme).join() === 'Acc65I,EcoRI,PvuII' && Array.from(rows).filter(r => r.textContent.includes('In lab')).length === 2;"));
+      await s.exec("document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"Acc65I\"]').focus();");
       await s.press("\uE015");
-      check("The personal checklist keeps keyboard navigation between rows", await s.exec("return document.activeElement?.dataset.personalEnzyme === 'EcoRI';"));
-      check("Only the current checklist row is in the Tab order, so Tab leaves the list", await s.exec("return document.querySelectorAll('[data-personal-enzyme][tabindex=\"0\"]').length === 1 && document.activeElement?.getAttribute('tabindex') === '0';"));
+      check("The personal checklist keeps keyboard navigation between rows", await s.exec("return document.activeElement?.dataset.personalEnzyme === 'EcoRI' && !!document.activeElement.closest('.sv-personal-enzyme-box-selected');"));
+      check("Only the current row of each box is in the Tab order, so Tab leaves the list", await s.exec("return ['selected', 'all'].every(box => document.querySelectorAll(`.sv-personal-enzyme-box-${box} [data-personal-enzyme][tabindex=\"0\"]`).length === 1) && document.activeElement?.getAttribute('tabindex') === '0';"));
       await s.shot("10e-my-enzymes");
       await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_enzyme_library', { section: 'lab' }).then(done);");
       await s.waitFor("document.querySelector('[aria-label=\"New stock enzyme\"]') || document.querySelector('.sv-enzyme-grid')", 5000);

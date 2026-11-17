@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Lab stock refers to enzymes TeselaGen knows by name. Product names are free text: an HF
+// Lab stock refers to enzymes REBASE lists as sold, by name. Product names are free text: an HF
 // version or a different supplier still maps to the enzyme explicitly chosen by the user.
 
 import { enzymeName } from "./enzymes.ts";

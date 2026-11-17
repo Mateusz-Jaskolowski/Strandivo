@@ -91,7 +91,7 @@ function unwrap(d: SeqData): SeqData {
     return (x.start > x.end && n - x.start >= x.end + 1 ? { ...rest, end: n - 1 } : x.start > x.end ? { ...rest, start: 0 } : rest) as T;
   };
   // A CDS cut short at its start counts its residues from a new first base.
-  const features = d.features.map(f => carryRegions(f, fix(f), n, n, p => p));
+  const features = d.features.map(f => carryRegions(f, fix(f), n, n, r => r));
   return { ...d, features, primers: d.primers.map(fix), sources: d.sources.map(fix) };
 }
 

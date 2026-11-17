@@ -91,8 +91,18 @@ test("replacing a selection", () => {
   assert.equal(r.data.sequence, "AAAATTGGGG");
   assert.deepEqual(r.inserted, { start: 4, end: 5 });
   assert.equal(r.caret, 6);
-  assert.deepEqual(r.data.features.map(f => f.id), ["g"]);
-  assert.deepEqual([r.data.features[0].start, r.data.features[0].end], [6, 9]);
+  // "c" was exactly the selection, so it holds the new bases; "g" moves with its own.
+  assert.deepEqual(r.data.features.map(f => [f.id, f.start, f.end]), [["c", 4, 5], ["g", 6, 9]]);
+});
+
+test("replacing bases at a feature's ends keeps them in it", () => {
+  const d = doc("AAAACCCCGGGG", [feat("c", 4, 7)]);
+  const span = (x: SeqData) => [x.features[0].start, x.features[0].end];
+  assert.deepEqual(span(replaceRange(d, { start: 4, end: 4 }, "T").data), [4, 7], "its first base");
+  assert.deepEqual(span(replaceRange(d, { start: 7, end: 7 }, "T").data), [4, 7], "its last base");
+  assert.deepEqual(span(replaceRange(d, { start: 4, end: 5 }, "TTT").data), [4, 8], "its first two, by three");
+  assert.deepEqual(span(replaceRange(d, { start: 2, end: 5 }, "TTTTTT").data), [8, 9], "across its start: the new bases stay out");
+  assert.deepEqual(replaceRange(d, { start: 2, end: 9 }, "TT").data.features, [], "inside a larger selection, it goes");
 });
 
 test("other Tm methods match primer3 and the textbook formulas", () => {

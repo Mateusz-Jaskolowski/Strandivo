@@ -4,7 +4,8 @@
 // Protein details: one protein in a dialog, with what the inspector has no room for (the
 // one dialog per kind of thing AGENTS.md allows under "Where things go"): its mass and
 // extinction coefficient with the counts behind them, its regions drawn as a figure to
-// copy or save, and its sequence numbered in tens. The inspector keeps the summary.
+// copy or save, and its sequence numbered in tens. The inspector keeps the summary. It
+// opens from there, the right-click menu, or a double-click on the protein (`proteinAt`).
 
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
@@ -18,7 +19,8 @@ import { openDialog } from "../ui/modal.ts";
 import { figureElement, figureFont, figureMeasure, figurePng } from "./proteinFigure.ts";
 import type { DocContext } from "../doc/context.ts";
 import type { SeqFeature } from "../lib/seqdata.ts";
-import { protein } from "../doc/analysis.ts";
+import { orfFeature, orfs, protein } from "../doc/analysis.ts";
+import type { Focus } from "../doc/store.ts";
 import { openProteinRegionDialog } from "./proteinRegionDialog.ts";
 import { copyText } from "./inspector.ts";
 
@@ -28,6 +30,21 @@ import { copyText } from "./inspector.ts";
  * sequence out of sight.
  */
 const figureChoice: { detail: "domains" | "all"; scale: boolean; list: boolean } = { detail: "all", scale: true, list: false };
+
+/**
+ * The protein a double-click on the map or in the sequence opens: that of a CDS, of one of
+ * its regions (the dialog then picks the region, once it is selected) or of an ORF. Null
+ * for anything else, where a double-click does what two clicks do.
+ */
+export function proteinAt(ctx: DocContext, hit: Focus): { feature: SeqFeature; of: "CDS" | "ORF" } | null {
+  const d = ctx.store.data;
+  if (hit.kind === "orf") {
+    const orf = orfs(d, ctx.options.orfOptions).find(o => o.id === hit.id);
+    return orf ? { feature: orfFeature(orf), of: "ORF" } : null;
+  }
+  const f = hit.kind === "feature" ? d.features.find(x => x.id === hit.id) : undefined;
+  return f && f.type.toUpperCase() === "CDS" ? { feature: f, of: "CDS" } : null;
+}
 
 /** The protein of a CDS, or of an ORF (`orfFeature`, which has no regions): `of` names which. */
 export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "ORF" = "CDS") {

@@ -671,33 +671,6 @@ async function main() {
     await s.shot("04-pcr-neb");
     check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && (await s.exec("return document.querySelector('[data-focus=\"program-1:0:cycles\"]')?.value")) === "25" && /Final extension/.test(nebPcr), nebPcr.slice(-400));
     check("The final product has a GC strip and a suggested digest", await s.exec("return !!document.querySelector('.sv-pcr-gc .sv-gc') && document.querySelector('.sv-pcr-digest')?.textContent.includes('564 + 314 bp')"));
-    // A change made elsewhere (here Settings) draws the dialog again without taking focus
-    // off the control that has it; each check below leaves the Tms where it found them.
-    const keepsFocus = async (selector, nebPrimer) => {
-      await s.exec(`document.querySelector('.sv-pcr-result').dataset.drawn = '1'; document.querySelector(${JSON.stringify(selector)}).focus();`);
-      await s.exec(`return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: ${nebPrimer} } })`);
-      const redrawn = await s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
-      return redrawn && (await s.exec(`return document.activeElement === document.querySelector(${JSON.stringify(selector)})`));
-    };
-    // Every site crowds the names, and a stack of them would push the product itself out of
-    // the dialog, so the ones past the last lane are counted where they cut.
-    await choose("Product cut-site filter", "all");
-    const crowded = await s.waitFor("document.querySelector('.sv-pcr-product-map button[data-more]')", 5000);
-    const counted = await s.exec(`const chip = document.querySelector('.sv-pcr-product-map button[data-more]'); chip.click();
-      return { chip: chip.textContent, height: parseFloat(document.querySelector('.sv-pcr-product-map').style.height), ticks: document.querySelectorAll('.sv-pcr-product-map .sv-pcr-tick').length, detail: document.querySelector('.sv-pcr-site-detail').textContent };`);
-    check(
-      "Sites too many to name are counted where they cut, and the chip names them",
-      crowded && /^\+\d+$/.test(counted.chip) && counted.ticks > 0 && counted.height < 200 && /^\d+ more sites? here: \w/.test(counted.detail),
-      JSON.stringify(counted)
-    );
-    await s.shot("04-pcr-crowded");
-    const chipKept = await keepsFocus("button[data-more]", 460);
-    check("A Settings change leaves focus on the counted sites", chipKept);
-    await choose("Product cut-site filter", "unique6");
-    await s.waitFor("!document.querySelector('.sv-pcr-product-map button[data-more]')", 5000);
-    // Back to the Tms the program checks below were written for.
-    await tmMethod("neb");
-    await s.waitFor("document.querySelector('[data-focus=\"program-1:0:cycles\"]')", 5000);
     const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
       const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
       edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');
@@ -734,8 +707,14 @@ async function main() {
       resetReady && (await s.exec(`return document.querySelector('[data-focus="program-1:1:temp"]')?.value === ${JSON.stringify(annealed)} && document.activeElement === document.querySelector('[data-focus=copy-program]')`)),
       `annealing at ${annealed} °C`
     );
-    // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it.
-    // A menu, a button in the program, one in the footer.
+    // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
+    // whether a menu, a button in the program, one in the footer or a crowd of sites counted below.
+    const keepsFocus = async (selector, nebPrimer) => {
+      await s.exec(`document.querySelector('.sv-pcr-result').dataset.drawn = '1'; document.querySelector(${JSON.stringify(selector)}).focus();`);
+      await s.exec(`return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: ${nebPrimer} } })`);
+      const redrawn = await s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
+      return redrawn && (await s.exec(`return document.activeElement === document.querySelector(${JSON.stringify(selector)})`));
+    };
     const menuKept = await keepsFocus("select[aria-label='Template']", 450);
     const programKept = await keepsFocus("button[data-focus='copy-program']", 400);
     const footerKept = await keepsFocus("button[data-focus='copy-sequence']", 350);
@@ -2247,6 +2226,20 @@ async function main() {
     await choose("Forward primer", "Dark PCR F"); await sleep(150); await choose("Reverse primer", "Dark PCR R");
     if (await s.waitFor("document.querySelector('.sv-pcr-program .sv-prog-trace')", 5000)) {
       await s.shot("13-dark-pcr");
+      // This plasmid's cloning site holds a dozen enzymes within a few bases: a lane each
+      // would push the product itself out of the dialog, so the rest are counted where they
+      // cut, and the chip over them names them when it is clicked.
+      const counted = await s.exec(`const chip = document.querySelector('.sv-pcr-product-map button[data-more]'); if (!chip) return null; chip.focus(); chip.click();
+        return { chip: chip.textContent, height: parseFloat(document.querySelector('.sv-pcr-product-map').style.height), ticks: document.querySelectorAll('.sv-pcr-product-map .sv-pcr-tick').length, detail: document.querySelector('.sv-pcr-site-detail').textContent };`);
+      check(
+        "Sites too many to name are counted where they cut, and the chip names them",
+        !!counted && /^\+\d+$/.test(counted.chip) && counted.ticks > 0 && counted.height < 200 && /^\d+ more sites? here: \w/.test(counted.detail),
+        JSON.stringify(counted)
+      );
+      await s.shot("13-dark-pcr-counted");
+      // Which sites have names of their own depends on the width, so a redraw is where that
+      // chip used to be lost, taking the focus with it.
+      check("A Settings change leaves focus on the counted sites", await keepsFocus("button[data-more]", 460));
       await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
       await s.shot("13-dark-pcr-program");
     } else check("In dark, the PCR program opens", false);

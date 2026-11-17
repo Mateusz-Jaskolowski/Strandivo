@@ -21,19 +21,20 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
   choice.digest = digest ? digestName(digest) : "";
   const detail = h("p", { class: "sv-small sv-dim sv-pcr-site-detail", "aria-live": "polite" });
   const map = h("div", { class: "sv-pcr-product-map", "aria-label": "Cut sites in the final linear product" });
-  choice.site = pickSite(data.sites, choice.site, digest)?.id ?? "";
+  // Only a click is kept here: without one, the site described follows the digest chosen at the time.
+  if (!data.sites.some(site => site.id === choice.site)) choice.site = "";
   // Filled by each drawing, as which sites are too many to name depends on the width.
   let crowds: LabelCrowd[] = [];
   const updateDetail = () => {
     const crowd = crowds.find(c => c.id === choice.more);
     if (!crowd) choice.more = "";
-    const site = crowd ? null : data.sites.find(site => site.id === choice.site);
+    const site = crowd ? null : pickSite(data.sites, choice.site, pickDigest(data.digests, choice.digest));
     detail.textContent = crowd
       ? `${crowd.sites.length} more ${crowd.sites.length === 1 ? "site" : "sites"} here: ${crowd.sites.map(m => m.site.enzyme).join(", ")}.`
       : site
         ? `${site.enzyme} · cuts after base ${fmt(site.cut)} · ${site.cuts} ${site.cuts === 1 ? "site" : "sites"} in the product, ${data.templateCounts.get(site.enzyme) ?? 0} in the template`
         : "No cut sites match this list and filter.";
-    map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(!crowd && b.dataset.site === choice.site)));
+    map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(!!site && b.dataset.site === site.id)));
     map.querySelectorAll<HTMLElement>("button[data-more]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.more === choice.more)));
   };
   const digestSizes = h("span", { class: "sv-mono sv-small" });
@@ -55,6 +56,7 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
       onchange: (e: Event) => {
         choice.digest = (e.target as HTMLSelectElement).value;
         updateDigest();
+        updateDetail();
       }
     },
     data.digests.map(d => h("option", { value: digestName(d), selected: digestName(d) === choice.digest }, digestName(d)))

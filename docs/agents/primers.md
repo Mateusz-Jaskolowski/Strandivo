@@ -86,7 +86,9 @@ and CI checks that they exist.
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
   the product, its GC and the digest out of the dialog, so the sites past those lanes keep
   their marks where they cut and a chip over each crowd counts them, naming them under the
-  strip when it is clicked. Which sites have a name of their own therefore depends on the
+  strip when it is clicked. The site described under the map is the one clicked, if it is
+  still drawn, and otherwise one the chosen digest uses (`pickSite`), so `ProductViewChoice`
+  keeps only a click, never the default, or a later digest would leave it on the first one's. Which sites have a name of their own therefore depends on the
   width, so the dialog measures the map as soon as its body is in the page rather than a
   frame later, or focus would go looking for a control the first drawing didn't have. It says what to expect on a gel, never that the
   product is the right one or that two enzymes share a buffer. What is said about the

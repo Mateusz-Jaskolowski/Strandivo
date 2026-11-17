@@ -895,6 +895,16 @@ async function main() {
     await redraws(() => choose("Product enzyme list", listAtStart));
     await redraws(() => choose("Product cut-site filter", filterAtStart));
     check("Putting both menus back draws the sites it started with", (await s.exec(chipTotal)) === chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${await s.exec(chipTotal)} sites`);
+    // Before any site is clicked, the one described is a site of the digest chosen, whichever that is. Only when
+    // the list offers a second digest, so a list with one has nothing to try.
+    const digestOptions = await s.exec("return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Suggested digest'] option\")).map(o => o.value);");
+    if (digestOptions.length > 1) {
+      const siteDetail = () => s.exec("return document.querySelector('.sv-pcr-site-detail')?.textContent ?? ''");
+      await choose("Suggested digest", digestOptions[1]);
+      const described = await siteDetail();
+      check("With no site clicked, the site described follows the digest chosen", digestOptions[1].split(" + ").some(name => described.startsWith(`${name} · `)), `${digestOptions[1]}: ${described}`);
+      await choose("Suggested digest", digestOptions[0]);
+    }
     // Enter accepts a field's value and leaves focus in it, with the dialog open and nothing else taking the key.
     const enterField = '[data-focus="program-1:1:temp"]';
     const enterBefore = await s.exec(`const el = document.querySelector('${enterField}'); const previous = el.value; el.value = String(Number(previous) + 1); el.dispatchEvent(new Event('input')); el.focus(); return previous;`);

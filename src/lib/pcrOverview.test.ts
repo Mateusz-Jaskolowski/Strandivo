@@ -358,6 +358,9 @@ test("the digest and site shown are kept while they are still offered", () => {
   assert.equal(pickSite(sites, bam.id, null), bam);
   // With nothing clicked, a site of the suggested digest comes first, else the leftmost.
   assert.equal(pickSite(sites, "", { enzymes: ["BamHI"], sizes: [], score: 0 }), bam);
+  // The view keeps only a click, so each digest picked gets its own site until one is clicked, which then holds.
+  assert.equal(pickSite(sites, "", { enzymes: ["EcoRI"], sizes: [], score: 0 }), eco);
+  assert.equal(pickSite(sites, bam.id, { enzymes: ["EcoRI"], sizes: [], score: 0 }), bam);
   assert.equal(pickSite(sites, "gone", null), eco);
   assert.equal(pickSite([], "", null), null);
 });

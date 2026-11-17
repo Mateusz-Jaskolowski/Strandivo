@@ -8,9 +8,10 @@
 // issue's number. The issue is public, so the
 // reporter's email address and any attached file never go in it: they are emailed to the
 // maintainer alone, with the issue's link. It logs nothing (wrangler.toml) and keeps
-// only two numbers a day (schema.sql): the reports that came, which past DAILY_REPORTS
-// are turned away, and the ones GitHub turned down. How often one network sends is held
-// back by Cloudflare's rate limiter.
+// only two numbers a day (schema.sql): the reports that came and the ones GitHub turned
+// down. Past DAILY_REPORTS of the first less the second, reports are turned away; past
+// DAILY_FAILURES of the second, GitHub isn't asked again that day. How often one network
+// sends is held back by Cloudflare's rate limiter.
 
 import { codeSpan, crashLines, describeSystem, FEEDBACK_KINDS, fenced, reportProblem } from "../../../src/lib/feedback.ts";
 
@@ -24,10 +25,17 @@ const FROM = "noreply@strandivo.com";
 /**
  * Reports taken in a day (UTC), from everyone together. An app can't keep a secret, so
  * anyone can send reports; this caps the issues a flood makes in a day, and the emails
- * about them. Past it, reports are turned away until the next day, and the maintainer
- * hears so once.
+ * about them. A report GitHub turns down gives its place back; one turned away keeps it.
+ * Past the limit, reports are turned away until the next day, and the maintainer hears so
+ * when the day fills.
  */
 export const DAILY_REPORTS = 30;
+/**
+ * Reports GitHub may turn down in a day before it isn't asked again until the next. They
+ * give their places back, so this keeps a day of refusals (an outage, the App suspended
+ * during a flood) from being endless calls to GitHub.
+ */
+export const DAILY_FAILURES = 100;
 
 // Any origin: the app's page is tauri://localhost on a Mac and http://tauri.localhost on
 // Windows, and the service takes no cookies or credentials, so nothing is gained by naming them.
@@ -101,13 +109,21 @@ export function failureEmail(reason, to, firstToday = false) {
     reason,
     "",
     "The reporter was told so and still has the report to send another way. Nothing from it is in this email.",
-    ...(firstToday ? ["Only the day's first is emailed: reports later today may have been turned down too."] : []),
+    ...(firstToday
+      ? [
+          "Only the day's first is emailed: reports later today may have been turned down too.",
+          `After ${DAILY_FAILURES} in a day it stops asking GitHub until midnight UTC, even once GitHub is back. To start it again sooner: https://github.com/${REPO}/blob/main/services/feedback/README.md#if-it-is-flooded`
+        ]
+      : []),
     "",
     `Setting up the GitHub App: https://github.com/${REPO}/blob/main/services/feedback/README.md#the-github-app`
   ], to);
 }
 
-/** The maintainer's email when the day's reports reach DAILY_REPORTS: sent once a day. */
+/**
+ * The maintainer's email when the day's reports reach DAILY_REPORTS: sent when the day
+ * fills, once, or again if a report GitHub turns down later makes room.
+ */
 export function limitEmail(day, to) {
   return noticeEmail("Today's limit of reports was reached", [
     `${DAILY_REPORTS} reports reached the feedback service today (${day}, UTC), its limit for a day. Until midnight UTC it turns reports away, and reporters are told to send theirs another way.`,
@@ -267,22 +283,27 @@ export function networkKey(ip) {
   return `${all.slice(0, 4).map(g => parseInt(g, 16).toString(16)).join(":")}::/64`;
 }
 
-/** Adds one to the day's reports or failures (schema.sql) and gives the new count as `n`. */
+/**
+ * Adds one to the day's reports or failures (schema.sql). For reports it answers `n`, the
+ * day's reports less those GitHub turned down, and `failures`; for failures, `n` is the
+ * day's refusals. A place is taken before GitHub is asked and a refusal gives it back, so
+ * reports sent together can't pass the limit.
+ */
 export const COUNT_SQL = {
-  reports: "INSERT INTO days (day, reports) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET reports = reports + 1 RETURNING reports AS n",
+  reports: "INSERT INTO days (day, reports) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET reports = reports + 1 RETURNING reports - failures AS n, failures",
   failures: "INSERT INTO days (day, failures) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET failures = failures + 1 RETURNING failures AS n"
 };
 
 /**
- * Adds one to the day's count of `what` and answers the new count, or null without a
- * database or when it fails. A report then goes through as it did before there was one:
+ * Adds one to the day's count of `what` and answers the row (COUNT_SQL), or null without
+ * a database or when it fails. A report then goes through as it did before there was one:
  * reports matter more than the limit, and the per-network limit still holds.
  */
 async function countToday(db, what, day) {
   if (!db) return null;
   try {
     const row = await db.prepare(COUNT_SQL[what]).bind(day).first();
-    return typeof row?.n === "number" ? row.n : null;
+    return typeof row?.n === "number" ? row : null;
   } catch {
     return null;
   }
@@ -334,8 +355,9 @@ export async function handle(request, env, deps = {}) {
   // Everyone's reports together, for the day. Not 429, which copies of the app take to
   // mean "wait a minute": every copy shows any other answer's reason as it is.
   const today = await countToday(env.COUNTS, "reports", day);
-  if (today !== null && today > DAILY_REPORTS) {
-    if (today === DAILY_REPORTS + 1) await notify(env, sendMail, to => limitEmail(day, to));
+  if (today !== null && today.failures >= DAILY_FAILURES) return answer(502, { error: "GitHub didn't take the issue just now." });
+  if (today !== null && today.n > DAILY_REPORTS) {
+    if (today.n === DAILY_REPORTS + 1) await notify(env, sendMail, to => limitEmail(day, to));
     return answer(503, { error: "Too many reports today." });
   }
 
@@ -344,7 +366,7 @@ export async function handle(request, env, deps = {}) {
     issue = await createIssue(report, env, fetchFn);
   } catch (e) {
     const reason = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 300);
-    const failures = await countToday(env.COUNTS, "failures", day);
+    const failures = today === null ? null : (await countToday(env.COUNTS, "failures", day))?.n ?? null;
     if (failures === null || failures === 1) await notify(env, sendMail, to => failureEmail(reason, to, failures === 1));
     return answer(502, { error: "GitHub didn't take the issue just now." });
   }

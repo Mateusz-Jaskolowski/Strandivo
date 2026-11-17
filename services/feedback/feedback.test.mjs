@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { appJwt, attachmentName, DAILY_REPORTS, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, networkKey, pkcs8 } from "./src/index.mjs";
+import { appJwt, attachmentName, COUNT_SQL, DAILY_FAILURES, DAILY_REPORTS, githubToken, handle, issueBody, maintainerEmail, MAX_BYTES, networkKey, pkcs8 } from "./src/index.mjs";
 
 /** The text of an email the Worker sent with one part, decoded. */
 const mailText = raw => Buffer.from(raw.split("\r\n\r\n")[1], "base64").toString();
@@ -41,9 +41,10 @@ function counts() {
 
 /**
  * GitHub gives the App a token for each report (`tokens`), then files its issue (`github`).
- * The per-network limit records what it was asked about (`limited`).
+ * The per-network limit records what it was asked about (`limited`). `hold`, if given, is
+ * awaited before GitHub answers an issue, so a test can keep reports in flight.
  */
-function service({ github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } }, tokenStatus = 201, mailFails = false, limited = false, env = {}, now } = {}) {
+function service({ github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } }, tokenStatus = 201, mailFails = false, limited = false, env = {}, now, hold } = {}) {
   const calls = { tokens: [], github: [], mail: [], limited: [] };
   const deps = {
     now,
@@ -54,6 +55,7 @@ function service({ github = { status: 201, body: { number: 42, html_url: "https:
         return new Response(JSON.stringify(tokenStatus === 201 ? { token: "ghs_report" } : { message: "no" }), { status: tokenStatus });
       }
       calls.github.push(call);
+      if (hold) await hold();
       return new Response(JSON.stringify(github.body), { status: github.status });
     },
     sendMail: async (_env, raw) => {
@@ -322,4 +324,114 @@ test("without a database, or when it fails, reports go through as before", async
     assert.equal(refused.calls.mail.length, 2);
     assert.doesNotMatch(mailText(refused.calls.mail[0]), /day's first/);
   }
+});
+
+/** The subject of one of the Worker's own emails (plain ASCII). */
+const subjectOf = raw => /^Subject: (.*)\r\n/m.exec(raw)[1];
+
+test("a report GitHub turns down doesn't use up one of the day's places", async () => {
+  const db = counts();
+  const github = { status: 403, body: { message: "Resource not accessible by integration" } };
+  const s = service({ env: { COUNTS: db }, github, now: day1 });
+  // GitHub is down for longer than the day's limit: each report is turned down, none turned away.
+  for (let i = 0; i < DAILY_REPORTS + 5; i++) assert.equal((await s.send(report)).status, 502);
+  // It comes back: the day still has all its places.
+  github.status = 201;
+  github.body = { number: 42, html_url: "https://github.com/o/r/issues/42" };
+  for (let i = 0; i < DAILY_REPORTS; i++) assert.equal((await s.send(report)).status, 200);
+  assert.equal((await s.send(report)).status, 503);
+  // The maintainer was told of the first refusal, and of the full day once it was full.
+  assert.deepEqual(s.calls.mail.map(subjectOf), ["A report couldn't be filed", "Today's limit of reports was reached"]);
+  assert.match(mailText(s.calls.mail[0]), new RegExp(`After ${DAILY_FAILURES} in a day it stops asking GitHub`));
+  assert.deepEqual(db.rows(), [{ day: "2026-11-14", reports: 2 * DAILY_REPORTS + 6, failures: DAILY_REPORTS + 5 }]);
+});
+
+test("after a day of refusals GitHub isn't asked again, and the maintainer isn't told the day is full", async () => {
+  const db = counts();
+  const s = service({ env: { COUNTS: db }, github: { status: 500, body: {} }, now: day1 });
+  for (let i = 0; i < DAILY_FAILURES; i++) assert.equal((await s.send(report)).status, 502);
+  for (let i = 0; i < DAILY_REPORTS + 5; i++) {
+    const res = await s.send(report);
+    assert.equal(res.status, 502);
+    assert.deepEqual(await res.json(), { error: "GitHub didn't take the issue just now." });
+  }
+  assert.equal(s.calls.tokens.length, DAILY_FAILURES);
+  assert.equal(s.calls.github.length, DAILY_FAILURES);
+  // Only the first refusal is emailed; the limit's email is for a day the reports filled.
+  assert.deepEqual(s.calls.mail.map(subjectOf), ["A report couldn't be filed"]);
+  // A new day starts again.
+  assert.equal((await service({ env: { COUNTS: db }, now: day2 }).send(report)).status, 200);
+});
+
+/** GitHub turns down every third report it is asked to file. */
+const everyThird = () => {
+  let n = 0;
+  return { get status() { return ++n % 3 === 0 ? 500 : 201; }, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } };
+};
+
+test("the day's limit counts the issues filed, with refusals in between", async () => {
+  const s = service({ env: { COUNTS: counts() }, github: everyThird(), now: day1 });
+  const statuses = [];
+  for (let i = 0; i < 45; i++) statuses.push((await s.send(report)).status);
+  assert.equal(statuses.filter(x => x === 200).length, DAILY_REPORTS);
+  assert.equal(statuses.filter(x => x === 502).length, 14);
+  assert.equal(statuses[44], 503);
+});
+
+test("reports sent together never file more than the day's limit", async () => {
+  const s = service({ env: { COUNTS: counts() }, github: everyThird(), now: day1 });
+  const statuses = await Promise.all(Array.from({ length: 4 * DAILY_REPORTS }, () => s.send(report).then(r => r.status)));
+  assert.ok(statuses.filter(x => x === 200).length <= DAILY_REPORTS, statuses.filter(x => x === 200).length + " filed");
+});
+
+test("a day's count is the reports that came, less those GitHub turned down", async () => {
+  const db = counts();
+  const take = async () => ({ ...(await db.prepare(COUNT_SQL.reports).bind("2026-11-14").first()) });
+  const refuse = async () => ({ ...(await db.prepare(COUNT_SQL.failures).bind("2026-11-14").first()) });
+  assert.deepEqual(await take(), { n: 1, failures: 0 });
+  assert.deepEqual(await take(), { n: 2, failures: 0 });
+  assert.deepEqual(await refuse(), { n: 1 });
+  assert.deepEqual(await take(), { n: 2, failures: 1 });
+  assert.deepEqual(db.rows(), [{ day: "2026-11-14", reports: 3, failures: 1 }]);
+});
+
+test("a refusal gives its place back to the next report, and never one more", async () => {
+  // GitHub answers an issue only when the test lets it, so reports can be held in flight.
+  const waiting = [];
+  const github = { status: 201, body: { number: 42, html_url: "https://github.com/o/r/issues/42" } };
+  const s = service({ env: { COUNTS: counts() }, github, now: day1, hold: () => new Promise(go => waiting.push(go)) });
+  const settled = [];
+  const send = () => s.send(report).then(res => (settled.push(res.status), res.status));
+  const until = ok => new Promise((done, fail) => {
+    const end = Date.now() + 5000;
+    (function check() { ok() ? done() : Date.now() > end ? fail(new Error("timed out")) : setTimeout(check, 1); })();
+  });
+  const first = Array.from({ length: DAILY_REPORTS }, send);
+  await until(() => waiting.length === DAILY_REPORTS);
+  // GitHub turns one down, and its place goes back.
+  github.status = 500;
+  waiting.shift()();
+  await until(() => settled.length === 1);
+  assert.deepEqual(settled, [502]);
+  github.status = 201;
+  // The next report takes that place, and the one after it finds the day full.
+  const next = send();
+  await until(() => waiting.length === DAILY_REPORTS);
+  assert.equal(await send(), 503);
+  // Everything still in flight is filed: 30 in all, never 31.
+  waiting.splice(0).forEach(go => go());
+  const statuses = await Promise.all([...first, next]);
+  assert.equal(statuses.filter(x => x === 200).length, DAILY_REPORTS);
+  assert.equal(s.calls.mail.filter(m => subjectOf(m) === "Today's limit of reports was reached").length, 1);
+});
+
+test("a report the database didn't count gives no place back when GitHub turns it down", async () => {
+  const db = counts();
+  // Counting the day's reports fails; counting refusals would still work.
+  const flaky = { prepare: sql => (sql === COUNT_SQL.reports ? { bind: () => ({ first: async () => { throw new Error("D1 is busy"); } }) } : db.prepare(sql)) };
+  const s = service({ env: { COUNTS: flaky }, github: { status: 500, body: {} }, now: day1 });
+  for (let i = 0; i < 3; i++) assert.equal((await s.send(report)).status, 502);
+  // Nothing was taken, so nothing is given back; each refusal is emailed, as without a database.
+  assert.deepEqual(db.rows(), []);
+  assert.equal(s.calls.mail.length, 3);
 });

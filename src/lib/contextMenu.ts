@@ -55,6 +55,7 @@ export type MenuAction =
   | "copy-primer"
   | "copy-for-ordering"
   | "copy-site"
+  | "enzyme-details"
   | "digest"
   | "add-personal-enzyme"
   | "remove-personal-enzyme"
@@ -220,7 +221,7 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
     }
     case "cutsite": {
       const saved = c.personalEnzymes?.includes(enzymeOf(target.id));
-      return [item("copy-site", "Copy recognition site"), item("digest", `Digest with ${enzymesText(digestEnzymes(target.id, c.enzymes))}…`), show,
+      return [item("copy-site", "Copy recognition site"), item("enzyme-details", "Enzyme details…"), item("digest", `Digest with ${enzymesText(digestEnzymes(target.id, c.enzymes))}…`), show,
         saved ? item("remove-personal-enzyme", "Remove from My enzymes") : item("add-personal-enzyme", "Add to My enzymes")];
     }
     case "orf":

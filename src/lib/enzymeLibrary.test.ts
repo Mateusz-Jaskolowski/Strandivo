@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, newEnzymeStocks, parseEnzymeLibrary, parseEnzymeTable, unknownEnzymes, type LabEnzyme } from "./enzymeLibrary.ts";
-import { enzymeName, findCutSites, KNOWN_ENZYMES, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { cutDrawing, enzymeCut, enzymeName, enzymeRelatives, enzymeSite, enzymeSites, enzymeSuppliers, findCutSites, KNOWN_ENZYMES, MAX_CUT_DISTANCE, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { REBASE_ENZYMES } from "./rebaseEnzymes.ts";
 
 const labOptions = (names: readonly string[] = [], enzymeFilter: EnzymeFilter = "all"): EnzymeOptions => ({ enzymeSource: "lab", enzymeFilter, labEnzymes: names, personalEnzymes: [] });
 const commonOptions = (labEnzymes: readonly string[], enzymeFilter: EnzymeFilter): EnzymeOptions => ({ enzymeSource: "common", enzymeFilter, labEnzymes, personalEnzymes: [] });
@@ -16,16 +17,109 @@ test("stock exports preserve products, locations and notes when imported", () =>
   assert.deepEqual(parseEnzymeLibrary(formatEnzymeLibrary([])), []);
 });
 
-test("enzyme names: the curated list's own, else any TeselaGen knows, as the user wrote it", () => {
+test("enzyme names: any enzyme REBASE lists as sold, as REBASE writes it", () => {
   assert.equal(enzymeName(" ecori "), "EcoRI");
   assert.equal(enzymeName("bsmbi"), "BsmBI");
   assert.equal(enzymeName("esp3i"), "Esp3I");
   assert.equal(enzymeName("ACC65I"), "Acc65I");
   assert.equal(enzymeName("dpni"), "DpnI");
+  assert.equal(enzymeName("i-scei"), "I-SceI");
   assert.equal(enzymeName("EcoRI-HF"), null);
   assert.equal(enzymeName(""), null);
+  // Isoschizomers no company sells are left out, so the list doesn't open on them.
+  assert.equal(enzymeName("BspJ106I"), null);
   assert.ok(KNOWN_ENZYMES.includes("Acc65I") && KNOWN_ENZYMES.indexOf("EcoRI") < KNOWN_ENZYMES.indexOf("Acc65I"), "curated names come first");
   assert.equal(new Set(KNOWN_ENZYMES.map(n => n.toLowerCase())).size, KNOWN_ENZYMES.length);
+});
+
+test("cuts are marked with ^, with Ns out to a cut past the site, and the ends they leave", () => {
+  const cut = (name: string) => {
+    const c = enzymeCut(name);
+    return c && `${c.notation} ${c.ends}`;
+  };
+  // Same site, other ends: the reason a lab's stock names the isoschizomer it has.
+  assert.equal(cut("KpnI"), "GGTAC^C 3′ GTAC");
+  assert.equal(cut("acc65i"), "G^GTACC 5′ GTAC");
+  assert.equal(cut("EcoRI"), "G^AATTC 5′ AATT");
+  assert.equal(cut("PvuII"), "CAG^CTG Blunt");
+  assert.equal(cut("BglI"), "GCCNNNN^NGGC 3′ NNN");
+  // Past the site (REBASE's GGTCTC(1/5) and so on): Ns out to the further cut, so for a 5′
+  // overhang the Ns after the ^ are the overhang.
+  assert.equal(cut("BsaI"), "GGTCTCN^NNNN 5′ NNNN");
+  assert.equal(cut("BbsI"), "GAAGACNN^NNNN 5′ NNNN");
+  assert.equal(cut("PaqCI"), "CACCTGCNNNN^NNNN 5′ NNNN");
+  assert.equal(cut("BtsI"), "GCAGTGNN^ 3′ NN");
+  assert.equal(cut("BsmI"), "GAATGCN^ 3′ CN");
+  // More than five Ns are counted, as NEB writes them.
+  assert.equal(cut("FokI"), "GGATG(N)9^NNNN 5′ NNNN");
+  assert.equal(cut("MmeI"), "TCCRAC(N)20^ 3′ NN");
+  assert.equal(cut("EcoP15I"), "CAGCAG(N)25^NN 5′ NN");
+  assert.deepEqual(enzymeCut("BsaI") && { site: enzymeCut("BsaI")!.site, rebase: enzymeCut("BsaI")!.rebase }, { site: "GGTCTC", rebase: "GGTCTC(1/5)" });
+  // A site that isn't a palindrome, cut inside it: REBASE counts back from its end
+  // (CCGC(-3/-1)), a ^ reads at a glance and the ends give the bottom strand.
+  assert.equal(cut("AciI"), "C^CGC 5′ CG");
+  assert.equal(cut("GsaI"), "CCCAG^C 3′ CCAG");
+  assert.equal(cut("I-SceI"), "TAGGGATAA^CAGGGTAAT 3′ ATAA");
+  // Cut outside a palindromic core, on both strands alike.
+  assert.equal(cut("TspRI"), "CASTGNN^ 3′ NNCASTGNN");
+  // TeselaGen's list had A^ATT.
+  assert.equal(cut("MluCI"), "^AATT 5′ AATT");
+  assert.equal(cut("BcgI"), "(10/12)CGANNNNNNTGC(12/10) Cuts both sides");
+  assert.equal(enzymeCut("EcoRI-HF"), null);
+  assert.equal(enzymeSite("TspRI"), "CASTGNN");
+  assert.equal(enzymeSite("BcgI"), "CGANNNNNNTGC");
+  assert.deepEqual(enzymeSuppliers("BtsI"), ["New England Biolabs"]);
+});
+
+test("isoschizomers cut a site the same way, neoschizomers elsewhere", () => {
+  assert.deepEqual(enzymeRelatives("Acc65I"), { isoschizomers: [], neoschizomers: ["KpnI"] });
+  assert.ok(enzymeRelatives("BsaI").isoschizomers.includes("Eco31I"));
+  assert.ok(enzymeRelatives("BsmBI").isoschizomers.includes("Esp3I"));
+  assert.ok(enzymeRelatives("FokI").neoschizomers.includes("BtsCI"));
+  // Ns put in front of TspRI's site for the search are compared like any other base.
+  assert.deepEqual(enzymeRelatives("TspRI").isoschizomers, ["TscAI"]);
+  assert.deepEqual(enzymeRelatives("NoSuchI"), { isoschizomers: [], neoschizomers: [] });
+  for (const name of KNOWN_ENZYMES) {
+    const r = enzymeRelatives(name);
+    for (const other of r.isoschizomers) assert.ok(enzymeRelatives(other).isoschizomers.includes(name), `${other} is an isoschizomer of ${name}`);
+    for (const other of r.neoschizomers) assert.ok(enzymeRelatives(other).neoschizomers.includes(name), `${other} is a neoschizomer of ${name}`);
+  }
+});
+
+test("a cut is drawn on both strands, with one more base each side", () => {
+  assert.deepEqual(cutDrawing("EcoRI"), { top: "NGAATTCN", bottom: "NCTTAAGN", site: [1, 7], cuts: [{ top: 2, bottom: 6 }] });
+  assert.deepEqual(cutDrawing("KpnI")?.cuts, [{ top: 6, bottom: 2 }]);
+  // Out to a cut past the site: BsaI's GGTCTCN^NNNN.
+  assert.deepEqual(cutDrawing("BsaI"), { top: "NGGTCTCNNNNNN", bottom: "NCCAGAGNNNNNN", site: [1, 7], cuts: [{ top: 8, bottom: 12 }] });
+  // TspRI's site is CASTGNN; the Ns searched for in front of it aren't.
+  assert.deepEqual(cutDrawing("TspRI"), { top: "NNNCASTGNNN", bottom: "NNNGTSACNNN", site: [3, 10], cuts: [{ top: 10, bottom: 1 }] });
+  // BcgI's (10/12)CGANNNNNNTGC(12/10): both cuts.
+  assert.deepEqual(cutDrawing("BcgI")?.cuts, [{ top: 3, bottom: 1 }, { top: 37, bottom: 35 }]);
+  assert.deepEqual(cutDrawing("BcgI")?.site, [13, 25]);
+  assert.equal(cutDrawing("NoSuchI"), null);
+});
+
+test("one enzyme's sites are found whichever list it is in", () => {
+  assert.deepEqual(enzymeSites("GAATTCAAAGAATTCGGTACC", false, "EcoRI").map(h => h.start), [0, 9]);
+  assert.deepEqual(enzymeSites("GAATTCAAAGAATTCGGTACC", false, "Acc65I").map(h => [h.start, h.cut, h.bottomCut]), [[15, 16, 20]]);
+  assert.deepEqual(enzymeSites("GAATTCAAAGAATTCGGTACC", false, "NoSuchI"), []);
+});
+
+test("every enzyme sold finds its own site and cuts near it", () => {
+  // Each code as its first base, between flanks longer than any cut is from its site.
+  const FIRST: Record<string, string> = { R: "A", Y: "C", S: "C", W: "A", K: "G", M: "A", B: "C", D: "A", H: "A", V: "A", N: "A" };
+  const flank = "T".repeat(MAX_CUT_DISTANCE + 10);
+  const names = REBASE_ENZYMES.trim().split("\n").map(line => line.split("\t")[0]);
+  assert.ok(names.length > 500 && names.every(n => KNOWN_ENZYMES.includes(n)));
+  for (const name of names) {
+    const site = enzymeSite(name).replace(/[RYSWKMBDHVN]/g, c => FIRST[c]);
+    const sequence = flank + site + flank;
+    const hit = scanSites(sequence, false, [name]).find(h => h.enzyme === name && Math.min(h.start, h.end) <= flank.length && Math.max(h.start, h.end) >= flank.length + site.length - 1);
+    assert.ok(hit, `${name} finds ${site}`);
+    for (const cut of [hit.cut, hit.bottomCut]) {
+      assert.ok(cut >= flank.length - MAX_CUT_DISTANCE && cut <= flank.length + site.length + MAX_CUT_DISTANCE, `${name} cuts within ${MAX_CUT_DISTANCE} bases of its site`);
+    }
+  }
 });
 
 test("a saved list keeps enzymes this version doesn't know, as written, instead of failing", () => {

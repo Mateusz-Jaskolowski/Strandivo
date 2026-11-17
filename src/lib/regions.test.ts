@@ -9,6 +9,7 @@ import { parseSequenceFile, serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { protein } from "../doc/analysis.ts";
 import { carryRegions, formatRegion, isClipped, layoutRegions, nextRegionColor, parseRegion, parseRegionFeatureNote, proteinRegionFeatures, regionFeatureNotes, proteinRegionTargets, regionColor, regionRange, regionSpans, regionsOf, regionOfFeatureId, regionTree, selectedProteinResidues, REGIONS_QUALIFIER, variableProteinFeatures, withRegions, type ProteinRegion } from "./regions.ts";
+import { codingPositions } from "./genetics.ts";
 import { cloneVariants } from "./variants.ts";
 import { splitVariable } from "./variable.ts";
 import type { CloneDifference, CloneResult } from "./types.ts";
@@ -142,12 +143,12 @@ test("turning a CDS round keeps each region on its bases", () => {
   const n = d.sequence.length;
   const f = cds(d);
   const spans = (x: SeqFeature) => regionsOf(x).map(r => regionSpans(x, r, n));
-  const turned = carryRegions<SeqFeature>(f, { ...f, strand: -1 }, n, n, p => p);
+  const turned = carryRegions<SeqFeature>(f, { ...f, strand: -1 }, n, n, r => r);
   assert.deepEqual(regionsOf(turned).map(r => [r.name, r.start, r.end]), [["TM2", 11, 13], ["TM1", 18, 20]]);
   assert.deepEqual(spans(turned).reverse(), spans(f));
-  const back = carryRegions(turned, { ...turned, strand: 1 }, n, n, p => p);
+  const back = carryRegions(turned, { ...turned, strand: 1 }, n, n, r => r);
   assert.deepEqual(regionsOf(back), regionsOf(f));
-  assert.equal(carryRegions(f, { ...f, strand: 0 }, n, n, p => p).notes, f.notes, "no direction counts from the same end");
+  assert.equal(carryRegions(f, { ...f, strand: 0 }, n, n, r => r).notes, f.notes, "no direction counts from the same end");
 });
 
 test("on a reverse strand, upstream is to the right", () => {
@@ -159,24 +160,139 @@ test("on a reverse strand, upstream is to the right", () => {
   assert.deepEqual(residues(inserted), [["TM1", 3, 5], ["TM2", 10, 12]], "past the stop");
 });
 
-test("replacing bases one at a time, as typing over them does, moves nothing", () => {
+test("replacing bases with as many moves nothing, even at a region's or the CDS's edge", () => {
   let d = doc();
   const want = residues(d);
-  // Not the CDS's first or last base: overwriting those cuts any feature short by a base.
-  for (let i = 1; i < CODING.length - 1; i++) {
+  for (let i = 0; i < CODING.length; i++) {
     const at = 10 + i;
-    d = replaceRange(d, { start: at, end: at }, d.sequence[at]).data;
+    d = replaceRange(d, { start: at, end: at }, "A").data;
     assert.deepEqual(residues(d), want, `after base ${i}`);
+    assert.deepEqual([cds(d).start, cds(d).end], [10, 10 + CODING.length - 1]);
   }
-  d = replaceRange(d, { start: 10 + 7, end: 10 + 11 }, "GCTGG").data;
-  assert.deepEqual(residues(d), want, "after five bases at once");
+  d = replaceRange(doc(), { start: 10 + 6, end: 10 + 14 }, "GGTGGTGGT").data;
+  assert.deepEqual(residues(d), want, "TM1's three codons at once");
+});
+
+/** Three regions in a row, as FR1, CDR1 and FR2 are: A 1–4, B 5–8, C 9–12. */
+const tiled = () => doc({ regions: [region("A", 1, 4), region("B", 5, 8), region("C", 9, 12)] });
+/** Sequence positions of residue `from`'s first base to residue `to`'s last, in `tiled`. */
+const codons = (from: number, to: number) => ({ start: 10 + (from - 1) * 3, end: 10 + to * 3 - 1 });
+
+test("a region replaced whole keeps the new bases, however many", () => {
+  const b = codons(5, 8);
+  assert.deepEqual(residues(replaceRange(tiled(), b, "GGT".repeat(4)).data), [["A", 1, 4], ["B", 5, 8], ["C", 9, 12]]);
+  assert.deepEqual(residues(replaceRange(tiled(), b, "GGT".repeat(2)).data), [["A", 1, 4], ["B", 5, 6], ["C", 7, 10]]);
+  assert.deepEqual(residues(replaceRange(tiled(), b, "GGT".repeat(6)).data), [["A", 1, 4], ["B", 5, 10], ["C", 11, 14]]);
+  assert.deepEqual(residues(replaceRange(tiled(), codons(5, 5), "GGTGGT").data), [["A", 1, 4], ["B", 5, 9], ["C", 10, 13]], "its first codon");
+});
+
+test("a replacement across a region's edge leaves the new bases in neither, and what lies inside it goes", () => {
+  // A's last codon and B's first, replaced by three codons: residues 4–6 belong to no region.
+  assert.deepEqual(residues(replaceRange(tiled(), codons(4, 5), "GGT".repeat(3)).data), [["A", 1, 3], ["B", 7, 9], ["C", 10, 13]]);
+  assert.deepEqual(residues(replaceRange(tiled(), codons(4, 5), "GGT".repeat(2)).data), [["A", 1, 4], ["B", 5, 8], ["C", 9, 12]], "as many: nothing moves");
+  assert.deepEqual(residues(replaceRange(tiled(), codons(4, 9), "GGT".repeat(4)).data), [["A", 1, 3], ["C", 8, 10]], "B lay inside");
+});
+
+test("typing or deleting a codon a base at a time moves what is downstream by a residue", () => {
+  let d = doc();
+  for (let i = 0; i < 3; i++) d = insertBases(d, 10 + 3 + i, "GCT"[i]);
+  assert.deepEqual(residues(d), [["TM1", 4, 6], ["TM2", 11, 13]]);
+  assert.equal(translated(d, "TM1"), translated(doc(), "TM1"));
+  assert.ok(regionsOf(cds(d)).every(r => !r.codingBases), "back on whole residues");
+  d = doc();
+  for (let i = 0; i < 3; i++) d = deleteRange(d, { start: 10 + 5 - i, end: 10 + 5 - i });
+  assert.deepEqual(residues(d), [["TM1", 2, 4], ["TM2", 9, 11]]);
+  assert.equal(translated(d, "TM2"), translated(doc(), "TM2"));
+  d = doc();
+  for (let i = 0; i < 3; i++) d = insertBases(d, 10 + 9 + i, "GCT"[i]);
+  assert.deepEqual(residues(d), [["TM1", 3, 6], ["TM2", 11, 13]], "inside TM1, it grows");
+});
+
+test("a region between codons keeps its exact bases, in the file too", async () => {
+  const d = doc();
+  const shifted = insertBases(d, 10 + 3, "G");
+  assert.deepEqual(residues(shifted), residues(d), "its nearest residues");
+  assert.deepEqual(regionsOf(cds(shifted))[0].codingBases, { start: 8, end: 16 });
+  const text = serialize(toParsed({ data: shifted, extra: {}, wholeSources: [] }, shifted), "genbank");
+  const back = fromParsed((await parseSequenceFile(new TextEncoder().encode(text), "t.gb")).sequences[0]).data;
+  assert.deepEqual(regionsOf(cds(back)), regionsOf(cds(shifted)));
+  const tm1 = regionsOf(cds(shifted))[0];
+  assert.ok(formatRegion(tm1).includes("codingBases"));
+  assert.ok(!formatRegion({ ...tm1, start: 4, end: 6 }).includes("codingBases"), "residues set without them win");
+  assert.equal(parseRegion(formatRegion(tm1).replace("3-5", "4-6"))!.codingBases, undefined, "as written by a version that doesn't know them");
 });
 
 test("a frameshift and its repair leave regions where they were", () => {
   const d = doc();
   const shifted = insertBases(d, 10 + 3, "G");
   assert.deepEqual(residues(shifted), residues(d));
-  assert.deepEqual(residues(deleteRange(shifted, { start: 10 + 3, end: 10 + 3 })), residues(d));
+  assert.deepEqual(regionsOf(cds(deleteRange(shifted, { start: 10 + 3, end: 10 + 3 }))), regionsOf(cds(d)));
+});
+
+test("random edits keep each region on the same bases as a feature on them", () => {
+  // Seeded, so a failure can be replayed.
+  const rng = (seed: number) => {
+    let a = seed >>> 0;
+    const next = () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    return { next, int: (lo: number, hi: number) => lo + Math.floor(next() * (hi - lo + 1)) };
+  };
+  const bases = (r: ReturnType<typeof rng>, k: number) => Array.from({ length: k }, () => "ACGT"[r.int(0, 3)]).join("");
+  /** Where a region's bases are now: its exact bases, else its residues', as one range. */
+  const placed = (d: SeqData, x: ProteinRegion) => {
+    const f = cds(d);
+    const all = codingPositions(f, d.sequence.length);
+    const from = x.codingBases ? x.codingBases.start - 1 : (x.start - 1) * 3;
+    const to = x.codingBases ? x.codingBases.end - 1 : Math.min(all.length, x.end * 3) - 1;
+    const ends = [all[from], all[to]];
+    return f.strand === -1 ? [ends[1], ends[0]] : ends;
+  };
+  for (let seed = 1; seed <= 400; seed++) {
+    const r = rng(seed);
+    const strand: Strand = r.next() < 0.5 ? 1 : -1;
+    const residuesCount = r.int(12, 30);
+    const length = residuesCount * 3;
+    const regions = Array.from({ length: r.int(1, 4) }, (_, k) => {
+      const start = r.int(1, residuesCount - 1);
+      return region(`R${k}`, start, Math.min(residuesCount, start + r.int(0, 8)));
+    });
+    // A feature on each region's bases, which edits map as they always have.
+    const twins: SeqFeature[] = regions.map(x => {
+      const first = (x.start - 1) * 3;
+      const last = x.end * 3 - 1;
+      const [start, end] = strand === 1 ? [15 + first, 15 + last] : [15 + length - 1 - last, 15 + length - 1 - first];
+      return { id: x.name, name: x.name, type: "misc_feature", start, end, strand, notes: {}, raw: {} };
+    });
+    const f: SeqFeature = { id: "cds", name: "gene", type: "CDS", start: 15, end: 15 + length - 1, strand, notes: withRegions({}, regions), raw: {} };
+    let d: SeqData = { name: "t", description: "", circular: false, sequence: bases(r, 15 + length + 15), features: [f, ...twins], primers: [], sources: [] };
+    for (let step = 0; step < 15; step++) {
+      const n = d.sequence.length;
+      const c = cds(d);
+      const at = Math.max(0, Math.min(n - 1, r.int(c.start - 4, c.end + 4)));
+      const kind = r.int(0, 3);
+      const end = Math.min(n - 1, at + r.int(0, 8));
+      const what = ["insert", "delete", "replace", "type"][kind];
+      // New bases at an edge go to the side the edit card was told, or to neither.
+      const side = (["neither", "before", "after"] as const)[r.int(0, 2)];
+      if (kind === 0) d = insertBases(d, at, bases(r, r.int(1, 4)), side);
+      else if (kind === 1) d = deleteRange(d, { start: at, end: Math.min(n - 1, at + r.int(0, 3)) });
+      else if (kind === 2) d = replaceRange(d, { start: at, end }, bases(r, r.next() < 0.3 ? end - at + 1 : r.int(1, 9)), side).data;
+      else for (let k = 0; k < r.int(1, 4); k++) d = insertBases(d, at + k, bases(r, 1), side);
+      if (!d.features.some(x => x.type === "CDS")) break;
+      const label = `seed ${seed} step ${step} (${what} at ${at}, ${side})`;
+      const kept = regionsOf(cds(d));
+      for (const twin of twins) {
+        const now = d.features.find(x => x.id === twin.id);
+        const x = kept.find(y => y.name === twin.id);
+        assert.equal(!!x, !!now, `${label}: ${twin.id} should ${now ? "stay" : "go"}`);
+        if (x && now) assert.deepEqual(placed(d, x), [now.start, now.end], `${label}: ${twin.id}`);
+      }
+    }
+  }
 });
 
 test("regions and the rest of a feature's qualifiers survive saving", async () => {

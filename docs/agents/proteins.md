@@ -17,15 +17,21 @@ and CI checks that they exist.
   translated. They are numbered in residues of the CDS, so rotating, turning round and
   cloning need no code; only what changes the CDS's length or first base does (`carryRegions`):
   edits (from `mapAnnotations`), moving an end or turning it round in the inspector, and a
-  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Ends round to the nearest
-  codon, not down: replacing a base is a deletion and an insertion, and rounding down would
-  creep everything downstream a residue per base typed over. A replacement across a region's
-  edge can still move that edge, as it clips a feature's own end. Each also keeps the
+  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Each region's
+  bases go through an edit as a feature's do, so the rules for replacing bases (`AGENTS.md`)
+  hold for regions too. A base typed or deleted at a time is a third of a residue, which
+  rounding to residues would lose every time (three codons typed left everything
+  downstream three residues off), so a region left between codons keeps its exact bases
+  (`codingBases`, coding bases from 1, in the optional JSON) beside its nearest residues
+  until it is back on whole ones. They count only while they round to its residues:
+  anything that sets the residues alone (the region editor, a version that doesn't know
+  them) makes them stale, and then the residues win. Each also keeps the
   entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
   makes a real one for files going to other software.
 - **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
   after the original qualifier fields holds stable ids, colour, a parent id, a library
-  design and the user's note (lines joined by line breaks); keep reading the original
+  design, the user's note (lines joined by line breaks) and, for a region between codons,
+  its exact bases; keep reading the original
   four/five-field form. Keys this version doesn't know are kept in `more` and written
   back, so a field added later survives this version rewriting the CDS's regions. Versions
   up to 0.4.0 keep only what they know: they drop every note on a CDS when they rewrite

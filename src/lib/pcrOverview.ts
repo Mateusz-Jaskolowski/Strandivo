@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Analysis of the final, linear PCR product, including tails and primer edits.
-import { extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { cutsBothSides, enzymeName, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { gcProfile, overviewWindow } from "./gc.ts";
-import { digestSequence, fragmentSize } from "./gel.ts";
+import { digestSequence, fragmentSize, LADDERS } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
@@ -105,21 +105,35 @@ export function productDigestSizes(length: number, hits: SiteHit[]): number[] | 
 
 /**
  * From this score up, a digest's fragments are far enough apart to suggest: the smallest is
- * a tenth of the product, and each is a tenth smaller than the one above it. It is this
- * suggestion's own bar, well clear of the 2% within which the gel draws bands as one.
+ * a tenth of the product, and each is a tenth smaller than the one above it, and none is
+ * too small for a gel to show (`SMALLEST_BAND`). It is this suggestion's own bar, well clear
+ * of the 2% within which the gel draws bands as one.
  */
 export const DISTINCT_DIGEST = 0.1;
 
-/** How far apart a digest's fragments are: the smallest as a share of the product, or of the next one up. */
+/** The smallest band of any ladder the gel offers: a fragment below it is not one a gel can show. */
+export const SMALLEST_BAND = Math.min(...LADDERS.map(ladder => Math.min(...ladder.bands)));
+
+/**
+ * How far apart a digest's fragments are: the smallest as a share of the product, or of the
+ * next one up. Relative sizes alone would call 64 and 39 bp from a 103 bp product far apart,
+ * so a digest with a fragment below `SMALLEST_BAND` is scaled to stay under
+ * `DISTINCT_DIGEST`, and those are still ordered among themselves.
+ */
 function digestScore(sizes: number[], length: number): number {
-  return Math.min(sizes[sizes.length - 1] / length, ...sizes.slice(1).map((s, i) => (sizes[i] - s) / sizes[i]));
+  const apart = Math.min(sizes[sizes.length - 1] / length, ...sizes.slice(1).map((s, i) => (sizes[i] - s) / sizes[i]));
+  return sizes[sizes.length - 1] < SMALLEST_BAND ? (apart * DISTINCT_DIGEST) / 2 : apart;
 }
 
 /** Prefer one enzyme; try pairs only if none gives well-separated, substantial fragments. */
 export function suggestedDigests(length: number, hits: SiteHit[], members: readonly string[]): SuggestedDigest[] {
   const byName = new Map<string, SiteHit[]>();
-  const allowed = new Set(members);
-  for (const h of hits) if (allowed.has(h.enzyme) && completeProductCut(h, length)) byName.set(h.enzyme, [...(byName.get(h.enzyme) ?? []), h]);
+  // Names as the sites carry them, as the drawn sites do: a lab's "ecori" is EcoRI. A name
+  // REBASE doesn't list can't be in a hit found by scanning, so it is kept as written.
+  const allowed = new Set(members.map(m => enzymeName(m) ?? m));
+  // An enzyme that cuts on both sides of its site is left out: only the cut after it is found,
+  // so its fragments would be one too few (BcgI's 324 + 288 are 290 + 34 + 288).
+  for (const h of hits) if (allowed.has(h.enzyme) && !cutsBothSides(h.enzyme) && completeProductCut(h, length)) byName.set(h.enzyme, [...(byName.get(h.enzyme) ?? []), h]);
   // Small patterns are readable; a digest with many sites is still accessible in Digest.
   const names = [...byName]
     .filter(([, sites]) => sites.length <= 3)
@@ -173,12 +187,18 @@ export const HIGH_GC = 65;
  */
 const isSimple = (template: TemplateKind) => template !== "complex";
 
-/** What NEB says about this product for the polymerase picked, and nothing the app has no source for. */
+/**
+ * What is said about this product for the polymerase picked. The GC sentence is about the
+ * product, so every polymerase gets it. What comes from `PCR_GUIDANCE` (the longest product,
+ * the enhancer) is said only where NEB's row for the polymerase has been read, and
+ * nothing is borrowed from another member of its Tm family.
+ */
 export function productAdvice(polymerase: string, template: TemplateKind, length: number, gcPercent: number): string[] {
   const guidance = PCR_GUIDANCE[polymerase];
   const out: string[] = [];
-  // Rounded as the dialog shows it, so a product shown as 65% GC is one this warns about.
-  if (Math.round(gcPercent) >= HIGH_GC) out.push(`The product is ${Math.round(gcPercent)}% GC, which can be hard to amplify.${guidance?.enhancer ? ` ${guidance.enhancer}` : ""}`);
+  // Compared as counted, not rounded: NEB's 65% is a threshold, so 64.6% is below it. The
+  // warning gives one decimal, as the header above the strip does.
+  if (gcPercent >= HIGH_GC) out.push(`The product is ${gcPercent.toFixed(1)}% GC, which can be hard to amplify.${guidance?.enhancer ? ` ${guidance.enhancer}` : ""}`);
   if (guidance) {
     const max = isSimple(template) ? guidance.maxLength.simple : guidance.maxLength.complex;
     if (length > max) out.push(`The product is longer than NEB’s ${max.toLocaleString("en")} bp maximum for ${guidance.product} on this template.`);

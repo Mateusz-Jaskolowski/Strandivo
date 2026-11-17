@@ -6,6 +6,7 @@
 // primers with tails. Kept apart from the dialog so tests can reach them. Pure functions.
 
 import { DEFAULT_POLYMERASE, nebPolymerase } from "./polymerases.ts";
+import { TEMPLATES, type TemplateKind } from "./pcrProtocols.ts";
 import { hasChanges, type PrimerAlignment } from "./primerAlign.ts";
 import { annealingTemp, TM_METHODS, type TmSettings } from "./primers.ts";
 
@@ -35,4 +36,16 @@ export function tmStrip(settings: TmSettings, polymerase: string): { text: strin
 export function wholePrimerTa(forward: string, reverse: string, a: PrimerAlignment, b: PrimerAlignment, conf: TmSettings): number | null {
   if (hasChanges(a) || hasChanges(b) || !(a.tail || b.tail)) return null;
   return annealingTemp(forward.toUpperCase(), reverse.toUpperCase(), conf)?.ta ?? null;
+}
+
+/**
+ * What a program was made for, in a line: the template, the product, where it anneals (in
+ * whole degrees, as the dialog says) and in how many stages. The strip over a program kept
+ * from an earlier setup shows it, and Copy writes it under the title, so a change of the
+ * annealing temperature or of the stages shows as one, as a change of product does. `taFull`
+ * is the second stage's temperature, or null for one stage.
+ */
+export function programContext(template: TemplateKind, length: number, ta: number, taFull: number | null): string {
+  const anneal = taFull === null ? `${Math.round(ta)} °C` : `${Math.round(ta)} °C, then ${Math.round(taFull)} °C`;
+  return `${TEMPLATES.find(t => t.id === template)!.label} · ${length.toLocaleString("en")} bp · annealing at ${anneal} · ${taFull === null ? "1 stage" : "2 stages"}`;
 }

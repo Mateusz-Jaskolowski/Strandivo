@@ -11,9 +11,8 @@ import {
   acceptProgramValue,
   cancelProgramValue,
   editedProgramText,
-  MAX_TEMP,
-  MIN_TEMP,
   parseProgramValue,
+  PROGRAM_LIMITS,
   programKey,
   programRows,
   programTemperatureY,
@@ -79,7 +78,7 @@ export function editableProgram(
     modified.hidden = !p.modified;
     resetButton.disabled = !generated || (!p.modified && !stale);
     copyButton.disabled = p.errors.length > 0;
-    error.textContent = p.errors.length ? `Enter temperatures from ${MIN_TEMP} to ${MAX_TEMP} °C, times above 0 and whole numbers of cycles.` : "";
+    error.textContent = p.errors.length ? PROGRAM_LIMITS : "";
     for (const [key, { input }] of controls) {
       const kind = key.split(":")[2] as ProgramField;
       input.setAttribute("aria-invalid", String(p.errors.includes(key)));

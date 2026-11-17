@@ -191,8 +191,23 @@ test("the program's key follows what the program is made from, and nothing else"
     assert.notEqual(programInputKey({ ...input, ...other }), programInputKey(input), JSON.stringify(other));
   }
   // A primer renamed, or a Tm setting that leaves the annealing temperature where it was,
-  // makes the same program, so an edited one is not reported as made for another setup.
-  assert.equal(syncProgram(programDraft(snapshot(programInputKey(input))), snapshot(programInputKey(input)))!.original.key, programInputKey(input));
+  // makes the same program, so an edited one is not reported as made for another setup:
+  // it is kept as it is, under the key it was made for, and that is the current one.
+  const key = programInputKey(input);
+  const edited = programDraft(snapshot(key));
+  edited.values[programKey(1, 1, "temp")] = "64";
+  assert.equal(syncProgram(edited, snapshot(programInputKey({ ...input }))), edited);
+  assert.equal(edited.original.key, programInputKey({ ...input, twoStage: false }));
+  // Another annealing temperature is another setup: the edit stays, but under the key it was made for.
+  const moved = snapshot(programInputKey({ ...input, ta: 65 }));
+  assert.equal(syncProgram(edited, moved), edited);
+  assert.notEqual(edited.original.key, moved.key);
+  // An untouched program is kept on the same key, and follows the inputs when they change.
+  const untouched = programDraft(snapshot(key));
+  assert.equal(syncProgram(untouched, snapshot(key)), untouched);
+  const followed = syncProgram(untouched, moved)!;
+  assert.notEqual(followed, untouched);
+  assert.equal(followed.original.key, moved.key);
 });
 
 test("untouched programs follow inputs; custom programs keep their baseline and provenance", () => {

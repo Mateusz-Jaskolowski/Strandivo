@@ -695,10 +695,18 @@ async function main() {
     check("An unfinished program field blocks copying and keeps its text, focus and caret on redraw", invalidProgram.blocked && await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); return el.value === 'unfinished' && document.activeElement === el && el.selectionStart === 2 && el.selectionEnd === 5;`));
     await s.press(ESCAPE);
     check("Escape cancels unfinished text without closing the PCR dialog", await s.exec(`return document.querySelector('[data-focus="program-1:0:seconds"]')?.value`) === invalidProgram.previous);
+    // Reset is for a program that was changed, so change one first: with the program as the
+    // protocol has it, and its inputs the same, there is nothing to put back and it is off.
+    const annealed = await s.exec(`const el = document.querySelector('[data-focus="program-1:1:temp"]'); const previous = el.value; el.value = String(Number(previous) + 5); el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); return previous;`);
+    const resetReady = await s.waitFor("!document.querySelector('.sv-prog-modified')?.hidden && !document.querySelector('[data-focus=reset-program]')?.disabled", 5000);
     await s.click("button[data-focus=reset-program]");
-    await s.waitFor("!document.querySelector('.sv-prog-modified') || document.querySelector('.sv-prog-modified').hidden", 5000);
-    // Reset disables itself, so it hands focus on rather than leaving it nowhere.
-    check("Reset moves focus to Copy program", await s.exec("return document.activeElement === document.querySelector('[data-focus=copy-program]')"));
+    await s.waitFor("document.querySelector('.sv-prog-modified')?.hidden !== false", 5000);
+    // Reset disables itself once pressed, so it hands focus on rather than leaving it nowhere.
+    check(
+      "Reset puts the program back and moves focus to Copy program",
+      resetReady && (await s.exec(`return document.querySelector('[data-focus="program-1:1:temp"]')?.value === ${JSON.stringify(annealed)} && document.activeElement === document.querySelector('[data-focus=copy-program]')`)),
+      `annealing at ${annealed} °C`
+    );
     // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
     // whether a menu, a button in the program or one in the footer.
     const keepsFocus = async (selector, nebPrimer) => {

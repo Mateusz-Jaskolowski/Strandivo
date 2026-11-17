@@ -23,8 +23,8 @@ flood, as an app can't keep a secret and anyone can send a report:
   being the first 64 bits of the address.
 - An attached file is named `.gb` in the email, whatever the report called it, so it never
   opens as a web page or a script.
-- Half of a character cut in two (half an emoji), which JSON can carry but GitHub may not take,
-  becomes � in the issue and the email.
+- Half of a character cut in two (half an emoji), which JSON can carry but GitHub may
+  not take, becomes � in the issue and the email.
 
 Issues are filed by a GitHub App, so they show its bot as their author rather than the
 maintainer: for each report the Worker signs a token request with the App's private key
@@ -125,23 +125,26 @@ The day's reports stop at the limit on their own. To stop them all, suspend the 
 installation: GitHub → Settings → Applications → Installed GitHub Apps → Configure →
 Suspend. Reports then fail, and reporters are offered another way to send them;
 Unsuspend there brings it back, unless 100 reports were turned down that day: it then
-stops asking GitHub until midnight UTC. To start it again sooner, from the repository's
-root:
+stops asking GitHub until midnight UTC. To start it again sooner, count the issues filed
+today, UTC (the limit email links to them, or search the repository's issues for
+`label:from-app created:YYYY-MM-DD`), then, from the repository's root, with that number
+for `N`:
 
 ```sh
-npx wrangler@4 d1 execute strandivo-feedback-counts --remote --command "UPDATE days SET reports = reports - failures, failures = 0 WHERE day = date('now')"
+npx wrangler@4 d1 execute strandivo-feedback-counts --remote --command "UPDATE days SET reports = N, failures = 0 WHERE day = date('now')"
 ```
 
-It keeps the day's limit where it was and forgets the day's refusals. Close the day's
-issues by their `from-app` label.
+The day then has its places less the issues already filed, and forgets its refusals and
+the reports it turned away. The same reopens a day the limit closed with nothing filed.
+Close the day's issues by their `from-app` label.
 
 The 30 are everyone's together, so anyone can use them up: one network does in about six
 minutes, and a burst across midnight can file up to 60. Reporters are then offered Copy,
 Email and Post on GitHub until midnight UTC. Telling senders apart would mean keeping
 something about them, which this service doesn't. A report turned away keeps its place,
-so more than 30 at once while GitHub is down can use the day up with no issue filed, and
-a report GitHub turns down after the day filled can send the limit email again. If it
-keeps happening, suspend the App as above.
+so if 30 are turned away while GitHub is down (60 or more at once), the day is used up
+with no issue filed, and a report GitHub turns down after the day filled can send the
+limit email again. If it keeps happening, suspend the App as above.
 
 ## Tests
 

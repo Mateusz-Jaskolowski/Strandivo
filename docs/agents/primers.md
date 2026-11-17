@@ -103,7 +103,10 @@ and CI checks that they exist.
   rate. Temperatures, times and cycle counts are text fields, in both stages, and the last
   step holds until stopped. What is typed lives in a draft (`src/lib/pcrProgramEdit.ts`)
   and survives a redraw, unfinished text and all, while Copy is off until every field
-  reads; a temperature outside `MIN_TEMP`–`MAX_TEMP` is a slip, not a program. A value
+  reads; a temperature outside `MIN_TEMP`–`MAX_TEMP`, a cycle count past `MAX_CYCLES` or a
+  step past `MAX_SECONDS` is a slip, not a program, and one message (`PROGRAM_LIMITS`)
+  gives all the limits. A comma is refused, not read as a decimal point, since the app
+  reads commas as thousands. A value
   counts as entered when the field is left or Enter is pressed, not on the browser's change
   event alone, as a field drawn anew mid-edit fires none; Escape then goes back to that
   value instead of closing the dialog. An edited program stays, with the protocol and the

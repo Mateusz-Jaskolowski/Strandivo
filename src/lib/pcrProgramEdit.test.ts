@@ -3,10 +3,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pcrProgram } from "./pcrProgram.ts";
+import { PCR_PROTOCOLS, templatesFor } from "./pcrProtocols.ts";
 import {
   acceptProgramValue,
   cancelProgramValue,
   editedProgramText,
+  MAX_CYCLES,
+  MAX_SECONDS,
   MAX_TEMP,
   MIN_TEMP,
   parseProgramValue,
@@ -14,6 +17,7 @@ import {
   programDraft,
   programKey,
   programRows,
+  PROGRAM_LIMITS,
   programTemperatureY,
   readProgram,
   syncProgram,
@@ -76,14 +80,86 @@ test("unfinished and invalid fields prevent copying and survive input changes", 
 });
 
 test("a temperature outside a cycler's range is a slip, not a program", () => {
+  assert.equal(MIN_TEMP, 4);
+  assert.equal(MAX_TEMP, 100);
   assert.equal(parseProgramValue("temp", "980"), null);
   assert.equal(parseProgramValue("temp", "-5"), null);
+  assert.equal(parseProgramValue("temp", "0"), null);
+  // Either side of each end: 4 °C is where a hold step sits, and 100 °C is as hot as it goes.
+  assert.equal(parseProgramValue("temp", "3.9"), null);
+  assert.equal(parseProgramValue("temp", "4"), 4);
+  assert.equal(parseProgramValue("temp", "4.1"), 4.1);
+  assert.equal(parseProgramValue("temp", "99.9"), 99.9);
+  assert.equal(parseProgramValue("temp", "100"), 100);
+  assert.equal(parseProgramValue("temp", "100.1"), null);
   assert.equal(parseProgramValue("temp", String(MIN_TEMP)), MIN_TEMP);
   assert.equal(parseProgramValue("temp", String(MAX_TEMP)), MAX_TEMP);
   assert.equal(parseProgramValue("temp", "98.5"), 98.5);
   const d = programDraft(snapshot());
   d.values[programKey(1, 0, "temp")] = "980";
   assert.equal(editedProgramText(d), null);
+});
+
+test("cycles are whole numbers from 1 to 99", () => {
+  assert.equal(MAX_CYCLES, 99);
+  assert.equal(parseProgramValue("cycles", "0"), null);
+  assert.equal(parseProgramValue("cycles", "1"), 1);
+  assert.equal(parseProgramValue("cycles", "99"), 99);
+  assert.equal(parseProgramValue("cycles", "100"), null);
+  assert.equal(parseProgramValue("cycles", "3000"), null);
+  assert.equal(parseProgramValue("cycles", "99999999999999999999"), null);
+  assert.equal(parseProgramValue("cycles", "25.5"), null);
+  const d = programDraft(snapshot());
+  d.values[programKey(1, 0, "cycles")] = "3000";
+  assert.equal(editedProgramText(d), null);
+  assert.deepEqual(readProgram(d).errors, [programKey(1, 0, "cycles")]);
+  d.values[programKey(1, 0, "cycles")] = "99";
+  assert.match(editedProgramText(d)!, /99 cycles:/);
+});
+
+test("a step lasts at most 60 minutes, however it is written", () => {
+  assert.equal(MAX_SECONDS, 3600);
+  assert.equal(parseProgramValue("seconds", "3600"), 3600);
+  assert.equal(parseProgramValue("seconds", "60 min"), 3600);
+  assert.equal(parseProgramValue("seconds", "59 min 59 s"), 3599);
+  assert.equal(parseProgramValue("seconds", "3600.5"), null);
+  assert.equal(parseProgramValue("seconds", "60 min 1 s"), null);
+  assert.equal(parseProgramValue("seconds", "61 min"), null);
+  assert.equal(parseProgramValue("seconds", "99999999999999999999"), null);
+  assert.equal(parseProgramValue("seconds", "0"), null);
+  assert.equal(parseProgramValue("seconds", "0.5"), 0.5);
+  const d = programDraft(snapshot());
+  d.values[programKey(1, 1, "seconds")] = "99999999999999999999";
+  assert.equal(editedProgramText(d), null);
+});
+
+test("a comma is not a decimal point, and the message says to use one", () => {
+  // The app reads commas as thousands, so "58,5" is refused rather than read as 585 or 58.5.
+  assert.equal(parseProgramValue("temp", "58,5"), null);
+  assert.equal(parseProgramValue("seconds", "1,5"), null);
+  assert.equal(parseProgramValue("seconds", "1,5 min"), null);
+  assert.equal(parseProgramValue("cycles", "2,5"), null);
+  assert.equal(parseProgramValue("cycles", "1,000"), null);
+  assert.equal(parseProgramValue("temp", "58.5"), 58.5);
+  const d = programDraft(snapshot());
+  d.values[programKey(1, 1, "temp")] = "58,5";
+  assert.deepEqual(readProgram(d).errors, [programKey(1, 1, "temp")]);
+  assert.equal(PROGRAM_LIMITS, "Temperatures 4–100 °C, 1–99 whole cycles, steps up to 60 min. Use a point for decimals.");
+  // Ranges are written with a dash, not as "from 4 to 100".
+  assert.doesNotMatch(PROGRAM_LIMITS, /\bfrom \d+ to \d+/);
+});
+
+test("every program the protocols generate is within its own limits", () => {
+  for (const [polymerase] of Object.entries(PCR_PROTOCOLS))
+    for (const template of templatesFor(polymerase))
+      for (const length of [60, 878, 5000, 20000])
+        for (const twoStage of [false, true]) {
+          const stages = pcrProgram({ polymerase, template, length, ta: 66, taFull: 72, twoStage });
+          if (!stages) continue;
+          const draft = programDraft({ ...snapshot(), stages });
+          assert.deepEqual(readProgram(draft).errors, [], `${polymerase} ${template} ${length} bp`);
+          assert.equal(readProgram(draft).modified, false);
+        }
 });
 
 test("the program's key follows what the program is made from, and nothing else", () => {

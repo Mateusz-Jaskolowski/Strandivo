@@ -45,13 +45,23 @@ export function cancelProgramValue(draft: ProgramDraft, key: string): boolean {
 }
 
 /**
- * Temperatures a program may use, °C: a cycler's block holds from about 4 °C and denatures
- * below 100 °C, so a value outside these is a slip ("980" for 98.0), not a choice.
+ * What a program field may hold. A cycler's block holds from about 4 °C, where a program's
+ * own hold step sits, and denatures below 100 °C; a protocol runs 1–99 cycles and no step
+ * lasts an hour. A value outside these is a slip ("980" for 98.0, "3000" cycles), not a
+ * choice.
  */
-export const MIN_TEMP = 0;
+export const MIN_TEMP = 4;
 export const MAX_TEMP = 100;
+export const MAX_CYCLES = 99;
+export const MAX_SECONDS = 3600;
 
-/** Bare numbers are seconds; minutes and seconds can be combined. */
+/**
+ * What a refused field is told, once, for all of them. A comma is not a decimal point, as the
+ * app reads commas as thousands separators, so "58,5" is refused rather than read as 585.
+ */
+export const PROGRAM_LIMITS = `Temperatures ${MIN_TEMP}–${MAX_TEMP} °C, 1–${MAX_CYCLES} whole cycles, steps up to ${MAX_SECONDS / 60} min. Use a point for decimals.`;
+
+/** Bare numbers are seconds; minutes and seconds can be combined. Null if unfinished or outside the limits. */
 export function parseProgramValue(field: ProgramField, text: string): number | null {
   const t = text.trim();
   let n = NaN;
@@ -62,7 +72,8 @@ export function parseProgramValue(field: ProgramField, text: string): number | n
   } else if (/^-?\d+(?:\.\d+)?$/.test(t)) n = Number(t);
   if (!Number.isFinite(n)) return null;
   if (field === "temp") return n >= MIN_TEMP && n <= MAX_TEMP ? n : null;
-  return n > 0 && (field !== "cycles" || Number.isSafeInteger(n)) ? n : null;
+  if (field === "cycles") return Number.isInteger(n) && n >= 1 && n <= MAX_CYCLES ? n : null;
+  return n > 0 && n <= MAX_SECONDS ? n : null;
 }
 
 /**

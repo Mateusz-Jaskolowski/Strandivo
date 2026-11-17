@@ -681,6 +681,39 @@ async function main() {
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
     await choose("Ladder", "1 kb ladder");
+    // The reaction mix is NEB's own table for the polymerase, folded until the bench wants it.
+    check("The reaction mix is folded under the program", await s.exec("return document.querySelector('.sv-pcr-mix .sv-fold-link')?.textContent.trim() === 'Show' && !document.querySelector('.sv-mix-table')"));
+    await s.click(".sv-pcr-mix .sv-fold-link");
+    await s.waitFor("document.querySelector('.sv-mix-table')", 3000);
+    const mixRows = await s.exec("return Array.from(document.querySelectorAll('.sv-mix-table tbody tr')).map(tr => Array.from(tr.children).map(td => td.textContent.trim()).join('|'))");
+    check(
+      "The mix is NEB's own M0491 table at the 25 µl it starts from",
+      JSON.stringify(mixRows) ===
+        JSON.stringify([
+          "5X Q5 Reaction Buffer|5|1X",
+          "10 mM dNTPs|0.5|200 µM",
+          "10 µM forward primer|1.25|0.5 µM",
+          "10 µM reverse primer|1.25|0.5 µM",
+          "Q5 High-Fidelity DNA Polymerase|0.25|0.02 U/µl",
+          "Nuclease-free water|15.8|",
+          "Template DNA|1|< 1,000 ng"
+        ]),
+      JSON.stringify(mixRows)
+    );
+    check("One tube's 0.25 µl of polymerase is called out, with NEB's own dilution", /Too little to pipette accurately: Q5 High-Fidelity DNA Polymerase 0.25 µl. Q5 may be diluted in 1X Q5 Reaction Buffer just before use/.test(await s.exec("return document.querySelector('.sv-mix-notes').textContent")));
+    const mixMany = await s.exec(`const n = document.querySelector('.sv-mix-fields input[type=number]'); n.value = '8'; n.dispatchEvent(new Event('change', { bubbles: true }));
+      return { head: Array.from(document.querySelectorAll('.sv-mix-table th')).map(th => th.textContent.trim()), total: Array.from(document.querySelector('.sv-mix-table tfoot tr').children).map(td => td.textContent.trim()), warn: document.querySelectorAll('.sv-mix-notes .sv-text-warn').length };`);
+    check(
+      "Eight reactions make a master mix a tenth over, and the volume is no longer small",
+      JSON.stringify(mixMany) === JSON.stringify({ head: ["Component", "Per reaction, µl", "Mix for 8.8, µl", "Final"], total: ["Master mix", "24", "211.2", ""], warn: 0 }),
+      JSON.stringify(mixMany)
+    );
+    const copiedMix = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__mixCopied = text; } } });
+      document.querySelector('[data-focus="copy-mix"]').click(); return window.__mixCopied;`);
+    check("Copy mix gives the recipe as a notebook would take it", /Q5 High-Fidelity DNA Polymerase \(NEB M0491\), 25 µl × 8.8 reactions/.test(copiedMix) && /Template DNA: 1 µl in each tube/.test(copiedMix) && /Master mix: 211.2 µl in all, 24 µl per tube/.test(copiedMix), copiedMix);
+    await s.exec("delete navigator.clipboard; delete window.__mixCopied;");
+    await s.exec("document.querySelector('.sv-pcr-mix').scrollIntoView({block:'end'})");
+    await s.shot("04-pcr-mix");
     const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
       const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
       edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');

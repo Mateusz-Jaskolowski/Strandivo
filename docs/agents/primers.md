@@ -101,8 +101,9 @@ and CI checks that they exist.
   resolution run as one band, lanes are numbered and named in a key beside the gel, and
   the ladder is the one chosen in either dialog, kept for as long as the window is open.
   Until one is chosen the Digest dialog opens on the first, and this gel on the first that
-  reaches its smallest band (`ladderReaching`, in `src/lib/gel.ts`), following the digest
-  chosen, as the 1 kb ladder draws every band of 312 bp or less on the bottom edge.
+  reaches its smallest band (`ladderReaching`, in `src/lib/gel.ts`), or on the one that goes
+  lowest when none does, following the digest chosen, as the 1 kb ladder draws every band
+  of 312 bp or less on the bottom edge.
   Brightness is a band's share of its own lane, so the gel says where things run, not how
   much of each was loaded. Names stack in `MAX_LABEL_LANES` lanes at most: a
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed

@@ -76,9 +76,13 @@ test("gel: it opens on the first ladder that reaches the smallest band, else the
   const [a, b] = [{ ...LADDERS[0], id: "a", bands: [900, 300] }, { ...LADDERS[0], id: "b", bands: [900, 100] }];
   assert.equal(ladderReaching(400, [b, a]).id, "b");
   assert.equal(ladderReaching(400, [a, b]).id, "a");
-  // Under every ladder's smallest band nothing reaches, so the first stands.
-  assert.equal(ladderReaching(99).id, LADDERS[0].id);
-  assert.equal(ladderReaching(1).id, LADDERS[0].id);
+  // Under every ladder's smallest band nothing reaches, so the first that goes lowest stands:
+  // the 1 kb Plus ladder (100 bp, as the 100 bp ladder, which comes after it), not the 1 kb.
+  assert.equal(ladderReaching(99).id, "1kb-plus");
+  assert.equal(ladderReaching(39).id, "1kb-plus");
+  assert.equal(ladderReaching(1).id, "1kb-plus");
+  assert.equal(ladderReaching(50, [a, b]).id, "b");
+  assert.equal(ladderReaching(50, [b, a]).id, "b");
   // Wherever one reaches, the smallest band is drawn clear of the bottom edge.
   for (let size = 100; size <= 20000; size += 7) assert.ok(bandY(size, ladderReaching(size)) < 0.99, `${size} bp`);
 });

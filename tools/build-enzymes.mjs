@@ -136,7 +136,7 @@ export const REBASE_VERSION = "${version}";
 
 /** REBASE's codes for the companies that sell restriction enzymes. */
 export const SUPPLIERS: Readonly<Record<string, string>> = {
-${Object.entries(suppliers).map(([code, name]) => `  ${code}: "${name.replace(/"/g, '\\"')}"`).join(",\n")}
+${Object.entries(suppliers).map(([code, name]) => `  ${code}: ${JSON.stringify(name)}`).join(",\n")}
 };
 
 /**

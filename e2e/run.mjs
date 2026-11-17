@@ -165,6 +165,7 @@ class Session {
 
 const CTRL = "\uE009";
 const SHIFT = "\uE008";
+const ARROW_LEFT = "\uE012";
 const ARROW_RIGHT = "\uE014";
 const ESCAPE = "\uE00C";
 const ENTER = "\uE007";
@@ -771,6 +772,16 @@ async function main() {
     await s.press("z", [CTRL]);
     await sleep(400);
     check("Ctrl+Z puts the primer back", JSON.stringify(await ends()) === JSON.stringify(beforeStep));
+    // A click on an end's handle takes the keyboard (WebKit focuses no button clicked), so the
+    // arrow keys move that end: the left one is this reverse primer's 3′ end.
+    const leftHandle = await s.exec("const b = Array.from(document.querySelectorAll('.sv-ctx-handle')).sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left)[0]; b.scrollIntoView({ block: 'nearest' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2];");
+    await s.clickAt(leftHandle);
+    await s.press(ARROW_LEFT);
+    await sleep(400);
+    const afterKey = await ends();
+    check("Clicking an end's handle lets the arrow keys move that end", JSON.stringify(afterKey) === JSON.stringify(afterStep), `${beforeStep} → ${afterKey}`);
+    await s.exec(`${doc} s.undo();`);
+    await sleep(300);
     const strands = await s.exec("const r = document.querySelector('.sv-ctx .sv-bases').getBoundingClientRect(); return [r.left + 30, r.top + 9, r.left + 230, r.top + 27];");
     await s.drag([strands[0], strands[1]], [strands[2], strands[3]]);
     const ctxSel = await s.exec(`${doc} return { range: s.selection.range, focus: s.selection.focus, bands: document.querySelectorAll('.sv-ctx .sv-sel-band').length, text: String(getSelection()), still: /AmpR-NdeI-F/.test(document.querySelector('.sv-ctx-name').textContent) };`);

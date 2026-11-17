@@ -50,6 +50,8 @@ with Unreleased's notes and leaves them where they are.
   as it is, and the message that says so can still make the edit. Delete bases from the
   right-click menu or the inspector still deletes at once, and says when it shifts a
   gene's frame.
+- **Arrow keys on a primer's ends**: click an end of a primer in the Primers tab, and the
+  arrow keys now extend or trim it, as the hint there says.
 
 ## 0.5.0
 

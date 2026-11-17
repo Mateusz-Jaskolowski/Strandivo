@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import { NEB_POLYMERASES } from "./polymerases.ts";
 import { PCR_PROTOCOLS, templatesFor, type PcrProtocol, type TemplateKind } from "./pcrProtocols.ts";
-import { durationText, extensionSeconds, FIRST_CYCLES, offerTwoStages, pcrProgram, programNotes, programSource, programText, programTitle, secondsPerKb, templateNotes, twoStagesPossible } from "./pcrProgram.ts";
+import { durationText, extensionSeconds, offerTwoStages, pcrProgram, programNotes, programSource, programText, programTitle, secondsPerKb, templateNotes, twoStagesPossible } from "./pcrProgram.ts";
 
 const steps = (st: ReturnType<typeof pcrProgram>, i: number) => st![i].steps.map(s => [s.name, s.temp, s.seconds]);
 
@@ -129,8 +129,9 @@ test("a colony gets the long first denaturation where NEB gives one", () => {
 test("two stages: the first cycles anneal on the pairing parts, the rest on the whole primers", () => {
   const p = pcrProgram({ polymerase: "q5", template: "plasmid", length: 737, ta: 65, taFull: 72, twoStage: true })!;
   assert.equal(p.length, 4);
-  assert.equal(p[1].cycles, FIRST_CYCLES);
-  assert.equal(p[2].cycles, 25 - FIRST_CYCLES);
+  // Five cycles on the pairing parts, then the other 20 of Q5's 25 on the whole primers.
+  assert.equal(p[1].cycles, 5);
+  assert.equal(p[2].cycles, 20);
   assert.deepEqual(steps(p, 1), [["Denature", 98, 10], ["Anneal", 65, 20], ["Extend", 72, 15]]);
   // 72 °C is where Q5 anneals and extends in one step.
   assert.deepEqual(steps(p, 2), [["Denature", 98, 10], ["Anneal and extend", 72, 15]]);
@@ -149,6 +150,11 @@ test("a second stage is offered when the whole primers anneal 5 °C higher", () 
   // A gain of 5 °C to 0.1 °C is enough, whichever way the sum rounds.
   assert.equal(offerTwoStages(56.3, 61.3), true);
   assert.equal(offerTwoStages(54.6, 59.6), true);
+  // The edge lies half a step of NEB's 0.1 °C below 5 °C, so 4.9 °C is no offer and 4.96 °C is.
+  assert.equal(offerTwoStages(65, 69.9), false);
+  assert.equal(offerTwoStages(65, 69.96), true);
+  assert.equal(offerTwoStages(56.3, 61.2), false);
+  assert.equal(offerTwoStages(56.3, 61.26), true);
 });
 
 test("a second stage is made only where it can be used", () => {
@@ -159,6 +165,25 @@ test("a second stage is made only where it can be used", () => {
   assert.equal(pcrProgram({ ...base, taFull: null, twoStage: true })!.length, 3);
   assert.equal(twoStagesPossible({ ...base, taFull: 72 }), true);
   assert.equal(twoStagesPossible({ ...base, polymerase: "q5u", taFull: 72 }), false);
+});
+
+test("no second stage is made when the first would take all the cycles", () => {
+  // No NEB protocol has so few cycles, so one is made up and stood in for a moment.
+  PCR_PROTOCOLS["made-up"] = { ...PCR_PROTOCOLS.q5, cycles: { plasmid: 5, complex: 6, colony: 3 } };
+  try {
+    const base = { polymerase: "made-up", length: 737, ta: 65, taFull: 72, twoStage: true };
+    // Five cycles, or fewer, are all the first stage takes: none is left for the second.
+    for (const template of ["plasmid", "colony"] as const) {
+      assert.equal(twoStagesPossible({ ...base, template }), false, template);
+      const p = pcrProgram({ ...base, template })!;
+      assert.deepEqual(p.map(st => st.cycles), [null, PCR_PROTOCOLS["made-up"].cycles[template], null], template);
+    }
+    // One more cycle is enough for a second stage of one.
+    assert.equal(twoStagesPossible({ ...base, template: "complex" }), true);
+    assert.deepEqual(pcrProgram({ ...base, template: "complex" })!.map(st => st.cycles), [null, 5, 1, null]);
+  } finally {
+    delete PCR_PROTOCOLS["made-up"];
+  }
 });
 
 test("a polymerase with no protocol has no program", () => {

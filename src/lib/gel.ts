@@ -27,6 +27,25 @@ export const LADDERS: Ladder[] = [
 ];
 
 /**
+ * The ladder a gel opens on while nobody has picked one: the first whose smallest band is at
+ * or below `smallest`, the smallest band the gel runs, or, if none reaches that low, the
+ * first that goes lowest. `bandY` leaves little room under a ladder's smallest band and
+ * draws anything under about 60% of it at the bottom edge, where small bands sit level and
+ * can't be told apart (everything of 312 bp or less on the 1 kb ladder).
+ */
+export function ladderReaching(smallest: number, ladders: readonly Ladder[] = LADDERS): Ladder {
+  const low = (l: Ladder) => Math.min(...l.bands);
+  return ladders.find(l => low(l) <= smallest) ?? ladders.reduce((best, l) => (low(l) < low(best) ? l : best));
+}
+
+/**
+ * An uncut plasmid is drawn where linear DNA of this share of its length runs. Supercoiled
+ * DNA runs ahead of linear DNA of the same length, by an amount that depends on the gel and
+ * the plasmid, so this is a drawing convention, not a measurement.
+ */
+export const SUPERCOILED_RUNS_AS = 0.7;
+
+/**
  * How far down the gel a band of `size` bp runs, 0 (wells) to 1 (bottom). DNA runs about
  * linearly with the log of its size, so the ladder's range is spread that way, with some
  * room above its largest band and below its smallest; anything beyond stays at the edges.

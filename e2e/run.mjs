@@ -828,9 +828,9 @@ async function main() {
     await choose("Forward primer", "AmpR-XhoI-R");
     await sleep(300);
     await choose("Reverse primer", "AmpR-NdeI-F");
-    await s.waitFor("/Size/.test(document.querySelector('.sv-pcr-result')?.textContent)", 5000);
+    await s.waitFor("document.querySelector('[data-product-length]')", 5000);
     const pcr = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
-    const size = Number(/Size\s*([\d,]+) bp/.exec(pcr)?.[1].replace(/,/g, ""));
+    const size = Number(await s.exec("return document.querySelector('[data-product-length]')?.dataset.productLength"));
     check("PCR product is AmpR plus the two tails", size === ampR.end - ampR.start + 1 + 17, `${size} bp`);
     check("No side products are reported", !/other product/.test(pcr), pcr.slice(0, 200));
     await s.shot("04-pcr");
@@ -849,10 +849,231 @@ async function main() {
     const nebPcr = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
     check("With NEB's Q5 as the Tm method, a PCR product says where to anneal", /Anneal at\s*\d+ °C · Q5 High-Fidelity: lower Tm \+ 1 °C, at most 72 °C/.test(nebPcr), nebPcr.slice(0, 300));
     await s.shot("04-pcr-neb");
+    check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && (await s.exec("return document.querySelector('[data-focus=\"program-1:0:cycles\"]')?.value")) === "25" && /Final extension/.test(nebPcr), nebPcr.slice(-400));
+    check("The final product has a GC strip and a suggested digest", await s.exec("return !!document.querySelector('.sv-pcr-gc .sv-gc') && document.querySelector('.sv-pcr-digest')?.textContent.includes('564 + 314 bp')"));
+    // The digest is there to be run, so the gel shows it, in the order the lanes would be
+    // loaded: the template uncut and cut, then the product uncut and cut. ScaI cuts pUC19
+    // once, so the plasmid is only opened up, and its lane says its whole length too.
+    const gelBands = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-gel .sv-gel-band[data-size]')).map(b => b.dataset.size)");
+    // The template is this file as it now stands, which is pUC19 plus the bases typed earlier,
+    // so the two template lanes are asked for its length rather than the plasmid's own 2,686.
+    const templateLength = await s.exec("return window.__strandivo.store.data.sequence.length");
+    check("The gel runs the template and the product, uncut and cut", JSON.stringify(gelBands) === JSON.stringify([String(templateLength), String(templateLength), "878", "564", "314"]), JSON.stringify(gelBands));
+    const laneKey = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-lane-key li')).map(li => li.textContent)");
+    const templateSize = templateLength.toLocaleString("en");
+    check(
+      "The key names what each lane holds",
+      JSON.stringify(laneKey) === JSON.stringify([`1Template, supercoiled${templateSize} bp`, `2Template, ScaI${templateSize} bp`, "3Product, uncut878 bp", "4Product, ScaI564 + 314 bp"]),
+      JSON.stringify(laneKey)
+    );
+    // An uncut plasmid runs ahead of the same plasmid cut once, so lane 1 sits lower on the gel than lane 2 (a larger y).
+    const laneY = lane => s.exec(`const b = document.querySelector('.sv-pcr-gel .sv-gel-band[data-lane="${lane}"]'); return b ? Number(b.getAttribute('y')) : null;`);
+    const [supercoiledY, openedY] = [await laneY(1), await laneY(2)];
+    check("The supercoiled plasmid runs ahead of the same plasmid cut once", supercoiledY !== null && openedY !== null && supercoiledY > openedY, `lane 1 at y ${supercoiledY}, lane 2 at y ${openedY}`);
+    // Before a ladder is picked, the gel opens on one that reaches its smallest band (the 314 bp piece here): the 1 kb ladder stops
+    // at 500 bp, which would leave the piece on the bottom edge. So no band of the samples runs below the ladder's lowest.
+    const reach = await s.exec(`const ys = selector => Array.from(document.querySelectorAll('.sv-pcr-gel ' + selector)).map(b => Number(b.getAttribute('y')));
+      return { ladder: document.querySelector(".sv-dialog select[aria-label='Ladder']").value, samples: Math.max(...ys('.sv-gel-band[data-lane]')), ladderLowest: Math.max(...ys('.sv-gel-band:not([data-lane])')) };`);
+    check("A short product opens the gel on a ladder that reaches its smallest band", reach.ladder === "1kb-plus" && reach.samples <= reach.ladderLowest, JSON.stringify(reach));
+    await choose("Ladder", "100 bp ladder");
+    check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
+    // A ladder picked holds for the window, so this is the 1 kb ladder the Digest dialog's checks below start on.
+    await choose("Ladder", "1 kb ladder");
+    // The primers' tails (7 and 10 bases) raise how well the whole primers anneal by more than 5 °C, so Q5 offers two stages.
+    const programStages = "const stages = []; for (const el of document.querySelectorAll('.sv-pcr-program [data-focus^=\"program-\"]')) { const [i, j, kind] = el.dataset.focus.slice(8).split(':'); const st = (stages[i] = stages[i] || { cycles: null, steps: [] }); if (kind === 'cycles') st.cycles = el.value + ' cycles'; if (kind === 'temp') st.steps[j] = el.getAttribute('aria-label').replace(/^Stage \\d+, | temperature, °C$/g, ''); } return stages.map(st => ({ cycles: st.cycles, steps: st.steps.filter(Boolean) }));";
+    // Runs `action`, then waits for the dialog to be drawn again: the marker goes with the old drawing's element.
+    const redraws = async action => {
+      await s.exec("document.querySelector('.sv-pcr-result').dataset.drawn = '1';");
+      await action();
+      return s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
+    };
+    const twoStageBox = ".sv-dialog input[aria-label='Anneal in two stages']";
+    const oneStage = await s.exec(programStages);
+    check("Q5 on a plasmid has one stage of 25 cycles, with two stages offered for the tails but not ticked", oneStage.length === 3 && oneStage[1].cycles === "25 cycles" && (await s.exec(`const b = document.querySelector("${twoStageBox}"); return !!b && !b.checked;`)), JSON.stringify(oneStage));
+    check("Ticking Anneal in two stages redraws the dialog", await redraws(() => s.click(twoStageBox)));
+    const twoStages = await s.exec(programStages);
+    const twoStageText = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check(
+      "Two stages are four stages: 5 cycles on the pairing parts, then 20 on the whole primers",
+      twoStages.length === 4 && twoStages[1].cycles === "5 cycles" && twoStages[2].cycles === "20 cycles" && twoStages[1].steps.join() === "Denature,Anneal,Extend" && twoStages[2].steps.join() === "Denature,Anneal and extend",
+      JSON.stringify(twoStages)
+    );
+    check("The Anneal at row gives the temperature of each stage", /Anneal at\s*\d+ °C, then \d+ °C/.test(twoStageText) && (await s.exec(`return document.querySelector("${twoStageBox}").checked;`)), twoStageText.slice(0, 400));
+    await s.shot("04-pcr-two-stages");
+    await redraws(() => s.click(twoStageBox));
+    const backToOne = await s.exec(programStages);
+    check("Unticking it goes back to one stage of 25 cycles", backToOne.length === 3 && backToOne[1].cycles === "25 cycles" && !(await s.exec(`return document.querySelector("${twoStageBox}").checked;`)), JSON.stringify(backToOne));
+    // A site with fewer than 6 bases beyond it in a tail (XhoI and NdeI here, 4 each, as the tails' extra bases are GCGC)
+    // is listed in a fold, which stays as it was left when the dialog is drawn again.
+    const flanks = () => s.exec("const d = document.querySelector('.sv-pcr-flanks'); return d ? { open: d.open, text: d.textContent } : null;");
+    const flanksShut = await flanks();
+    check(
+      "Sites in the tails with fewer than 6 bases beyond them are listed, in a fold that starts shut",
+      flanksShut && !flanksShut.open && /Bases beyond the sites in the tails/.test(flanksShut.text) && /XhoI: 4 bp between its site and the nearest end of the product\./.test(flanksShut.text) && /NdeI: 4 bp between its site/.test(flanksShut.text),
+      JSON.stringify(flanksShut)
+    );
+    await s.click(".sv-pcr-flanks summary");
+    check("Clicking its heading opens it", await s.waitFor("document.querySelector('.sv-pcr-flanks')?.open", 3000));
+    await redraws(() => s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 525 } })"));
+    check("It stays open when the dialog is drawn again", (await flanks())?.open === true, JSON.stringify(await flanks()));
+    await s.click(".sv-pcr-flanks summary");
+    check("And clicking its heading again shuts it, as the checks below expect", await s.waitFor("document.querySelector('.sv-pcr-flanks') && !document.querySelector('.sv-pcr-flanks').open", 3000));
+    await redraws(() => s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 500 } })"));
+    // The product's own enzyme list and filter decide the sites it draws; the suggested digest is looked for in the whole list.
+    const chipTotal = "return Array.from(document.querySelectorAll('.sv-pcr-cut')).reduce((n, b) => n + (b.dataset.more ? Number(b.textContent.replace('+', '')) : 1), 0);";
+    const menuValue = label => s.exec(`return document.querySelector(".sv-dialog select[aria-label='${label}']")?.value ?? null;`);
+    const listAtStart = await menuValue("Product enzyme list");
+    const filterAtStart = await menuValue("Product cut-site filter");
+    const chipsAtStart = await s.exec(chipTotal);
+    await redraws(() => choose("Product cut-site filter", "all"));
+    const chipsEvery = await s.exec(chipTotal);
+    const digestText = () => s.exec("return document.querySelector('.sv-pcr-digest')?.textContent ?? ''");
+    check("Choosing Every site in the product's own filter draws more sites, and the digest follows the list, not the filter", chipsEvery > chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${chipsAtStart} → ${chipsEvery} sites, ${await digestText()}`);
+    await redraws(() => choose("Product enzyme list", "lab"));
+    const labText = await s.exec("return document.querySelector('.sv-pcr-overview').textContent");
+    check("A lab list with no enzymes draws none, says so and suggests no digest", (await s.exec(chipTotal)) === 0 && /No cut sites match this list and filter/.test(labText) && /No digest from this list gives fragments worth running/.test(labText), labText.slice(0, 300));
+    await redraws(() => choose("Product enzyme list", listAtStart));
+    await redraws(() => choose("Product cut-site filter", filterAtStart));
+    check("Putting both menus back draws the sites it started with", (await s.exec(chipTotal)) === chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${await s.exec(chipTotal)} sites`);
+    // Before any site is clicked, the one described is a site of the digest chosen, whichever that is. Only when
+    // the list offers a second digest, so a list with one has nothing to try.
+    const digestOptions = await s.exec("return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Suggested digest'] option\")).map(o => o.value);");
+    if (digestOptions.length > 1) {
+      const siteDetail = () => s.exec("return document.querySelector('.sv-pcr-site-detail')?.textContent ?? ''");
+      await choose("Suggested digest", digestOptions[1]);
+      const described = await siteDetail();
+      check("With no site clicked, the site described follows the digest chosen", digestOptions[1].split(" + ").some(name => described.startsWith(`${name} · `)), `${digestOptions[1]}: ${described}`);
+      await choose("Suggested digest", digestOptions[0]);
+    }
+    // Enter accepts a field's value and leaves focus in it, with the dialog open and nothing else taking the key.
+    const enterField = '[data-focus="program-1:1:temp"]';
+    const enterBefore = await s.exec(`const el = document.querySelector('${enterField}'); const previous = el.value; el.value = String(Number(previous) + 1); el.dispatchEvent(new Event('input')); el.focus(); return previous;`);
+    await s.press(ENTER);
+    const enterAfter = await s.exec(`const el = document.querySelector('${enterField}'); return { focused: document.activeElement === el, value: el.value, dialog: !!document.querySelector('.sv-dialog'), modified: !document.querySelector('.sv-prog-modified')?.hidden };`);
+    check("Enter in a program field keeps focus there, with the dialog open and the change made", enterAfter.focused && enterAfter.dialog && enterAfter.modified && enterAfter.value === String(Number(enterBefore) + 1), JSON.stringify(enterAfter));
+    await s.exec(`const el = document.querySelector('${enterField}'); el.value = '${enterBefore}'; el.dispatchEvent(new Event('input'));`);
+    await s.press(ENTER);
+    check("Typing the generated value back and pressing Enter leaves the program unmodified, focus still there", (await s.waitFor("document.querySelector('.sv-prog-modified')?.hidden", 3000)) && (await s.exec(`return document.activeElement === document.querySelector('${enterField}');`)));
+    const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
+      const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
+      edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');
+      document.querySelector('[data-focus="copy-program"]').click(); return window.__pcrCopied;`);
+    check("Copy program uses edited temperatures, times and counts, including the last typed field", /Modified PCR program/.test(copiedProgram) && /30 cycles:/.test(copiedProgram) && /Anneal: 64 °C, 1 min 30 s/.test(copiedProgram), copiedProgram);
+    await s.exec("delete navigator.clipboard; delete window.__pcrCopied;");
+    await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
+    await s.shot("04-pcr-edited");
+    // Another polymerase picked in the dialog gets its own Tms and program, and offers to become the Tm method.
+    await choose("Polymerase", "OneTaq, Standard buffer");
+    await s.waitFor("/Tms here are for OneTaq/.test(document.querySelector('.sv-dialog')?.textContent)", 5000);
+    check("Changing polymerase preserves the custom program and offers regeneration", await s.exec("return document.querySelector('[data-focus=\"program-1:1:temp\"]')?.value === '64' && !!document.querySelector('[data-focus=regenerate-program]')"));
+    check("The strip over the kept program says what it was made for, annealing and stages included", /kept from the earlier setup \(Plasmid · [\d,]+ bp · annealing at \d+ °C(?:, then \d+ °C)? · [12] stages?\)/.test(await s.exec("return document.querySelector('.sv-pcr-program .sv-pcr-strip')?.textContent ?? ''")));
+    await s.click("button[data-focus=regenerate-program]");
+    await s.waitFor("!document.querySelector('[data-focus=regenerate-program]')", 5000);
+    const oneTaq = await s.exec("return document.querySelector('.sv-dialog').textContent");
+    check("Picking another polymerase in the dialog offers it for all Tms", /Tms here are for OneTaq, Standard buffer; the rest of the app uses Q5 High-Fidelity/.test(oneTaq) && /Use for all Tms/.test(oneTaq), oneTaq.slice(0, 500));
+    check("Its program is OneTaq's, from 94 °C", (await s.exec("return document.querySelector('[data-focus=\"program-0:0:temp\"]')?.value")) === "94" && /OneTaq, Standard buffer: lower Tm − 5 °C, at most 68 °C/.test(oneTaq), oneTaq.slice(-500));
+    check("The program names the product its protocol is for, beside the program", /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(oneTaq), oneTaq.slice(-500));
+    await s.shot("04-pcr-onetaq");
+    const invalidProgram = await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); const previous = el.value; el.value = 'unfinished'; el.dispatchEvent(new Event('input')); el.focus(); el.setSelectionRange(2, 5); return {previous, blocked:document.querySelector('[data-focus="copy-program"]').disabled};`);
+    // The marker goes with the old program view when the dialog is drawn again, so the field is read only after a redraw.
+    await s.exec("document.querySelector('.sv-pcr-program').dataset.drawn = '1';");
+    await s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 475 } })");
+    const invalidRedrawn = await s.waitFor("!document.querySelector('.sv-pcr-program')?.dataset.drawn", 5000);
+    check("An unfinished program field blocks copying and keeps its text, focus and caret on redraw", invalidProgram.blocked && invalidRedrawn && await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); return el.value === 'unfinished' && document.activeElement === el && el.selectionStart === 2 && el.selectionEnd === 5;`));
+    await s.press(ESCAPE);
+    check("Escape cancels unfinished text without closing the PCR dialog", await s.exec(`return document.querySelector('[data-focus="program-1:0:seconds"]')?.value`) === invalidProgram.previous);
+    // Reset is for a program that was changed, so change one first: with the program as the
+    // protocol has it, and its inputs the same, there is nothing to put back and it is off.
+    const annealed = await s.exec(`const el = document.querySelector('[data-focus="program-1:1:temp"]'); const previous = el.value; el.value = String(Number(previous) + 5); el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); return previous;`);
+    const resetReady = await s.waitFor("!document.querySelector('.sv-prog-modified')?.hidden && !document.querySelector('[data-focus=reset-program]')?.disabled", 5000);
+    await s.click("button[data-focus=reset-program]");
+    await s.waitFor("document.querySelector('.sv-prog-modified')?.hidden !== false", 5000);
+    // Reset disables itself once pressed, so it hands focus on rather than leaving it nowhere.
+    check(
+      "Reset puts the program back and moves focus to Copy program",
+      resetReady && (await s.exec(`return document.querySelector('[data-focus="program-1:1:temp"]')?.value === ${JSON.stringify(annealed)} && document.activeElement === document.querySelector('[data-focus=copy-program]')`)),
+      `annealing at ${annealed} °C`
+    );
+    // The strip's button makes the dialog's polymerase the Tm method for the whole app; as the strip goes
+    // with it, the Polymerase menu takes the focus.
+    await s.click(".sv-pcr-strip button[data-focus='use-for-all']");
+    const followed = await s.waitFor("!document.querySelector('.sv-pcr-strip') && document.activeElement?.getAttribute('aria-label') === 'Polymerase'", 5000);
+    const savedTm = await s.exec("return JSON.parse(localStorage.getItem('strandivo.settings') || '{}').tm ?? null;");
+    check("Use for all Tms saves the dialog's polymerase as the Tm method, with its own primer concentration", savedTm?.method === "neb" && savedTm?.polymerase === "onetaq" && savedTm?.nebPrimer === 200, JSON.stringify(savedTm));
+    check("Then the strip is gone and the Polymerase menu has the focus", followed, await s.exec("const a = document.activeElement; return `${a?.tagName} ${a?.getAttribute('aria-label') ?? ''}, strip ${!!document.querySelector('.sv-pcr-strip')}`;"));
+    // Settings back to NEB's Q5, as the checks below expect.
+    await tmMethod("neb");
+    await s.waitFor("document.querySelector('.sv-pcr-strip')", 5000);
+    // A template the polymerase has no protocol for goes back to plasmid: Taq has a colony, Q5 has not.
+    const templateOptions = "return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Template'] option\")).map(o => o.value).join();";
+    const templateNow = "return document.querySelector(\".sv-dialog select[aria-label='Template']\").value;";
+    await redraws(() => choose("Polymerase", "Taq, Standard Taq buffer"));
+    check("Taq offers a colony as a template", (await s.exec(templateOptions)) === "plasmid,complex,colony", await s.exec(templateOptions));
+    await redraws(() => choose("Template", "colony"));
+    const colonyStart = await s.exec("return document.querySelector('[data-focus=\"program-0:0:seconds\"]')?.value ?? null;");
+    check("A colony on Taq starts with the longer first denaturation", (await s.exec(templateNow)) === "colony" && colonyStart === "5 min", `${await s.exec(templateNow)}, first step ${colonyStart}`);
+    await redraws(() => choose("Polymerase", "Q5 High-Fidelity"));
+    const q5Source = await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? null;");
+    check("Picking Q5, which has no colony, falls back to a plasmid", (await s.exec(templateOptions)) === "plasmid,complex" && (await s.exec(templateNow)) === "plasmid" && /Q5 High-Fidelity DNA Polymerase · NEB M0491/.test(q5Source), `${await s.exec(templateOptions)}; ${await s.exec(templateNow)}; ${q5Source}`);
+    // Genomic DNA or cDNA is not the plasmid open here, so its gel runs the product's lanes alone and drops the note about leftover template.
+    const laneKeyText = () => s.exec("return Array.from(document.querySelectorAll('.sv-pcr-lane-key li')).map(li => li.textContent)");
+    await redraws(() => choose("Template", "complex"));
+    const complexKey = await laneKeyText();
+    check(
+      "With genomic DNA or cDNA as the template, the gel runs the product's lanes without the plasmid's",
+      complexKey.length === 2 && /^1Product, uncut/.test(complexKey[0]) && /^2Product, \S/.test(complexKey[1]) && (await s.exec("return document.querySelector('.sv-pcr-lanes > p')?.hidden === true")),
+      JSON.stringify(complexKey)
+    );
+    // The choice is kept between dialogs, so a plasmid is chosen again.
+    await redraws(() => choose("Template", "plasmid"));
+    const plasmidKey = await laneKeyText();
+    check("Back on a plasmid the gel has the template's lanes again", plasmidKey.length === 4 && /^1Template, supercoiled/.test(plasmidKey[0]) && (await s.exec("return document.querySelector('.sv-pcr-lanes > p')?.hidden === false")), JSON.stringify(plasmidKey));
+    // A polymerase whose protocol has not been read has no program, and the dialog says so.
+    await redraws(() => choose("Polymerase", "Q5U Hot Start"));
+    const noProgram = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check("A polymerase with no protocol says there is no program for it", /There is no program for Q5U Hot Start yet\./.test(noProgram) && !(await s.exec("return !!document.querySelector('.sv-pcr-program')")), noProgram.slice(-200));
+    // And back on OneTaq, as the checks below expect.
+    await redraws(() => choose("Polymerase", "OneTaq, Standard buffer"));
+    check("The dialog is back on OneTaq with its program and a plasmid", (await s.exec(templateNow)) === "plasmid" && /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? ''")), await s.exec(templateNow));
+    // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
+    // whether a menu, a button in the program, one in the footer or a crowd of sites counted below.
+    const keepsFocus = async (selector, nebPrimer) => {
+      await s.exec(`document.querySelector('.sv-pcr-result').dataset.drawn = '1'; document.querySelector(${JSON.stringify(selector)}).focus();`);
+      await s.exec(`return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: ${nebPrimer} } })`);
+      const redrawn = await s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
+      return redrawn && (await s.exec(`return document.activeElement === document.querySelector(${JSON.stringify(selector)})`));
+    };
+    const menuKept = await keepsFocus("select[aria-label='Template']", 450);
+    const programKept = await keepsFocus("button[data-focus='copy-program']", 400);
+    const footerKept = await keepsFocus("button[data-focus='copy-sequence']", 350);
+    check("A Settings change redraws the PCR dialog and keeps focus where it was", menuKept && programKept && footerKept, `menu ${menuKept}, program ${programKept}, footer ${footerKept}`);
     await s.press(ESCAPE);
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");
     await sleep(300);
+
+    // --- a GC-rich product warns: 300 bases of G and C in place of 1,001–1,300, with a primer at each end ---
+    check("A product of ordinary GC has no GC warning", !/% GC, which can be hard to amplify/.test(pcr), pcr.slice(0, 200));
+    const beforeGc = await s.exec(`${doc} return s.data.sequence;`);
+    await s.exec(`${doc} let x = 12345;
+      const gc = Array.from({ length: 300 }, () => { x = (x * 1103515245 + 12345) % 2147483648; return (x >> 16) & 1 ? 'G' : 'C'; }).join('');
+      const rc = bases => [...bases].reverse().map(c => ({ G: 'C', C: 'G' })[c]).join('');
+      s.apply({ ...s.data, sequence: s.data.sequence.slice(0, 1000) + gc + s.data.sequence.slice(1300), primers: [...s.data.primers,
+        { id: 'e2e-gc-f', name: 'GC-F', start: 1000, end: 1019, strand: 1, bases: gc.slice(0, 20), notes: {}, raw: {} },
+        { id: 'e2e-gc-r', name: 'GC-R', start: 1280, end: 1299, strand: -1, bases: rc(gc.slice(280)), notes: {}, raw: {} }] }, 'Add GC-rich product');`);
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]", "xpath");
+    await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Forward primer']\")", 5000);
+    await choose("Forward primer", "GC-F");
+    await sleep(300);
+    await choose("Reverse primer", "GC-R");
+    await s.waitFor("document.querySelector('[data-product-length]')?.dataset.productLength === '300'", 5000);
+    const gcText = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check("A GC-rich product says so, with the GC to one decimal and Q5's enhancer", /The product is 100\.0% GC, which can be hard to amplify\./.test(gcText) && /Q5 High GC Enhancer/.test(gcText) && /100\.0% GC/.test(await s.exec("return document.querySelector('.sv-pcr-overview .sv-pcr-head').textContent")), gcText.slice(0, 400));
+    await s.shot("04-pcr-gc-rich");
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.exec(`${doc} s.undo();`);
+    check("Undo takes the GC-rich bases and their primers out again", (await s.exec(`${doc} return s.data.sequence;`)) === beforeGc && !(await state()).primers.some(name => name.startsWith("GC-")));
 
     // --- mutagenesis: a codon of AmpR to alanine, from the right-click menu ---
     await s.click("button[data-tab=sequence]");
@@ -938,7 +1159,7 @@ async function main() {
     check("Pairs lists what each forward and reverse primer would amplify", await s.waitFor("/Product/.test(document.querySelector('.sv-primer-table thead')?.textContent || '') && document.querySelectorAll('.sv-primer-table tbody tr').length >= 1", 5000));
     await s.shot("04b-primer-pairs");
     await s.exec("document.querySelector('.sv-primer-table tbody tr').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
-    check("Clicking a pair opens it in the PCR product dialog", await s.waitFor("document.querySelector('.sv-dialog') && /Size/.test(document.querySelector('.sv-pcr-result')?.textContent || '')", 5000));
+    check("Clicking a pair opens it in the PCR product dialog", await s.waitFor("document.querySelector('.sv-dialog [data-product-length]')", 5000));
     await s.press(ESCAPE);
     // Copy for ordering follows the file while Pairs shows: a primer removed there is gone.
     const before = await s.exec(`${doc} return s.data.primers.length;`);
@@ -2415,6 +2636,29 @@ async function main() {
         await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
       } else check("In dark, Digest opens its dialog", false);
     } else check("The library's parent opens again for the dark screenshots", false);
+    await s.exec(`${doc} const n = s.data.sequence.length; const rc = bases => bases.split('').reverse().map(b => ({A:'T',T:'A',G:'C',C:'G'})[b.toUpperCase()] || 'N').join(''); s.apply({...s.data, primers:[...s.data.primers, {id:'dark-pcr-f',name:'Dark PCR F',start:0,end:24,strand:1,bases:s.data.sequence.slice(0,25),notes:{},raw:{}},{id:'dark-pcr-r',name:'Dark PCR R',start:n-25,end:n-1,strand:-1,bases:rc(s.data.sequence.slice(-25)),notes:{},raw:{}}]}, 'Add PCR example'); window.__strandivo.setView('primers');`);
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]", "xpath");
+    await choose("Forward primer", "Dark PCR F"); await sleep(150); await choose("Reverse primer", "Dark PCR R");
+    if (await s.waitFor("document.querySelector('.sv-pcr-program .sv-prog-trace')", 5000)) {
+      await s.shot("13-dark-pcr");
+      // This plasmid's cloning site holds a dozen enzymes within a few bases: a lane each
+      // would push the product itself out of the dialog, so the rest are counted where they
+      // cut, and the chip over them names them when it is clicked.
+      const counted = await s.exec(`const chip = document.querySelector('.sv-pcr-product-map button[data-more]'); if (!chip) return null; chip.focus(); chip.click();
+        return { chip: chip.textContent, height: parseFloat(document.querySelector('.sv-pcr-product-map').style.height), ticks: document.querySelectorAll('.sv-pcr-product-map .sv-pcr-tick').length, detail: document.querySelector('.sv-pcr-site-detail').textContent };`);
+      check(
+        "Sites too many to name are counted where they cut, and the chip names them",
+        !!counted && /^\+\d+$/.test(counted.chip) && counted.ticks > 0 && counted.height < 200 && /^\d+ more sites? here: \w/.test(counted.detail),
+        JSON.stringify(counted)
+      );
+      await s.shot("13-dark-pcr-counted");
+      // Which sites have names of their own depends on the width, so a redraw is where that
+      // chip used to be lost, taking the focus with it.
+      check("A Settings change leaves focus on the counted sites", await keepsFocus("button[data-more]", 460));
+      await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
+      await s.shot("13-dark-pcr-program");
+    } else check("In dark, the PCR program opens", false);
+    await s.press(ESCAPE);
     await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");
     check("Choosing Light turns it back", await s.waitFor("document.documentElement.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(238, 240, 243)'", 5000));
   } catch (e) {

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { bandY, bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, LADDERS } from "./gel.ts";
+import { bandY, bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, ladderReaching, LADDERS } from "./gel.ts";
 import type { SeqData } from "./seqdata.ts";
 
 const puc19 = (): SeqData => {
@@ -59,4 +59,30 @@ test("gel: fragments of nearly the same size run as one band", () => {
   assert.deepEqual(b.map(x => x.fragments), [[1], [2, 0], [3]]);
   assert.equal(b[1].mass, 2010);
   assert.equal(b[1].size, 1005);
+});
+
+test("gel: it opens on the first ladder that reaches the smallest band, else the first", () => {
+  const smallest = (id: string) => Math.min(...LADDERS.find(l => l.id === id)!.bands);
+  assert.equal(smallest("1kb"), 500);
+  // Big bands are as well off on the first, the 1 kb ladder, as on any.
+  assert.equal(ladderReaching(5000).id, "1kb");
+  assert.equal(ladderReaching(500).id, "1kb");
+  // A band under its smallest takes the first ladder that goes lower: the 1 kb ladder puts everything of 312 bp or less on the edge.
+  assert.equal(ladderReaching(499).id, "1kb-plus");
+  assert.equal(ladderReaching(314).id, "1kb-plus");
+  assert.equal(ladderReaching(100).id, "1kb-plus");
+  assert.equal(bandY(300, LADDERS[0]), 0.99);
+  // The first one that reaches, not the best fit: it is the order of LADDERS that decides.
+  const [a, b] = [{ ...LADDERS[0], id: "a", bands: [900, 300] }, { ...LADDERS[0], id: "b", bands: [900, 100] }];
+  assert.equal(ladderReaching(400, [b, a]).id, "b");
+  assert.equal(ladderReaching(400, [a, b]).id, "a");
+  // Under every ladder's smallest band nothing reaches, so the first that goes lowest stands:
+  // the 1 kb Plus ladder (100 bp, as the 100 bp ladder, which comes after it), not the 1 kb.
+  assert.equal(ladderReaching(99).id, "1kb-plus");
+  assert.equal(ladderReaching(39).id, "1kb-plus");
+  assert.equal(ladderReaching(1).id, "1kb-plus");
+  assert.equal(ladderReaching(50, [a, b]).id, "b");
+  assert.equal(ladderReaching(50, [b, a]).id, "b");
+  // Wherever one reaches, the smallest band is drawn clear of the bottom edge.
+  for (let size = 100; size <= 20000; size += 7) assert.ok(bandY(size, ladderReaching(size)) < 0.99, `${size} bp`);
 });

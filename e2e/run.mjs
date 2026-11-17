@@ -854,8 +854,18 @@ async function main() {
       JSON.stringify(laneKey) === JSON.stringify([`1Template, supercoiled${templateSize} bp`, `2Template, ScaI${templateSize} bp`, "3Product, uncut878 bp", "4Product, ScaI564 + 314 bp"]),
       JSON.stringify(laneKey)
     );
+    // An uncut plasmid runs ahead of the same plasmid cut once, so lane 1 sits lower on the gel than lane 2 (a larger y).
+    const laneY = lane => s.exec(`const b = document.querySelector('.sv-pcr-gel .sv-gel-band[data-lane="${lane}"]'); return b ? Number(b.getAttribute('y')) : null;`);
+    const [supercoiledY, openedY] = [await laneY(1), await laneY(2)];
+    check("The supercoiled plasmid runs ahead of the same plasmid cut once", supercoiledY !== null && openedY !== null && supercoiledY > openedY, `lane 1 at y ${supercoiledY}, lane 2 at y ${openedY}`);
+    // Before a ladder is picked, the gel opens on one that reaches its smallest band (the 314 bp piece here): the 1 kb ladder stops
+    // at 500 bp, which would leave the piece on the bottom edge. So no band of the samples runs below the ladder's lowest.
+    const reach = await s.exec(`const ys = selector => Array.from(document.querySelectorAll('.sv-pcr-gel ' + selector)).map(b => Number(b.getAttribute('y')));
+      return { ladder: document.querySelector(".sv-dialog select[aria-label='Ladder']").value, samples: Math.max(...ys('.sv-gel-band[data-lane]')), ladderLowest: Math.max(...ys('.sv-gel-band:not([data-lane])')) };`);
+    check("A short product opens the gel on a ladder that reaches its smallest band", reach.ladder === "1kb-plus" && reach.samples <= reach.ladderLowest, JSON.stringify(reach));
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
+    // A ladder picked holds for the window, so this is the 1 kb ladder the Digest dialog's checks below start on.
     await choose("Ladder", "1 kb ladder");
     // The primers' tails (7 and 10 bases) raise how well the whole primers anneal by more than 5 °C, so Q5 offers two stages.
     const programStages = "const stages = []; for (const el of document.querySelectorAll('.sv-pcr-program [data-focus^=\"program-\"]')) { const [i, j, kind] = el.dataset.focus.slice(8).split(':'); const st = (stages[i] = stages[i] || { cycles: null, steps: [] }); if (kind === 'cycles') st.cycles = el.value + ' cycles'; if (kind === 'temp') st.steps[j] = el.getAttribute('aria-label').replace(/^Stage \\d+, | temperature, °C$/g, ''); } return stages.map(st => ({ cycles: st.cycles, steps: st.steps.filter(Boolean) }));";

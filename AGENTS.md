@@ -96,8 +96,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   interface shows positions 1-based.
 - **Edits** go through `store.apply(next, label, selection?, key?)` with a new `SeqData`;
   never change `store.data` or arrays it holds in place. Steps with the same `key` within
-  1.5 s merge into one undo step (typing a note, dragging a primer's end). Views compare
-  data by reference, so the same goes for read results: replace lists, don't mutate them.
+  1.5 s merge into one undo step (typing a note, dragging a primer's or region's end).
+  Views compare data by reference, so the same goes for read results: replace lists, don't
+  mutate them.
 - **Replacing bases** is not a deletion and then an insertion, which left new bases at an
   annotation's edge outside it (`replaceRange` in `src/lib/seqdata.ts`). As many bases as
   were selected move nothing. Otherwise, annotation by annotation (features, primers,

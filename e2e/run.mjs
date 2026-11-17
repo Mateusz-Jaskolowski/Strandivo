@@ -165,7 +165,9 @@ class Session {
 
 const CTRL = "\uE009";
 const SHIFT = "\uE008";
+const ARROW_LEFT = "\uE012";
 const ARROW_RIGHT = "\uE014";
+const ALT = "\uE00A";
 const ESCAPE = "\uE00C";
 const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
@@ -771,6 +773,16 @@ async function main() {
     await s.press("z", [CTRL]);
     await sleep(400);
     check("Ctrl+Z puts the primer back", JSON.stringify(await ends()) === JSON.stringify(beforeStep));
+    // A click on an end's handle takes the keyboard (WebKit focuses no button clicked), so the
+    // arrow keys move that end: the left one is this reverse primer's 3′ end.
+    const leftHandle = await s.exec("const b = Array.from(document.querySelectorAll('.sv-ctx-handle')).sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left)[0]; b.scrollIntoView({ block: 'nearest' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2];");
+    await s.clickAt(leftHandle);
+    await s.press(ARROW_LEFT);
+    await sleep(400);
+    const afterKey = await ends();
+    check("Clicking an end's handle lets the arrow keys move that end", JSON.stringify(afterKey) === JSON.stringify(afterStep), `${beforeStep} → ${afterKey}`);
+    await s.exec(`${doc} s.undo();`);
+    await sleep(300);
     const strands = await s.exec("const r = document.querySelector('.sv-ctx .sv-bases').getBoundingClientRect(); return [r.left + 30, r.top + 9, r.left + 230, r.top + 27];");
     await s.drag([strands[0], strands[1]], [strands[2], strands[3]]);
     const ctxSel = await s.exec(`${doc} return { range: s.selection.range, focus: s.selection.focus, bands: document.querySelectorAll('.sv-ctx .sv-sel-band').length, text: String(getSelection()), still: /AmpR-NdeI-F/.test(document.querySelector('.sv-ctx-name').textContent) };`);
@@ -1658,6 +1670,63 @@ async function main() {
     check("A custom region kind is kept when reopened", await s.exec("return document.querySelector('[aria-label=\"Region kind\"]').value === 'custom' && document.querySelector('[aria-label=\"Custom region kind\"]').value === 'Antigen-binding loop';"));
     await s.click("//button[normalize-space(.)='Cancel']", "xpath");
     await s.shot("11-protein-regions-sequence");
+
+    // --- dragging a region's ends in Sequence, a codon at a time ---
+    // AmpR runs right to left, so CDR1 edited's end (residue 19) is its left end.
+    const regionSpan = name => s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds);
+      const v = [].concat(f.notes.strandivo_regions).map(String).find(v => v.split('|')[0] === arguments[0]);
+      return v ? v.split('|')[2] : null;`, name);
+    // An expression for waitFor, given the region's name and residues as "9-21".
+    const spanIs = "[].concat(window.__strandivo.store.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions).map(String).some(v => v.split('|')[0] === arguments[0] && v.split('|')[2] === arguments[1])";
+    const focusedRegion = () => s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds); const focus = s.selection.focus;
+      const sorted = [].concat(f.notes.strandivo_regions).map(String).map(v => { const [name, , at] = v.split('|'); const [a, b] = at.split('-').map(Number); return { name, a, b }; }).sort((x, y) => x.a - y.a || x.b - y.b);
+      return focus?.kind === 'feature' && focus.id === f.id && focus.region !== undefined ? sorted[focus.region]?.name ?? null : null;`);
+    await s.exec("Array.from(document.querySelectorAll('.sv-outline [data-region]')).find(r => r.textContent.includes('CDR1 edited')).scrollIntoView({ block: 'nearest' });");
+    await s.click("//*[contains(@class,'sv-outline')]//*[@data-region][contains(., 'CDR1 edited')]", "xpath");
+    check("A selected region has a handle at each end in Sequence", await s.waitFor("document.querySelectorAll('.sv-seq .sv-region-handle').length === 2", 5000), String(await s.exec("return document.querySelectorAll('.sv-seq .sv-region-handle').length;")));
+    const endHandle = await s.exec(`const b = document.querySelector('.sv-seq .sv-region-handle[aria-label^="Move where CDR1 edited ends"]');
+      b.scrollIntoView({ block: 'center' });
+      const r = b.getBoundingClientRect();
+      const row = b.closest('.sv-row');
+      const bases = row.querySelector('.sv-bases');
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, cw: bases.getBoundingClientRect().width / bases.textContent.length, title: b.title };`);
+    check("Its handle says what it moves", /CDR1 edited ends, a codon at a time/.test(endHandle.title), endHandle.title);
+    // Two codons and a bit: it snaps to the nearest edge between codons.
+    await s.drag([endHandle.x, endHandle.y], [endHandle.x - 6.6 * endHandle.cw, endHandle.y]);
+    check("Dragging the end two codons out makes the region two residues longer", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-21"), await regionSpan("CDR1 edited"));
+    check("The region stays selected, with its handles", (await focusedRegion()) === "CDR1 edited" && await s.waitFor("document.querySelectorAll('.sv-seq .sv-region-handle').length === 2", 2000));
+    await s.shot("11-region-dragged");
+    await s.exec(`${doc} s.undo();`);
+    check("One undo takes the whole drag back", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-19"), await regionSpan("CDR1 edited"));
+    // The arrow keys move a handle's end too: left, into the protein, for this start.
+    // A real click, as WebKit focuses no button clicked and the handle has to take the keys.
+    const startHandle = await s.exec("const b = document.querySelector('.sv-seq .sv-region-handle[aria-label^=\"Move where CDR1 edited starts\"]'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2];");
+    await s.clickAt(startHandle);
+    await s.press(ARROW_LEFT);
+    check("An arrow key moves the end a residue", await s.waitFor(spanIs, 3000, "CDR1 edited", "10-19"), await regionSpan("CDR1 edited"));
+    check("The keyboard stays on the handle", await s.waitFor("/CDR1 edited starts/.test(document.activeElement?.getAttribute('aria-label') ?? '')", 2000));
+    await s.exec(`${doc} s.undo();`);
+    // Where two regions meet, a handle moves both, and with Alt only its own region's end.
+    // Keys rather than an Alt-drag, which some Linux desktops take for moving the window.
+    const regionsBefore = await s.exec(`${doc} return [].concat(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions);`);
+    await s.exec(`${doc} const d = s.data;
+      const fr2 = 'FR2|Region|20-25|:20-25||' + encodeURIComponent(JSON.stringify({ id: 'e2e-fr2', parentId: arguments[0] }));
+      s.apply({ ...d, features: d.features.map(f => f.id === window.__strandivoCds ? { ...f, notes: { ...f.notes, strandivo_regions: [...f.notes.strandivo_regions, fr2] } } : f) }, 'Test meeting regions');`, domainId);
+    await s.exec("Array.from(document.querySelectorAll('.sv-outline [data-region]')).find(r => r.textContent.includes('CDR1 edited')).scrollIntoView({ block: 'nearest' });");
+    await s.click("//*[contains(@class,'sv-outline')]//*[@data-region][contains(., 'CDR1 edited')]", "xpath");
+    await s.waitFor("document.querySelector('.sv-seq .sv-region-handle[aria-label^=\"Move where CDR1 edited ends\"]')", 5000);
+    const sharedHandle = await s.exec("const b = document.querySelector('.sv-seq .sv-region-handle[aria-label^=\"Move where CDR1 edited ends\"]'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { at: [r.left + r.width / 2, r.top + r.height / 2], title: b.title };");
+    check("A handle where two regions meet says Alt moves its own end alone", /CDR1 edited ends and FR2 starts, a codon at a time; Alt-drag moves only where CDR1 edited ends$/.test(sharedHandle.title), sharedHandle.title);
+    await s.clickAt(sharedHandle.at);
+    // AmpR runs right to left, so left is out of the protein, towards its end.
+    await s.press(ARROW_LEFT);
+    check("Where two regions meet, the arrow keys move both", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-20") && await s.waitFor(spanIs, 3000, "FR2", "21-25"), `${await regionSpan("CDR1 edited")}, ${await regionSpan("FR2")}`);
+    await s.press(ARROW_RIGHT, [ALT]);
+    check("With Alt, only the selected region's end moves, parting the two", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-19") && await s.waitFor(spanIs, 3000, "FR2", "21-25"), `${await regionSpan("CDR1 edited")}, ${await regionSpan("FR2")}`);
+    await s.exec(`${doc} const before = JSON.stringify(arguments[0]);
+      const now = () => JSON.stringify([].concat(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions));
+      for (let i = 0; i < 4 && now() !== before; i++) s.undo();`, regionsBefore);
+    check("Undo takes the meeting region away again", await regionSpan("FR2") === null && await regionSpan("CDR1 edited") === "9-19");
 
     // A primer's context includes both overlapping regions and nearby template boundaries.
     await s.exec(`${doc} const d = s.data;

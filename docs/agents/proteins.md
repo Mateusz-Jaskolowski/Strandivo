@@ -102,6 +102,24 @@ and CI checks that they exist.
   saved or not (`onClose` of `openProteinRegionDialog`); opened from the inspector, the
   editor closes to the window. Stacking the editor over it was the alternative, but it
   would darken the window twice and leave numbers from before the edit showing beneath.
+- **Dragging a region's ends** (`src/lib/regionEdges.ts`): in the Sequence tab a selected
+  region has a handle at each end, as a selected primer has in the Primers tab, and a drag
+  or the arrow keys move that end a codon at a time, as regions are numbered in residues.
+  Only a CDS has regions, so nothing here moves a base at a time; a part of a feature that
+  is DNA, like a promoter's −10 box, is a feature of its own. A handle moves an edge
+  between residues: its region's end, and a region on the same level (the same parent, or
+  none) that meets it there, so regions that met (FR1 and CDR1) still meet; with ⌥ (Alt)
+  held, even partway through a drag, its region's end moves alone, which parts them. Only
+  the tooltip of a handle that moves two regions says so, as elsewhere ⌥ changes nothing,
+  and nothing else needs to: a region that meets it snaps back as ⌥ is pressed. Some Linux
+  desktops take Alt-drag for moving the window, but Alt with the arrow keys still works
+  there. A parent or child ending there too stays put and only limits the move: moving it
+  along once coupled a child pulled up to its parent's end to it for good. A child can't
+  leave its parent, a parent can't leave out a child, and every region keeps a residue.
+  Nor do two regions on one level that overlap and end together move together. An end that
+  didn't move keeps its exact bases. An imported region's entry numbers move by as much as
+  it does, and it counts as edited, so the next import of its entry keeps it. The moves of
+  a drag are one undo step.
 - **Regions from a selection** use `selectedProteinResidues` for both the inspector and
   right-click menu: coordinates follow the CDS's direction and splicing, partial codons
   expand to whole residues, and a terminal stop is excluded. When several CDSs contain

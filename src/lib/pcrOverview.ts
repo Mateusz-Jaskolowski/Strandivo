@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Analysis of the final, linear PCR product, including tails and primer edits.
-import { cutsBothSides, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { cutsBothSides, enzymeName, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { gcProfile, overviewWindow } from "./gc.ts";
 import { LADDERS } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
@@ -110,7 +110,9 @@ function digestScore(sizes: number[], length: number): number {
 /** Prefer one enzyme; try pairs only if none gives well-separated, substantial fragments. */
 export function suggestedDigests(length: number, hits: SiteHit[], members: readonly string[]): SuggestedDigest[] {
   const byName = new Map<string, SiteHit[]>();
-  const allowed = new Set(members);
+  // Names as the sites carry them, as the drawn sites do: a lab's "ecori" is EcoRI. A name
+  // REBASE doesn't list can't be in a hit found by scanning, so it is kept as written.
+  const allowed = new Set(members.map(m => enzymeName(m) ?? m));
   // An enzyme that cuts on both sides of its site is left out: only the cut after it is found,
   // so its fragments would be one too few (BcgI's 324 + 288 are 290 + 34 + 288).
   for (const h of hits) if (allowed.has(h.enzyme) && !cutsBothSides(h.enzyme) && completeProductCut(h, length)) byName.set(h.enzyme, [...(byName.get(h.enzyme) ?? []), h]);

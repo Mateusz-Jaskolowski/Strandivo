@@ -241,6 +241,20 @@ test("an enzyme that cuts on both sides of its site is never suggested, as only 
   assert.deepEqual(overview.digests, []);
 });
 
+test("a lab list's names are matched as the drawn sites match them, whatever their case", () => {
+  const seq = "AT".repeat(150) + "GAATTC" + "AT".repeat(100);
+  const hits = scanSites(seq, false, ["EcoRI"]).filter(h => h.enzyme === "EcoRI");
+  assert.equal(hits.length, 1);
+  assert.deepEqual(suggestedDigests(seq.length, hits, ["EcoRI"]).map(digestName), ["EcoRI"]);
+  assert.deepEqual(suggestedDigests(seq.length, hits, ["ecori"]).map(digestName), ["EcoRI"]);
+  assert.deepEqual(suggestedDigests(seq.length, hits, ["ECORI"]).map(digestName), ["EcoRI"]);
+  // Through the overview, the list typed or imported in lower case draws the site and suggests its digest.
+  const product = pcrProduct(seq, false, { name: "F", start: 0, end: 19, strand: 1, bases: seq.slice(0, 20) }, { name: "R", start: seq.length - 20, end: seq.length - 1, strand: -1, bases: reverseComplement(seq.slice(-20)) })!;
+  const overview = productOverview(product, seq, false, { ...opts, enzymeSource: "lab", enzymeFilter: "all", labEnzymes: ["ecori"] });
+  assert.deepEqual(overview.sites.map(s => s.enzyme), ["EcoRI"]);
+  assert.deepEqual(overview.digests.map(digestName), ["EcoRI"]);
+});
+
 test("no digest of fragments too small for a gel is called far enough apart, but pairs are still tried", () => {
   // Read from the ladders, so a ladder with a smaller band moves it.
   assert.equal(SMALLEST_BAND, 100);

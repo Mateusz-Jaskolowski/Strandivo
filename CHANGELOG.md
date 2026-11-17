@@ -17,9 +17,9 @@ with Unreleased's notes and leaves them where they are.
 ## Unreleased
 
 - **Check and adjust a PCR before you run it**: the product dialog now draws the product
-  with its cut sites and GC content, suggests a digest to check it by and runs it beside
-  the uncut product on a gel, so you can see which bands to expect, and warns about a
-  GC-rich product, one longer than the polymerase is made for, or a site in a tail with
+  with its cut sites and GC content, suggests a digest to check it by and runs a gel of
+  the template and the product, each uncut and cut, so you can see which bands to expect
+  and where a leftover template would run, and warns about a GC-rich product, one longer than the polymerase is made for, or a site in a tail with
   too few bases beyond it. The cycling program is
   drawn as a line you can edit: change a temperature, a time or a number of cycles, copy
   the program as it stands, or put it back the way the protocol has it.

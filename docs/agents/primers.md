@@ -78,10 +78,19 @@ and CI checks that they exist.
   where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
   bar). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
   complete on both strands or whose overhangs overlap another's makes no suggestion rather
-  than a band that wouldn't be there. Beside the suggestion a gel runs the whole product in
-  one lane and that digest's fragments in the next, drawn by the renderer the Digest dialog
-  uses (`src/views/gelDraw.ts`); fragments within the gel's resolution run as one band, and
-  the ladder is the one chosen in either dialog, kept for as long as the window is open. Names stack in `MAX_LABEL_LANES` lanes at most: a
+  than a band that wouldn't be there. Beside the suggestion a gel runs four lanes in the order
+  they would be loaded: the template uncut and cut by that digest, then the product uncut
+  and cut, drawn by the renderer the Digest dialog uses (`src/views/gelDraw.ts`). The
+  template is there because carry-over from the reaction is what an extra band in a
+  product usually is, and it is cut too because every site inside the product is in the
+  template as well, unless a 5′ tail brought it in. Its sizes come from the same digest
+  the Digest dialog runs (`templateDigestSizes`, kept while the template and the enzymes
+  stay the same, as the dialog is drawn again on every change); a circular template cut
+  once gives one fragment of its whole length, and a lane that would only repeat the one
+  above it is left out. Fragments within the gel's resolution run as one band, lanes are
+  numbered and named in a key beside the gel, and the ladder is the one chosen in either
+  dialog, kept for as long as the window is open. Brightness is a band's share of its own
+  lane, so the gel says where things run, not how much of each was loaded. Names stack in `MAX_LABEL_LANES` lanes at most: a
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
   the product, its GC and the digest out of the dialog, so the sites past those lanes keep
   their marks where they cut and a chip over each crowd counts them, naming them under the

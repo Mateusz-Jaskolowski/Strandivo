@@ -18,7 +18,8 @@ import {
   productLabels,
   productOverview,
   suggestedDigests,
-  tailSiteFlanks
+  tailSiteFlanks,
+  templateDigestSizes
 } from "./pcrOverview.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
 import { reverseComplement, type SeqData } from "./seqdata.ts";
@@ -191,4 +192,24 @@ test("product label lanes stay inside their bounds without overlapping peers", (
       for (const q of placed) if (p !== q && p.row === q.row) assert.ok(p.left + p.width < q.left || q.left + q.width < p.left);
     }
   }
+});
+
+test("the template's own digest is the lane that runs beside the product's", () => {
+  const pad = "ACGT".repeat(25); // 100 bp holding no site of either enzyme
+  const sequence = pad + "GAATTC" + pad + "GAATTC" + pad;
+  const circular: SeqData = { ...doc(sequence), circular: true };
+  const sizes = templateDigestSizes(circular, ["EcoRI"]);
+  // Kept while the template and the enzymes are the same, as the dialog is drawn again on every change.
+  assert.equal(templateDigestSizes(circular, ["EcoRI"]), sizes);
+  assert.equal(sizes.length, 2);
+  assert.equal(
+    sizes.reduce((a, b) => a + b, 0),
+    sequence.length
+  );
+  // Cut once, a plasmid is only opened up: one fragment, its whole length.
+  assert.deepEqual(templateDigestSizes({ ...doc(pad + "GAATTC" + pad), circular: true }, ["EcoRI"]), [206]);
+  // A site a primer's 5′ tail brought into the product is not in the template, so nothing cuts.
+  assert.deepEqual(templateDigestSizes(circular, ["BamHI"]), []);
+  // A linear template the enzymes leave whole comes back as itself, which the lane for it takes for uncut.
+  assert.deepEqual(templateDigestSizes(doc(pad), ["EcoRI"]), [pad.length]);
 });

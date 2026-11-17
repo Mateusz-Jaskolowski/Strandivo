@@ -671,10 +671,13 @@ async function main() {
     await s.shot("04-pcr-neb");
     check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && (await s.exec("return document.querySelector('[data-focus=\"program-1:0:cycles\"]')?.value")) === "25" && /Final extension/.test(nebPcr), nebPcr.slice(-400));
     check("The final product has a GC strip and a suggested digest", await s.exec("return !!document.querySelector('.sv-pcr-gc .sv-gc') && document.querySelector('.sv-pcr-digest')?.textContent.includes('564 + 314 bp')"));
-    // The digest is there to be run, so the gel shows it: the whole product in one lane and
-    // its fragments in the next, beside the ladder the Digest dialog uses.
+    // The digest is there to be run, so the gel shows it, in the order the lanes would be
+    // loaded: the template uncut and cut, then the product uncut and cut. ScaI cuts pUC19
+    // once, so the plasmid is only opened up, and its lane says its whole length too.
     const gelBands = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-gel .sv-gel-band[data-size]')).map(b => b.dataset.size)");
-    check("The gel runs the whole product beside the digest's fragments", JSON.stringify(gelBands) === '["878","564","314"]', JSON.stringify(gelBands));
+    check("The gel runs the template and the product, uncut and cut", JSON.stringify(gelBands) === '["2686","2686","878","564","314"]', JSON.stringify(gelBands));
+    const laneKey = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-lane-key li')).map(li => li.textContent)");
+    check("The key names what each lane holds", JSON.stringify(laneKey) === JSON.stringify(["1Template, supercoiled2,686 bp", "2Template, ScaI2,686 bp", "3Product, uncut878 bp", "4Product, ScaI564 + 314 bp"]), JSON.stringify(laneKey));
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
     await choose("Ladder", "1 kb ladder");

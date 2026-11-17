@@ -2265,8 +2265,45 @@
   align-items: center;
   gap: 6px;
 }
-.sv-pcr-gel > select {
-  max-width: 100%;
+/* The key beside the gel: one row per lane, in the space the gel's height leaves. */
+.sv-pcr-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 3px;
+}
+.sv-pcr-lanes-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sv-pcr-lane-key {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-2);
+}
+.sv-pcr-lane-key li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.sv-pcr-lane-key li:hover {
+  color: var(--text);
+}
+.sv-pcr-lane-no {
+  flex: none;
+  width: 12px;
+  text-align: right;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.sv-pcr-lane-what {
+  flex: 1;
+  min-width: 0;
 }
 .sv-pcr-flanks summary {
   cursor: pointer;
@@ -4211,6 +4248,9 @@
   stroke: var(--gel-band);
   stroke-dasharray: 3 2;
   fill: transparent;
+}
+.sv-gel-fade {
+  opacity: 0.15;
 }
 .sv-gel-size {
   fill: var(--text-3);

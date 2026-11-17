@@ -4,10 +4,12 @@
 // Analysis of the final, linear PCR product, including tails and primer edits.
 import { extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { gcProfile, overviewWindow } from "./gc.ts";
+import { digestSequence, fragmentSize } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
 import type { PcrProduct } from "./pcr.ts";
+import type { SeqData } from "./seqdata.ts";
 import type { TemplateKind } from "./pcrProtocols.ts";
 
 /**
@@ -25,6 +27,23 @@ function templateCutCounts(sequence: string, circular: boolean, members: readonl
   for (const h of scanSites(sequence, circular, members)) counts.set(h.enzyme, (counts.get(h.enzyme) ?? 0) + 1);
   counted = { sequence, circular, members: key, counts };
   return counts;
+}
+
+/** The last template digested, kept for the reason the counts above are. */
+let digested: { sequence: string; circular: boolean; enzymes: string; sizes: number[] } | null = null;
+
+/**
+ * The template cut by a digest's enzymes, as top-strand sizes largest first, so a lane of it
+ * can run beside the product's. A circular template cut once gives one fragment of its whole
+ * length, as the plasmid is only opened up; enzymes that don't cut it at all give none, which
+ * is what a site a primer's 5′ tail brought in looks like from here.
+ */
+export function templateDigestSizes(template: SeqData, enzymes: readonly string[]): number[] {
+  const key = [...enzymes].sort().join("+");
+  if (digested && digested.sequence === template.sequence && digested.circular === template.circular && digested.enzymes === key) return digested.sizes;
+  const sizes = digestSequence(template, [...enzymes]).fragments.map(fragmentSize);
+  digested = { sequence: template.sequence, circular: template.circular, enzymes: key, sizes };
+  return sizes;
 }
 
 export function productOverview(product: PcrProduct, template: string, circular: boolean, options: EnzymeOptions) {

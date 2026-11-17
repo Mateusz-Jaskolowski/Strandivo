@@ -26,7 +26,7 @@ export interface GelBand {
 }
 
 export interface GelLane {
-  /** Over the well: a lane number, or what was loaded. */
+  /** Over the well: a lane number, or what was loaded. The ladder's own is always "M". */
   label: string;
   on?: boolean;
   bands: GelBand[];
@@ -77,7 +77,7 @@ export function gelSvg(lanes: GelLane[], ladder: Ladder, shape: GelShape = {}): 
   // Wells and lane labels, the ladder's own first.
   [{ label: "M", on: false }, ...lanes].forEach((lane, i) => {
     root.appendChild(s("rect", { x: laneX(i) + 5, y: TOP + 2, width: laneW - 10, height: 3, rx: 1, class: "sv-gel-well" }));
-    root.appendChild(s("text", { x: laneX(i) + laneW / 2, y: TOP - 8, "text-anchor": "middle", class: `sv-gel-lane-label${lane.on ? " sv-gel-lane-on" : ""}` }, lane.label));
+    root.appendChild(s("text", { x: laneX(i) + laneW / 2, y: TOP - 8, "text-anchor": "middle", "data-lane": i || null, class: `sv-gel-lane-label${lane.on ? " sv-gel-lane-on" : ""}` }, lane.label));
   });
   // The ladder, with its sizes on the left (the brighter bands' first where they'd crowd).
   let lastLabel = -Infinity;
@@ -90,6 +90,7 @@ export function gelSvg(lanes: GelLane[], ladder: Ladder, shape: GelShape = {}): 
     lastLabel = y(size);
     root.appendChild(s("text", { x: labelW - 6, y: y(size) + 3.5, "text-anchor": "end", class: "sv-gel-size" }, size >= 1000 ? `${size / 1000} kb` : `${size}`));
   }
+  // Each sample lane is marked, so a key beside the gel can pick one of them out.
   lanes.forEach((lane, li) => {
     const x = laneX(li + 1) + 5;
     const total = lane.bands.reduce((sum, b) => sum + b.mass, 0) || 1;
@@ -104,6 +105,7 @@ export function gelSvg(lanes: GelLane[], ladder: Ladder, shape: GelShape = {}): 
           width: laneW - 10,
           height: 3,
           "data-size": String(Math.round(b.size)),
+          "data-lane": li + 1,
           class: `sv-gel-band${b.class ? ` ${b.class}` : ""}${b.onClick ? " sv-gel-pick" : ""}${b.on ? " sv-gel-band-on" : ""}`,
           opacity
         },

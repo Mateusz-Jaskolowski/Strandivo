@@ -57,6 +57,21 @@ with Unreleased's notes and leaves them where they are.
   without moving it, so it can be pulled back from that region's end.
 - **Arrow keys on a primer's ends**: click an end of a primer in the Primers tab, and the
   arrow keys now extend or trim it, as the hint there says.
+- **Check and adjust a PCR before you run it**: the product dialog now draws the product
+  with its cut sites and GC content, suggests a digest to check it by and runs the
+  product, uncut and cut, on a gel, beside the template when it is a plasmid or a
+  colony, so you can see which bands to expect and where leftover template would run. It
+  warns about a GC-rich product or one longer than the polymerase is made for, and lists
+  the sites in a tail with too few bases beyond them. The cycling program is drawn as a
+  line you can edit: change a temperature, a time or a number of cycles, copy the
+  program as it stands, or put it back the way the protocol has it.
+- **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
+  genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
+  it, with the annealing temperature and an extension time worked out from the product's
+  length, ready to copy. It covers Q5, Phusion, OneTaq and Taq so far. The dialog's Tms
+  follow the polymerase you pick there, and it offers to make it the Tm for the whole
+  app. When 5′ tails raise how well the primers anneal, you can use two stages of
+  annealing.
 - **Dialogs stay with their file**: a dialog opened for a file, such as Digest, PCR
   product or Design primers, now closes when you switch to another tab or Home, open a
   file or close that file's tab, instead of staying over the next file and acting on the

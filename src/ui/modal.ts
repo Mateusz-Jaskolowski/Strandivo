@@ -94,12 +94,15 @@ export interface DialogOptions {
   note?: string;
   width?: number;
   onClose?: () => void;
+  /** Escape while this dialog is on top: true if it was handled here, so the dialog stays. */
+  onEscape?: () => boolean;
 }
 
 /**
  * A task dialog over the window (Design primers, PCR product…): title, a body the caller
- * fills, buttons at the bottom. Escape or the close button closes it. One that belongs to
- * an open file is opened through its `DocContext.openDialog`, so it goes with its tab.
+ * fills, buttons at the bottom. Escape or the close button closes it; an editor can handle
+ * Escape first by returning true from `onEscape`. One that belongs to an open file is opened
+ * through its `DocContext.openDialog`, so it goes with its tab.
  */
 export function openDialog(o: DialogOptions): Dialog {
   const before = document.activeElement as HTMLElement | null;
@@ -122,7 +125,7 @@ export function openDialog(o: DialogOptions): Dialog {
     if (e.key === "Escape" && !e.defaultPrevented && layers[layers.length - 1] === layer) {
       e.preventDefault();
       e.stopPropagation();
-      close();
+      if (!o.onEscape?.()) close();
     }
   };
   const closeBtn = h("button", { type: "button", class: "sv-dialog-close", "aria-label": "Close", onclick: close });

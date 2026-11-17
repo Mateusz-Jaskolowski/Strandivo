@@ -493,6 +493,27 @@ const pad = "ACGT".repeat(25);
 const oneSite = pad + "GAATTC" + pad;
 const twoSites = pad + "GAATTC" + pad + "GAATTC" + pad;
 const digestOf = (enzymes: string[], sizes: number[]) => ({ enzymes, sizes, score: 1 });
+
+test("a different digest of the same template is worked out again, not taken from the last", () => {
+  // Cut once by each, a plasmid is only opened up, and by both it is two fragments.
+  const plasmid: SeqData = { ...doc(pad + "GAATTC" + pad + "GGATCC" + pad), circular: true };
+  const fresh = (enzymes: string[]) => digestSequence(plasmid, enzymes).fragments.map(fragmentSize);
+  const eco = templateDigestSizes(plasmid, ["EcoRI"]);
+  const both = templateDigestSizes(plasmid, ["EcoRI", "BamHI"]);
+  assert.deepEqual(eco, [plasmid.sequence.length]);
+  assert.equal(both.length, 2);
+  assert.deepEqual(both, fresh(["EcoRI", "BamHI"]));
+  // Going back is a third digest in a row, and enzymes in another order are the same digest.
+  assert.deepEqual(templateDigestSizes(plasmid, ["EcoRI"]), eco);
+  assert.deepEqual(templateDigestSizes(plasmid, ["BamHI", "EcoRI"]), both);
+  assert.deepEqual(templateDigestSizes(plasmid, ["EcoRI"]), fresh(["EcoRI"]));
+  // The same enzymes on another sequence, or on the same one linear, are not the last digest either.
+  const longer: SeqData = { ...plasmid, sequence: plasmid.sequence + pad };
+  assert.deepEqual(templateDigestSizes(longer, ["EcoRI"]), [longer.sequence.length]);
+  const linear: SeqData = { ...longer, circular: false };
+  assert.deepEqual(templateDigestSizes(linear, ["EcoRI"]), digestSequence(linear, ["EcoRI"]).fragments.map(fragmentSize));
+  assert.equal(templateDigestSizes(linear, ["EcoRI"]).length, 2);
+});
 const shape = (lanes: PcrGelLane[]) => lanes.map(l => [l.what, l.sizes]);
 
 test("a circular template cut once runs supercoiled, then opened up, beside the product's two lanes", () => {

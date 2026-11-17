@@ -16,13 +16,46 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **A clearer enzyme library**: Lab stock and My enzymes show where each enzyme cuts, as
+  G^AATTC or GGTCTCN^NNNN, and the ends it leaves, so Acc65I and KpnI are easy to tell
+  apart. My enzymes keeps your chosen enzymes in a box of their own, updated as you tick,
+  above all enzymes: your lab's stock, the common enzymes and the rest, each under its
+  heading, instead of opening on rare isoschizomers. One search looks through both, and
+  either box folds away. Lab stock sorts by enzyme, product or freezer location, and shows
+  the cut of the enzyme you are adding as you type its name.
+- **Enzymes from REBASE**: the enzyme library now offers the 588 enzymes on sale today,
+  taken from REBASE, instead of thousands of names nobody sells. It adds enzymes that were
+  missing, such as PaqCI and I-SceI, corrects MluCI's cut and TaqII's site, and shows
+  TspRI's and TscAI's sites once each with their 9-base overhangs. Hover over an enzyme in
+  My enzymes to see who sells it.
+- **Double-click a protein**: on the map or in the Sequence tab, a double-click on a CDS,
+  one of its regions or an ORF opens its Protein details.
+- **Enzyme details**: double-click a cut site, or choose Enzyme details… from its
+  right-click menu or the inspector, to see the enzyme's cut drawn on both strands, who
+  sells it, its isoschizomers and neoschizomers (Acc65I for KpnI), where it cuts your
+  sequence and the fragments, and your lab's stock of it.
+- **Regions stay on their residues while you edit**: bases typed or deleted one at a time
+  inside a CDS now move the regions after them (before, typing three codons left every
+  later region three residues off), and replacing bases no longer trims a feature, primer
+  or region that starts or ends there. Replace a whole region, like a CDR, and the region
+  keeps the new bases.
+- **See every edit to bases before it happens**: in the Sequence tab, typing, pasting,
+  Backspace and Delete open a small card at the cursor or above the selected bases. It
+  shows the bases going in or out (those going are struck through in the sequence), how
+  many for how many (green when they match), the change to the protein, like I15A, and a
+  warning when the edit shifts a gene's frame. Press Enter to make the edit or Esc to leave
+  the sequence as it is; with bases selected, pressing Delete again deletes them too.
+  Typing between two features or regions, such as FR1 and CDR1, asks which one the new
+  bases belong to, or neither; press Tab to choose. Clicking elsewhere leaves the sequence
+  as it is, and the message that says so can still make the edit. Delete bases from the
+  right-click menu or the inspector still deletes at once, and says when it shifts a
+  gene's frame.
 - **Check and adjust a PCR before you run it**: the product dialog now draws the product
   with its cut sites and GC content, suggests a digest to check it by and says which
   fragments to expect, and warns about a GC-rich product, one longer than the polymerase
   is made for, or a site in a tail with too few bases beyond it. The cycling program is
   drawn as a line you can edit: change a temperature, a time or a number of cycles, copy
   the program as it stands, or put it back the way the protocol has it.
-
 - **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
   genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
   it, with the annealing temperature and an extension time worked out from the product's

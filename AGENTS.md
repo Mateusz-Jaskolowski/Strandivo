@@ -96,8 +96,34 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   interface shows positions 1-based.
 - **Edits** go through `store.apply(next, label, selection?, key?)` with a new `SeqData`;
   never change `store.data` or arrays it holds in place. Steps with the same `key` within
-  1.5 s merge into one undo step (typing). Views compare data by reference, so the same
-  goes for read results: replace lists, don't mutate them.
+  1.5 s merge into one undo step (typing a note, dragging a primer's end). Views compare
+  data by reference, so the same goes for read results: replace lists, don't mutate them.
+- **Replacing bases** is not a deletion and then an insertion, which left new bases at an
+  annotation's edge outside it (`replaceRange` in `src/lib/seqdata.ts`). As many bases as
+  were selected move nothing. Otherwise, annotation by annotation (features, primers,
+  protein regions): one holding the whole selection holds the new bases; one inside a
+  larger selection goes; the rest move with their bases. New bases at an edge, inserted
+  there or replacing bases an annotation crosses the edge of, belong to neither side
+  unless the user chose one (`EdgeSide`), as which side they belong to can't be known:
+  `"before"` gives them to the features and regions before the edge, `"after"` to those
+  after it, and otherwise each keeps only its own bases. A primer never takes them, as its
+  bases are the oligo's.
+- **Edits to bases from the keyboard** wait in a card (`src/views/editCard.ts`) instead of
+  happening at once, so a region never takes or loses bases unseen and a stray key deletes
+  nothing: bases typed or pasted at the cursor or over a selection, Backspace or Delete at
+  the cursor (one more base struck through with each press; typing then replaces them),
+  and Delete or Cut with bases selected, where a second press deletes them unless bases
+  were typed into the card. Enter makes the edit as one undo step and Esc leaves the
+  sequence as it is, silently unless a Cut already copied the bases. The card shows how many bases for how many (green when they match),
+  each CDS's protein change and frameshift, and what holds, loses or goes without the new
+  bases (`describeEdit` in `src/lib/baseEdit.ts`); at an edge it asks which side takes new
+  bases, Neither unless Tab changes it. Anything else done meanwhile (a click elsewhere, a
+  key that moves the selection, another edit) closes it and says so, offering the edit
+  while the sequence is unchanged. It is not a dialog: it belongs to the selection and
+  must leave the keyboard with the sequence, which sends it keys. What the user chose on
+  purpose stays at once: Delete bases from a right-click or the inspector (which says when
+  it shifts a CDS's frame, `deleteAtOnce` in `src/lib/deletion.ts`), picked codons and
+  Use read base.
 - **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.
@@ -114,9 +140,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   from the library) is a dialog (`openDialog` in `src/ui/modal.ts`, see
   `src/views/primerDialogs.ts`); so is a closer look at one thing too big for the
   inspector, such as a protein (`src/views/proteinDialog.ts`: its figure, numbered sequence
-  and properties), opened from its section there and its right-click menu, never by a
-  double-click. The inspector keeps that thing's summary and actions, and there is one
-  such dialog per kind of thing, not one per section: a second wish grows the first.
+  and properties) and a restriction enzyme (`src/views/enzymeDialog.ts`: its cut on both
+  strands, suppliers, isoschizomers and sites), opened from its section there, its
+  right-click menu, or a double-click on the thing itself on the map or in the Sequence
+  tab (a CDS's arc, name or regions, or an ORF: `proteinAt`; a cut site), never on bases
+  or on the amino acids that codons are picked by (`docs/enzyme-data-plan.md` says why). The inspector keeps that thing's summary and
+  actions, and there is one such dialog per kind of thing, not one per section: a second
+  wish grows the first.
   Something not tied to one file gets its own window, like
   Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
@@ -138,7 +168,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   live in the store so both panels share them; ordinary selections clear them.
 - **Delete with something clicked** (a feature, primer, protein region, cut site or ORF)
   first deletes that thing, or for a cut site or ORF only drops it from the selection, and
-  leaves its bases selected; the next press deletes the bases (`src/lib/deletion.ts`). A
+  leaves its bases selected; the next press opens the card for deleting the bases, and one
+  more deletes them (`src/lib/deletion.ts`). A
   view that gets a Delete key keeps to this, as one press used to take a feature's bases
   along when the user meant the feature.
 - **Messages** (`toast` in `src/ui/dom.ts`) are for what the user can't see happen: side
@@ -281,7 +312,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   enums or namespaces.
 - `node tools/build-catalog.mjs` rebuilds the parts catalog. It needs the network, so it
   is not part of `npm run check` and is never run by the app or CI; commit the curated
-  list and the regenerated catalog together.
+  list and the regenerated catalog together. `node tools/build-enzymes.mjs` likewise
+  rebuilds the enzymes from REBASE; check the diff of `src/lib/rebaseEnzymes.ts`.
 - `node tools/build-icon.mjs` draws the app icon and writes every file made from it: the
   PNGs, `src-tauri/icons/icon.ico` and `src-tauri/icons/icon.icns`, and the website's icon
   and favicon. Change the drawing there, never the images (the SVGs beside them are its
@@ -407,11 +439,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   unique 6+ cutters, unique, unique and dual, or every site. The common list
   (`src/lib/enzymes.ts`) is curated to avoid duplicate isoschizomers. Lab stock
   (`src/enzymeLibrary.ts`) and the independent personal list (`src/personalEnzymes.ts`)
-  may name any enzyme TeselaGen knows: Acc65I is not KpnI (same site, other ends), and
-  Esp3I keeps its chosen name. Names reach analysis and reaction dialogs through
-  `ViewOptions`, never a global; name arrays remain the same until membership changes,
-  so editing a stock note redraws no map. Source and filter changes prune unavailable
-  enzyme picks; drawing visibility is separate and the outline still lists sites when
+  may name any enzyme REBASE lists as sold (`src/lib/rebaseEnzymes.ts`, built by
+  `tools/build-enzymes.mjs`; sources, terms and what is left out in
+  `docs/enzyme-data-plan.md`): Acc65I is not KpnI (same site, other ends), and Esp3I
+  keeps its name. Lists mark the top strand's cut with ^ and Ns out to a cut past the
+  site, with the ends beside it: C^CGC and GGTCTCN^NNNN, which REBASE writes CCGC(-3/-1)
+  and GGTCTC(1/5), and GGATG(N)9^NNNN past five Ns (`enzymeCut`).
+  Names reach analysis and reaction dialogs through `ViewOptions`, never a global; name
+  arrays remain the same until membership changes, so editing a stock note redraws no
+  map. Source and filter changes prune unavailable enzyme picks; drawing visibility is
+  separate and the outline still lists sites when
   drawing is off. Digest and restriction cloning choose their own source, initially the
   document's, and keep already chosen reaction enzymes available through filter changes.
   Product names are user text, never read for recognition or reaction conditions.

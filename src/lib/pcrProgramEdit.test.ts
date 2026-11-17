@@ -115,7 +115,7 @@ test("untouched programs follow inputs; custom programs keep their baseline and 
 test("equivalent formatting does not mark a program modified; both stages edit independently", () => {
   const d = programDraft(snapshot("two", true));
   d.values[programKey(1, 0, "temp")] = "98.0";
-  d.values[programKey(2, 1, "seconds")] = "0 min 20 s";
+  d.values[programKey(2, 1, "seconds")] = "0 min 15 s";
   assert.equal(readProgram(d).modified, false);
   d.values[programKey(1, 0, "cycles")] = "4";
   d.values[programKey(2, 0, "cycles")] = "26";

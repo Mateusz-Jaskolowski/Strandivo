@@ -6,8 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { NEB_POLYMERASES } from "./polymerases.ts";
-import { PCR_PROTOCOLS, templatesFor } from "./pcrProtocols.ts";
-import { durationText, extensionSeconds, FIRST_CYCLES, offerTwoStages, pcrProgram, programNotes, programSource, programText, programTitle, templateNotes, twoStagesPossible } from "./pcrProgram.ts";
+import { PCR_PROTOCOLS, templatesFor, type PcrProtocol, type TemplateKind } from "./pcrProtocols.ts";
+import { durationText, extensionSeconds, offerTwoStages, pcrProgram, programNotes, programSource, programText, programTitle, secondsPerKb, templateNotes, twoStagesPossible } from "./pcrProgram.ts";
 
 const steps = (st: ReturnType<typeof pcrProgram>, i: number) => st![i].steps.map(s => [s.name, s.temp, s.seconds]);
 
@@ -16,7 +16,7 @@ test("Q5 on a plasmid follows NEB's routine conditions", () => {
   assert.equal(p.length, 3);
   assert.deepEqual(steps(p, 0), [["Initial denaturation", 98, 30]]);
   assert.equal(p[1].cycles, 25);
-  // 737 bp at 20 s/kb is 14.7 s, up to the next 5.
+  // 737 bp at 15 s/kb is 11.1 s, up to the next 5.
   assert.deepEqual(steps(p, 1), [["Denature", 98, 10], ["Anneal", 65, 20], ["Extend", 72, 15]]);
   assert.deepEqual(steps(p, 2), [["Final extension", 72, 120], ["Hold", 4, null]]);
 });
@@ -25,14 +25,55 @@ test("a complex template gets more cycles and a longer extension", () => {
   const p = pcrProgram({ polymerase: "q5", template: "complex", length: 2000, ta: 60 })!;
   assert.equal(p[1].cycles, 30);
   assert.equal(p[1].steps[2].seconds, 60);
-  assert.equal(pcrProgram({ polymerase: "q5", template: "plasmid", length: 2000, ta: 60 })![1].steps[2].seconds, 40);
+  assert.equal(pcrProgram({ polymerase: "q5", template: "plasmid", length: 2000, ta: 60 })![1].steps[2].seconds, 30);
 });
 
-test("Q5 extends longer past 6 kb, and never for less than 10 s", () => {
+test("Q5 extends longer past 6 kb on either template, and never for less than 10 s", () => {
   const q5 = PCR_PROTOCOLS.q5;
-  assert.equal(extensionSeconds(q5, "plasmid", 6000), 120);
-  assert.equal(extensionSeconds(q5, "plasmid", 8000), 360);
+  // A plasmid: 15 s/kb up to 6 kb, 30 s/kb above (the top of NEB's pDNA ranges).
+  assert.equal(extensionSeconds(q5, "plasmid", 6000), 90);
+  assert.equal(extensionSeconds(q5, "plasmid", 6001), 185);
+  assert.equal(extensionSeconds(q5, "plasmid", 8000), 240);
+  // Complex: 30 s/kb up to 6 kb, 45 s/kb above.
+  assert.equal(extensionSeconds(q5, "complex", 6000), 180);
+  assert.equal(extensionSeconds(q5, "complex", 6001), 275);
+  assert.equal(extensionSeconds(q5, "complex", 8000), 360);
   assert.equal(extensionSeconds(q5, "plasmid", 200), 10);
+});
+
+test("extension is rounded up to the next 5 s, never to the nearest or down", () => {
+  // [polymerase, template, bp, raw seconds worked out by hand from the rate, the step]
+  const rows: [string, TemplateKind, number, number, number][] = [
+    ["phusion", "plasmid", 1700, 25.5, 30], // 1.7 kb at 15 s/kb; nearest would give 25
+    ["phusion", "plasmid", 1010, 15.15, 20], // just over a multiple of 5; down or nearest would give 15
+    ["taq", "plasmid", 1100, 66, 70], // 1.1 kb at 60 s/kb; nearest would give 65
+    ["q5", "plasmid", 1100, 16.5, 20], // 1.1 kb at 15 s/kb; nearest would give 15
+    ["q5", "plasmid", 6100, 183, 185], // 6.1 kb at the plasmid's rate past 6 kb, 30 s/kb
+    ["q5", "plasmid", 7000, 210, 210], // 7 kb at 30 s/kb is already a multiple of 5
+    ["q5", "complex", 1100, 33, 35], // 1.1 kb at 30 s/kb
+    ["q5", "complex", 6500, 292.5, 295] // 6.5 kb at the complex rate past 6 kb, 45 s/kb
+  ];
+  for (const [id, template, length, raw, step] of rows) {
+    const p = PCR_PROTOCOLS[id];
+    const label = `${id} ${template} ${length} bp`;
+    assert.ok(Math.abs((length / 1000) * secondsPerKb(p, template, length) - raw) < 1e-9, `${label}: ${raw} s is not what its rate gives`);
+    assert.equal(extensionSeconds(p, template, length), step, label);
+  }
+});
+
+test("a colony is extended as a simple template, at the plasmid's rate", () => {
+  // No protocol offers a colony and rates that differ, so this one is made up: NEB counts
+  // E. coli among the simple templates, so only genomic DNA and cDNA take the complex rates.
+  const made: PcrProtocol = { ...PCR_PROTOCOLS.q5, extend: { temp: 72, plasmid: 10, complex: 40, longer: { above: 3000, plasmid: 20, complex: 60 } } };
+  for (const length of [2000, 3000]) {
+    assert.equal(secondsPerKb(made, "plasmid", length), 10, `${length}`);
+    assert.equal(secondsPerKb(made, "colony", length), 10, `${length}`);
+    assert.equal(secondsPerKb(made, "complex", length), 40, `${length}`);
+  }
+  assert.equal(secondsPerKb(made, "plasmid", 4000), 20);
+  assert.equal(secondsPerKb(made, "colony", 4000), 20);
+  assert.equal(secondsPerKb(made, "complex", 4000), 60);
+  assert.deepEqual(["plasmid", "colony", "complex"].map(t => extensionSeconds(made, t as TemplateKind, 2000)), [20, 20, 80]);
 });
 
 test("Taq and OneTaq extend a short product for 45 s, as NEB advises below 1 kb", () => {
@@ -58,7 +99,7 @@ test("annealing and extension become one step from the polymerase's temperature"
   assert.deepEqual(at("taq", 65), ["Denature", "Anneal", "Extend"]);
   assert.deepEqual(at("taq", 66), ["Denature", "Anneal and extend"]);
   const merged = pcrProgram({ polymerase: "q5", template: "plasmid", length: 1000, ta: 72 })![1].steps[1];
-  assert.deepEqual([merged.temp, merged.seconds], [72, 20]);
+  assert.deepEqual([merged.temp, merged.seconds], [72, 15]);
 });
 
 test("Phusion, OneTaq and Taq follow their own protocols", () => {
@@ -88,8 +129,9 @@ test("a colony gets the long first denaturation where NEB gives one", () => {
 test("two stages: the first cycles anneal on the pairing parts, the rest on the whole primers", () => {
   const p = pcrProgram({ polymerase: "q5", template: "plasmid", length: 737, ta: 65, taFull: 72, twoStage: true })!;
   assert.equal(p.length, 4);
-  assert.equal(p[1].cycles, FIRST_CYCLES);
-  assert.equal(p[2].cycles, 25 - FIRST_CYCLES);
+  // Five cycles on the pairing parts, then the other 20 of Q5's 25 on the whole primers.
+  assert.equal(p[1].cycles, 5);
+  assert.equal(p[2].cycles, 20);
   assert.deepEqual(steps(p, 1), [["Denature", 98, 10], ["Anneal", 65, 20], ["Extend", 72, 15]]);
   // 72 °C is where Q5 anneals and extends in one step.
   assert.deepEqual(steps(p, 2), [["Denature", 98, 10], ["Anneal and extend", 72, 15]]);
@@ -108,6 +150,11 @@ test("a second stage is offered when the whole primers anneal 5 °C higher", () 
   // A gain of 5 °C to 0.1 °C is enough, whichever way the sum rounds.
   assert.equal(offerTwoStages(56.3, 61.3), true);
   assert.equal(offerTwoStages(54.6, 59.6), true);
+  // The edge lies half a step of NEB's 0.1 °C below 5 °C, so 4.9 °C is no offer and 4.96 °C is.
+  assert.equal(offerTwoStages(65, 69.9), false);
+  assert.equal(offerTwoStages(65, 69.96), true);
+  assert.equal(offerTwoStages(56.3, 61.2), false);
+  assert.equal(offerTwoStages(56.3, 61.26), true);
 });
 
 test("a second stage is made only where it can be used", () => {
@@ -118,6 +165,25 @@ test("a second stage is made only where it can be used", () => {
   assert.equal(pcrProgram({ ...base, taFull: null, twoStage: true })!.length, 3);
   assert.equal(twoStagesPossible({ ...base, taFull: 72 }), true);
   assert.equal(twoStagesPossible({ ...base, polymerase: "q5u", taFull: 72 }), false);
+});
+
+test("no second stage is made when the first would take all the cycles", () => {
+  // No NEB protocol has so few cycles, so one is made up and stood in for a moment.
+  PCR_PROTOCOLS["made-up"] = { ...PCR_PROTOCOLS.q5, cycles: { plasmid: 5, complex: 6, colony: 3 } };
+  try {
+    const base = { polymerase: "made-up", length: 737, ta: 65, taFull: 72, twoStage: true };
+    // Five cycles, or fewer, are all the first stage takes: none is left for the second.
+    for (const template of ["plasmid", "colony"] as const) {
+      assert.equal(twoStagesPossible({ ...base, template }), false, template);
+      const p = pcrProgram({ ...base, template })!;
+      assert.deepEqual(p.map(st => st.cycles), [null, PCR_PROTOCOLS["made-up"].cycles[template], null], template);
+    }
+    // One more cycle is enough for a second stage of one.
+    assert.equal(twoStagesPossible({ ...base, template: "complex" }), true);
+    assert.deepEqual(pcrProgram({ ...base, template: "complex" })!.map(st => st.cycles), [null, 5, 1, null]);
+  } finally {
+    delete PCR_PROTOCOLS["made-up"];
+  }
 });
 
 test("a polymerase with no protocol has no program", () => {
@@ -157,15 +223,57 @@ test("the notes say what the choices change", () => {
   assert.match(t[2].text, /5 min at 95 °C, then 30 cycles/);
   assert.equal(templateNotes("q5").length, 2);
   const n = programNotes("q5", 737, "plasmid");
-  assert.match(n[1], /20 s for each kb of product at 72 °C, so 737 bp gets 15 s\./);
+  assert.match(n[1], /15 s for each kb of product at 72 °C, so 737 bp gets 15 s\./);
   // The time reads as the program shows it, and the shortest step is owned up to.
-  assert.match(programNotes("q5", 8000, "plasmid")[1], /so 8,000 bp gets 6 min\./);
+  assert.match(programNotes("q5", 8000, "plasmid")[1], /30 s for each kb of product at 72 °C, so 8,000 bp gets 4 min\./);
   assert.match(programNotes("q5", 200, "plasmid")[1], /so 200 bp gets 10 s, the shortest step used\./);
   assert.match(programNotes("taq", 200, "plasmid")[1], /so 200 bp gets 45 s, the least NEB suggests for a short product\./);
   // Its source by number, and that other products of the same Tm rule may cycle differently.
   const notes = programNotes("onetaq", 1000, "plasmid");
   assert.match(notes.at(-2)!, /\(M0481\)/);
   assert.match(notes.at(-1)!, /Other products .* check their own protocol\./);
+});
+
+test("the program's notes, every line of them, for a program of each polymerase", () => {
+  const finish = "The final extension finishes any product still half made.";
+  const others = "Other products that share this polymerase's Tm rule, such as master mixes, kits or Hot Start forms, can cycle differently, so check their own protocol.";
+  assert.deepEqual(programNotes("q5", 737, "plasmid"), [
+    "Each denaturation is short, 10 s at 98 °C, to spare the enzyme.",
+    "Extension is 15 s for each kb of product at 72 °C, so 737 bp gets 15 s.",
+    "25 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 72 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, PCR Using Q5 High-Fidelity DNA Polymerase (M0491).",
+    others
+  ]);
+  assert.deepEqual(programNotes("phusion", 2000, "complex"), [
+    "Each denaturation is short, 10 s at 98 °C, to spare the enzyme.",
+    "Extension is 30 s for each kb of product at 72 °C, so 2,000 bp gets 1 min.",
+    "30 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 72 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, PCR Protocol for Phusion High-Fidelity DNA Polymerase (M0530).",
+    others
+  ]);
+  assert.deepEqual(programNotes("onetaq", 1000, "plasmid"), [
+    "Each denaturation is short, 20 s at 94 °C, to spare the enzyme.",
+    "Extension is 60 s for each kb of product at 68 °C, so 1,000 bp gets 1 min.",
+    "25 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 68 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, Protocol for OneTaq Hot Start DNA Polymerase (M0481).",
+    others
+  ]);
+  // A colony on a short product: the 45 s that NEB suggests below 1 kb is owned up to.
+  assert.deepEqual(programNotes("taq", 200, "colony"), [
+    "Each denaturation is short, 20 s at 95 °C, to spare the enzyme.",
+    "Extension is 60 s for each kb of product at 68 °C, so 200 bp gets 45 s, the least NEB suggests for a short product.",
+    "30 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 66 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, PCR Protocol for Taq DNA Polymerase with Standard Taq Buffer (M0273).",
+    others
+  ]);
 });
 
 test("the program names the product its protocol is for, by NEB's own name and number", () => {
@@ -191,11 +299,12 @@ test("the template notes only claim a longer extension where the protocol gives 
     assert.match(complex.text, /, so it takes 30 cycles\.$/);
   }
   const [plasmid, complex] = templateNotes("q5");
-  assert.match(plasmid.text, /, so 25 cycles and 20 s for each kb do\.$/);
+  assert.match(plasmid.text, /, so 25 cycles and 15 s for each kb do\.$/);
   assert.match(complex.text, /, so it takes 30 cycles and 30 s for each kb\.$/);
-  // A product past 6 kb is extended at one rate on any template, and the notes say so.
+  // A product past 6 kb has a rate of its own on each template, and the notes give them.
   const [longPlasmid, longComplex] = templateNotes("q5", 8000);
-  assert.doesNotMatch(longPlasmid.text + longComplex.text, /for each kb/);
+  assert.match(longPlasmid.text, /, so 25 cycles and 30 s for each kb do\.$/);
+  assert.match(longComplex.text, /, so it takes 30 cycles and 45 s for each kb\.$/);
   assert.match(templateNotes("taq")[2].text, /, so it starts with 5 min at 95 °C, then 30 cycles\.$/);
   // No protocol: the reasons alone, with nothing to quote.
   assert.doesNotMatch(templateNotes("q5u")[0].text, /\d/);

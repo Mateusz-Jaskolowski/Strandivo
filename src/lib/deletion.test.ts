@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { describeLost, firstDelete, lostWith } from "./deletion.ts";
+import { deleteAtOnce, describeLost, firstDelete, lostWith } from "./deletion.ts";
 import { REGIONS_QUALIFIER, regionsOf } from "./regions.ts";
 import { deleteRange, replaceRange, type SeqData, type SeqFeature, type SeqPrimer } from "./seqdata.ts";
 
@@ -124,4 +124,16 @@ test("lost features and primers are described in a sentence that stays short", (
   assert.equal(describeLost({ features: [], primers: p("M13 fwd") }), "The primer M13 fwd was inside the deleted bases, so it was deleted too.");
   assert.equal(describeLost({ features: f("lacZ"), primers: p("F") }), "The feature lacZ and the primer F were inside the deleted bases, so they were deleted too.");
   assert.equal(describeLost({ features: f("a", "b"), primers: p("F") }), "2 features and the primer F were inside the deleted bases, so they were deleted too.");
+});
+
+test("bases deleted at once say what went with them and which frame shifted", () => {
+  const shifted = deleteAtOnce(data, { start: 20, end: 39 });
+  assert.equal(shifted.data.sequence.length, 180);
+  assert.equal(shifted.caret, 20);
+  assert.equal(shifted.note, "The primer F was inside the deleted bases, so it was deleted too. Deleting 20 bases shifted lacZ's frame.");
+  assert.equal(deleteAtOnce(data, { start: 21, end: 22 }).note, "Deleting 2 bases shifted lacZ's frame.");
+  // In frame, or outside every CDS, the document's own message is enough.
+  assert.equal(deleteAtOnce(data, { start: 21, end: 23 }).note, null);
+  assert.equal(deleteAtOnce(data, { start: 100, end: 129 }).note, null);
+  assert.equal(deleteAtOnce(data, { start: 190, end: 5 }).caret, 0);
 });

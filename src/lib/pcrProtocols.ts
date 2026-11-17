@@ -36,11 +36,11 @@ export interface PcrProtocol {
   anneal: number;
   extend: {
     temp: number;
-    /** Seconds for each kb of product. */
+    /** Seconds for each kb of product, on a simple template and on a complex one. */
     plasmid: number;
     complex: number;
-    /** For products longer than `above` bp, where NEB asks for more. */
-    longer?: { above: number; perKb: number };
+    /** For products longer than `above` bp, where NEB asks for more: the rate for each kind of template. */
+    longer?: { above: number; plasmid: number; complex: number };
     /** The shortest extension NEB gives for a short product, s; the program's own 10 s where absent. */
     shortest?: number;
   };
@@ -59,9 +59,13 @@ const Q5: PcrProtocol = {
   initial: { temp: 98, seconds: 30 },
   denature: { temp: 98, seconds: 10 }, // 5–10 s
   anneal: 20, // 10–30 s
-  // 20–30 s/kb, "reduced to 10 s/kb for simple templates (plasmid, E. coli, etc.)", and
-  // 40–50 s/kb past 6 kb. A plasmid gets the low end of the routine range, not the 10.
-  extend: { temp: 72, plasmid: 20, complex: 30, longer: { above: 6000, perKb: 45 } },
+  // M0491: "Extension times are generally 20–30 seconds per kb for complex, genomic samples,
+  // but can be reduced to 10 seconds per kb for simple templates (plasmid, E. coli, etc.) or
+  // complex templates < 1 kb." Its table gives up to 6 kb and from 6 kb: gDNA 20–30 and
+  // 30–50 s/kb, cDNA 30–40 and 40–50, pDNA 10–15 and 20–30; and "when amplifying products
+  // > 6 kb, it is often helpful to increase the extension time to 40–50 seconds/kb". A
+  // plasmid gets the top of its ranges, 15 and 30, not the 10; complex 30, and 45 above 6 kb.
+  extend: { temp: 72, plasmid: 15, complex: 30, longer: { above: 6000, plasmid: 30, complex: 45 } },
   final: { temp: 72, seconds: 120 },
   cycles: { plasmid: 25, complex: 30, colony: 30 }, // 25–35, genomic 30–35
   cycleRange: [25, 35],

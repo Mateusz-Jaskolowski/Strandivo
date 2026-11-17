@@ -16,7 +16,7 @@ test("Q5 on a plasmid follows NEB's routine conditions", () => {
   assert.equal(p.length, 3);
   assert.deepEqual(steps(p, 0), [["Initial denaturation", 98, 30]]);
   assert.equal(p[1].cycles, 25);
-  // 737 bp at 20 s/kb is 14.7 s, up to the next 5.
+  // 737 bp at 15 s/kb is 11.1 s, up to the next 5.
   assert.deepEqual(steps(p, 1), [["Denature", 98, 10], ["Anneal", 65, 20], ["Extend", 72, 15]]);
   assert.deepEqual(steps(p, 2), [["Final extension", 72, 120], ["Hold", 4, null]]);
 });
@@ -25,13 +25,19 @@ test("a complex template gets more cycles and a longer extension", () => {
   const p = pcrProgram({ polymerase: "q5", template: "complex", length: 2000, ta: 60 })!;
   assert.equal(p[1].cycles, 30);
   assert.equal(p[1].steps[2].seconds, 60);
-  assert.equal(pcrProgram({ polymerase: "q5", template: "plasmid", length: 2000, ta: 60 })![1].steps[2].seconds, 40);
+  assert.equal(pcrProgram({ polymerase: "q5", template: "plasmid", length: 2000, ta: 60 })![1].steps[2].seconds, 30);
 });
 
-test("Q5 extends longer past 6 kb, and never for less than 10 s", () => {
+test("Q5 extends longer past 6 kb on either template, and never for less than 10 s", () => {
   const q5 = PCR_PROTOCOLS.q5;
-  assert.equal(extensionSeconds(q5, "plasmid", 6000), 120);
-  assert.equal(extensionSeconds(q5, "plasmid", 8000), 360);
+  // A plasmid: 15 s/kb up to 6 kb, 30 s/kb above (the top of NEB's pDNA ranges).
+  assert.equal(extensionSeconds(q5, "plasmid", 6000), 90);
+  assert.equal(extensionSeconds(q5, "plasmid", 6001), 185);
+  assert.equal(extensionSeconds(q5, "plasmid", 8000), 240);
+  // Complex: 30 s/kb up to 6 kb, 45 s/kb above.
+  assert.equal(extensionSeconds(q5, "complex", 6000), 180);
+  assert.equal(extensionSeconds(q5, "complex", 6001), 275);
+  assert.equal(extensionSeconds(q5, "complex", 8000), 360);
   assert.equal(extensionSeconds(q5, "plasmid", 200), 10);
 });
 
@@ -58,7 +64,7 @@ test("annealing and extension become one step from the polymerase's temperature"
   assert.deepEqual(at("taq", 65), ["Denature", "Anneal", "Extend"]);
   assert.deepEqual(at("taq", 66), ["Denature", "Anneal and extend"]);
   const merged = pcrProgram({ polymerase: "q5", template: "plasmid", length: 1000, ta: 72 })![1].steps[1];
-  assert.deepEqual([merged.temp, merged.seconds], [72, 20]);
+  assert.deepEqual([merged.temp, merged.seconds], [72, 15]);
 });
 
 test("Phusion, OneTaq and Taq follow their own protocols", () => {
@@ -157,9 +163,9 @@ test("the notes say what the choices change", () => {
   assert.match(t[2].text, /5 min at 95 °C, then 30 cycles/);
   assert.equal(templateNotes("q5").length, 2);
   const n = programNotes("q5", 737, "plasmid");
-  assert.match(n[1], /20 s for each kb of product at 72 °C, so 737 bp gets 15 s\./);
+  assert.match(n[1], /15 s for each kb of product at 72 °C, so 737 bp gets 15 s\./);
   // The time reads as the program shows it, and the shortest step is owned up to.
-  assert.match(programNotes("q5", 8000, "plasmid")[1], /so 8,000 bp gets 6 min\./);
+  assert.match(programNotes("q5", 8000, "plasmid")[1], /30 s for each kb of product at 72 °C, so 8,000 bp gets 4 min\./);
   assert.match(programNotes("q5", 200, "plasmid")[1], /so 200 bp gets 10 s, the shortest step used\./);
   assert.match(programNotes("taq", 200, "plasmid")[1], /so 200 bp gets 45 s, the least NEB suggests for a short product\./);
   // Its source by number, and that other products of the same Tm rule may cycle differently.
@@ -191,11 +197,12 @@ test("the template notes only claim a longer extension where the protocol gives 
     assert.match(complex.text, /, so it takes 30 cycles\.$/);
   }
   const [plasmid, complex] = templateNotes("q5");
-  assert.match(plasmid.text, /, so 25 cycles and 20 s for each kb do\.$/);
+  assert.match(plasmid.text, /, so 25 cycles and 15 s for each kb do\.$/);
   assert.match(complex.text, /, so it takes 30 cycles and 30 s for each kb\.$/);
-  // A product past 6 kb is extended at one rate on any template, and the notes say so.
+  // A product past 6 kb has a rate of its own on each template, and the notes give them.
   const [longPlasmid, longComplex] = templateNotes("q5", 8000);
-  assert.doesNotMatch(longPlasmid.text + longComplex.text, /for each kb/);
+  assert.match(longPlasmid.text, /, so 25 cycles and 30 s for each kb do\.$/);
+  assert.match(longComplex.text, /, so it takes 30 cycles and 45 s for each kb\.$/);
   assert.match(templateNotes("taq")[2].text, /, so it starts with 5 min at 95 °C, then 30 cycles\.$/);
   // No protocol: the reasons alone, with nothing to quote.
   assert.doesNotMatch(templateNotes("q5u")[0].text, /\d/);

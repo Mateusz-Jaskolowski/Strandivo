@@ -20,7 +20,7 @@ import { alignPrimer } from "../lib/primerAlign.ts";
 import { NEB_POLYMERASES, nebPolymerase } from "../lib/polymerases.ts";
 import { PCR_PROTOCOLS, TEMPLATES, templatesFor, type TemplateKind } from "../lib/pcrProtocols.ts";
 import { FIRST_CYCLES, pcrProgram, programNotes, programSource, programTitle, templateNotes, twoStagesPossible } from "../lib/pcrProgram.ts";
-import { followsSettings, startPolymerase, tmStrip, wholePrimerTa } from "../lib/pcrPlan.ts";
+import { followsSettings, programContext, startPolymerase, tmStrip, wholePrimerTa } from "../lib/pcrPlan.ts";
 import { loadSettings, onSettingsChanged, saveSettings } from "../settings.ts";
 import { COMMON_SEQUENCING_PRIMERS, libraryHits, type LibraryHit } from "../lib/library.ts";
 import { allProducts, pcrProduct, productDocument, type PcrProduct, type PlacedPrimer } from "../lib/pcr.ts";
@@ -533,7 +533,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       const useTwo = twoStage && canStage;
       const stages = input && PCR_PROTOCOLS[polymerase] ? pcrProgram({ ...input, twoStage: useTwo }) : null;
       const inputKey = input ? programInputKey({ ...input, twoStage: useTwo }) : "";
-      const generated: ProgramSnapshot | null = stages ? { key: inputKey, stages, title: programTitle(polymerase, product.length), source: programSource(polymerase)!, context: `${TEMPLATES.find(t => t.id === template)!.label} · ${fmt(product.length)} bp`, notes: programNotes(polymerase, product.length, template) } : null;
+      const generated: ProgramSnapshot | null = stages ? { key: inputKey, stages, title: programTitle(polymerase, product.length), source: programSource(polymerase)!, context: programContext(template, product.length, anneal!.ta, useTwo ? taFull : null), notes: programNotes(polymerase, product.length, template) } : null;
       draft = syncProgram(draft, generated);
       const overview = productOverview(product, d.sequence, d.circular, { ...ctx.options, enzymeSource, enzymeFilter });
       const sourceSelect = enzymeSourceSelect(enzymeSource, "Product enzyme list", source => { enzymeSource = source; redraw(); });

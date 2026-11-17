@@ -110,7 +110,8 @@ and CI checks that they exist.
   counts as entered when the field is left or Enter is pressed, not on the browser's change
   event alone, as a field drawn anew mid-edit fires none; Escape then goes back to that
   value instead of closing the dialog. An edited program stays, with the protocol and the
-  setup it was made for, when the inputs change, and only what `pcrProgram` is given counts
+  setup it was made for (`programContext`: template, length, annealing temperatures and
+  stages, which the strip over it and Copy name), when the inputs change, and only what `pcrProgram` is given counts
   as an input (`programInputKey`), so a primer renamed elsewhere doesn't say the setup has
   moved. Regenerate and Reset build it again from the current inputs, change no setting,
   and hand focus to Copy program, as each takes itself away. Every control needs its own

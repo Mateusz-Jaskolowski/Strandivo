@@ -90,8 +90,11 @@ and CI checks that they exist.
   site inside the product is in the template as well, unless a 5′ tail brought it in. Its
   sizes come from the same digest the Digest dialog runs (`templateDigestSizes`, kept while
   the template and the enzymes stay the same, as the dialog is drawn again on every change);
-  a circular template cut once gives one fragment of its whole length, and a lane that
-  would only repeat the one above it is left out. Fragments within the gel's resolution run
+  a circular template cut once gives one fragment of its whole length. Which lanes exist is
+  `pcrGelLanes`, not the view: a circular template runs supercoiled, and cut only when the
+  digest cuts it; a linear one runs uncut only when its length differs from the product's
+  and cut only in two pieces or more, as a lane that would only repeat the one above it is
+  left out. Fragments within the gel's resolution run
   as one band, lanes are numbered and named in a key beside the gel, and the ladder is the
   one chosen in either dialog, kept for as long as the window is open. Brightness is a
   band's share of its own lane, so the gel says where things run, not how much of each was

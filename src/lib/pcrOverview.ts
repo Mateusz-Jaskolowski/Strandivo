@@ -4,7 +4,7 @@
 // Analysis of the final, linear PCR product, including tails and primer edits.
 import { cutsBothSides, enzymeName, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { gcProfile, overviewWindow } from "./gc.ts";
-import { digestSequence, fragmentSize, LADDERS } from "./gel.ts";
+import { digestSequence, fragmentSize, LADDERS, SUPERCOILED_RUNS_AS } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
@@ -44,6 +44,36 @@ export function templateDigestSizes(template: SeqData, enzymes: readonly string[
   const sizes = digestSequence(template, [...enzymes]).fragments.map(fragmentSize);
   digested = { sequence: template.sequence, circular: template.circular, enzymes: key, sizes };
   return sizes;
+}
+
+/** One lane of the PCR product's gel. */
+export interface PcrGelLane {
+  /** What the key calls it. */
+  what: string;
+  /** Top-strand sizes of the fragments in it. */
+  sizes: number[];
+  /** Set on an uncut plasmid: the length of linear DNA it runs as, which is less than its own. */
+  runsAs?: number;
+}
+
+/**
+ * The lanes of the gel beside the suggested digest, in the order they would be loaded: the
+ * template, so an extra band in the product can be matched against it, then the product,
+ * each whole and cut by the digest. A circular template runs supercoiled, and cut only if the
+ * enzymes cut it; a linear one runs uncut only when its length differs from the product's,
+ * as one the product's length would run where the product does, and is cut only if the
+ * enzymes leave it in two pieces or more, as whole it is the lane above.
+ */
+export function pcrGelLanes(template: SeqData, productLength: number, digest: SuggestedDigest | null): PcrGelLane[] {
+  const length = template.sequence.length;
+  const lanes: PcrGelLane[] = [];
+  if (template.circular) lanes.push({ what: "Template, supercoiled", sizes: [length], runsAs: length * SUPERCOILED_RUNS_AS });
+  else if (length !== productLength) lanes.push({ what: "Template, uncut", sizes: [length] });
+  const cut = digest ? templateDigestSizes(template, digest.enzymes) : [];
+  if (digest && (template.circular ? cut.length > 0 : cut.length > 1)) lanes.push({ what: `Template, ${digestName(digest)}`, sizes: cut });
+  lanes.push({ what: "Product, uncut", sizes: [productLength] });
+  if (digest) lanes.push({ what: `Product, ${digestName(digest)}`, sizes: digest.sizes });
+  return lanes;
 }
 
 export function productOverview(product: PcrProduct, template: string, circular: boolean, options: EnzymeOptions) {

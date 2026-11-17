@@ -173,6 +173,7 @@ const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
 const TAB = "\uE004";
 const PAGE_UP = "\uE00E";
+const PAGE_DOWN = "\uE00F";
 
 /** Drawn width of the first row's bases relative to the width the layout gives them (1.0 = lined up). */
 const SEQUENCE_FIT = `
@@ -1294,6 +1295,60 @@ async function main() {
     await s.exec("window.__strandivo.showTab(1); window.__strandivo.closeTab();");
     check("Closing the product asks to save it", await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000));
 
+    // --- a dialog belongs to its file's tab ---
+    // One opened for a file closes, as Cancel does, when another tab or Home becomes the
+    // current one (a key, a click, a file opening) or when its tab closes; Escape closes only
+    // the topmost. Ends as it began: this file's tab alone, no dialog.
+    const digestOpen = () => s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
+    const noDialog = also => s.waitFor(`!document.querySelector('.sv-dialog') && ${also}`, 3000);
+    await s.exec(`window.__strandivo.open([${JSON.stringify(data("sanger", "sage-sample-reference.fa"))}])`);
+    await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.tabs()[1] !== null", 20000);
+    await s.exec("window.__strandivo.showTab(0)");
+    await sleep(300);
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.press(PAGE_DOWN, [CTRL]);
+    check("Ctrl+Page Down closes a file's dialog as it shows the next tab", await noDialog("window.__strandivo.activeTab() === 1"));
+    await s.exec("window.__strandivo.command('digest')");
+    check("The next tab opens its own dialog", await digestOpen());
+    await s.press(ESCAPE);
+    check("Escape closes the dialog of the tab shown", await noDialog("window.__strandivo.activeTab() === 1"));
+    await s.exec("window.__strandivo.showTab(0)");
+    await sleep(300);
+    check("A dialog closed with its tab stays closed when the tab is shown again", await noDialog("window.__strandivo.activeTab() === 0"));
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.exec("window.__strandivo.showHome()");
+    check("Showing Home closes a file's dialog", await noDialog("window.__strandivo.activeTab() === -1"));
+    await s.exec("window.__strandivo.showTab(0)");
+    await sleep(300);
+    // What "Open as new file…" in the PCR dialog does once the product is saved: the shell
+    // asks the window to open it.
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.execAsync(
+      "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",
+      [data("snapgene", "pIB2-SEC13-mEGFP.dna")]
+    );
+    await s.waitFor("window.__strandivo.tabs().length === 3 && window.__strandivo.tabs()[2] !== null", 20000);
+    check("Opening a file closes a dialog left over the tab it came from", await noDialog("window.__strandivo.activeTab() === 2"));
+    await s.exec("window.__strandivo.closeTab()");
+    await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.activeTab() === 1", 5000);
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.exec("window.__strandivo.menu('close')");
+    check("Closing a file's tab, as the menu's Close does, takes its dialog with it", await noDialog("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0"));
+    await s.exec("window.__strandivo.command('digest')");
+    check("The file left works as before", await digestOpen());
+    // The menu can open another dialog over this one; each Escape closes the topmost.
+    await s.exec("window.__strandivo.command('simulate-cloning')");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-clone-methods')", 5000);
+    check("A second dialog opens over the first", (await s.exec("return document.querySelectorAll('.sv-dialog').length")) === 2);
+    await s.press(ESCAPE);
+    check("The first Escape closes only the topmost dialog", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && !!document.querySelector('.sv-dialog .sv-digest') && !document.querySelector('.sv-dialog .sv-clone-methods')", 3000));
+    await s.press(ESCAPE);
+    check("The next Escape closes the one under it", await noDialog("window.__strandivo.tabs().length === 1"));
+
     // --- ORFs and digests ---
     await s.exec("window.__strandivo.command('show-map')");
     await s.click("//*[contains(@class,'sv-map')]//button[contains(@class,'sv-chip')][normalize-space()='ORFs']", "xpath");
@@ -1635,7 +1690,15 @@ async function main() {
     await s.waitFor("!!document.querySelector('.sv-dialog [aria-label=\"Region name\"]')", 5000);
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Cancel']", "xpath");
     check("Closing a region editor opened from Protein details returns to them", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && !!document.querySelector('.sv-dialog .sv-protein-seq') && document.querySelector('.sv-dialog .sv-figure rect[data-region=\"1\"]')?.classList.contains('sv-selected')", 5000));
-    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
+    // Leaving the file with the editor open closes it, and the Protein details it brings back
+    // as it closes don't stay over Home or the next tab.
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Edit region…']", "xpath");
+    await s.waitFor("!!document.querySelector('.sv-dialog [aria-label=\"Region name\"]')", 5000);
+    await s.exec("window.__strandivo.showHome()");
+    check("Leaving a file with a region editor open leaves no dialog, Protein details included", await noDialog("window.__strandivo.activeTab() === -1"));
+    await s.exec("window.__strandivo.showTab(0)");
+    check("No dialog comes back with the file's tab", await noDialog("window.__strandivo.activeTab() === 0"));
+    await sleep(300);
 
     await s.exec("window.__strandivo.command('show-sequence')");
     await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds);

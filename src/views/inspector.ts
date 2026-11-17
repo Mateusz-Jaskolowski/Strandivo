@@ -725,7 +725,7 @@ export class Inspector {
               h("button", { type: "button", class: "sv-link", onclick: () => this.actions.copy(design.options.map(line).join("\n"), `${fmt(count)} versions`) }, iconSvg("copy", 13), "Copy")
             ),
             h("div", { class: "sv-code sv-versions-preview" }, ...design.options.slice(0, 3).map(o => h("div", null, line(o))), h("div", { class: "sv-dim" }, `and ${fmt(count - 3)} more`)),
-            this.button("Edit versions…", () => openVersionsDialog(f.name || "This feature", design, d => set(d, "Change variable design")), { wide: true })
+            this.button("Edit versions…", () => openVersionsDialog(this.ctx, f.name || "This feature", design, d => set(d, "Change variable design")), { wide: true })
           );
         }
         body.push(...matchChoice(!!design.exact, { count, letters, protein: !!design.protein }, exact => set({ ...design, exact: exact || undefined }, exact ? "Match exact versions" : "Match closest versions")));

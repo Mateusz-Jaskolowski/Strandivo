@@ -9,6 +9,7 @@ import type { EnzymeOptions } from "../lib/enzymes.ts";
 import type { OrfOptions } from "../lib/orfs.ts";
 import type { Range, SeqData } from "../lib/seqdata.ts";
 import type { DocStore } from "./store.ts";
+import type { Dialog, DialogOptions } from "../ui/modal.ts";
 import type { ProteinDetail } from "../lib/regions.ts";
 
 export type Tab = "map" | "sequence" | "primers" | "reads" | "info";
@@ -69,6 +70,11 @@ export interface DocContext {
   command(id: string): void;
   /** Shows the right-click menu for what was clicked (already selected); `onMap` when on the map. */
   contextMenu(target: MenuTarget, at: { x: number; y: number }, onMap?: boolean): void;
+  /**
+   * Opens a dialog that belongs to this file's tab (`openDialog` in src/ui/modal.ts): it
+   * closes, as Cancel does, when the tab is closed or another one becomes the current tab.
+   */
+  openDialog(o: DialogOptions): Dialog;
   /** Opens a sequence made here (a cloning product) in a new tab, unsaved. */
   openNew(data: SeqData): void;
   /** The other open files' sequences and selections. */

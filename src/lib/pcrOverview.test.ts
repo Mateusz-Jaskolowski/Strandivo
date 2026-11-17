@@ -121,13 +121,19 @@ test("length warnings follow NEB's simple and complex templates, where a colony 
 
 test("the GC warning is the whole product's, at NEB's 65%, and names an enhancer only where there is one", () => {
   assert.equal(HIGH_GC, 65);
+  // The threshold is NEB's 65%, compared as counted: nothing below it warns, however it rounds.
   assert.deepEqual(productAdvice("q5", "plasmid", 1000, 64.4), []);
-  // Rounded as the dialog shows it, so a product shown as 65% GC warns.
-  const q5 = productAdvice("q5", "plasmid", 1000, 64.6);
-  assert.match(q5[0], /^The product is 65% GC, which can be hard to amplify\./);
+  assert.deepEqual(productAdvice("q5", "plasmid", 1000, 64.6), []);
+  assert.deepEqual(productAdvice("q5", "plasmid", 1000, 64.99), []);
+  const q5 = productAdvice("q5", "plasmid", 1000, 65);
+  assert.equal(q5.length, 1);
+  assert.match(q5[0], /^The product is 65\.0% GC, which can be hard to amplify\./);
   assert.match(q5[0], /Q5 High GC Enhancer/);
+  // One decimal, as the header above the strip writes it.
+  assert.match(productAdvice("q5", "plasmid", 1000, 65.04)[0], /^The product is 65\.0% GC/);
+  assert.match(productAdvice("q5", "plasmid", 1000, 67.26)[0], /^The product is 67\.3% GC/);
   // Phusion has no enhancer in the chart, so the sentence stops at the fact.
-  assert.equal(productAdvice("phusion", "plasmid", 1000, 70)[0], "The product is 70% GC, which can be hard to amplify.");
+  assert.equal(productAdvice("phusion", "plasmid", 1000, 70)[0], "The product is 70.0% GC, which can be hard to amplify.");
   assert.equal(productAdvice("q5u", "plasmid", 1000, 70).length, 1);
 });
 

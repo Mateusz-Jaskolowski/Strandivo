@@ -59,10 +59,10 @@ with Unreleased's notes and leaves them where they are.
   arrow keys now extend or trim it, as the hint there says.
 - **Check and adjust a PCR before you run it**: the product dialog now draws the product
   with its cut sites and GC content, suggests a digest to check it by and says which
-  fragments to expect, warns about a GC-rich product or one longer than the polymerase is
-  made for, and lists the sites in a tail with too few bases beyond them. The cycling
-  program is drawn as a line you can edit: change a temperature, a time or a number of cycles, copy
-  the program as it stands, or put it back the way the protocol has it.
+  fragments to expect, warns about a GC-rich product or one longer than the polymerase
+  is made for, and lists the sites in a tail with too few bases beyond them. The cycling
+  program is drawn as a line you can edit: change a temperature, a time or a number of
+  cycles, copy the program as it stands, or put it back the way the protocol has it.
 - **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
   genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
   it, with the annealing temperature and an extension time worked out from the product's

@@ -45,10 +45,11 @@ export interface GelShape {
 const TOP = 22;
 
 /** The ladder every gel in this window runs beside, so a choice made in one holds in the next. */
-const chosen = { ladder: LADDERS[0].id };
-export const currentLadder = (): Ladder => LADDERS.find(l => l.id === chosen.ladder) ?? LADDERS[0];
+const chosen: { ladder: string | null } = { ladder: null };
+/** The ladder picked, or until one is, `opening`: the first, for a gel with nothing to say about it. */
+export const currentLadder = (opening: Ladder = LADDERS[0]): Ladder => LADDERS.find(l => l.id === chosen.ladder) ?? opening;
 
-export function ladderSelect(className: string, onChange: () => void): HTMLSelectElement {
+export function ladderSelect(className: string, onChange: () => void, opening: Ladder = LADDERS[0]): HTMLSelectElement {
   return h(
     "select",
     {
@@ -59,7 +60,7 @@ export function ladderSelect(className: string, onChange: () => void): HTMLSelec
         onChange();
       }
     },
-    LADDERS.map(l => h("option", { value: l.id, selected: l.id === chosen.ladder }, l.name))
+    LADDERS.map(l => h("option", { value: l.id, selected: l.id === currentLadder(opening).id }, l.name))
   ) as HTMLSelectElement;
 }
 

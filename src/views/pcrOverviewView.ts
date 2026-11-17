@@ -4,10 +4,10 @@
 import { h } from "../ui/dom.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, pickDigest, pickSite, productLabels, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
-import { bands } from "../lib/gel.ts";
+import { bands, ladderReaching } from "../lib/gel.ts";
 import type { TemplateKind } from "../lib/pcrProtocols.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelBand, type GelLane } from "./gelDraw.ts";
@@ -76,10 +76,14 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     const d = pickDigest(data.digests, choice.digest);
     const rows = pcrGelLanes(template, templateKind, product.length, d);
     leftover.hidden = !rows.some(r => r.of === "template");
+    // Until a ladder is picked, the gel opens on one that reaches its smallest band. What it
+    // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.
+    const ladder = currentLadder(ladderReaching(smallestGelBand(rows)));
+    ladderMenu.value = ladder.id;
     gelFigure.replaceChildren(
       gelSvg(
         rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })),
-        currentLadder(),
+        ladder,
         {
           height: 160,
           laneWidth: 40,
@@ -101,10 +105,11 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     );
   };
   // The ladder is made once, so changing it keeps the focus on its own menu.
+  const ladderMenu = ladderSelect("sv-select-quiet", drawGel);
   const lanes = h(
     "div",
     { class: "sv-pcr-lanes" },
-    h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderSelect("sv-select-quiet", drawGel)),
+    h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderMenu),
     laneKey,
     leftover
   );

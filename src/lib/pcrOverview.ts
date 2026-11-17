@@ -83,6 +83,11 @@ export function pcrGelLanes(template: SeqData, kind: TemplateKind, productLength
   return lanes;
 }
 
+/** Where the gel's smallest band runs, in bp: an uncut plasmid by where it runs, the rest by size. */
+export function smallestGelBand(lanes: readonly PcrGelLane[]): number {
+  return Math.min(...lanes.map(lane => lane.runsAs ?? Math.min(...lane.sizes)));
+}
+
 export function productOverview(product: PcrProduct, template: string, circular: boolean, options: EnzymeOptions) {
   const members = sourceEnzymes(options);
   const hits = scanSites(product.sequence, false, members);

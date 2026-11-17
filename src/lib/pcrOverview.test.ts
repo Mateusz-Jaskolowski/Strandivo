@@ -21,6 +21,7 @@ import {
   productLabels,
   productOverview,
   SMALLEST_BAND,
+  smallestGelBand,
   suggestedDigests,
   tailSiteFlanks,
   templateDigestSizes,
@@ -578,4 +579,15 @@ test("genomic DNA or cDNA leaves the template's lanes out, as the open file isn'
     const lanes = pcrGelLanes({ ...doc(oneSite), circular: true }, kind, 500, digest);
     assert.deepEqual(lanes.map(l => l.of), ["template", "template", "product", "product"]);
   }
+});
+
+test("the gel's smallest band is where one runs, so a supercoiled plasmid counts by its drawn position", () => {
+  const digest = digestOf(["EcoRI"], [300, 200]);
+  // A linear template cut into 105 and 101 bp has a smaller band than the product's 200.
+  assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "plasmid", 500, digest)), 101);
+  // Supercoiled it runs as 206 × SUPERCOILED_RUNS_AS, which is under every other band here.
+  assert.equal(smallestGelBand(pcrGelLanes({ ...doc(oneSite), circular: true }, "plasmid", 500, digest)), 206 * SUPERCOILED_RUNS_AS);
+  // A product alone has its own sizes to go by.
+  assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "complex", 500, digest)), 200);
+  assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "complex", 500, null)), 500);
 });

@@ -13,7 +13,7 @@ import { enzymeSourceSelect } from "./enzymeControls.ts";
 import type { DocContext } from "../doc/context.ts";
 import { extraKey, reactionEnzymes, scanSites, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
 import { endLabel } from "../lib/cloning.ts";
-import { bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, type DigestResult } from "../lib/gel.ts";
+import { bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, SUPERCOILED_RUNS_AS, type DigestResult } from "../lib/gel.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelLane } from "./gelDraw.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { plural, rerender } from "./primerDialogs.ts";
@@ -195,7 +195,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
       const r = resultOf(lane);
       if (r.uncut) {
         const n = lane.data.sequence.length;
-        return { label, on, bands: [{ size: n, runsAs: n * 0.7, mass: n, class: "sv-gel-uncut", title: `Uncut plasmid, ${fmt(n)} bp. Supercoiled DNA runs faster than linear DNA of the same length.` }] };
+        return { label, on, bands: [{ size: n, runsAs: n * SUPERCOILED_RUNS_AS, mass: n, class: "sv-gel-uncut", title: `Uncut plasmid, ${fmt(n)} bp. Supercoiled DNA runs faster than linear DNA of the same length.` }] };
       }
       const sizes = r.fragments.map(fragmentSize);
       return {

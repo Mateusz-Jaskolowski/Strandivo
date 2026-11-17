@@ -7,7 +7,7 @@ import { fmt } from "../ui/format.ts";
 import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pickDigest, pickSite, productLabels, tailSiteFlanks, templateDigestSizes, type LabelCrowd, type productOverview } from "../lib/pcrOverview.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
-import { bands } from "../lib/gel.ts";
+import { bands, SUPERCOILED_RUNS_AS } from "../lib/gel.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelBand, type GelLane } from "./gelDraw.ts";
 
@@ -68,7 +68,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
       add("Template, supercoiled", [templateLength], [
         {
           size: templateLength,
-          runsAs: templateLength * 0.7,
+          runsAs: templateLength * SUPERCOILED_RUNS_AS,
           mass: templateLength,
           class: "sv-gel-uncut",
           title: `Uncut template, ${fmt(templateLength)} bp. Supercoiled DNA runs faster than linear DNA of the same length.`

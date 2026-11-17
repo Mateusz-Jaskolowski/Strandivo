@@ -27,6 +27,13 @@ export const LADDERS: Ladder[] = [
 ];
 
 /**
+ * An uncut plasmid is drawn where linear DNA of this share of its length runs. Supercoiled
+ * DNA runs ahead of linear DNA of the same length, by an amount that depends on the gel and
+ * the plasmid, so this is a drawing convention, not a measurement.
+ */
+export const SUPERCOILED_RUNS_AS = 0.7;
+
+/**
  * How far down the gel a band of `size` bp runs, 0 (wells) to 1 (bottom). DNA runs about
  * linearly with the log of its size, so the ladder's range is spread that way, with some
  * room above its largest band and below its smallest; anything beyond stays at the edges.

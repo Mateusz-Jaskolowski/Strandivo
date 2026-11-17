@@ -56,8 +56,21 @@ and CI checks that they exist.
   the note says how many with Show all; a pair with an unknown Tm always shows. The
   difference is compared as the list rounds it, so a pair shown 5.0 °C apart is within
   5 °C. The PCR product dialog's warning keeps the fixed `TM_APART`, as it judges one pair.
-  With an NEB polymerase as the Tm method the dialog also says where to anneal, in whole
-  degrees as NEB's calculator shows it (`annealingTemp`; AGENTS.md says why only then).
+  The dialog also says where to anneal, in whole degrees as NEB's calculator shows it
+  (`annealingTemp`), and gives a cycling program (`src/lib/pcrProgram.ts`) for the
+  polymerase picked there (AGENTS.md says why it has its own menu). With 5′ tails whose
+  whole primers anneal 5 °C or more higher, the program may use two stages: five cycles
+  on the pairing parts, the rest on the whole primers, which pair from the third cycle on.
+  It is offered, never the default, as one stage is what NEB's calculator gives, and only
+  when the gain is 5 °C as NEB gives it to 0.1 °C, not as shown. A primer with changes
+  gets no offer: its whole length doesn't pair, so it has no Tm to anneal at. A menu entry
+  stands for products that share a Tm rule, not a protocol, so a program is for the product
+  its protocol names (its number is shown), and its ⓘ warns that the others may differ.
+  A colony is extended as a plasmid is, for NEB counts E. coli among the simple templates;
+  only genomic DNA and cDNA take the complex rates.
+  What the dialog decides before drawing (the starting polymerase, the strip that says its
+  Tms differ from Settings, the whole primers' annealing temperature) is in
+  `src/lib/pcrPlan.ts`, so tests reach it.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

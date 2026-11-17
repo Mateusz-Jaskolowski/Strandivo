@@ -849,6 +849,81 @@ async function main() {
     const nebPcr = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
     check("With NEB's Q5 as the Tm method, a PCR product says where to anneal", /Anneal at\s*\d+ °C · Q5 High-Fidelity: lower Tm \+ 1 °C, at most 72 °C/.test(nebPcr), nebPcr.slice(0, 300));
     await s.shot("04-pcr-neb");
+    check("A PCR product shows NEB's cycling program for the polymerase", /Program/.test(nebPcr) && /Initial denaturation/.test(nebPcr) && /\d+ cycles/.test(nebPcr) && /Final extension/.test(nebPcr), nebPcr.slice(-400));
+    // The primers' tails (7 and 10 bases) raise how well the whole primers anneal by more than 5 °C, so Q5 offers two stages.
+    const programStages = "return Array.from(document.querySelectorAll('.sv-pcr-program .sv-prog-stage')).map(st => ({ cycles: st.querySelector('.sv-prog-count')?.textContent ?? null, steps: Array.from(st.querySelectorAll('.sv-prog-name')).map(n => n.textContent) }));";
+    // Runs `action`, then waits for the dialog to be drawn again: the marker goes with the old drawing's element.
+    const redraws = async action => {
+      await s.exec("document.querySelector('.sv-pcr-result').dataset.drawn = '1';");
+      await action();
+      return s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
+    };
+    const twoStageBox = ".sv-dialog input[aria-label='Anneal in two stages']";
+    const oneStage = await s.exec(programStages);
+    check("Q5 on a plasmid has one stage of 25 cycles, with two stages offered for the tails but not ticked", oneStage.length === 3 && oneStage[1].cycles === "25 cycles" && (await s.exec(`const b = document.querySelector("${twoStageBox}"); return !!b && !b.checked;`)), JSON.stringify(oneStage));
+    check("Ticking Anneal in two stages redraws the dialog", await redraws(() => s.click(twoStageBox)));
+    const twoStages = await s.exec(programStages);
+    const twoStageText = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check(
+      "Two stages are four stages: 5 cycles on the pairing parts, then 20 on the whole primers",
+      twoStages.length === 4 && twoStages[1].cycles === "5 cycles" && twoStages[2].cycles === "20 cycles" && twoStages[1].steps.join() === "Denature,Anneal,Extend" && twoStages[2].steps.join() === "Denature,Anneal and extend",
+      JSON.stringify(twoStages)
+    );
+    check("The Anneal at row gives the temperature of each stage", /Anneal at\s*\d+ °C, then \d+ °C/.test(twoStageText) && (await s.exec(`return document.querySelector("${twoStageBox}").checked;`)), twoStageText.slice(0, 400));
+    await s.shot("04-pcr-two-stages");
+    await redraws(() => s.click(twoStageBox));
+    const backToOne = await s.exec(programStages);
+    check("Unticking it goes back to one stage of 25 cycles", backToOne.length === 3 && backToOne[1].cycles === "25 cycles" && !(await s.exec(`return document.querySelector("${twoStageBox}").checked;`)), JSON.stringify(backToOne));
+    // Another polymerase picked in the dialog gets its own Tms and program, and offers to become the Tm method.
+    await choose("Polymerase", "OneTaq, Standard buffer");
+    await s.waitFor("/Tms here are for OneTaq/.test(document.querySelector('.sv-dialog')?.textContent)", 5000);
+    const oneTaq = await s.exec("return document.querySelector('.sv-dialog').textContent");
+    check("Picking another polymerase in the dialog offers it for all Tms", /Tms here are for OneTaq, Standard buffer; the rest of the app uses Q5 High-Fidelity/.test(oneTaq) && /Use for all Tms/.test(oneTaq), oneTaq.slice(0, 500));
+    check("Its program is OneTaq's, from 94 °C", /94 °C/.test(oneTaq) && /OneTaq, Standard buffer: lower Tm − 5 °C, at most 68 °C/.test(oneTaq), oneTaq.slice(-500));
+    check("The program names the product its protocol is for, beside the program", /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(oneTaq), oneTaq.slice(-500));
+    await s.shot("04-pcr-onetaq");
+    // The strip's button makes the dialog's polymerase the Tm method for the whole app; as the strip goes
+    // with it, the Polymerase menu takes the focus.
+    await s.click(".sv-pcr-strip button[data-focus='use-for-all']");
+    const followed = await s.waitFor("!document.querySelector('.sv-pcr-strip') && document.activeElement?.getAttribute('aria-label') === 'Polymerase'", 5000);
+    const savedTm = await s.exec("return JSON.parse(localStorage.getItem('strandivo.settings') || '{}').tm ?? null;");
+    check("Use for all Tms saves the dialog's polymerase as the Tm method, with its own primer concentration", savedTm?.method === "neb" && savedTm?.polymerase === "onetaq" && savedTm?.nebPrimer === 200, JSON.stringify(savedTm));
+    check("Then the strip is gone and the Polymerase menu has the focus", followed, await s.exec("const a = document.activeElement; return `${a?.tagName} ${a?.getAttribute('aria-label') ?? ''}, strip ${!!document.querySelector('.sv-pcr-strip')}`;"));
+    // Settings back to NEB's Q5, as the checks below expect.
+    await tmMethod("neb");
+    await s.waitFor("document.querySelector('.sv-pcr-strip')", 5000);
+    // A template the polymerase has no protocol for goes back to plasmid: Taq has a colony, Q5 has not.
+    const templateOptions = "return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Template'] option\")).map(o => o.value).join();";
+    const templateNow = "return document.querySelector(\".sv-dialog select[aria-label='Template']\").value;";
+    await redraws(() => choose("Polymerase", "Taq, Standard Taq buffer"));
+    check("Taq offers a colony as a template", (await s.exec(templateOptions)) === "plasmid,complex,colony", await s.exec(templateOptions));
+    await redraws(() => choose("Template", "colony"));
+    const colonyStart = await s.exec("return document.querySelector('.sv-pcr-program .sv-prog-time')?.textContent ?? null;");
+    check("A colony on Taq starts with the longer first denaturation", (await s.exec(templateNow)) === "colony" && colonyStart === "5 min", `${await s.exec(templateNow)}, first step ${colonyStart}`);
+    await redraws(() => choose("Polymerase", "Q5 High-Fidelity"));
+    const q5Source = await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? null;");
+    check("Picking Q5, which has no colony, falls back to a plasmid", (await s.exec(templateOptions)) === "plasmid,complex" && (await s.exec(templateNow)) === "plasmid" && /Q5 High-Fidelity DNA Polymerase · NEB M0491/.test(q5Source), `${await s.exec(templateOptions)}; ${await s.exec(templateNow)}; ${q5Source}`);
+    // The choice is kept between dialogs, so a plasmid is chosen again.
+    await redraws(() => choose("Template", "plasmid"));
+    // A polymerase whose protocol has not been read has no program, and the dialog says so.
+    await redraws(() => choose("Polymerase", "Q5U Hot Start"));
+    const noProgram = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check("A polymerase with no protocol says there is no program for it", /There is no program for Q5U Hot Start yet\./.test(noProgram) && !(await s.exec("return !!document.querySelector('.sv-pcr-program')")), noProgram.slice(-200));
+    // And back on OneTaq, as the checks below expect.
+    await redraws(() => choose("Polymerase", "OneTaq, Standard buffer"));
+    check("The dialog is back on OneTaq with its program and a plasmid", (await s.exec(templateNow)) === "plasmid" && /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? ''")), await s.exec(templateNow));
+    // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
+    // whether a menu, a button in the program or one in the footer.
+    const keepsFocus = async (selector, nebPrimer) => {
+      await s.exec(`document.querySelector('.sv-pcr-result').dataset.drawn = '1'; document.querySelector(${JSON.stringify(selector)}).focus();`);
+      await s.exec(`return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: ${nebPrimer} } })`);
+      const redrawn = await s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
+      return redrawn && (await s.exec(`return document.activeElement === document.querySelector(${JSON.stringify(selector)})`));
+    };
+    const menuKept = await keepsFocus("select[aria-label='Template']", 450);
+    const programKept = await keepsFocus("button[data-focus='copy-program']", 400);
+    const footerKept = await keepsFocus("button[data-focus='copy-sequence']", 350);
+    check("A Settings change redraws the PCR dialog and keeps focus where it was", menuKept && programKept && footerKept, `menu ${menuKept}, program ${programKept}, footer ${footerKept}`);
     await s.press(ESCAPE);
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");

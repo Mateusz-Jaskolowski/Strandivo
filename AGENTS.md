@@ -19,8 +19,8 @@ The rest of the guide is split by area, so an agent reads only what its task nee
 changing code in an area, read its guide; their rules are as binding as this file's.
 
 - Reads, clones, mutations, translation of reads and the Reads tab: `docs/agents/reads.md`.
-- Primers, primer pairs, mutagenesis primers and the primer library:
-  `docs/agents/primers.md`.
+- Primers, primer pairs, mutagenesis primers, the primer library and the PCR product
+  dialog with its cycling program: `docs/agents/primers.md`.
 - Protein regions and UniProt: `docs/agents/proteins.md`.
 - Anything the app sends or fetches, updates, feedback, crash reports, usage statistics and
   the welcome window: `docs/agents/updates-and-reports.md`.
@@ -414,15 +414,22 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (`src/main.ts`), so `meltingTemp` without arguments follows it; tests pass settings.
 - **NEB polymerases** (Nov 2026): the "neb" Tm method gives NEB's Tm Calculator's numbers
   for a polymerase chosen in Settings (`src/lib/polymerases.ts`), as people compare with
-  it and primer3's conditions come out 3–8 °C below its Q5. Only then does the PCR product
-  dialog show an annealing temperature, as NEB's calculator has a rule for each
-  polymerase; other methods have none to follow. The polymerases and rules started from
-  polymerase-tm (MIT), whose numbers were in part wrong, so every salt and rule was fitted
-  to NEB's own Tm API instead and `src/lib/polymerases.test.ts` keeps its answers: change
-  them only from new answers of that API. The app never asks NEB: Tm is worked out here,
-  as sequences stay on the computer. Ta comes from the same bases as the Tms (`tmBases`),
-  as Vent's rule depends on their length. NEB rounds Ta to 0.1 °C, then its calculator
-  to a whole degree; rounding once gives a different degree near a half.
+  it and primer3's conditions come out 3–8 °C below its Q5. The PCR product dialog has a
+  polymerase menu of its own, starting as Settings have it (Q5 under another Tm method),
+  and always works its Tms, annealing temperature and cycling program in NEB's way for the
+  one picked, as only NEB's calculator has a rule for each polymerase to follow. It says
+  whenever that differs from Settings (a user of another Tm method sees its Tms differ from
+  the Primers tab's) and offers to make it the Tm method for the whole app
+  (`withNebPolymerase`). The program (`src/lib/pcrProgram.ts`) follows NEB's own protocol
+  for the polymerase (`src/lib/pcrProtocols.ts`, tested): a polymerase whose protocol has
+  not been read has none, and the dialog says so rather than guess. The polymerases and
+  rules started from polymerase-tm (MIT), whose numbers were in part wrong, so every salt
+  and rule was fitted to NEB's own Tm API instead and `src/lib/polymerases.test.ts` keeps
+  its answers: change them only from new answers of that API. The app never asks NEB: Tm
+  is worked out here, as sequences stay on the computer. Ta comes from the same bases as
+  the Tms (`tmBases`), as Vent's rule depends on their length. NEB rounds Ta to 0.1 °C,
+  then its calculator to a whole degree; rounding once gives a different degree near a
+  half.
 - **Amber suppression** (TAG read as Q, for phage display in TG1 or XL1-Blue) is a setting
   applied the same way (`useAmberSuppression`), so everything that translates through
   `translateCodon` follows it. ORF stops get it in `OrfOptions`, and caches of

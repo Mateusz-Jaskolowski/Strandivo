@@ -2188,6 +2188,166 @@
 .sv-pcr-result p {
   margin: 0;
 }
+/* The PCR product dialog's polymerase and template, the notes under them and the program. */
+.sv-pcr-with-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sv-pcr-with-info > select {
+  flex: 1 1 auto;
+}
+.sv-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.sv-info-btn:hover,
+.sv-info-btn.sv-on {
+  background: var(--hover);
+  color: var(--text);
+}
+.sv-info-pop {
+  padding: 9px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--side);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sv-info-pop p {
+  margin: 0 0 6px;
+}
+.sv-info-pop p:last-child {
+  margin: 0;
+}
+.sv-info-pop strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.sv-pcr-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sv-pcr-strip > .sv-icon {
+  flex: none;
+  color: var(--accent-text);
+}
+.sv-pcr-strip > .sv-btn {
+  margin-left: auto;
+  flex: none;
+}
+.sv-pcr-result p.sv-pcr-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sv-pcr-note > .sv-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent-text);
+}
+.sv-pcr-program {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sv-pcr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sv-pcr-source {
+  min-width: 0;
+}
+.sv-pcr-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.sv-pcr-copy {
+  margin-left: auto;
+}
+.sv-prog {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.sv-prog-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 4px 6px;
+}
+.sv-prog-cycles {
+  border-radius: 8px;
+  background: var(--side);
+}
+.sv-prog-count {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-align: center;
+}
+.sv-prog-steps {
+  display: flex;
+  gap: 2px;
+}
+.sv-prog-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 78px;
+  text-align: center;
+}
+.sv-prog-bars {
+  display: flex;
+  align-items: flex-end;
+  height: 38px;
+  width: 100%;
+}
+.sv-prog-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+  opacity: 0.75;
+}
+.sv-prog-temp {
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.sv-prog-time {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sv-prog-name {
+  font-size: 11px;
+  color: var(--text-3);
+}
 .sv-pcr-bar {
   position: relative;
   height: 34px;

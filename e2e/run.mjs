@@ -916,7 +916,7 @@ async function main() {
     await choose("Polymerase", "OneTaq, Standard buffer");
     await s.waitFor("/Tms here are for OneTaq/.test(document.querySelector('.sv-dialog')?.textContent)", 5000);
     check("Changing polymerase preserves the custom program and offers regeneration", await s.exec("return document.querySelector('[data-focus=\"program-1:1:temp\"]')?.value === '64' && !!document.querySelector('[data-focus=regenerate-program]')"));
-    check("The strip over the kept program says what it was made for, annealing and stages included", /kept from the earlier setup \(Plasmid · [\d,]+ bp · annealing at \d+ °C · 1 stage\)/.test(await s.exec("return document.querySelector('.sv-pcr-program .sv-pcr-strip')?.textContent ?? ''")));
+    check("The strip over the kept program says what it was made for, annealing and stages included", /kept from the earlier setup \(Plasmid · [\d,]+ bp · annealing at \d+ °C(?:, then \d+ °C)? · [12] stages?\)/.test(await s.exec("return document.querySelector('.sv-pcr-program .sv-pcr-strip')?.textContent ?? ''")));
     await s.click("button[data-focus=regenerate-program]");
     await s.waitFor("!document.querySelector('[data-focus=regenerate-program]')", 5000);
     const oneTaq = await s.exec("return document.querySelector('.sv-dialog').textContent");

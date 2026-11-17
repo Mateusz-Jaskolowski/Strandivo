@@ -31,20 +31,18 @@ import type { Orf } from "../lib/orfs.ts";
 import {
   basesFromText,
   complement,
-  deleteRange,
   DNA_CHARS,
   featureGaps,
-  insertBases,
   pieces,
   rangeLength,
-  replaceRange,
   type Range,
   type SeqData,
   type SeqFeature,
   type SeqPrimer
 } from "../lib/seqdata.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
-import { ReplaceCard } from "./replaceCard.ts";
+import { EditCard } from "./editCard.ts";
+import { applyEdit, verbOf, type PendingEdit } from "../lib/baseEdit.ts";
 
 const FONT_PX = 13;
 const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
@@ -165,8 +163,10 @@ export class SequenceView {
   private stale = true;
   private ctx: DocContext;
   private lastWidth = 0;
-  /** Open while bases typed or pasted over a selection wait for Replace. */
-  private card: ReplaceCard | null = null;
+  /** Open while an edit to bases from the keyboard waits to be applied (AGENTS.md). */
+  private card: EditCard | null = null;
+  /** The card a Cut opened, if it is the last one shown. */
+  private cutCard: EditCard | null = null;
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
@@ -814,6 +814,23 @@ export class SequenceView {
         parts.push(el);
       }
     }
+    // Bases the card would take out, struck through on each strand.
+    const gone = this.card?.pending;
+    if (gone?.range && !gone.bases) {
+      for (const [a, b] of clip(gone.range.start, gone.range.end, row.start, row.end, n)) {
+        const at = `left:${ch(a - row.start)};width:${ch(b - a + 1)}`;
+        const band = document.createElement("div");
+        band.className = "sv-gone-band";
+        band.setAttribute("style", `${at};top:${row.yTop - 1}px;height:${strandsH + 2}px`);
+        parts.push(band);
+        for (const y of o.complement ? [row.yTop, row.yBot] : [row.yTop]) {
+          const line = document.createElement("div");
+          line.className = "sv-gone-line";
+          line.setAttribute("style", `${at};top:${y + 9}px`);
+          parts.push(line);
+        }
+      }
+    }
     const caretRow = caret >= n ? this.rows.length - 1 : Math.floor(caret / this.bpr);
     if (caretRow === i) {
       const el = document.createElement("div");
@@ -1122,12 +1139,11 @@ export class SequenceView {
             return;
           }
           if (selectedRanges(sel).length) this.deleteSelection();
-          else if (e.key === "Backspace" && caret > 0) {
-            store.apply(deleteRange(store.data, { start: caret - 1, end: caret - 1 }), "Delete", { caret: caret - 1 }, "delete");
-          } else if (e.key === "Delete" && caret < n) {
-            store.apply(deleteRange(store.data, { start: caret, end: caret }), "Delete", { caret }, "delete");
+          else {
+            // At the cursor, the bases to go wait in the card, one more with each press.
+            const card = this.newCard({ range: null, at: caret, bases: "", side: "neither" }, false);
+            if (card.grow(e.key === "Backspace" ? -1 : 1)) this.showCard(card);
           }
-          this.revealCaret();
           return;
         }
       }
@@ -1172,6 +1188,8 @@ export class SequenceView {
     area.addEventListener("cut", e => {
       if (!selectedRanges(store.selection).length) return;
       e.preventDefault();
+      // The card's bases are not on the clipboard yet, and the selected ones stay until it goes.
+      if (this.card) return;
       e.clipboardData?.setData("text/plain", selectedBases(store.data.sequence, store.selection));
       this.deleteSelection("Cut");
     });
@@ -1192,51 +1210,79 @@ export class SequenceView {
       if (text.trim()) toast("The clipboard has no DNA bases to paste.", "info");
       return;
     }
-    this.typeBases(bases, "Paste");
+    this.typeBases(bases, true);
     if (dropped > 0) toast(`Pasted ${fmt(bases.length)} bases (left out ${fmt(dropped)} other characters).`, "info", 3500);
   }
 
-  private typeBases(bases: string, label = "Typing") {
+  /** Typed or pasted bases wait in the card: at the cursor, or over the selected ones. */
+  private typeBases(bases: string, pasted = false) {
     const store = this.ctx.store;
-    const { range, caret } = store.selection;
     if (this.card) {
-      this.card.add(bases, label === "Paste");
-      this.placeCard();
+      this.card.add(bases, pasted);
+      this.cardChanged();
       return;
     }
     if (store.selection.ranges) {
       toast("Select one continuous stretch to replace bases.", "info");
       return;
     }
-    if (range) {
-      // Over a selection, the bases wait in a card for Replace.
-      this.openCard(range, bases, label === "Paste");
-      return;
-    }
-    store.apply(insertBases(store.data, caret, bases), label, { caret: caret + bases.length }, label === "Typing" ? "typing" : undefined);
-    this.revealCaret();
+    const { range, caret } = store.selection;
+    const card = this.newCard({ range: range ?? null, at: range ? range.start : caret, bases: "", side: "neither" }, !!range);
+    card.add(bases, pasted);
+    this.showCard(card);
   }
 
-  // ---------- the replace card ----------
+  /**
+   * Delete or Cut with bases selected: picked codons go at once, as they are picked one by
+   * one; a stretch waits in the card, which the next press or Enter applies.
+   */
+  private deleteSelection(label: "Delete" | "Cut" = "Delete") {
+    const store = this.ctx.store;
+    if (store.selection.ranges) {
+      const next = deleteSelected(store.data, store.selection);
+      store.apply(next.data, label, { caret: next.caret });
+      return;
+    }
+    const { range } = store.selection;
+    if (range) this.showCard(this.newCard({ range, at: range.start, bases: "", side: "neither" }, true), label === "Cut");
+  }
 
-  private openCard(range: Range, bases: string, pasted: boolean) {
+  // ---------- the edit card ----------
+
+  private newCard(edit: PendingEdit, fixed: boolean): EditCard {
     const o = this.ctx.options;
     const caseOf = (t: string) => (o.caseMode === "uppercase" ? t.toUpperCase() : o.caseMode === "lowercase" ? t.toLowerCase() : t);
-    const card = new ReplaceCard(this.ctx.store.data, range, caseOf, { replace: () => this.replaceFrom(card), cancel: () => this.closeCard() });
+    const card: EditCard = new EditCard(this.ctx.store.data, edit, fixed, caseOf, {
+      apply: () => this.applyCard(card),
+      cancel: () => this.dismissCard(card),
+      changed: () => this.cardChanged()
+    });
+    return card;
+  }
+
+  /** `cut`: a Cut opened it, so its bases are on the clipboard whether it deletes them or not. */
+  private showCard(card: EditCard, cut = false) {
     this.card = card;
-    card.add(bases, pasted);
+    this.cutCard = cut ? card : null;
     this.canvas.appendChild(card.el);
-    this.placeCard();
+    this.cardChanged();
     card.el.scrollIntoView({ block: "nearest" });
   }
 
-  /** Above the selection's first row, or below it when there is no room above. */
+  /** The card grew, shrank or now takes other bases out: placed again, with its bases marked. */
+  private cardChanged() {
+    this.placeCard();
+    this.renderSelection();
+  }
+
+  /** Above the first row of the bases it takes out, or of the cursor; below when there is no room above. */
   private placeCard() {
     const card = this.card;
     if (!card || !this.rows.length) return;
     const n = this.ctx.store.length;
-    const first = pieces(card.range, n)[0];
-    const i = Math.min(this.rows.length - 1, Math.floor(first.start / this.bpr));
+    const { range, at } = card.pending;
+    const first = range ? pieces(range, n)[0] : { start: at, end: at - 1 };
+    const i = Math.max(0, Math.min(this.rows.length - 1, Math.floor(Math.min(first.start, n - 1) / this.bpr)));
     const row = this.rows[i];
     const last = Math.min(first.end, row.end);
     const x = GUTTER + 12 + ((first.start + last + 1) / 2 - row.start) * this.chPx;
@@ -1246,7 +1292,7 @@ export class SequenceView {
     const above = this.offsets[i] + row.yTop - 2;
     const below = above + strands + 4;
     const room = above - card.el.offsetHeight - 8 >= 0;
-    card.el.classList.toggle("sv-replace-below", !room);
+    card.el.classList.toggle("sv-edit-below", !room);
     card.el.style.left = `${left}px`;
     card.el.style.top = `${room ? above : below}px`;
     card.el.style.setProperty("--arrow", `${x - left}px`);
@@ -1255,86 +1301,103 @@ export class SequenceView {
   private closeCard() {
     this.card?.el.remove();
     this.card = null;
+    this.renderSelection();
     this.focus();
   }
 
-  /** Closed by anything but Esc: says so, offering to replace all the same while nothing else changed. */
+  /**
+   * Esc, its button or Undo: the user sees the sequence stay as it is, so nothing is said,
+   * except after a Cut, whose bases were copied all the same.
+   */
+  private dismissCard(card: EditCard) {
+    const cut = card === this.cutCard;
+    if (this.card === card) this.closeCard();
+    if (cut) toast(`${this.copiedText(card)}.`, "info", { key: "edit-card" });
+  }
+
+  private copiedText(card: EditCard): string {
+    const { range } = card.pending;
+    const k = range ? rangeLength(range, card.data.sequence.length) : 0;
+    return `Copied ${fmt(k)} ${k === 1 ? "base but didn't delete it" : "bases but didn't delete them"}`;
+  }
+
+  /** Closed by anything but Esc: says so, offering to make the edit all the same while nothing else changed. */
   private cancelCard(why: "moved" | "changed") {
     const card = this.card;
     if (!card) return;
     this.card = null;
     card.el.remove();
-    if (!card.bases) return;
-    const where = fmtRange(card.range.start + 1, card.range.end + 1);
-    if (why === "changed") {
-      toast(`Didn't replace ${where}, as the sequence changed.`, "info", { key: "replace" });
-      return;
-    }
-    const what = card.bases.length > 12 ? `${fmt(card.bases.length)} bases` : card.bases;
-    toast(`Didn't replace ${where} with ${what}.`, "info", { key: "replace", action: { label: "Replace", run: () => this.replaceFrom(card) } });
+    this.renderSelection();
+    if (!card.ready) return;
+    const e = card.pending;
+    const verb = verbOf(e);
+    const what = e.bases.length > 12 ? `${fmt(e.bases.length)} bases` : e.bases;
+    const where = e.range ? fmtRange(e.range.start + 1, e.range.end + 1) : "";
+    const text =
+      verb === "Insert"
+        ? `Didn't insert ${what} ${e.at ? `after ${fmt(e.at)}` : "at the start"}`
+        : verb === "Delete"
+          ? card === this.cutCard
+            ? this.copiedText(card)
+            : `Didn't delete ${where}`
+          : `Didn't replace ${where} with ${what}`;
+    if (why === "changed") toast(`${text}, as the sequence changed.`, "info", { key: "edit-card" });
+    else toast(`${text}.`, "info", { key: "edit-card", action: { label: verb, run: () => this.applyCard(card) } });
   }
 
-  private replaceFrom(card: ReplaceCard) {
+  private applyCard(card: EditCard) {
     const store = this.ctx.store;
     if (this.card === card) this.closeCard();
-    if (!card.bases) return;
+    if (!card.ready) return;
     if (store.data !== card.data) {
-      toast("The sequence has changed since, so those bases weren't replaced.", "info");
+      toast("The sequence has changed since, so it was left as it is.", "info");
       return;
     }
-    const r = replaceRange(card.data, card.range, card.bases);
-    store.apply(r.data, "Replace", { caret: r.caret });
+    const e = card.pending;
+    const r = applyEdit(card.data, e);
+    store.apply(r.data, verbOf(e), { caret: r.caret });
     this.revealCaret();
   }
 
   /** Keys while the card is open: true for those it takes. */
-  private cardKey(card: ReplaceCard, e: KeyboardEvent, mod: boolean): boolean {
+  private cardKey(card: EditCard, e: KeyboardEvent, mod: boolean): boolean {
     if (e.key === "Enter" && !mod && !e.altKey) {
       e.preventDefault();
-      this.replaceFrom(card);
+      if (card.ready) this.applyCard(card);
       return true;
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      this.closeCard();
+      this.dismissCard(card);
+      return true;
+    }
+    // Tab chooses which side takes new bases at an edge, and never leaves the sequence.
+    if (e.key === "Tab" && !mod && !e.altKey) {
+      e.preventDefault();
+      if (card.cycle(e.shiftKey ? -1 : 1)) this.cardChanged();
       return true;
     }
     if (e.key === "Backspace" || e.key === "Delete") {
       e.preventDefault();
-      if (e.key === "Backspace") {
-        card.back();
-        this.placeCard();
-      }
+      // Selected bases waiting to go: a second press deletes them, but not one held down.
+      if (card.confirmsWithDelete && !e.repeat) this.applyCard(card);
+      else if (e.key === "Backspace" ? card.back() || card.grow(-1) : card.grow(1)) this.cardChanged();
       return true;
     }
     // Undo takes back the card, not an edit before it.
     if (mod && !e.altKey && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
       e.preventDefault();
-      this.closeCard();
+      this.dismissCard(card);
       return true;
     }
     if (e.key.length === 1 && !mod && !e.altKey) {
       e.preventDefault();
       if (DNA_CHARS.test(e.key)) {
         card.add(e.key.toUpperCase(), false);
-        this.placeCard();
+        this.cardChanged();
       } else if (e.key !== " ") toast(`“${e.key}” isn't a DNA base. Type A, C, G, T or an IUPAC code like N.`, "info", 2200);
       return true;
     }
     return false;
-  }
-
-  deleteSelection(label = "Delete") {
-    const store = this.ctx.store;
-    if (store.selection.ranges) {
-      const next = deleteSelected(store.data, store.selection);
-      store.apply(next.data, label, { caret: next.caret });
-      return;
-    }
-    const { range } = store.selection;
-    if (!range) return;
-    const n = store.length;
-    const caret = range.start <= range.end ? range.start : Math.max(0, range.start - (range.end + 1));
-    store.apply(deleteRange(store.data, range), label, { caret: Math.min(caret, n) });
   }
 }

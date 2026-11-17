@@ -171,9 +171,30 @@ export function basesFromText(text: string): PastedBases {
 type Positioned = { start: number; end: number };
 type Located = Positioned & { locations?: Range[] };
 
+/**
+ * Which annotations take new bases put in at their edge: those ending right before them,
+ * those starting right after them, or neither, the default, as which side they belong to
+ * can't be known. The edit card asks (`src/views/editCard.ts`). Only features and their
+ * protein regions take them, never primers, whose bases say where they bind.
+ */
+export type EdgeSide = "before" | "after" | "neither";
+
 /** Shifts annotation coordinates for `len` bases inserted before position `pos` (0…n). */
 function shiftForInsert<T extends Positioned>(a: T, pos: number, len: number): T {
   return { ...a, start: a.start >= pos ? a.start + len : a.start, end: a.end >= pos ? a.end + len : a.end };
+}
+
+/**
+ * `shiftForInsert`, with an annotation that ends right before position `pos` or starts
+ * right at it (in a sequence of length n) taking the new bases when `side` says so.
+ */
+function insertAtEdge<T extends Positioned>(x: T, pos: number, len: number, n: number, circular: boolean, side: EdgeSide): T {
+  const m = shiftForInsert(x, pos, len);
+  if (side === "neither") return m;
+  const wrap = (p: number) => (circular ? ((p % n) + n) % n : p);
+  if (side === "before" && x.end === wrap(pos - 1) && !inRange(x, wrap(pos))) return { ...m, end: pos + len - 1 };
+  if (side === "after" && x.start === wrap(pos) && !inRange(x, wrap(pos - 1))) return { ...m, start: pos };
+  return m;
 }
 
 /**
@@ -209,29 +230,34 @@ function mapThroughDelete<T extends Positioned>(x: T, a: number, b: number, n: n
  * length n with `len` bases, a different number from what was there (as many move nothing:
  * `replaceRange` doesn't call this). What held the whole range holds the new bases, so a
  * codon typed over keeps its feature; what crossed one of its edges keeps only its part
- * outside, as which side the new bases belong to can't be known; what lay inside it goes.
- * Everything else moves with its bases. Returns null if nothing of it is left.
+ * outside, as which side the new bases belong to can't be known, unless `side` says (what
+ * crossed the range's start is before the new bases, what crossed its end after them);
+ * what lay inside it goes. Everything else moves with its bases. Returns null if nothing
+ * of it is left.
  */
-function mapThroughReplace<T extends Positioned>(x: T, a: number, b: number, len: number, n: number): T | null {
+function mapThroughReplace<T extends Positioned>(x: T, a: number, b: number, len: number, n: number, side: EdgeSide = "neither"): T | null {
   const delta = len - (b - a + 1);
   const n2 = n + delta;
   const after = (p: number) => (p > b ? p + delta : p);
   const to = (s: number, e: number) => ({ ...x, start: ((s % n2) + n2) % n2, end: ((e % n2) + n2) % n2 });
+  // Where a part ending at the range's start ends, and one starting at its end starts.
+  const end = side === "before" ? a + len - 1 : a - 1;
+  const start = side === "after" ? a : a + len;
   const { start: s, end: e } = x;
   if (s <= e) {
     if (e < a || s > b) return to(after(s), after(e));
     if (s <= a && e >= b) return e + delta < s ? null : to(s, e + delta);
     if (s >= a && e <= b) return null;
-    return s < a ? to(s, a - 1) : to(a + len, e + delta);
+    return s < a ? to(s, end) : to(start, e + delta);
   }
   // Crosses the origin: [start, n-1] and [0, end]. The range can reach into either piece.
   const inFirst = b >= s;
   const inSecond = a <= e;
   if (!inFirst && !inSecond) return to(after(s), e);
   // The range takes in the gap between the two pieces: both keep their part outside it.
-  if (inFirst && inSecond) return a === 0 && b === n - 1 ? null : to(a + len, a - 1);
-  if (inFirst) return a >= s ? to(s, e) : to(a + len, e);
-  return b <= e ? to(s + delta, e + delta) : to(s + delta, a - 1);
+  if (inFirst && inSecond) return a === 0 && b === n - 1 ? null : to(start, end);
+  if (inFirst) return a >= s ? to(s, e) : to(start, e);
+  return b <= e ? to(s + delta, e + delta) : to(s + delta, end);
 }
 
 /**
@@ -250,24 +276,30 @@ function mapLocated<T extends Located>(x: T, f: (r: Positioned) => Positioned | 
   return (parts.length > 1 ? { ...rest, ...span, locations: parts } : { ...rest, ...span }) as unknown as T;
 }
 
-function mapAnnotations(d: SeqData, f: (r: Positioned) => Positioned | null, nextLength = d.sequence.length): Pick<SeqData, "features" | "primers" | "sources"> {
+/** `onFeatures` maps features and their regions, when they take new bases at an edge (`EdgeSide`) and the rest don't. */
+function mapAnnotations(d: SeqData, f: (r: Positioned) => Positioned | null, nextLength = d.sequence.length, onFeatures = f): Pick<SeqData, "features" | "primers" | "sources"> {
   const all = <T extends Located>(xs: T[]) => xs.map(x => mapLocated(x, f)).filter((x): x is T => !!x);
   const n = d.sequence.length;
   const features = d.features.flatMap(x => {
-    const next = mapLocated(x, f);
-    return next ? [carryRegions(x, next, n, nextLength, f)] : [];
+    const next = mapLocated(x, onFeatures);
+    return next ? [carryRegions(x, next, n, nextLength, onFeatures)] : [];
   });
   return { features, primers: all(d.primers), sources: all(d.sources) };
 }
 
-/** Inserts bases before position `pos` (0 = at the start, n = at the end). */
-export function insertBases(d: SeqData, pos: number, bases: string): SeqData {
+/**
+ * Inserts bases before position `pos` (0 = at the start, n = at the end). Features ending
+ * right before them or starting right after them take them only when `side` says so.
+ */
+export function insertBases(d: SeqData, pos: number, bases: string, side: EdgeSide = "neither"): SeqData {
   if (!bases) return d;
-  const p = Math.max(0, Math.min(d.sequence.length, pos));
+  const n = d.sequence.length;
+  const p = Math.max(0, Math.min(n, pos));
+  const len = bases.length;
   return {
     ...d,
     sequence: d.sequence.slice(0, p) + bases + d.sequence.slice(p),
-    ...mapAnnotations(d, x => shiftForInsert(x, p, bases.length), d.sequence.length + bases.length)
+    ...mapAnnotations(d, x => shiftForInsert(x, p, len), n + len, x => insertAtEdge(x, p, len, n, d.circular, side))
   };
 }
 
@@ -293,9 +325,10 @@ export function deleteRange(d: SeqData, r: Range): SeqData {
  * Replaces the bases in a range; returns the new data and where the inserted bases are.
  * As many bases as were there is a substitution: every annotation keeps its place. Any
  * other number maps them with `mapThroughReplace`, never as a deletion and then an
- * insertion, which leaves new bases at an annotation's edge outside it.
+ * insertion, which leaves new bases at an annotation's edge outside it. `side` says which
+ * features crossing an edge of the range take the new bases, if any.
  */
-export function replaceRange(d: SeqData, r: Range, bases: string): { data: SeqData; inserted: Range | null; caret: number } {
+export function replaceRange(d: SeqData, r: Range, bases: string, side: EdgeSide = "neither"): { data: SeqData; inserted: Range | null; caret: number } {
   const n = d.sequence.length;
   const across = r.start > r.end;
   if (!bases || !n) {
@@ -314,7 +347,7 @@ export function replaceRange(d: SeqData, r: Range, bases: string): { data: SeqDa
   }
   if (across) {
     // Turn the sequence so the range starts it, then so the new bases end it, as they always have.
-    const turned = replaceRange(setOrigin(d, r.start), { start: 0, end: length - 1 }, bases).data;
+    const turned = replaceRange(setOrigin(d, r.start), { start: 0, end: length - 1 }, bases, side).data;
     const n2 = turned.sequence.length;
     return { data: setOrigin(turned, bases.length % n2), inserted: { start: n2 - bases.length, end: n2 - 1 }, caret: n2 };
   }
@@ -325,7 +358,7 @@ export function replaceRange(d: SeqData, r: Range, bases: string): { data: SeqDa
     data: {
       ...d,
       sequence: d.sequence.slice(0, a) + bases + d.sequence.slice(b + 1),
-      ...mapAnnotations(d, x => mapThroughReplace(x, a, b, bases.length, n), n2)
+      ...mapAnnotations(d, x => mapThroughReplace(x, a, b, bases.length, n), n2, x => mapThroughReplace(x, a, b, bases.length, n, side))
     },
     inserted: { start: a, end: a + bases.length - 1 },
     caret: a + bases.length

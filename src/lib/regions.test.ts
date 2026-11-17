@@ -276,12 +276,14 @@ test("random edits keep each region on the same bases as a feature on them", () 
       const kind = r.int(0, 3);
       const end = Math.min(n - 1, at + r.int(0, 8));
       const what = ["insert", "delete", "replace", "type"][kind];
-      if (kind === 0) d = insertBases(d, at, bases(r, r.int(1, 4)));
+      // New bases at an edge go to the side the edit card was told, or to neither.
+      const side = (["neither", "before", "after"] as const)[r.int(0, 2)];
+      if (kind === 0) d = insertBases(d, at, bases(r, r.int(1, 4)), side);
       else if (kind === 1) d = deleteRange(d, { start: at, end: Math.min(n - 1, at + r.int(0, 3)) });
-      else if (kind === 2) d = replaceRange(d, { start: at, end }, bases(r, r.next() < 0.3 ? end - at + 1 : r.int(1, 9))).data;
-      else for (let k = 0; k < r.int(1, 4); k++) d = insertBases(d, at + k, bases(r, 1));
+      else if (kind === 2) d = replaceRange(d, { start: at, end }, bases(r, r.next() < 0.3 ? end - at + 1 : r.int(1, 9)), side).data;
+      else for (let k = 0; k < r.int(1, 4); k++) d = insertBases(d, at + k, bases(r, 1), side);
       if (!d.features.some(x => x.type === "CDS")) break;
-      const label = `seed ${seed} step ${step} (${what} at ${at})`;
+      const label = `seed ${seed} step ${step} (${what} at ${at}, ${side})`;
       const kept = regionsOf(cds(d));
       for (const twin of twins) {
         const now = d.features.find(x => x.id === twin.id);

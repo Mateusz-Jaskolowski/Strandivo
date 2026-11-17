@@ -169,6 +169,7 @@ const ARROW_RIGHT = "\uE014";
 const ESCAPE = "\uE00C";
 const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
+const TAB = "\uE004";
 const PAGE_UP = "\uE00E";
 
 /** Drawn width of the first row's bases relative to the width the layout gives them (1.0 = lined up). */
@@ -500,16 +501,22 @@ async function main() {
     const focused = await s.exec("return document.activeElement?.classList.contains('sv-clipboard')");
     check("Clicking the sequence puts the cursor there", focused);
     const n0 = (await state()).len;
+    const editCard = () => s.exec(`${doc} const c = document.querySelector('.sv-edit');
+      return { open: !!c, text: c?.textContent ?? '', on: c?.querySelector('.sv-edit-side-on')?.textContent ?? '', struck: document.querySelectorAll('.sv-gone-band').length, len: s.data.sequence.length };`);
     await s.press("GAT");
-    await sleep(1800); // a pause ends one typing step
-    await s.press("TACA");
+    await sleep(200);
+    const waiting = await editCard();
+    check("Typing at the cursor waits in a card", waiting.open && /Insert after 5/.test(waiting.text) && /3 bases/.test(waiting.text) && waiting.len === n0, JSON.stringify(waiting));
+    await s.press(ENTER);
+    await sleep(200);
+    await s.press(`TACA${ENTER}`);
     await sleep(300);
     const typed = await state();
-    check("Typing inserts bases", typed.len === n0 + 7 && typed.dirty, `${n0} → ${typed.len} bp`);
+    check("Enter inserts them", typed.len === n0 + 7 && typed.dirty, `${n0} → ${typed.len} bp`);
     await s.press("z", [CTRL]);
     await sleep(400);
     const undone = (await state()).len;
-    check("Ctrl+Z undoes one typing step", undone === n0 + 3, `${typed.len} → ${undone} bp`);
+    check("Ctrl+Z undoes one insertion", undone === n0 + 3, `${typed.len} → ${undone} bp`);
     await s.press("z", [CTRL]);
     await sleep(400);
     await s.press("y", [CTRL]);
@@ -524,7 +531,7 @@ async function main() {
       return { at, was: s.data.sequence.slice(at, at + 3).toUpperCase(), len: s.data.sequence.length };`);
     const reselect = `${doc} s.select({ range: { start: ${over.at}, end: ${over.at + 2} }, caret: ${over.at + 3}, anchor: ${over.at} }, 'e2e'); document.querySelector('.sv-clipboard').focus();`;
     const swap = [...over.was].map(c => ({ A: "T", T: "A", G: "C", C: "G" })[c] ?? "A").join("");
-    const card = () => s.exec(`${doc} const c = document.querySelector('.sv-replace');
+    const card = () => s.exec(`${doc} const c = document.querySelector('.sv-edit');
       return { open: !!c, text: c?.textContent ?? '', len: s.data.sequence.length, bases: s.data.sequence.slice(${over.at}, ${over.at} + 3).toUpperCase() };`);
     await s.press(swap[0]);
     await sleep(200);
@@ -565,12 +572,68 @@ async function main() {
     await sleep(200);
     const kept = await card();
     check("Esc closes it and keeps the bases", !kept.open && kept.bases === over.was && kept.len === over.len, JSON.stringify(kept));
+    // At a feature's edge the card asks which side takes new bases: neither, unless Tab chooses.
+    const ampEdge = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR');
+      s.select({ range: null, caret: f.end + 1, anchor: f.end + 1 }, 'e2e');
+      document.querySelector('.sv-clipboard').focus();
+      return { id: f.id, end: f.end };`);
+    const ampEnd = () => s.exec(`${doc} return s.data.features.find(x => x.id === ${JSON.stringify(ampEdge.id)})?.end;`);
+    await s.press("GCT");
+    await sleep(200);
+    const edge = await editCard();
+    check("At a feature's edge the card asks where new bases go, Neither first", /New bases go in/.test(edge.text) && /AmpR/.test(edge.text) && edge.on === "Neither", JSON.stringify(edge));
+    await s.shot("03-edit-card-edge");
+    await s.press(ENTER);
+    await sleep(300);
+    const outside = await ampEnd();
+    check("Neither leaves them outside the feature", outside === ampEdge.end, `${ampEdge.end} → ${outside}`);
+    await s.exec(`${doc} s.undo(); s.select({ range: null, caret: ${ampEdge.end + 1}, anchor: ${ampEdge.end + 1} }, 'e2e'); document.querySelector('.sv-clipboard').focus();`);
+    await s.press(`GCT${TAB}`);
+    await sleep(200);
+    const chosen = await editCard();
+    check("Tab picks the feature", /AmpR/.test(chosen.on), JSON.stringify(chosen));
+    await s.press(ENTER);
+    await sleep(300);
+    const inside = await ampEnd();
+    check("It then takes the new bases", inside === ampEdge.end + 3, `${ampEdge.end} → ${inside}`);
+    await s.exec(`${doc} s.undo();`);
+    // Backspace at the cursor marks bases to delete, one more with each press, and Enter deletes them.
+    await s.exec(`${doc} s.select({ range: null, caret: 200, anchor: 200 }, 'e2e'); document.querySelector('.sv-clipboard').focus();`);
+    const beforeBack = (await state()).len;
+    await s.press(BACKSPACE + BACKSPACE + BACKSPACE);
+    await sleep(200);
+    const marked = await editCard();
+    check("Backspace at the cursor marks bases to delete, one more with each press", /Delete 198–200/.test(marked.text) && marked.struck > 0 && marked.len === beforeBack, JSON.stringify(marked));
+    await s.shot("03-edit-card-delete");
+    await s.press(ENTER);
+    await sleep(300);
+    const afterBack = (await state()).len;
+    check("Enter deletes them", afterBack === beforeBack - 3, `${beforeBack} → ${afterBack} bp`);
+    await s.exec(`${doc} s.undo();`);
+    // Cut copies the selected bases at once and waits in the card to delete them; Esc keeps them.
+    const cutText = await s.exec(`${doc} s.select({ range: { start: 199, end: 208 }, caret: 209, anchor: 199 }, 'e2e');
+      const area = document.querySelector('.sv-clipboard'); area.focus();
+      const dt = new DataTransfer();
+      area.dispatchEvent(new ClipboardEvent('cut', { clipboardData: dt, bubbles: true, cancelable: true }));
+      return dt.getData('text/plain');`);
+    await sleep(200);
+    const cutCard = await editCard();
+    check("Cut waits in the card to delete the bases", /Delete 200–209/.test(cutCard.text) && cutCard.len === beforeBack, JSON.stringify({ ...cutCard, copied: cutText }));
+    await s.press(ESCAPE);
+    await sleep(200);
+    check("Esc keeps them", (await state()).len === beforeBack && !(await editCard()).open);
+    check("It says they were copied all the same", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /Copied 10 bases but didn't delete them/.test(t.textContent))", 2000), `copied “${cutText}”`);
     // --- Pasting what a database copies: a FASTA header, and text that isn't a sequence ---
-    const pasteLen = async (text) =>
-      s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');
-        const before = s.data.sequence.length;
+    const pasteLen = async (text) => {
+      const before = await s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');
+        document.querySelector('.sv-clipboard').focus();
         window.__strandivo.paste(${JSON.stringify(text)});
-        return { grew: s.data.sequence.length - before, start: s.data.sequence.slice(0, 8) };`);
+        return s.data.sequence.length;`);
+      await sleep(100);
+      await s.press(ENTER);
+      await sleep(200);
+      return s.exec(`${doc} return { grew: s.data.sequence.length - ${before}, start: s.data.sequence.slice(0, 8) };`);
+    };
     const fasta = await pasteLen(">pUC19 cloning vector, complete sequence\nacgtacgu\n");
     check("Pasting a FASTA entry puts in its bases alone, U as T", fasta.grew === 8 && fasta.start === "ACGTACGT", JSON.stringify(fasta));
     await s.exec(`${doc} s.undo();`);
@@ -582,7 +645,7 @@ async function main() {
     const shiftSel = (await state()).sel.range;
     check("Shift+arrows select bases", shiftSel && shiftSel.end - shiftSel.start === 2, JSON.stringify(shiftSel));
 
-    // --- Delete with a feature selected: the feature goes first, its bases on the next press ---
+    // --- Delete with a feature selected: the feature goes first, then its bases wait in the card ---
     const lacZ = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'lacZ-alpha');
       s.select({ range: { start: f.start, end: f.end }, caret: f.end + 1, focus: { kind: 'feature', id: f.id } }, 'e2e');
       document.querySelector('.sv-clipboard').focus();
@@ -602,8 +665,12 @@ async function main() {
     await s.shot("03-delete-feature");
     await s.press(BACKSPACE);
     await sleep(300);
+    const asked = await editCard();
+    check("The next Delete asks before deleting its bases", asked.open && /Delete /.test(asked.text) && /or Delete again/.test(asked.text) && asked.len === beforeDelete.len, JSON.stringify(asked));
+    await s.press(BACKSPACE);
+    await sleep(300);
     const secondPress = await state();
-    check("The next Delete deletes its bases", secondPress.len === beforeDelete.len - (lacZ.end - lacZ.start + 1), `${beforeDelete.len} → ${secondPress.len} bp`);
+    check("Delete again deletes them", secondPress.len === beforeDelete.len - (lacZ.end - lacZ.start + 1), `${beforeDelete.len} → ${secondPress.len} bp`);
     check("It says the feature inside them went too", await s.waitFor(toastWith("/The feature MCS was inside the deleted bases/"), 2000));
     await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Undo']", "xpath");
     await sleep(300);

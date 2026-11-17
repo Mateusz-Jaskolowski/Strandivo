@@ -41,6 +41,26 @@ test("Q5 extends longer past 6 kb on either template, and never for less than 10
   assert.equal(extensionSeconds(q5, "plasmid", 200), 10);
 });
 
+test("extension is rounded up to the next 5 s, never to the nearest or down", () => {
+  // [polymerase, template, bp, raw seconds worked out by hand from the rate, the step]
+  const rows: [string, TemplateKind, number, number, number][] = [
+    ["phusion", "plasmid", 1700, 25.5, 30], // 1.7 kb at 15 s/kb; nearest would give 25
+    ["phusion", "plasmid", 1010, 15.15, 20], // just over a multiple of 5; down or nearest would give 15
+    ["taq", "plasmid", 1100, 66, 70], // 1.1 kb at 60 s/kb; nearest would give 65
+    ["q5", "plasmid", 1100, 16.5, 20], // 1.1 kb at 15 s/kb; nearest would give 15
+    ["q5", "plasmid", 6100, 183, 185], // 6.1 kb at the plasmid's rate past 6 kb, 30 s/kb
+    ["q5", "plasmid", 7000, 210, 210], // 7 kb at 30 s/kb is already a multiple of 5
+    ["q5", "complex", 1100, 33, 35], // 1.1 kb at 30 s/kb
+    ["q5", "complex", 6500, 292.5, 295] // 6.5 kb at the complex rate past 6 kb, 45 s/kb
+  ];
+  for (const [id, template, length, raw, step] of rows) {
+    const p = PCR_PROTOCOLS[id];
+    const label = `${id} ${template} ${length} bp`;
+    assert.ok(Math.abs((length / 1000) * secondsPerKb(p, template, length) - raw) < 1e-9, `${label}: ${raw} s is not what its rate gives`);
+    assert.equal(extensionSeconds(p, template, length), step, label);
+  }
+});
+
 test("a colony is extended as a simple template, at the plasmid's rate", () => {
   // No protocol offers a colony and rates that differ, so this one is made up: NEB counts
   // E. coli among the simple templates, so only genomic DNA and cDNA take the complex rates.

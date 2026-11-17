@@ -234,6 +234,48 @@ test("the notes say what the choices change", () => {
   assert.match(notes.at(-1)!, /Other products .* check their own protocol\./);
 });
 
+test("the program's notes, every line of them, for a program of each polymerase", () => {
+  const finish = "The final extension finishes any product still half made.";
+  const others = "Other products that share this polymerase's Tm rule, such as master mixes, kits or Hot Start forms, can cycle differently, so check their own protocol.";
+  assert.deepEqual(programNotes("q5", 737, "plasmid"), [
+    "Each denaturation is short, 10 s at 98 °C, to spare the enzyme.",
+    "Extension is 15 s for each kb of product at 72 °C, so 737 bp gets 15 s.",
+    "25 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 72 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, PCR Using Q5 High-Fidelity DNA Polymerase (M0491).",
+    others
+  ]);
+  assert.deepEqual(programNotes("phusion", 2000, "complex"), [
+    "Each denaturation is short, 10 s at 98 °C, to spare the enzyme.",
+    "Extension is 30 s for each kb of product at 72 °C, so 2,000 bp gets 1 min.",
+    "30 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 72 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, PCR Protocol for Phusion High-Fidelity DNA Polymerase (M0530).",
+    others
+  ]);
+  assert.deepEqual(programNotes("onetaq", 1000, "plasmid"), [
+    "Each denaturation is short, 20 s at 94 °C, to spare the enzyme.",
+    "Extension is 60 s for each kb of product at 68 °C, so 1,000 bp gets 1 min.",
+    "25 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 68 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, Protocol for OneTaq Hot Start DNA Polymerase (M0481).",
+    others
+  ]);
+  // A colony on a short product: the 45 s that NEB suggests below 1 kb is owned up to.
+  assert.deepEqual(programNotes("taq", 200, "colony"), [
+    "Each denaturation is short, 20 s at 95 °C, to spare the enzyme.",
+    "Extension is 60 s for each kb of product at 68 °C, so 200 bp gets 45 s, the least NEB suggests for a short product.",
+    "30 cycles is within NEB's 25–35; more adds errors and smears.",
+    "From 66 °C up, annealing is so close to the extension temperature that the two steps become one.",
+    finish,
+    "Source: NEB, PCR Protocol for Taq DNA Polymerase with Standard Taq Buffer (M0273).",
+    others
+  ]);
+});
+
 test("the program names the product its protocol is for, by NEB's own name and number", () => {
   // "OneTaq, Standard buffer" in the menu follows the protocol of OneTaq Hot Start, and says so.
   assert.equal(programSource("onetaq"), "OneTaq Hot Start DNA Polymerase · NEB M0481");

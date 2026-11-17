@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { nebPolymerase } from "./polymerases.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { annealingTemp, DEFAULT_TM, tmBases, withNebPolymerase, type TmSettings } from "./primers.ts";
-import { followsSettings, startPolymerase, tmStrip, wholePrimerTa } from "./pcrPlan.ts";
+import { followsSettings, programContext, startPolymerase, tmStrip, wholePrimerTa } from "./pcrPlan.ts";
 import { reverseComplement } from "./seqdata.ts";
 
 const neb = (polymerase: string, nebPrimer = nebPolymerase(polymerase).primer): TmSettings => ({ ...DEFAULT_TM, method: "neb", polymerase, nebPrimer });
@@ -128,4 +128,19 @@ test("a changed base in either primer leaves no whole-primer temperature, whiche
   assert.ok(d.substitutions > 0);
   assert.equal(e.tail, TAIL);
   assert.equal(wholePrimerTa(changedF, tailedR, d, e, conf), null);
+});
+
+test("what a program was made for names its annealing temperatures and stages, so a change in them shows", () => {
+  assert.equal(programContext("plasmid", 878, 66.4, null), "Plasmid · 878 bp · annealing at 66 °C · 1 stage");
+  assert.equal(programContext("complex", 1878, 61.6, 70.2), "Genomic DNA or cDNA · 1,878 bp · annealing at 62 °C, then 70 °C · 2 stages");
+  const base = programContext("plasmid", 878, 66, null);
+  // Only the annealing temperature, only the stages, only the second stage's temperature: each reads differently.
+  assert.notEqual(programContext("plasmid", 878, 65, null), base);
+  assert.notEqual(programContext("plasmid", 878, 66, 72), base);
+  assert.notEqual(programContext("plasmid", 878, 66, 72), programContext("plasmid", 878, 66, 73));
+  // In whole degrees, as the program uses them and the dialog says them.
+  assert.equal(programContext("plasmid", 878, 66.2, null), programContext("plasmid", 878, 65.6, null));
+  // And the template and length still show.
+  assert.notEqual(programContext("colony", 878, 66, null), base);
+  assert.notEqual(programContext("plasmid", 879, 66, null), base);
 });

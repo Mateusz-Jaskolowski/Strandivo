@@ -2290,63 +2290,184 @@
   margin-left: auto;
 }
 .sv-prog {
+  width: 100%;
+}
+.sv-prog-row {
+  position: relative;
+  height: 246px;
+}
+.sv-prog-row + .sv-prog-row {
+  margin-top: 10px;
+}
+.sv-prog-row > svg {
+  display: block;
+  overflow: visible;
+}
+.sv-prog-trace {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.sv-prog-divider,
+.sv-prog-bracket {
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+.sv-prog-divider {
+  stroke-dasharray: 3 4;
+}
+.sv-prog-value {
+  position: absolute;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
-}
-.sv-prog-stage {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 4px 6px;
-}
-.sv-prog-cycles {
-  border-radius: 8px;
-  background: var(--side);
-}
-.sv-prog-count {
-  padding: 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-2);
-  text-align: center;
-}
-.sv-prog-steps {
-  display: flex;
-  gap: 2px;
-}
-.sv-prog-step {
-  display: flex;
-  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  width: 78px;
-  text-align: center;
-}
-.sv-prog-bars {
-  display: flex;
-  align-items: flex-end;
-  height: 38px;
-  width: 100%;
-}
-.sv-prog-bar {
-  width: 100%;
-  border-radius: 3px 3px 0 0;
-  background: var(--accent);
-  opacity: 0.75;
+  gap: 2px;
+  height: 24px;
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .sv-prog-temp {
-  margin-top: 4px;
-  font-size: 12.5px;
-  font-weight: 600;
+  width: 64px;
 }
-.sv-prog-time {
-  font-size: 12px;
+.sv-prog-seconds {
+  width: 86px;
   color: var(--text-2);
 }
+.sv-prog-cycles {
+  width: 84px;
+  font-weight: 600;
+}
+.sv-prog-value input {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dotted var(--text-3);
+  border-radius: 0;
+  padding: 1px 0;
+  font: inherit;
+  text-align: center;
+  min-width: 0;
+  width: 38px;
+  height: 22px;
+}
+.sv-prog-seconds input {
+  width: 82px;
+}
+.sv-prog-cycles input {
+  width: 30px;
+}
+.sv-prog-value input:hover {
+  border-bottom-style: solid;
+}
+.sv-prog-value input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  background: var(--field);
+}
+.sv-prog-value input.sv-prog-changed {
+  color: var(--accent-text);
+  border-bottom: 2px solid var(--accent);
+}
+.sv-prog-value input[aria-invalid="true"] {
+  border-bottom-color: var(--bad);
+}
+.sv-prog-modified {
+  color: var(--accent-text);
+}
 .sv-prog-name {
+  position: absolute;
+  top: 210px;
+  text-align: center;
   font-size: 11px;
   color: var(--text-3);
+}
+.sv-pcr-program > [role="alert"]:empty {
+  display: none;
+}
+.sv-pcr-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sv-pcr-product-map {
+  position: relative;
+  width: 100%;
+}
+.sv-pcr-leaders {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sv-pcr-leaders polyline {
+  stroke: var(--leader);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.sv-pcr-product-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--backbone);
+}
+.sv-pcr-gc {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+}
+.sv-pcr-product-ends {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.sv-pcr-cut {
+  position: absolute;
+  height: 20px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 3px;
+  color: var(--text-3);
+  background: var(--panel);
+  font: 11px var(--mono);
+  cursor: pointer;
+}
+.sv-pcr-cut-unique,
+.sv-pcr-more {
+  color: var(--text-2);
+}
+.sv-pcr-leaders .sv-pcr-tick {
+  stroke: var(--cut);
+  stroke-width: 1;
+}
+.sv-pcr-cut:hover,
+.sv-pcr-cut[aria-pressed="true"] {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+.sv-pcr-cut:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sv-pcr-digest {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.sv-pcr-flanks summary {
+  cursor: pointer;
+  color: var(--text-2);
+}
+.sv-pcr-flanks p {
+  margin-top: 6px;
 }
 .sv-pcr-bar {
   position: relative;

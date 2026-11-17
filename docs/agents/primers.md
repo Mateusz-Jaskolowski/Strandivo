@@ -71,6 +71,55 @@ and CI checks that they exist.
   What the dialog decides before drawing (the starting polymerase, the strip that says its
   Tms differ from Settings, the whole primers' annealing temperature) is in
   `src/lib/pcrPlan.ts`, so tests reach it.
+  The **overview** above it is of the final linear product, tails and primer changes
+  included (`src/lib/pcrOverview.ts`), so its positions are the product's own; the template
+  row keeps the plasmid's, and a site says how often its enzyme cuts each. Its enzyme list
+  and filter start from the document's and then go their own way, following only a change
+  of membership, through `ViewOptions`. The filter chooses what is drawn, not what is
+  suggested: a digest is looked for in the whole list, one enzyme first and a pair only
+  where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
+  bar, which no digest with a fragment below the smallest band of the gel's ladders,
+  100 bp today, reaches). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
+  complete on both strands or whose overhangs overlap another's makes no suggestion rather
+  than a band that wouldn't be there, and neither does an enzyme that cuts on both sides
+  of its site (BcgI, `cutsBothSides`), as only its cut after the site is found. Names stack in `MAX_LABEL_LANES` lanes at most: a
+  multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
+  the product, its GC and the digest out of the dialog, so the sites past those lanes keep
+  their marks where they cut and a chip over each crowd counts them, naming them under the
+  strip when it is clicked. The site described under the map is the one clicked, if it is
+  still drawn, and otherwise one the chosen digest uses (`pickSite`), so `ProductViewChoice`
+  keeps only a click, never the default, or a later digest would leave it on the first one's. Which sites have a name of their own therefore depends on the
+  width, so the dialog measures the map as soon as its body is in the page rather than a
+  frame later, or focus would go looking for a control the first drawing didn't have. It says what to expect on a gel, never that the
+  product is the right one or that two enzymes share a buffer. What is said about the
+  polymerase comes from `src/lib/pcrGuidance.ts` alone (the ends it leaves, NEB's longest
+  product, the GC enhancer), and only where NEB's row for it has been read: the Ends row
+  then says "No end guidance for this polymerase yet", there is no length limit or
+  enhancer to name, and nothing is taken from another member of its Tm family. The GC
+  sentence is about the product, so every polymerase gets it, with the enhancer named
+  only where there is one. GC is the whole product's, to the one decimal the header shows,
+  against NEB's 65% (`HIGH_GC`), as the enhancer is described for an amplicon, while the strip
+  shows where it runs high inside; a colony is a simple template, being E. coli, so only
+  genomic DNA or cDNA takes the complex limit.
+  The **program**'s line is schematic: its widths and slopes are neither time nor ramp
+  rate. Temperatures, times and cycle counts are text fields, in both stages, and the last
+  step holds until stopped. What is typed lives in a draft (`src/lib/pcrProgramEdit.ts`)
+  and survives a redraw, unfinished text and all, while Copy is off until every field
+  reads; a temperature outside `MIN_TEMP`–`MAX_TEMP`, a cycle count past `MAX_CYCLES` or a
+  step past `MAX_SECONDS` is a slip, not a program, and one message (`PROGRAM_LIMITS`)
+  gives all the limits. A comma is refused, not read as a decimal point, since the app
+  reads commas as thousands. A value
+  counts as entered when the field is left or Enter is pressed, not on the browser's change
+  event alone, as a field drawn anew mid-edit fires none; Escape then goes back to that
+  value instead of closing the dialog. An edited program stays, with the protocol and the
+  setup it was made for (`programContext`: template, length, annealing temperatures and
+  stages, which the strip over it and Copy name), when the inputs change, and only what `pcrProgram` is given counts
+  as an input (`programInputKey`), so a primer renamed elsewhere doesn't say the setup has
+  moved. Regenerate and Reset build it again from the current inputs, change no setting,
+  and hand focus to Copy program, as each takes itself away. Every control needs its own
+  `aria-label` or `data-focus`; a redraw puts back the caret as well as the focus, passes
+  over a control that came back disabled, and the two ResizeObservers are disconnected when
+  the dialog is drawn again or closed.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

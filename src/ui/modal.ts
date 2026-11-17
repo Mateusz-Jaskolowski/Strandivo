@@ -79,8 +79,9 @@ export const dialogOpen = () => openDialogs > 0;
 /**
  * A task dialog over the window (Design primers, PCR product…): title, a body the caller
  * fills, buttons at the bottom. Escape or the close button closes it.
+ * An editor can handle Escape first by returning true from onEscape.
  */
-export function openDialog(o: { title: string; note?: string; width?: number; onClose?: () => void }): Dialog {
+export function openDialog(o: { title: string; note?: string; width?: number; onClose?: () => void; onEscape?: () => boolean }): Dialog {
   const before = document.activeElement as HTMLElement | null;
   const body = h("div", { class: "sv-dialog-body" });
   const footer = h("div", { class: "sv-dialog-foot" });
@@ -99,7 +100,7 @@ export function openDialog(o: { title: string; note?: string; width?: number; on
     if (e.key === "Escape" && !e.defaultPrevented) {
       e.preventDefault();
       e.stopPropagation();
-      close();
+      if (!o.onEscape?.()) close();
     }
   };
   const closeBtn = h("button", { type: "button", class: "sv-dialog-close", "aria-label": "Close", onclick: close });

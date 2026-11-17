@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { COMMON_ENZYMES, findCutSites, scanSites, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { COMMON_ENZYMES, cutsBothSides, findCutSites, scanSites, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { digestSequence, fragmentSize } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
 import { pcrProduct } from "./pcr.ts";
@@ -94,6 +94,31 @@ test("suggestions prefer one internal cutter, use pairs to rescue equal bands an
   const best = suggestedDigests(seq.length, scanSites(seq, false), COMMON_ENZYMES)[0];
   assert.deepEqual(best.enzymes, ["ScaI"]);
   assert.deepEqual(best.sizes, [564, 314]);
+});
+
+test("an enzyme that cuts on both sides of its site is never suggested, as only its cut after the site is found", () => {
+  assert.equal(cutsBothSides("BcgI"), true);
+  assert.equal(cutsBothSides("EcoRI"), false);
+  assert.equal(cutsBothSides("NoSuchI"), false);
+  // One BcgI site (CGANNNNNNTGC) in 612 bp: REBASE's cuts make 290 + 34 + 288, the scan alone 324 + 288.
+  const bcgI = "CGA" + "AAAAAA" + "TGC";
+  const seq = "AT".repeat(150) + bcgI + "AT".repeat(150);
+  assert.equal(seq.length, 612);
+  const hits = scanSites(seq, false, ["BcgI"]).filter(h => h.enzyme === "BcgI");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].cut, 324);
+  assert.deepEqual(suggestedDigests(seq.length, hits, ["BcgI"]), []);
+  // In a Lab list with an ordinary enzyme beside it, only the ordinary one is offered, alone or in a pair.
+  const mixed = "AT".repeat(100) + "GAATTC" + "AT".repeat(100) + bcgI + "AT".repeat(100);
+  const found = scanSites(mixed, false, ["BcgI", "EcoRI"]).filter(h => h.enzyme === "BcgI" || h.enzyme === "EcoRI");
+  assert.deepEqual(new Set(found.map(h => h.enzyme)), new Set(["BcgI", "EcoRI"]));
+  const offered = suggestedDigests(mixed.length, found, ["BcgI", "EcoRI"]);
+  assert.deepEqual(offered.map(digestName), ["EcoRI"]);
+  // The overview offers the same through its own list.
+  const product = pcrProduct(seq, false, { name: "F", start: 0, end: 19, strand: 1, bases: seq.slice(0, 20) }, { name: "R", start: 592, end: 611, strand: -1, bases: reverseComplement(seq.slice(592)) })!;
+  const overview = productOverview(product, seq, false, { ...opts, enzymeSource: "lab", enzymeFilter: "all", labEnzymes: ["BcgI"] });
+  assert.equal(overview.sites.length, 1);
+  assert.deepEqual(overview.digests, []);
 });
 
 test("no digest of fragments too small for a gel is called far enough apart, but pairs are still tried", () => {

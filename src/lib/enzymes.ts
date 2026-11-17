@@ -310,6 +310,14 @@ export function enzymeSite(name: string): string {
   return known(name)?.notation.replace(/\(-?\d+\/-?\d+\)|\^/g, "") ?? "";
 }
 
+/**
+ * Whether an enzyme also cuts before its site (BcgI, BaeI, CspCI), where `scanSites` finds
+ * only the cut after it, so what it gives for such an enzyme has a piece too few.
+ */
+export function cutsBothSides(name: string): boolean {
+  return known(name)?.bothSides ?? false;
+}
+
 /** How an enzyme cuts, for lists of enzymes. */
 export interface EnzymeCut {
   /**

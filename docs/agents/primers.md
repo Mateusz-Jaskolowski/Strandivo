@@ -81,7 +81,8 @@ and CI checks that they exist.
   bar, which no digest with a fragment below the smallest band of the gel's ladders,
   100 bp today, reaches). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
   complete on both strands or whose overhangs overlap another's makes no suggestion rather
-  than a band that wouldn't be there. Names stack in `MAX_LABEL_LANES` lanes at most: a
+  than a band that wouldn't be there, and neither does an enzyme that cuts on both sides
+  of its site (BcgI, `cutsBothSides`), as only its cut after the site is found. Names stack in `MAX_LABEL_LANES` lanes at most: a
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
   the product, its GC and the digest out of the dialog, so the sites past those lanes keep
   their marks where they cut and a chip over each crowd counts them, naming them under the

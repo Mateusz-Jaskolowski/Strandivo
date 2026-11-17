@@ -6,8 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { NEB_POLYMERASES } from "./polymerases.ts";
-import { PCR_PROTOCOLS, templatesFor } from "./pcrProtocols.ts";
-import { durationText, extensionSeconds, FIRST_CYCLES, offerTwoStages, pcrProgram, programNotes, programSource, programText, programTitle, templateNotes, twoStagesPossible } from "./pcrProgram.ts";
+import { PCR_PROTOCOLS, templatesFor, type PcrProtocol, type TemplateKind } from "./pcrProtocols.ts";
+import { durationText, extensionSeconds, FIRST_CYCLES, offerTwoStages, pcrProgram, programNotes, programSource, programText, programTitle, secondsPerKb, templateNotes, twoStagesPossible } from "./pcrProgram.ts";
 
 const steps = (st: ReturnType<typeof pcrProgram>, i: number) => st![i].steps.map(s => [s.name, s.temp, s.seconds]);
 
@@ -39,6 +39,21 @@ test("Q5 extends longer past 6 kb on either template, and never for less than 10
   assert.equal(extensionSeconds(q5, "complex", 6001), 275);
   assert.equal(extensionSeconds(q5, "complex", 8000), 360);
   assert.equal(extensionSeconds(q5, "plasmid", 200), 10);
+});
+
+test("a colony is extended as a simple template, at the plasmid's rate", () => {
+  // No protocol offers a colony and rates that differ, so this one is made up: NEB counts
+  // E. coli among the simple templates, so only genomic DNA and cDNA take the complex rates.
+  const made: PcrProtocol = { ...PCR_PROTOCOLS.q5, extend: { temp: 72, plasmid: 10, complex: 40, longer: { above: 3000, plasmid: 20, complex: 60 } } };
+  for (const length of [2000, 3000]) {
+    assert.equal(secondsPerKb(made, "plasmid", length), 10, `${length}`);
+    assert.equal(secondsPerKb(made, "colony", length), 10, `${length}`);
+    assert.equal(secondsPerKb(made, "complex", length), 40, `${length}`);
+  }
+  assert.equal(secondsPerKb(made, "plasmid", 4000), 20);
+  assert.equal(secondsPerKb(made, "colony", 4000), 20);
+  assert.equal(secondsPerKb(made, "complex", 4000), 60);
+  assert.deepEqual(["plasmid", "colony", "complex"].map(t => extensionSeconds(made, t as TemplateKind, 2000)), [20, 20, 80]);
 });
 
 test("Taq and OneTaq extend a short product for 45 s, as NEB advises below 1 kb", () => {

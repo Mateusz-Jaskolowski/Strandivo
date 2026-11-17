@@ -49,11 +49,16 @@ export function offerTwoStages(ta: number, taFull: number | null): boolean {
   return taFull !== null && taFull - ta > TWO_STAGE_GAIN - 0.05;
 }
 
-/** Seconds of extension for each kb: NEB's rate for the template, or its slower one for a long product. */
+/**
+ * Seconds of extension for each kb: NEB's rate for the template, or its slower one for a long
+ * product. A colony is a simple template, as NEB counts E. coli ("Simple templates include
+ * plasmid, viral, and E. coli genomic DNA"), so it takes the plasmid's rate; only genomic
+ * DNA and cDNA take the complex one.
+ */
 export function secondsPerKb(p: PcrProtocol, template: TemplateKind, length: number): number {
   const e = p.extend;
   const rates = e.longer && length > e.longer.above ? e.longer : e;
-  return template === "plasmid" ? rates.plasmid : rates.complex;
+  return template === "complex" ? rates.complex : rates.plasmid;
 }
 
 /** The shortest extension: the protocol's own where NEB gives one for short products. */

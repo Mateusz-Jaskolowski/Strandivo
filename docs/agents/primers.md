@@ -66,6 +66,8 @@ and CI checks that they exist.
   gets no offer: its whole length doesn't pair, so it has no Tm to anneal at. A menu entry
   stands for products that share a Tm rule, not a protocol, so a program is for the product
   its protocol names (its number is shown), and its ⓘ warns that the others may differ.
+  A colony is extended as a plasmid is, for NEB counts E. coli among the simple templates;
+  only genomic DNA and cDNA take the complex rates.
   What the dialog decides before drawing (the starting polymerase, the strip that says its
   Tms differ from Settings, the whole primers' annealing temperature) is in
   `src/lib/pcrPlan.ts`, so tests reach it.

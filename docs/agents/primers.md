@@ -78,7 +78,8 @@ and CI checks that they exist.
   of membership, through `ViewOptions`. The filter chooses what is drawn, not what is
   suggested: a digest is looked for in the whole list, one enzyme first and a pair only
   where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
-  bar). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
+  bar, which no digest with a fragment below the smallest band of the gel's ladders,
+  100 bp today, reaches). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
   complete on both strands or whose overhangs overlap another's makes no suggestion rather
   than a band that wouldn't be there. Names stack in `MAX_LABEL_LANES` lanes at most: a
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed

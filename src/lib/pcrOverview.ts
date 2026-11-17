@@ -4,6 +4,7 @@
 // Analysis of the final, linear PCR product, including tails and primer edits.
 import { extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { gcProfile, overviewWindow } from "./gc.ts";
+import { LADDERS } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
@@ -86,14 +87,24 @@ export function productDigestSizes(length: number, hits: SiteHit[]): number[] | 
 
 /**
  * From this score up, a digest's fragments are far enough apart to suggest: the smallest is
- * a tenth of the product, and each is a tenth smaller than the one above it. It is this
- * suggestion's own bar, well clear of the 2% within which the gel draws bands as one.
+ * a tenth of the product, and each is a tenth smaller than the one above it, and none is
+ * too small for a gel to show (`SMALLEST_BAND`). It is this suggestion's own bar, well clear
+ * of the 2% within which the gel draws bands as one.
  */
 export const DISTINCT_DIGEST = 0.1;
 
-/** How far apart a digest's fragments are: the smallest as a share of the product, or of the next one up. */
+/** The smallest band of any ladder the gel offers: a fragment below it is not one a gel can show. */
+export const SMALLEST_BAND = Math.min(...LADDERS.map(ladder => Math.min(...ladder.bands)));
+
+/**
+ * How far apart a digest's fragments are: the smallest as a share of the product, or of the
+ * next one up. Relative sizes alone would call 64 and 39 bp from a 103 bp product far apart,
+ * so a digest with a fragment below `SMALLEST_BAND` is scaled to stay under
+ * `DISTINCT_DIGEST`, and those are still ordered among themselves.
+ */
 function digestScore(sizes: number[], length: number): number {
-  return Math.min(sizes[sizes.length - 1] / length, ...sizes.slice(1).map((s, i) => (sizes[i] - s) / sizes[i]));
+  const apart = Math.min(sizes[sizes.length - 1] / length, ...sizes.slice(1).map((s, i) => (sizes[i] - s) / sizes[i]));
+  return sizes[sizes.length - 1] < SMALLEST_BAND ? (apart * DISTINCT_DIGEST) / 2 : apart;
 }
 
 /** Prefer one enzyme; try pairs only if none gives well-separated, substantial fragments. */

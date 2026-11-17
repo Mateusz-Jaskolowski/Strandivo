@@ -9,6 +9,7 @@ import { gcPercent } from "./labinfo.ts";
 import { pcrProduct } from "./pcr.ts";
 import {
   CHECK_FLANKS,
+  DISTINCT_DIGEST,
   digestName,
   HIGH_GC,
   MAX_LABEL_LANES,
@@ -18,6 +19,7 @@ import {
   productDigestSizes,
   productLabels,
   productOverview,
+  SMALLEST_BAND,
   suggestedDigests,
   tailSiteFlanks
 } from "./pcrOverview.ts";
@@ -92,6 +94,39 @@ test("suggestions prefer one internal cutter, use pairs to rescue equal bands an
   const best = suggestedDigests(seq.length, scanSites(seq, false), COMMON_ENZYMES)[0];
   assert.deepEqual(best.enzymes, ["ScaI"]);
   assert.deepEqual(best.sizes, [564, 314]);
+});
+
+test("no digest of fragments too small for a gel is called far enough apart, but pairs are still tried", () => {
+  // Read from the ladders, so a ladder with a smaller band moves it.
+  assert.equal(SMALLEST_BAND, 100);
+  const gb = readFileSync(new URL("../../testdata/e2e/pUC19-annotated.gb", import.meta.url), "utf8");
+  const template = gb
+    .split("ORIGIN")[1]
+    .replace(/[^acgtn]/gi, "")
+    .toUpperCase();
+  // M13 forward and reverse on pUC19: 103 bp across the multiple cloning site.
+  const f = { name: "M13 fwd", start: 378, end: 394, strand: 1 as const, bases: "GTAAAACGACGGCCAGT" };
+  const r = { name: "M13 rev", start: 464, end: 480, strand: -1 as const, bases: "CAGGAAACAGCTATGAC" };
+  const product = pcrProduct(template, true, f, r)!;
+  assert.equal(product.length, 103);
+  const m13 = suggestedDigests(product.length, scanSites(product.sequence, false), COMMON_ENZYMES);
+  // BamHI's 64 + 39 bp is still offered, as the best of what there is, but not as one to trust.
+  assert.deepEqual(m13[0].enzymes, ["BamHI"]);
+  assert.deepEqual(m13[0].sizes, [64, 39]);
+  assert.ok(m13.length > 0 && m13.every(d => d.score < DISTINCT_DIGEST), JSON.stringify(m13.map(d => [digestName(d), d.score])));
+  // A fragment of exactly the smallest band is one a ladder shows, so it counts.
+  assert.ok(suggestedDigests(300, [hit("A", 100)], ["A"])[0].score >= DISTINCT_DIGEST);
+  assert.ok(suggestedDigests(300, [hit("A", 99)], ["A"])[0].score < DISTINCT_DIGEST);
+  // A 20 bp piece is far from the others in size, but with every single enzyme unreadable pairs are tried.
+  const tried = suggestedDigests(200, [hit("A", 60), hit("B", 140)], ["A", "B"]);
+  assert.deepEqual(tried.map(digestName), ["A", "B", "A + B"]);
+  assert.ok(tried.every(d => d.score < DISTINCT_DIGEST));
+  // A long product's fragments are all well above it, so they are judged as before: AmpR's ScaI.
+  const ampR = "AAAACTCGAG" + template.slice(1625, 2486) + reverseComplement("ACATATG");
+  const best = suggestedDigests(ampR.length, scanSites(ampR, false), COMMON_ENZYMES)[0];
+  assert.deepEqual(best.enzymes, ["ScaI"]);
+  assert.deepEqual(best.sizes, [564, 314]);
+  assert.ok(best.score >= DISTINCT_DIGEST);
 });
 
 test("the source chart's exact ends and length limits are held, including mixed OneTaq ends", () => {

@@ -189,6 +189,33 @@ test("suggestions prefer one internal cutter, use pairs to rescue equal bands an
   assert.deepEqual(best.sizes, [564, 314]);
 });
 
+test("the suggestion's limits hold on both sides: 3 sites, 2–4 fragments and a score of 0.1", () => {
+  const offered = (length: number, hits: SiteHit[], members: string[]) => suggestedDigests(length, hits, members).map(digestName);
+  // At most 3 sites of an enzyme: three are offered, and four are not, even when two of them cut
+  // in one place, so that the fragments (4) would be within the limit and only the sites are over.
+  assert.deepEqual(offered(2000, [hit("A", 500), hit("A", 1000), hit("A", 1500)], ["A"]), ["A"]);
+  assert.deepEqual(offered(2000, [hit("A", 500), hit("A", 1000), hit("A", 1000), hit("A", 1500)], ["A"]), []);
+  // At least 2 fragments: one complete cut makes them, a cut at an end of the product makes none.
+  assert.deepEqual(offered(2000, [hit("A", 700)], ["A"]), ["A"]);
+  assert.deepEqual(offered(2000, [hit("A", 0)], ["A"]), []);
+  assert.deepEqual(offered(2000, [hit("A", 2000)], ["A"]), []);
+  // At most 4: a pair making 4 (400, 600, 200, 800) is offered, first as its fragments are far apart;
+  // a pair making 5 is dropped, while each enzyme alone is still offered.
+  assert.deepEqual(offered(2000, [hit("A", 1000), hit("B", 400), hit("B", 1200)], ["A", "B"]), ["A + B", "A", "B"]);
+  assert.deepEqual(offered(2000, [hit("A", 1000), hit("A", 1500), hit("B", 400), hit("B", 1200)], ["A", "B"]), ["A", "B"]);
+  // Far enough apart is a score of 0.1: the smallest fragment a tenth of the product, or each a tenth smaller than the one above.
+  assert.equal(DISTINCT_DIGEST, 0.1);
+  const score = (length: number, ...cuts: number[]) => suggestedDigests(length, cuts.map(c => hit("A", c)), ["A"])[0].score;
+  assert.ok(score(2000, 1801) < DISTINCT_DIGEST, "199 of 2,000");
+  assert.ok(score(2000, 1800) >= DISTINCT_DIGEST, "200 of 2,000");
+  assert.ok(score(2000, 1799) >= DISTINCT_DIGEST, "201 of 2,000");
+  assert.ok(score(3000, 1100, 2100) < DISTINCT_DIGEST, "1,100, 1,000 and 900: the first a ninth bigger than the next");
+  assert.ok(score(3000, 1112, 2112) >= DISTINCT_DIGEST, "1,112, 1,000 and 888");
+  // And a single enzyme under the bar leaves the pairs to be tried; over it, they are not.
+  assert.equal(offered(2000, [hit("A", 1801), hit("B", 1000)], ["A", "B"]).includes("A + B"), true);
+  assert.equal(offered(2000, [hit("A", 1800), hit("B", 1000)], ["A", "B"]).includes("A + B"), false);
+});
+
 test("an enzyme that cuts on both sides of its site is never suggested, as only its cut after the site is found", () => {
   assert.equal(cutsBothSides("BcgI"), true);
   assert.equal(cutsBothSides("EcoRI"), false);

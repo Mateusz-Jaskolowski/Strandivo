@@ -412,13 +412,16 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
   let draft: ProgramDraft | null = null;
   let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
   let enzymeFilter: EnzymeFilter = ctx.options.enzymeFilter;
-  const overviewChoice: ProductViewChoice = { site: "", digest: "", flanks: false };
+  const overviewChoice: ProductViewChoice = { site: "", more: "", digest: "", flanks: false };
   let disposeViews: (() => void)[] = [];
+  /** Views that draw themselves from their own width, measured once the body is in place. */
+  let measureViews: (() => void)[] = [];
   const redraw = () => requestAnimationFrame(refresh);
   let counted = false;
   const render = () => {
     disposeViews.forEach(dispose => dispose());
     disposeViews = [];
+    measureViews = [];
     cancelProgramEdit = () => false;
     const d = ctx.store.data;
     const n = d.sequence.length;
@@ -537,6 +540,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       const filterSelect = h("select", { class: "sv-select-quiet", "aria-label": "Product cut-site filter", onchange: (e: Event) => { enzymeFilter = (e.target as HTMLSelectElement).value as EnzymeFilter; redraw(); } }, ENZYME_FILTERS.map(f => h("option", { value: f.id, selected: f.id === enzymeFilter }, f.label)));
       const overviewView = pcrOverviewView(product, overview, overviewChoice, sourceSelect, filterSelect);
       disposeViews.push(overviewView.dispose);
+      measureViews.push(overviewView.measure);
       const guidance = PCR_GUIDANCE[polymerase];
       const annealText = anneal ? `${Math.round(anneal.ta)} °C${useTwo ? `, then ${Math.round(taFull!)} °C` : ""}` : "";
       const annealRow: [string, Node][] = anneal ? [["Anneal at", h("span", null, annealText, h("span", { class: "sv-dim" }, ` · ${anneal.polymerase}: ${anneal.rule}`))]] : [];
@@ -628,6 +632,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     if (strip) rows.push(strip);
     rows.push(h("div", { class: "sv-pcr-result", "aria-live": "polite" }, ...result));
     dlg.body.replaceChildren(...rows);
+    measureViews.forEach(measure => measure());
     dlg.footer.replaceChildren(...(actions.length ? actions : [h("button", { type: "button", class: "sv-btn sv-foot-start", "data-focus": "close", onclick: () => dlg.close() }, "Close")]));
     if (focusAfter) {
       const key = CSS.escape(focusAfter);

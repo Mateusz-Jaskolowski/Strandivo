@@ -2227,8 +2227,13 @@
   font: 11px var(--mono);
   cursor: pointer;
 }
-.sv-pcr-cut-unique {
+.sv-pcr-cut-unique,
+.sv-pcr-more {
   color: var(--text-2);
+}
+.sv-pcr-leaders .sv-pcr-tick {
+  stroke: var(--cut);
+  stroke-width: 1;
 }
 .sv-pcr-cut:hover,
 .sv-pcr-cut[aria-pressed="true"] {

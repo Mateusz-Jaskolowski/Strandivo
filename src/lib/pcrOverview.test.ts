@@ -6,7 +6,20 @@ import { readFileSync } from "node:fs";
 import { COMMON_ENZYMES, findCutSites, scanSites, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
 import { digestSequence, fragmentSize } from "./gel.ts";
 import { pcrProduct } from "./pcr.ts";
-import { CHECK_FLANKS, digestName, HIGH_GC, pickDigest, pickSite, productAdvice, productDigestSizes, productLabels, productOverview, suggestedDigests, tailSiteFlanks } from "./pcrOverview.ts";
+import {
+  CHECK_FLANKS,
+  digestName,
+  HIGH_GC,
+  MAX_LABEL_LANES,
+  pickDigest,
+  pickSite,
+  productAdvice,
+  productDigestSizes,
+  productLabels,
+  productOverview,
+  suggestedDigests,
+  tailSiteFlanks
+} from "./pcrOverview.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
 import { reverseComplement, type SeqData } from "./seqdata.ts";
 const opts: EnzymeOptions = { enzymeSource: "common", enzymeFilter: "unique6", labEnzymes: [], personalEnzymes: [] };
@@ -135,10 +148,39 @@ test("the digest and site shown are kept while they are still offered", () => {
   assert.equal(pickSite([], "", null), null);
 });
 
+test("sites past the last lane are counted where they cut, one chip for each crowd", () => {
+  // Two multiple cloning sites, ten enzymes deep each, at opposite ends of a long product.
+  const seq = "GAATTC".repeat(10) + "T".repeat(500) + "GGATCC".repeat(10);
+  const sites = findCutSites(seq, false, { ...opts, enzymeFilter: "all" }).filter(s => s.enzyme === "EcoRI" || s.enzyme === "BamHI");
+  const { labels, crowds, lanes } = productLabels(
+    sites,
+    seq.length,
+    700,
+    sites.map(() => 60)
+  );
+  assert.equal(lanes, MAX_LABEL_LANES);
+  assert.equal(crowds.length, 2);
+  // Every site is either named or counted, once.
+  assert.deepEqual(
+    [...labels.map(p => p.site.id), ...crowds.flatMap(c => c.sites.map(m => m.site.id))].sort(),
+    sites.map(s => s.id).sort()
+  );
+  for (const crowd of crowds) {
+    const xs = crowd.sites.map(m => m.anchor);
+    assert.ok(crowd.anchor >= Math.min(...xs) && crowd.anchor <= Math.max(...xs));
+    assert.ok(crowd.sites.every(m => m.site.enzyme === crowd.sites[0].site.enzyme));
+  }
+  assert.ok(crowds[0].anchor < crowds[1].anchor);
+  // Few enough sites still get every name, with no chip.
+  const roomy = productLabels(sites.slice(0, 3), seq.length, 700, [60, 60, 60]);
+  assert.equal(roomy.crowds.length, 0);
+  assert.equal(roomy.labels.length, 3);
+});
+
 test("product label lanes stay inside their bounds without overlapping peers", () => {
   const sites = findCutSites("GAATTC".repeat(10), false, { ...opts, enzymeFilter: "all" }).filter(s => s.enzyme === "EcoRI");
   for (const width of [260, 700]) {
-    const placed = productLabels(
+    const { labels: placed } = productLabels(
       sites,
       60,
       width,

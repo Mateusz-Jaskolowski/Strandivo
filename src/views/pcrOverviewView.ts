@@ -4,13 +4,15 @@
 import { h } from "../ui/dom.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pickDigest, pickSite, productLabels, tailSiteFlanks, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pickDigest, pickSite, productLabels, tailSiteFlanks, type LabelCrowd, type productOverview } from "../lib/pcrOverview.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
 
 /** What the user chose here, kept while the dialog is open, as it is drawn anew on every change. */
 export interface ProductViewChoice {
   site: string;
+  /** A crowd of sites too many to name, picked instead of one site. */
+  more: string;
   digest: string;
   flanks: boolean;
 }
@@ -20,12 +22,19 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
   const detail = h("p", { class: "sv-small sv-dim sv-pcr-site-detail", "aria-live": "polite" });
   const map = h("div", { class: "sv-pcr-product-map", "aria-label": "Cut sites in the final linear product" });
   choice.site = pickSite(data.sites, choice.site, digest)?.id ?? "";
+  // Filled by each drawing, as which sites are too many to name depends on the width.
+  let crowds: LabelCrowd[] = [];
   const updateDetail = () => {
-    const site = data.sites.find(site => site.id === choice.site);
-    detail.textContent = site
-      ? `${site.enzyme} · cuts after base ${fmt(site.cut)} · ${site.cuts} ${site.cuts === 1 ? "site" : "sites"} in the product, ${data.templateCounts.get(site.enzyme) ?? 0} in the template`
-      : "No cut sites match this list and filter.";
-    map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.site === choice.site)));
+    const crowd = crowds.find(c => c.id === choice.more);
+    if (!crowd) choice.more = "";
+    const site = crowd ? null : data.sites.find(site => site.id === choice.site);
+    detail.textContent = crowd
+      ? `${crowd.sites.length} more ${crowd.sites.length === 1 ? "site" : "sites"} here: ${crowd.sites.map(m => m.site.enzyme).join(", ")}.`
+      : site
+        ? `${site.enzyme} · cuts after base ${fmt(site.cut)} · ${site.cuts} ${site.cuts === 1 ? "site" : "sites"} in the product, ${data.templateCounts.get(site.enzyme) ?? 0} in the template`
+        : "No cut sites match this list and filter.";
+    map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(!crowd && b.dataset.site === choice.site)));
+    map.querySelectorAll<HTMLElement>("button[data-more]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.more === choice.more)));
   };
   const digestSizes = h("span", { class: "sv-mono sv-small" });
   const digestNote = h("p", { class: "sv-small sv-dim" });
@@ -83,15 +92,18 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
       : null
   );
   const draw = () => {
-    const active = document.activeElement instanceof HTMLElement && map.contains(document.activeElement) ? document.activeElement.dataset.site : null;
+    const kept = document.activeElement instanceof HTMLElement && map.contains(document.activeElement) ? document.activeElement.dataset : null;
     const width = Math.max(260, map.clientWidth);
-    const labels = productLabels(
+    const mono = `11px ${fontStack("mono")}`;
+    const placed = productLabels(
       data.sites,
       product.length,
       width,
-      data.sites.map(site => textWidth(site.enzyme, `11px ${fontStack("mono")}`) + 10)
+      data.sites.map(site => textWidth(site.enzyme, mono) + 10)
     );
-    const count = Math.max(0, ...labels.map(p => p.row + 1));
+    const labels = placed.labels;
+    crowds = placed.crowds;
+    const count = placed.lanes + (crowds.length ? 1 : 0);
     const y = count * 24 + 15;
     const leaders = s("svg", { width, height: y + 8, "aria-hidden": "true", class: "sv-pcr-leaders" });
     const pct = (v: number) => `${(v / product.length) * 100}%`;
@@ -128,6 +140,7 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
             style: { left: `${p.left}px`, top: `${top}px`, width: `${p.width}px` },
             onclick: () => {
               choice.site = p.site.id;
+              choice.more = "";
               updateDetail();
             }
           },
@@ -135,19 +148,49 @@ export function pcrOverviewView(product: PcrProduct, data: ReturnType<typeof pro
         )
       );
     }
+    for (const crowd of crowds) {
+      const w = textWidth(`+${crowd.sites.length}`, mono) + 10;
+      const left = Math.max(0, Math.min(width - w, crowd.anchor - w / 2));
+      // Every site still shows where it cuts, so only its name is left out.
+      for (const m of crowd.sites) leaders.append(s("line", { class: "sv-pcr-tick", x1: m.anchor, y1: y - 6, x2: m.anchor, y2: y }));
+      leaders.append(s("polyline", { points: `${left + w / 2},20 ${left + w / 2},24 ${crowd.anchor},${y}`, fill: "none" }));
+      map.append(
+        h(
+          "button",
+          {
+            type: "button",
+            class: "sv-pcr-cut sv-pcr-more",
+            "data-more": crowd.id,
+            "data-focus": `product-more-${crowd.id}`,
+            "aria-label": `${crowd.sites.length} more ${crowd.sites.length === 1 ? "site" : "sites"} here`,
+            style: { left: `${left}px`, top: "0px", width: `${w}px` },
+            onclick: () => {
+              choice.more = crowd.id;
+              updateDetail();
+            }
+          },
+          `+${crowd.sites.length}`
+        )
+      );
+    }
     updateDetail();
-    if (active) map.querySelector<HTMLElement>(`[data-site="${CSS.escape(active)}"]`)?.focus();
+    const back = kept?.site ? `[data-site="${CSS.escape(kept.site)}"]` : kept?.more ? `[data-more="${CSS.escape(kept.more)}"]` : null;
+    if (back) map.querySelector<HTMLElement>(back)?.focus();
   };
   let lastWidth = 0;
-  const observer = new ResizeObserver(() => {
+  // Which sites there is room to name depends on the width, and so do their controls, so
+  // the dialog measures this as soon as it is in the page rather than a frame later, when
+  // focus has already gone looking for a control the first drawing didn't have.
+  const measure = () => {
     const width = Math.round(map.clientWidth);
     if (width > 0 && width !== lastWidth) {
       lastWidth = width;
       draw();
     }
-  });
+  };
+  const observer = new ResizeObserver(measure);
   observer.observe(map);
   draw();
   updateDigest();
-  return { el, dispose: () => observer.disconnect() };
+  return { el, measure, dispose: () => observer.disconnect() };
 }

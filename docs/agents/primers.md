@@ -78,7 +78,13 @@ and CI checks that they exist.
   where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
   bar). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
   complete on both strands or whose overhangs overlap another's makes no suggestion rather
-  than a band that wouldn't be there. It says what to expect on a gel, never that the
+  than a band that wouldn't be there. Names stack in `MAX_LABEL_LANES` lanes at most: a
+  multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
+  the product, its GC and the digest out of the dialog, so the sites past those lanes keep
+  their marks where they cut and a chip over each crowd counts them, naming them under the
+  strip when it is clicked. Which sites have a name of their own therefore depends on the
+  width, so the dialog measures the map as soon as its body is in the page rather than a
+  frame later, or focus would go looking for a control the first drawing didn't have. It says what to expect on a gel, never that the
   product is the right one or that two enzymes share a buffer. What is said about the
   polymerase comes from `src/lib/pcrGuidance.ts` alone (the ends it leaves, NEB's longest
   product, the GC enhancer): a polymerase whose row has not been read says nothing, and

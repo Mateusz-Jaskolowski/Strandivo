@@ -167,10 +167,37 @@ export function productAdvice(polymerase: string, template: TemplateKind, length
   return out;
 }
 
+/**
+ * How many lanes of names are drawn. A multiple cloning site holds a dozen enzymes within a
+ * few bases, and a lane each would push the product line, its GC and the digest out of the
+ * dialog, so the sites past these lanes are counted where they cut instead of named.
+ */
+export const MAX_LABEL_LANES = 5;
+
+/** How far apart, in pixels, counted sites are taken to be separate crowds. */
+const CROWD_APART = 40;
+
+export interface ProductLabel {
+  site: CutSite;
+  row: number;
+  left: number;
+  width: number;
+  anchor: number;
+}
+
+/** Sites with no lane left, kept together where they cut so one chip can count them. */
+export interface LabelCrowd {
+  id: string;
+  anchor: number;
+  sites: { site: CutSite; anchor: number }[];
+}
+
 /** Dotted leaders and labels in non-overlapping lanes; widths come from the actual font. */
-export function productLabels(sites: CutSite[], length: number, width: number, widths: number[]) {
+export function productLabels(sites: CutSite[], length: number, width: number, widths: number[]): { labels: ProductLabel[]; crowds: LabelCrowd[]; lanes: number } {
   const lanes: { left: number; right: number }[][] = [];
-  return sites.map((site, i) => {
+  const labels: ProductLabel[] = [];
+  const over: { site: CutSite; anchor: number }[] = [];
+  sites.forEach((site, i) => {
     const w = Math.min(width, widths[i]);
     const anchor = Math.max(0, Math.min(width, (site.cut / length) * width));
     const left = Math.max(0, Math.min(width - w, anchor - w / 2));
@@ -178,9 +205,23 @@ export function productLabels(sites: CutSite[], length: number, width: number, w
     let row = lanes.findIndex(lane => lane.every(p => right + 7 < p.left || left > p.right + 7));
     if (row < 0) {
       row = lanes.length;
+      if (row >= MAX_LABEL_LANES) {
+        over.push({ site, anchor });
+        return;
+      }
       lanes.push([]);
     }
     lanes[row].push({ left, right });
-    return { site, row, left, width: w, anchor };
+    labels.push({ site, row, left, width: w, anchor });
   });
+  const crowds: LabelCrowd[] = [];
+  let last = -Infinity;
+  for (const mark of [...over].sort((a, b) => a.anchor - b.anchor)) {
+    if (mark.anchor - last > CROWD_APART) crowds.push({ id: mark.site.id, anchor: mark.anchor, sites: [] });
+    crowds.at(-1)!.sites.push(mark);
+    last = mark.anchor;
+  }
+  // The chip sits over the crowd it counts, not over its first site.
+  for (const crowd of crowds) crowd.anchor = crowd.sites.reduce((sum, m) => sum + m.anchor, 0) / crowd.sites.length;
+  return { labels, crowds, lanes: lanes.length };
 }

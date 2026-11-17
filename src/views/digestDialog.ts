@@ -8,7 +8,6 @@
 import { h } from "../ui/dom.ts";
 import { s } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import { enzymeSourceSelect } from "./enzymeControls.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -54,7 +53,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
   let picked: number | null = null;
   let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
   let offOptions = () => {};
-  const dlg = openDialog({ onClose: () => offOptions(), title: "Digest", note: "Choose enzymes to see the fragments and how they would run on a gel.", width: 920 });
+  const dlg = ctx.openDialog({ onClose: () => offOptions(), title: "Digest", note: "Choose enzymes to see the fragments and how they would run on a gel.", width: 920 });
   const update = () => rerender(dlg, render);
   offOptions = ctx.onOptions(update);
   const results = new Map<Lane, { key: string; result: DigestResult }>();

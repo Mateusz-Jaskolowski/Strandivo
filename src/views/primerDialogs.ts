@@ -8,7 +8,7 @@
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
-import { openDialog, type Dialog } from "../ui/modal.ts";
+import type { Dialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
 import { primerLibrary } from "../primerLibrary.ts";
@@ -62,7 +62,7 @@ export function rerender(d: Dialog, render: () => void) {
 export function openLibraryPicker(ctx: DocContext) {
   const d0 = ctx.store.data;
   let off = () => {};
-  const dlg = openDialog({ title: "Add from library", note: `Primers from your lab's library that bind ${d0.name || "this sequence"}.`, width: 640, onClose: () => off() });
+  const dlg = ctx.openDialog({ title: "Add from library", note: `Primers from your lab's library that bind ${d0.name || "this sequence"}.`, width: 640, onClose: () => off() });
   const search = h("input", { class: "sv-input sv-input-filter", type: "search", placeholder: "Search the library", "aria-label": "Search the library" }) as HTMLInputElement;
   const list = h("div", { class: "sv-pick-list" });
   const chosen = new Set<string>();
@@ -181,7 +181,7 @@ export function openOrderDialog(ctx: DocContext, ordered?: SeqPrimer[]) {
     toast("There are no primers to copy.", "info");
     return;
   }
-  const dlg = openDialog({ title: "Copy for ordering", note: "Copy primer names and sequences to paste into a vendor order form or spreadsheet.", width: 600 });
+  const dlg = ctx.openDialog({ title: "Copy for ordering", note: "Copy primer names and sequences to paste into a vendor order form or spreadsheet.", width: 600 });
   const chosen = new Set(primers.map(p => p.id));
   const format = h(
     "select",
@@ -271,7 +271,7 @@ export async function exportPrimerList(ctx: DocContext, rows: ExportRow[]) {
 // ---------- add by sequence ----------
 
 export function openAddBySequence(ctx: DocContext) {
-  const dlg = openDialog({ title: "Add a primer by its sequence", note: "Finds where the primer binds on either strand, allowing 5′ tails and mismatches.", width: 560 });
+  const dlg = ctx.openDialog({ title: "Add a primer by its sequence", note: "Finds where the primer binds on either strand, allowing 5′ tails and mismatches.", width: 560 });
   const name = h("input", { class: "sv-input", placeholder: "e.g. pET-seq-F", "aria-label": "Primer name" }) as HTMLInputElement;
   const seq = h("textarea", { class: "sv-input sv-mono sv-dlg-seq", rows: "2", placeholder: "Sequence 5′→3′", "aria-label": "Primer sequence", spellcheck: "false" }) as HTMLTextAreaElement;
   const save = h("input", { type: "checkbox" }) as HTMLInputElement;
@@ -372,7 +372,7 @@ async function saveProduct(d: SeqData, product: PcrProduct) {
 export function openPcrDialog(ctx: DocContext, preset: { forward?: string; reverse?: string } = {}) {
   const d0 = ctx.store.data;
   let off = () => {};
-  const dlg = openDialog({ title: "PCR product", note: `Check the product amplified from ${d0.name || "this sequence"} by two primers.`, width: 680, onClose: () => off() });
+  const dlg = ctx.openDialog({ title: "PCR product", note: `Check the product amplified from ${d0.name || "this sequence"} by two primers.`, width: 680, onClose: () => off() });
   const pick = { forward: preset.forward ?? "", reverse: preset.reverse ?? "" };
   // With a primer selected, start from it.
   const focus = ctx.store.selection.focus;
@@ -519,7 +519,7 @@ export function selectionTarget(ctx: DocContext): DesignTarget | null {
 const positionLabel = (r: Range) => `${r.start + 1}-${r.end + 1}`;
 
 export function openDesignDialog(ctx: DocContext, initial: DesignTarget | null = selectionTarget(ctx)) {
-  const dlg = openDialog({ title: "Design primers", note: "Design a primer pair with matched Tms and optional 5′ restriction sites.", width: 760 });
+  const dlg = ctx.openDialog({ title: "Design primers", note: "Design a primer pair with matched Tms and optional 5′ restriction sites.", width: 760 });
   const d0 = ctx.store.data;
   const n0 = d0.sequence.length;
   // Regions to choose from: the selection (if any) and every feature.

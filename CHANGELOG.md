@@ -57,6 +57,11 @@ with Unreleased's notes and leaves them where they are.
   without moving it, so it can be pulled back from that region's end.
 - **Arrow keys on a primer's ends**: click an end of a primer in the Primers tab, and the
   arrow keys now extend or trim it, as the hint there says.
+- **Dialogs stay with their file**: a dialog opened for a file, such as Digest, PCR
+  product or Design primers, now closes when you switch to another tab or Home, open a
+  file or close that file's tab, instead of staying over the next file and acting on the
+  first. Two dialogs open at once now close one at a time, the top one first, when you
+  press Esc.
 
 ## 0.5.0
 

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { h, toast } from "../ui/dom.ts";
-import { openDialog } from "../ui/modal.ts";
 import type { DocContext } from "../doc/context.ts";
 import { featureStyles, protein } from "../doc/analysis.ts";
 import { newId, type Range, type SeqFeature } from "../lib/seqdata.ts";
@@ -26,7 +25,7 @@ export function openProteinRegionDialog(ctx: DocContext, f: SeqFeature, index?: 
   const residues = selection ? selectedProteinResidues(f, selection, d.sequence) : null;
   const start = old?.start ?? residues?.start ?? 1;
   const end = old?.end ?? residues?.end ?? length;
-  const dlg = openDialog({ title: old ? "Edit protein region" : "Add protein region", note: `Amino-acid positions in ${f.name} (1–${length.toLocaleString()}), counted from the start of its CDS.`, width: 520, onClose });
+  const dlg = ctx.openDialog({ title: old ? "Edit protein region" : "Add protein region", note: `Amino-acid positions in ${f.name} (1–${length.toLocaleString()}), counted from the start of its CDS.`, width: 520, onClose });
   const input = (label: string, value: string, type = "text") => h("input", { class: "sv-input", type, value, "aria-label": label, ...(type === "text" ? { autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } : {}), ...(type === "number" ? { min: "1", max: String(length), step: "1" } : {}) }) as HTMLInputElement;
   const name = input("Region name", old?.name ?? "");
   name.placeholder = "Domain, linker, CDR1…";
@@ -161,7 +160,7 @@ export function openProteinRegionFromSelection(ctx: DocContext, range: Range | n
   const targets = proteinRegionTargets(ctx.store.data, range);
   if (!targets.length) { toast("Select bases within a CDS to add a protein region.", "info"); return; }
   if (targets.length === 1) { openProteinRegionDialog(ctx, targets[0].feature, undefined, range); return; }
-  const dlg = openDialog({ title: "Add as region", note: "Choose which coding sequence this region belongs to.", width: 520 });
+  const dlg = ctx.openDialog({ title: "Add as region", note: "Choose which coding sequence this region belongs to.", width: 520 });
   dlg.body.append(h("div", { class: "sv-list" }, targets.map(({ feature, start, end }) => h("button", {
     type: "button", class: "sv-list-row", onclick: () => { dlg.close(); openProteinRegionDialog(ctx, feature, undefined, range); }
   }, h("span", { class: "sv-list-name" }, feature.name), h("span", { class: "sv-list-meta sv-mono" }, `${start}–${end} aa`)))));

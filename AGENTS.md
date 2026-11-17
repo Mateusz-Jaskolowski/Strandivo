@@ -500,7 +500,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Only the current tab is in the page**: other files' views are taken out (`setActive`),
   so `document.querySelector` in tests finds the current file's elements. A document must
   not measure or draw while inactive, and anything it subscribes to outside itself
-  (settings, the primer library) must be undone in `dispose`, or closed tabs leak.
+  (settings, the primer library) must be undone in `dispose`, or closed tabs leak. A
+  dialog for a file belongs to its tab: open it with `ctx.openDialog` (`DocContext`), which
+  closes it, as Cancel does, when the tab closes or another becomes current; the plain
+  `openDialog` is for what no file owns (welcome, updates, feedback).
 - **The inspector rebuilds on every change**, so a field edited live (a primer's sequence)
   would lose focus to its own edit: mark it `data-keep` and `render()` in
   `src/views/inspector.ts` moves focus, caret and unapplied keystrokes to the new one.

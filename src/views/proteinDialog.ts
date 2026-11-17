@@ -15,7 +15,6 @@ import { absorbance, extinctionNote, kilodaltons, proteinProperties, residueLine
 import { figureSvg, proteinFigure } from "../lib/proteinFigure.ts";
 import { chooseSavePath, copyImage, saveBytes, saveText } from "../platform.ts";
 import { basename } from "../lib/files.ts";
-import { openDialog } from "../ui/modal.ts";
 import { figureElement, figureFont, figureMeasure, figurePng } from "./proteinFigure.ts";
 import type { DocContext } from "../doc/context.ts";
 import type { SeqFeature } from "../lib/seqdata.ts";
@@ -58,7 +57,7 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
   const font = figureFont();
   const measure = figureMeasure(font);
   const figure = () => proteinFigure(regions, { length, detail: nested ? figureChoice.detail : "all", scale: figureChoice.scale, measure });
-  const dlg = openDialog({ title: f.name || "Protein", note: `Numbered in amino acids from the start of this ${of}.`, width: regions.length ? 980 : 760 });
+  const dlg = ctx.openDialog({ title: f.name || "Protein", note: `Numbered in amino acids from the start of this ${of}.`, width: regions.length ? 980 : 760 });
   const fileName = `${f.name.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Protein"} regions`;
   const save = async (kind: "png" | "svg") => {
     const path = await chooseSavePath(`${fileName}.${kind}`, [kind === "png" ? { name: "PNG image", extensions: ["png"] } : { name: "SVG image", extensions: ["svg"] }]);

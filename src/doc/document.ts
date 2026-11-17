@@ -10,7 +10,7 @@ import "./document.css";
 
 import { h, icon, toast, type ToastHandle } from "../ui/dom.ts";
 import { iconSvg, type IconName } from "../ui/icons.ts";
-import { choose } from "../ui/modal.ts";
+import { choose, dialogGroup } from "../ui/modal.ts";
 import {
   alertDialog,
   canDetectFeatures,
@@ -276,6 +276,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const d = store.data;
     return { name: d.name, sequence: d.sequence, circular: d.circular, features: legacyFeatures(d), version: String(dataVersion) };
   });
+  // The dialogs opened for this file go with its tab (`setActive`, `dispose`).
+  const dialogs = dialogGroup();
   const ctx: DocContext = {
     store,
     get options() {
@@ -322,6 +324,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         at,
         onMap
       ),
+    openDialog: o => dialogs.open(o),
     openNew: data => host.openNew(data),
     otherSequences: () => host.sequences(),
     noteEdit,
@@ -1170,8 +1173,9 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       }
       scrolls = [];
     } else {
-      // Its Undo would act on a file that isn't showing.
+      // Its Undo would act on a file that isn't showing, and so would a dialog's buttons.
       closeEditNote();
+      dialogs.closeAll();
       scrolls = Array.from(app.querySelectorAll("*"))
         .filter(el => el.scrollTop || el.scrollLeft)
         .map(el => [el, el.scrollTop, el.scrollLeft]);
@@ -1217,6 +1221,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     },
     dispose: () => {
       closeEditNote();
+      dialogs.closeAll();
       offSettings();
       offEnzymeLibrary();
       offPersonalEnzymes();

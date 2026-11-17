@@ -8,7 +8,6 @@
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { fmt } from "../ui/format.ts";
-import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import type { DocContext } from "../doc/context.ts";
 import { featureLength, isCoding, threeLetter } from "../lib/genetics.ts";
@@ -54,7 +53,7 @@ export function mutagenesisTarget(ctx: DocContext): MutagenesisTarget {
 }
 
 export function openMutagenesisDialog(ctx: DocContext, initial: MutagenesisTarget = mutagenesisTarget(ctx)) {
-  const dlg = openDialog({ title: "Mutagenesis primers", note: "Design whole-plasmid site-directed mutagenesis primers.", width: 760 });
+  const dlg = ctx.openDialog({ title: "Mutagenesis primers", note: "Design whole-plasmid site-directed mutagenesis primers.", width: 760 });
   const d0 = ctx.store.data;
   const n = d0.sequence.length;
   const coding = d0.features.filter(isCoding);

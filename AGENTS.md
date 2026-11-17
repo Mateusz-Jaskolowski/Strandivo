@@ -105,6 +105,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   edge of it keeps only its part outside, as which side new bases belong to can't be
   known; one inside a larger selection goes; the rest move with their bases. Inserting at
   a caret on an annotation's edge still leaves the new bases outside it.
+- **Typing over a selection** opens a card above it (`src/views/replaceCard.ts`) instead
+  of replacing at once, so a region never takes or loses bases unseen: typed and pasted
+  bases collect there, Enter replaces them as one step and Esc keeps the selected ones. It
+  shows how many for how many (green when they match), each CDS's protein change and, for
+  another length, what holds the new bases, what they fall outside and what goes
+  (`describeReplacement` in `src/lib/replacement.ts`). Anything else done meanwhile (a
+  click elsewhere, a key that moves the selection, another edit) closes it and says so,
+  offering Replace while the sequence is unchanged. It is not a dialog: it belongs to the
+  selection and must leave the keyboard with the sequence, which sends it keys. With only
+  a caret, typing inserts at once.
 - **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
   `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
   `SeqData.sources`: never shown, but edited along with the sequence and saved.

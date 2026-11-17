@@ -122,7 +122,7 @@ function uncoveredRanges(clone: CloneResult, n: number, circular: boolean): Rang
  * pure insertion is "L7_L8insYLGDTIEYSS" and a pure deletion "S9del"; anything else is
  * "…delins…". `aa(c)` is the reference amino acid of codon index c, null outside the CDS.
  */
-function indelName(R: string, M: string, k: number, aa: (c: number) => string | null): string {
+export function indelName(R: string, M: string, k: number, aa: (c: number) => string | null): string {
   let p = 0;
   while (p < R.length && p < M.length && R[p] === M[p]) p++;
   let s = 0;

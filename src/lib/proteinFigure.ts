@@ -416,8 +416,8 @@ function fitted(shapes: FigureShape[], measure: FigureOptions["measure"]): Prote
 const escape = (s: string) => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const n = (v: number) => String(Math.round(v * 100) / 100);
 
-/** A standalone SVG file of the figure, on white. */
-export function figureSvg(fig: ProteinFigure, fontFamily: string): string {
+/** A standalone SVG file of the figure. */
+export function figureSvg(fig: ProteinFigure, fontFamily: string, transparent = false): string {
   const body = fig.shapes.map(s => {
     if (s.kind === "line") return `<polyline points="${s.points.map(([x, y]) => `${n(x)},${n(y)}`).join(" ")}" fill="none" stroke="${s.stroke}" stroke-width="${n(s.width)}" stroke-linecap="round" stroke-linejoin="round"/>`;
     if (s.kind === "rect") return `<rect x="${n(s.x)}" y="${n(s.y)}" width="${n(s.w)}" height="${n(s.h)}" rx="${n(s.r)}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${n(s.strokeWidth)}"/>`;
@@ -425,7 +425,7 @@ export function figureSvg(fig: ProteinFigure, fontFamily: string): string {
   });
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${fig.width}" height="${fig.height}" viewBox="0 0 ${fig.width} ${fig.height}">`,
-    `<rect width="100%" height="100%" fill="${FIGURE_COLORS.background}"/>`,
+    ...(transparent ? [] : [`<rect width="100%" height="100%" fill="${FIGURE_COLORS.background}"/>`]),
     `<g font-family="${escape(fontFamily)}">`,
     ...body,
     "</g>",

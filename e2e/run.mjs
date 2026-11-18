@@ -1694,7 +1694,7 @@ async function main() {
     await s.shot("11-protein-regions");
 
     // Protein details draw the protein as a figure: a nested region is a bracket under its parts.
-    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Protein details…']", "xpath");
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Details & schematic…']", "xpath");
     const figureNames = `
       const names = Array.from(document.querySelectorAll('.sv-figure text[data-region]')).map(t => t.getBoundingClientRect());
       const apart = names.every((a, i) => names.every((b, j) => i <= j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));`;
@@ -1704,8 +1704,13 @@ async function main() {
     await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     check("At top level the figure draws the domain as a block", await s.waitFor("document.querySelectorAll('.sv-figure rect[data-region]').length === 1 && document.querySelectorAll('.sv-figure text[data-region]').length === 1 && document.querySelector('.sv-figure rect[data-region]').dataset.region === '0'", 5000));
     await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true }));");
-    await s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    await s.exec("document.querySelector('.sv-figure text[data-region=\"0\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    const clickCdr = () => s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    await clickCdr();
     check("Clicking a block in the figure selects its region", await s.waitFor("window.__strandivo.store.selection.focus?.region === 1 && document.querySelector('.sv-figure rect[data-region=\"1\"]').classList.contains('sv-selected')", 5000));
+    await clickCdr();
+    check("Clicking the selected block again returns to its CDS", await s.waitFor("window.__strandivo.store.selection.focus?.id === window.__strandivoCds && window.__strandivo.store.selection.focus.region === undefined && !document.querySelector('.sv-figure .sv-selected')", 5000));
+    await clickCdr();
     check("The figure can be copied or saved as PNG or SVG", await s.exec("const labels = Array.from(document.querySelectorAll('.sv-dialog-foot button')).map(b => b.textContent.trim()); return ['Copy image', 'Save as PNG…', 'Save as SVG…'].every(l => labels.includes(l));"));
     check("Protein details give both coefficients for a protein with a pair of Cys", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-protein-facts dt')).map(d => d.textContent).join() === 'Length,Mass,ε280, Cys reduced,ε280, disulfides,Counted';"));
     check("Protein details fold the list of regions under the figure", await s.exec("return document.querySelector('.sv-dialog .sv-fold-link')?.getAttribute('aria-expanded') === 'false' && !document.querySelector('.sv-dialog .sv-list-row');"));

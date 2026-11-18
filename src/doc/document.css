@@ -4881,7 +4881,7 @@ main.sv-enzyme-section-body {
   top: 3px;
 }
 .sv-region-group-toggle[aria-expanded="false"] > .sv-icon { transform: rotate(-90deg); }
-/* Expand…: the protein as a figure (src/lib/proteinFigure.ts), on white as it is saved. */
+/* The protein schematic (src/lib/proteinFigure.ts) in Protein details. */
 .sv-figure-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 12.5px; color: var(--text-2); }
 .sv-figure-control { display: inline-flex; align-items: center; gap: 7px; }
 .sv-figure-paper {

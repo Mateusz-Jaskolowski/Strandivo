@@ -85,14 +85,15 @@ and CI checks that they exist.
   translation is shown. They use `src/views/regionTracks.ts` to pack and draw both the
   bars and captions, so names do not collide or widen the scroller. The primer's panel
   shows all regions in its visible template window, including neighbouring boundaries.
-- **The protein figure** (in Protein details, `src/views/proteinDialog.ts`, opened by
-  Details… in the inspector's Protein section) is laid out once, as shapes with
-  concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
+- **The protein figure** (in Protein details, `src/views/proteinDialog.ts`) opens from
+  Details & schematic… in the inspector for a CDS or one of its regions. It is laid out
+  once as shapes with concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
   as SVG in the dialog, paints on a canvas for the PNG and writes as the SVG file, so all
   three match. Painting from the shapes, not loading the SVG as an image, keeps `data:`
   and `blob:` images out of the Content Security Policy, and lets Copy image make the PNG
-  within the click, which Safari's clipboard requires. Regions with drawn parts are
-  brackets under them; the rest are blocks, the longest on the protein's line and one
+  within the click, which Safari's clipboard requires. The Transparent background checkbox
+  applies to both formats and Copy image, with white as the default. Regions with drawn
+  parts are brackets under them; the rest are blocks, the longest on the protein's line and one
   inside another in a lane under it. A name goes straight over its block where it can
   without hiding a neighbour's leader, else on an elbow leader, a crowd of them rising to
   a peak (left half pointing left) so no leader crosses a name; a randomised test holds
@@ -101,8 +102,9 @@ and CI checks that they exist.
   shell writes its bytes with `write_bytes`, which takes them as the request's body
   rather than JSON, with the path in a header.
 - **Protein details** keeps the sequence in sight: the list of regions under the figure
-  starts folded (the figure shows and picks them all). Edit region… there gives the
-  dialog's place to the region editor, which brings Protein details back when it closes,
+  starts folded (the figure shows and picks them all). Picking the selected region again
+  selects its whole CDS. Edit region… there gives the dialog's place to the region editor,
+  which brings Protein details back when it closes,
   saved or not (`onClose` of `openProteinRegionDialog`); opened from the inspector, the
   editor closes to the window. Stacking the editor over it was the alternative, but it
   would darken the window twice and leave numbers from before the edit showing beneath.

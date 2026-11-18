@@ -33,16 +33,18 @@ export function figureElement(fig: ProteinFigure, font: string, o: { label: stri
   return svg;
 }
 
-/** The figure as a PNG on white, marked with its resolution. */
-export function figurePng(fig: ProteinFigure, font: string): Uint8Array {
+/** The figure as a PNG, marked with its resolution. */
+export function figurePng(fig: ProteinFigure, font: string, transparent = false): Uint8Array {
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(fig.width * PNG_SCALE);
   canvas.height = Math.ceil(fig.height * PNG_SCALE);
   const g = canvas.getContext("2d");
   if (!g) throw new Error("This window can't draw images.");
   g.scale(PNG_SCALE, PNG_SCALE);
-  g.fillStyle = FIGURE_COLORS.background;
-  g.fillRect(0, 0, fig.width, fig.height);
+  if (!transparent) {
+    g.fillStyle = FIGURE_COLORS.background;
+    g.fillRect(0, 0, fig.width, fig.height);
+  }
   g.lineCap = "round";
   g.lineJoin = "round";
   for (const sh of fig.shapes) {

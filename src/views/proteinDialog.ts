@@ -24,11 +24,13 @@ import { openProteinRegionDialog } from "./proteinRegionDialog.ts";
 import { copyText } from "./inspector.ts";
 
 /**
- * Kept for the visit, so the next figure is drawn the same way. The list of regions under
- * it starts folded, as the figure shows and picks them all and a long list would push the
- * sequence out of sight.
+ * Kept for the visit, so the next figure is drawn and exported the same way. The list
+ * under the figure starts folded, as the figure shows and picks every region and a long
+ * list would push the sequence out of sight.
  */
-const figureChoice: { detail: "domains" | "all"; scale: boolean; list: boolean } = { detail: "all", scale: true, list: false };
+const figureChoice: { detail: "domains" | "all"; scale: boolean; list: boolean; transparent: boolean } = {
+  detail: "all", scale: true, list: false, transparent: false
+};
 
 /**
  * The protein a double-click on the map or in the sequence opens: that of a CDS, of one of
@@ -60,12 +62,13 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
   const dlg = ctx.openDialog({ title: f.name || "Protein", note: `Numbered in amino acids from the start of this ${of}.`, width: regions.length ? 980 : 760 });
   const fileName = `${f.name.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Protein"} regions`;
   const save = async (kind: "png" | "svg") => {
-    const path = await chooseSavePath(`${fileName}.${kind}`, [kind === "png" ? { name: "PNG image", extensions: ["png"] } : { name: "SVG image", extensions: ["svg"] }]);
-    if (!path) return;
     try {
       const fig = figure();
-      if (kind === "png") await saveBytes(path, figurePng(fig, font));
-      else await saveText(path, figureSvg(fig, font));
+      const { transparent } = figureChoice;
+      const path = await chooseSavePath(`${fileName}.${kind}`, [kind === "png" ? { name: "PNG image", extensions: ["png"] } : { name: "SVG image", extensions: ["svg"] }]);
+      if (!path) return;
+      if (kind === "png") await saveBytes(path, figurePng(fig, font, transparent));
+      else await saveText(path, figureSvg(fig, font, transparent));
       toast(`Saved ${basename(path)}`, "success", 3000);
     } catch (e) {
       toast(`Couldn't save the figure: ${e instanceof Error ? e.message : e}`, "error", 6000);
@@ -73,16 +76,16 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
   };
   const copy = async () => {
     try {
-      await copyImage(figurePng(figure(), font));
+      await copyImage(figurePng(figure(), font, figureChoice.transparent));
       toast("Copied the figure", "success", 1800);
     } catch {
       toast("Couldn't copy the figure. Save it as a PNG instead.", "error", 5000);
     }
   };
   const pick = (index: number) => {
-    selected = index;
-    const range = regionRange(f, regions[index], ctx.store.length);
-    if (range) ctx.store.selectRange(range, { kind: "feature", id: f.id, region: index }, "inspector");
+    selected = selected === index ? undefined : index;
+    const range = selected === undefined ? { start: f.start, end: f.end } : regionRange(f, regions[selected], ctx.store.length);
+    if (range) ctx.store.selectRange(range, { kind: "feature", id: f.id, region: selected }, "inspector");
     render();
   };
   // The editor takes this dialog's place, and this comes back when it closes, saved or
@@ -124,8 +127,8 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
     const scale = h("input", { type: "checkbox", checked: figureChoice.scale, onchange: (e: Event) => { figureChoice.scale = (e.target as HTMLInputElement).checked; render(); } });
     return h(
       "section",
-      { class: "sv-protein-section", "aria-label": "Regions" },
-      sectionHead("Regions", h("div", { class: "sv-figure-controls" }, nested ? h("label", { class: "sv-figure-control" }, "Show", detail) : null, h("label", { class: "sv-figure-control" }, scale, "Residue scale"))),
+      { class: "sv-protein-section", "aria-label": "Protein schematic" },
+      sectionHead("Protein schematic", h("div", { class: "sv-figure-controls" }, nested ? h("label", { class: "sv-figure-control" }, "Show", detail) : null, h("label", { class: "sv-figure-control" }, scale, "Residue scale"))),
       h("div", { class: "sv-figure-paper" }, figureElement(figure(), font, { label: `Protein regions of ${f.name}`, selected, title: index => regionTitle(regions[index]), pick })),
       h("button", { type: "button", class: "sv-fold-link", "aria-expanded": String(figureChoice.list), onclick: () => { figureChoice.list = !figureChoice.list; render(); dlg.body.querySelector<HTMLElement>(".sv-fold-link")?.focus(); } }, iconSvg("chevronDown", 12), figureChoice.list ? "Hide list" : "Show list"),
       !figureChoice.list ? null : h("div", { class: "sv-list" }, regionTree(regions).flatMap(({ region: r, index, depth }) => [
@@ -152,8 +155,11 @@ export function openProteinDialog(ctx: DocContext, f: SeqFeature, of: "CDS" | "O
     dlg.body.replaceChildren(properties(), ...(regions.length ? [regionsPart()] : []), sequence());
     const close = h("button", { type: "button", class: regions.length ? "sv-btn" : "sv-btn sv-btn-primary", onclick: () => dlg.close() }, "Close");
     if (!regions.length) return dlg.footer.replaceChildren(close);
+    const transparent = h("input", { type: "checkbox", checked: figureChoice.transparent });
+    transparent.addEventListener("change", () => { figureChoice.transparent = transparent.checked; });
     dlg.footer.replaceChildren(
-      h("div", { class: "sv-foot-start sv-foot-group" },
+      h("div", { class: "sv-foot-start sv-foot-group", role: "group", "aria-label": "Export schematic" },
+        h("label", { class: "sv-check-row" }, transparent, "Transparent background"),
         h("button", { type: "button", class: "sv-btn", onclick: copy }, iconSvg("copy", 14), "Copy image"),
         h("button", { type: "button", class: "sv-btn", onclick: () => save("png") }, iconSvg("download", 14), "Save as PNG…"),
         h("button", { type: "button", class: "sv-btn", onclick: () => save("svg") }, "Save as SVG…")),

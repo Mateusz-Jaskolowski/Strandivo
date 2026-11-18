@@ -419,7 +419,7 @@ export class Inspector {
         this.viewOther({ start: f.start, end: f.end })
       )
     );
-    if (properties) out.push(this.regionsSection(f, prot), this.proteinSection(properties, () => openProteinDialog(this.ctx, f), true));
+    if (properties) out.push(this.regionsSection(f, prot), this.proteinSection(properties, this.proteinDetails(f), true));
     out.push(...this.noteSections(f), this.featureFields(f, n));
     if (cds) {
       out.push(
@@ -490,13 +490,18 @@ export class Inspector {
     return out;
   }
 
+  private proteinDetails(f: SeqFeature, of: "CDS" | "ORF" = "CDS") {
+    return h("button", { type: "button", class: "sv-link", onclick: () => openProteinDialog(this.ctx, f, of) },
+      regionsOf(f).length ? "Details & schematic…" : "Details…");
+  }
+
   /**
    * A protein's mass and extinction coefficient (`src/lib/proteinProperties.ts`), and the
    * way to its dialog, which has the rest. Both coefficients show once it has a pair of
    * Cys, as which applies depends on where the protein folds. A note about the numbers
    * stays while the section is folded.
    */
-  private proteinSection(p: ProteinProperties, details: () => void, compact = false): Node {
+  private proteinSection(p: ProteinProperties, details: HTMLButtonElement, compact = false): Node {
     const rows: [string, Node | string][] = [];
     if (p.mass !== null) rows.push(["Mass", kilodaltons(p.mass)]);
     if (p.reduced !== null && p.mass !== null && (p.trp || p.tyr || p.cys)) {
@@ -519,7 +524,7 @@ export class Inspector {
       "protein",
       "Protein",
       {
-        actions: [h("button", { type: "button", class: "sv-link", onclick: details }, "Details…")],
+        actions: [details],
         defaultFolded: compact,
         summary: compact && p.mass !== null ? kilodaltons(p.mass) : undefined,
         keep: compact ? [] : notes
@@ -612,7 +617,7 @@ export class Inspector {
       );
       this.updateRegionList = browser.updateList;
     }
-    const details = picked === undefined ? null : h("button", { type: "button", class: "sv-link", onclick: () => openProteinDialog(this.ctx, f) }, "Protein details…");
+    const details = picked === undefined ? null : this.proteinDetails(f);
     return this.foldSection(
       "regions",
       "Protein regions",
@@ -1036,7 +1041,7 @@ export class Inspector {
         ]),
         this.viewOther(o)
       ),
-      this.proteinSection(proteinProperties(prot), () => openProteinDialog(this.ctx, orfFeature(o), "ORF")),
+      this.proteinSection(proteinProperties(prot), this.proteinDetails(orfFeature(o), "ORF")),
       this.foldSection(
         "translation",
         "Translation",

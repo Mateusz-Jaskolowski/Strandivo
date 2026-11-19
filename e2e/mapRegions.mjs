@@ -3,6 +3,8 @@
 
 // Shared map checks: real pointers in both WebKitGTK (desktop) and Chrome (web).
 
+import { readFileSync } from "node:fs";
+
 /** Overlapping proteins, a reverse CDS across the origin, an intron and nested regions. */
 export function mapRegionFixture(n) {
   const region = (name, kind, start, end, extra) =>
@@ -148,7 +150,7 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
         return focus?.id === 'map-region-a' && focus.region === 0 && el.classList.contains('sv-focused') &&
           getComputedStyle(el).fontWeight === '400' && el.getBoundingClientRect().width === window.__mapRegionTest.width;
       `, label()));
-      if (!linear) check("Selected region leaders keep their stronger accent stroke", await s.exec(`
+      check(`${name} selected region leaders keep their stronger accent stroke`, await s.exec(`
         const leader = document.querySelector('.sv-map-leader-region.sv-focused');
         return leader && getComputedStyle(leader).strokeWidth === '1.25px';
       `));
@@ -233,6 +235,7 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
       await s.pointer([pointerTo([5, 5])]);
       check(`${name} leaving the map clears hover`, hoveredBeforeLeave && await s.exec(`return ${noHover};`));
     }
+    await checkCrowdedLinearMap(s, check, control, move);
   } finally {
     await s.exec("window.__mapRegionTest.off?.(); if ('menu' in window.__mapRegionTest) window.__strandivoMenu = window.__mapRegionTest.menu; window.__strandivo.store.undo();");
     const saved = await s.exec("const t = window.__mapRegionTest; return { regions: t.regions, detail: t.detail, linear: t.linear, labelSize: t.labelSize, rotation: t.rotation };");
@@ -242,5 +245,166 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
     await mode(saved.linear);
     if (!saved.regions) await s.exec("Array.from(document.querySelectorAll('.sv-map .sv-chip')).find(b => b.textContent.trim() === 'Regions').click();");
     await s.exec("delete window.__mapRegionTest;");
+  }
+}
+
+/** A crowded CDS and neighbouring labels on pUC19, with its own restriction sites. */
+async function checkCrowdedLinearMap(s, check, control, move) {
+  const source = '[aria-label="Which map enzymes to show"] [data-value]';
+  const filter = "Map cut-site filter";
+  // The desktop suite has edited the document by now. Use the fixture's own bases
+  // here so the cut-site IDs and cut positions below refer to the original pUC19.
+  const gb = readFileSync(new URL("../testdata/e2e/pUC19-annotated.gb", import.meta.url), "utf8");
+  const sequence = gb.match(/^ORIGIN\s*\n([\s\S]*?)^\/\//m)[1].replace(/[\d\s]/g, "").toUpperCase();
+  const saved = await s.exec(`
+    const store = window.__strandivo.store;
+    const seq = arguments[1];
+    const buttons = Array.from(document.querySelectorAll('.sv-map .sv-chip'));
+    const toggled = buttons.filter(b => ['Features', 'Primers', 'Cut sites'].includes(b.textContent.trim()) &&
+      b.getAttribute('aria-pressed') === 'false').map(b => b.textContent.trim());
+    const options = {
+      toggled,
+      source: document.querySelector(arguments[0] + '[aria-checked="true"]').dataset.value,
+      filter: document.querySelector('[aria-label="Map cut-site filter"]').value,
+      labelSize: document.querySelector('[aria-label="Label size"]').value,
+      zoom: document.querySelector('[aria-label="Zoom"]').value
+    };
+    const annotations = ['CAP binding site', 'lac promoter', 'lac operator', 'RBS'].map((name, i) =>
+      ({ id: 'short-' + i, name, type: 'misc_feature', start: 8 * i, end: 8 * i + 6, strand: 1, raw: {}, notes: {} }));
+    const cds = { id: 'crowded-cds', name: 'Example CDS', type: 'CDS', start: 32, end: 600, strand: 1, raw: {},
+      notes: { strandivo_regions: ['First region|Domain|12-19', 'Second region|Domain|21-26', 'Third region|Domain|28-37'] } };
+    const primer = (id, name, start, end, strand) => {
+      const site = start <= end ? seq.slice(start, end + 1) : seq.slice(start) + seq.slice(0, end + 1);
+      const bases = strand === 1 ? site : [...site].reverse().map(b => ({ A: 'T', T: 'A', C: 'G', G: 'C' })[b] || b).join('');
+      return { id, name, start, end, strand, bases, notes: {}, raw: {} };
+    };
+    const primers = [
+      primer('crowded-f', 'Forward primer with a long name', 18, 40, 1),
+      primer('crowded-r', 'Reverse primer with a long name', 53, 76, -1),
+      primer('overlap', 'Overlapping primer', 25, 45, -1),
+      primer('wrap-primer', 'Primer across the origin', seq.length - 24, 3, 1)
+    ];
+    store.apply({ ...store.data, sequence: seq, features: [...annotations, cds], primers }, 'Crowded linear map fixture');
+    store.select({ range: null }, 'e2e');
+    for (const name of toggled) buttons.find(b => b.textContent.trim() === name).click();
+    document.querySelector(arguments[0] + '[data-value="common"]').click();
+    return options;
+  `, source, sequence);
+  try {
+    await control(filter, "unique6");
+    await control("Zoom", "0");
+    await control("Label size", "8");
+    const drawn = await s.exec(`
+      const line = (id, type) => document.querySelector('.sv-map-leader-' + type + '[data-id="' + id + '"]');
+      const marks = (id, kind) => Array.from(document.querySelectorAll('[data-kind="' + kind + '"][data-id="' + id + '"]:is(path, line, g)'));
+      const forward = marks('crowded-f', 'primer')[0].getBBox();
+      const reverse = marks('crowded-r', 'primer')[0].getBBox();
+      const overlap = marks('overlap', 'primer')[0].getBBox();
+      const paths = marks('wrap-primer', 'primer');
+      const wrap = line('wrap-primer', 'primer').points.getItem(0);
+      const ticks = [...document.querySelectorAll('.sv-map-cut line[data-id]:not([data-cut-group])')];
+      return {
+        features: ['short-0', 'short-1', 'short-2', 'short-3'].every(id => line(id, 'feature')?.points.numberOfItems >= 3),
+        regions: document.querySelectorAll('.sv-map-leader-region[data-id="crowded-cds"]').length === 3,
+        arrows: forward.y === reverse.y && forward.y !== overlap.y &&
+          paths.length === 2 && paths.some(p => {
+            const b = p.getBBox(); return wrap.x >= b.x - .1 && wrap.x <= b.x + b.width + .1 && Math.abs(wrap.y - b.y) < .1;
+          }),
+        cuts: ticks.length >= 5 && ticks.every(tick => {
+          const start = line(tick.dataset.id, 'cutsite').points.getItem(0);
+          return Math.abs(start.x - tick.x1.baseVal.value) < .1 && Math.abs(start.y - tick.y1.baseVal.value) < .1;
+        })
+      };
+    `);
+    check("Crowded linear features and protein regions get anchored labels", drawn.features && drawn.regions, JSON.stringify(drawn));
+    check("Linear primer arrows pack by binding overlap and draw both pieces across the origin", drawn.arrows);
+    check("Linear enzyme leaders start at their own cut ticks", drawn.cuts);
+    await s.shot("map-linear-crowded");
+    for (const [size, zoom] of [["8", "0"], ["16", "20"]]) {
+      await control("Label size", size);
+      await control("Zoom", zoom);
+      const collision = await s.exec(`
+        const svg = document.querySelector('.sv-map-svgel');
+        const bounds = svg.getBoundingClientRect();
+        const boxes = [...svg.parentElement.querySelectorAll('.sv-map-linear-names > *, .sv-map-cut-group')].map(e =>
+          ({ e, box: e.getBoundingClientRect() }));
+        for (const [i, { e, box: a }] of boxes.entries()) {
+          if (a.left < bounds.left || a.right > bounds.right)
+            return { outside: e.dataset.id, x: a.x, width: a.width };
+          const hit = boxes.slice(i + 1).find(({ e: other, box: b }) => {
+            // A feature's chip is its background, so it deliberately contains its own text.
+            if (e.dataset.id && e.dataset.id === other.dataset.id && e.dataset.region === other.dataset.region) return false;
+            return a.x + a.width > b.x && b.x + b.width > a.x && a.y + a.height > b.y && b.y + b.height > a.y;
+          });
+          if (hit) return { ids: [e.dataset.id, hit.e.dataset.id], boxes: [a, hit.box].map(b => [b.x, b.y, b.width, b.height]) };
+        }
+        return null;
+      `);
+      check(`Crowded linear labels fit at label size ${size}`, !collision, JSON.stringify(collision));
+    }
+    await control("Label size", "8");
+    await control("Zoom", "0");
+    for (const [kind, id] of [["primer", "crowded-r"], ["feature", "short-0"], ["cutsite", null]]) {
+      const selector = `.sv-map-linear-names text[data-kind="${kind}"]${id ? `[data-id="${id}"]` : ""}`;
+      await move(selector);
+      const width = await s.exec("return document.querySelector(arguments[0]).getBBox().width;", selector);
+      await s.pointer([{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
+      check(`Clicking a displaced linear ${kind} label selects its mark`, await s.exec(`
+        const label = document.querySelector(arguments[0]);
+        const focus = window.__strandivo.store.selection.focus;
+        return focus?.kind === label.dataset.kind && focus.id === label.dataset.id &&
+          label.classList.contains('sv-focused') && label.getBBox().width === arguments[1];
+      `, selector, width));
+    }
+    const group = await s.exec(`
+      const key = document.querySelector('.sv-map-cut line[data-id="AvaI@411"]').dataset.cutGroup;
+      const ticks = [...document.querySelectorAll('.sv-map-cut line[data-cut-group="' + key + '"]')];
+      const xs = ticks.map(t => t.x1.baseVal.value);
+      return {
+        key, ids: ticks.map(t => t.dataset.id),
+        close: Math.max(...xs) - Math.min(...xs) <= 1.01,
+        separatedCut: !!document.querySelector('.sv-map-cut line[data-id="AccI@428"][data-cut-group]')
+      };
+    `);
+    const count = `.sv-map-cut-group[data-cut-group="${group.key}"]`;
+    const choice = '.sv-map-cut-site-choice';
+    await s.exec("document.querySelector(arguments[0]).focus();", count);
+    await s.press("\uE007"); // Enter on the count button.
+    check("A linear cut-site count opens a keyboard-accessible list of its own ticks", group.close && await s.exec(`
+      const rows = [...document.querySelectorAll(arguments[0])];
+      return rows.length >= 3 && rows.map(b => b.dataset.site).join() === arguments[1].join() &&
+        rows.some(b => b.dataset.site === 'XmaI@411' && b.textContent.includes('After base 412'));
+    `, choice, group.ids));
+    await move(`${choice}[data-site="XmaI@411"]`);
+    await s.pointer([{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
+    check("Choosing a grouped site selects its enzyme and highlights the count", await s.exec(`
+      const focus = window.__strandivo.store.selection.focus;
+      return focus?.kind === 'cutsite' && focus.id === 'XmaI@411' &&
+        !document.querySelector('.sv-map-cut-site-choice') &&
+        document.querySelector(arguments[0]).classList.contains('sv-focused');
+    `, count));
+    await move(count);
+    await s.pointer([{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
+    check("Picking from the cut-site list keeps both picked enzymes", await s.exec(`
+      const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+      document.querySelector('.sv-map-cut-site-choice[data-site="KpnI@407"]').dispatchEvent(
+        new MouseEvent('click', { bubbles: true, [mac ? 'metaKey' : 'ctrlKey']: true }));
+      return window.__strandivo.store.selection.enzymes?.slice().sort().join() === 'KpnI,XmaI';
+    `));
+    await control("Zoom", "100");
+    check("Zooming in restores a name for a separated tick and keeps identical cuts grouped", group.separatedCut && await s.exec(`
+      return !!document.querySelector('.sv-map-label-cut[data-id="AccI@428"]') &&
+        !!document.querySelector('.sv-map-cut line[data-id="XmaI@411"][data-cut-group]');
+    `));
+  } finally {
+    await s.exec(`
+      window.__strandivo.store.undo();
+      const buttons = Array.from(document.querySelectorAll('.sv-map .sv-chip'));
+      for (const name of arguments[0]) buttons.find(b => b.textContent.trim() === name).click();
+      document.querySelector(arguments[1] + '[data-value="' + arguments[2] + '"]').click();
+    `, saved.toggled, source, saved.source);
+    await control(filter, saved.filter);
+    await control("Label size", saved.labelSize);
+    await control("Zoom", saved.zoom);
   }
 }

@@ -960,6 +960,74 @@ async function main() {
     await s.exec(`const el = document.querySelector('${enterField}'); el.value = '${enterBefore}'; el.dispatchEvent(new Event('input'));`);
     await s.press(ENTER);
     check("Typing the generated value back and pressing Enter leaves the program unmodified, focus still there", (await s.waitFor("document.querySelector('.sv-prog-modified')?.hidden", 3000)) && (await s.exec(`return document.activeElement === document.querySelector('${enterField}');`)));
+    // The reaction mix is NEB's own table for the polymerase, folded until the bench wants it.
+    check("The reaction mix is folded under the program", await s.exec("return document.querySelector('.sv-pcr-mix .sv-fold-link')?.textContent.trim() === 'Show' && !document.querySelector('.sv-mix-table')"));
+    await s.click(".sv-pcr-mix .sv-fold-link");
+    check("Clicking Show opens the reaction mix", await s.waitFor("document.querySelector('.sv-mix-table')", 3000));
+    const mixRows = await s.exec("return Array.from(document.querySelectorAll('.sv-mix-table tbody tr')).map(tr => Array.from(tr.children).map(td => td.textContent.trim()).join('|'))");
+    check(
+      "The mix is NEB's own M0491 table at the 25 µl it starts from",
+      JSON.stringify(mixRows) ===
+        JSON.stringify([
+          "5X Q5 Reaction Buffer|5|1X",
+          "10 mM dNTPs|0.5|200 µM",
+          "10 µM forward primer|1.25|0.5 µM",
+          "10 µM reverse primer|1.25|0.5 µM",
+          "Q5 High-Fidelity DNA Polymerase|0.25|0.02 U/µl",
+          "Nuclease-free water|15.8|",
+          "Template DNA|1|< 1,000 ng"
+        ]),
+      JSON.stringify(mixRows)
+    );
+    check(
+      "One tube's 0.25 µl of polymerase is called out, with NEB's own dilution",
+      /Too little to pipette accurately: Q5 High-Fidelity DNA Polymerase 0\.25 µl\. The Q5 High-Fidelity DNA Polymerase may be diluted in 1X Q5 Reaction Buffer just prior to use/.test(await s.exec("return document.querySelector('.sv-mix-notes').textContent"))
+    );
+    const mixMany = await s.exec(`const n = document.querySelector('[data-focus="mix-reactions"]'); n.value = '8'; n.dispatchEvent(new Event('change', { bubbles: true }));
+      return { head: Array.from(document.querySelectorAll('.sv-mix-table th')).map(th => th.textContent.trim()), firstRow: Array.from(document.querySelectorAll('.sv-mix-table tbody tr')[0].children).map(td => td.textContent.trim()), total: Array.from(document.querySelector('.sv-mix-table tfoot tr').children).map(td => td.textContent.trim()), warn: document.querySelectorAll('.sv-mix-notes .sv-text-warn').length };`);
+    check(
+      "Eight reactions make a master mix a tenth over, and the volume is no longer small",
+      // Field by field: what comes back from the browser keeps its arrays in order, not its keys.
+      JSON.stringify(mixMany.head) === JSON.stringify(["Component", "Per reaction, µl", "Mix (8.8 reactions), µl", "Final"]) &&
+        JSON.stringify(mixMany.firstRow) === JSON.stringify(["5X Q5 Reaction Buffer", "5", "44", "1X"]) &&
+        JSON.stringify(mixMany.total) === JSON.stringify(["Master mix", "24", "211.2", ""]) &&
+        mixMany.warn === 0,
+      JSON.stringify(mixMany)
+    );
+    const copiedMix = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__mixCopied = text; } } });
+      document.querySelector('[data-focus="copy-mix"]').click(); return window.__mixCopied;`);
+    check("Copy mix gives the recipe as a notebook would take it", /Q5 High-Fidelity DNA Polymerase \(NEB M0491\), 25 µl × 8.8 reactions/.test(copiedMix) && /Template DNA: 1 µl in each tube/.test(copiedMix) && /Master mix: 211.2 µl in all, 24 µl per tube/.test(copiedMix), copiedMix);
+    await s.exec("delete navigator.clipboard; delete window.__mixCopied;");
+    await s.exec("document.querySelector('.sv-pcr-mix').scrollIntoView({block:'end'})");
+    await s.shot("04-pcr-mix");
+    // Template volume of 0 is saved as 0 rather than falling back to the 1 µl default.
+    const zeroTemplate = await s.exec(`const t = document.querySelector('[data-focus="mix-template"]'); t.value = '0'; t.dispatchEvent(new Event('change', { bubbles: true }));
+      const stored = JSON.parse(localStorage.getItem('strandivo.pcrMix') || '{}');
+      const row = Array.from(document.querySelectorAll('.sv-mix-table tbody tr.sv-mix-own td')).map(td => td.textContent.trim());
+      t.value = '1'; t.dispatchEvent(new Event('change', { bubbles: true }));
+      return { stored: stored.templateVolume, row };`);
+    check("Template volume of 0 µl is kept in storage and shown in the table", zeroTemplate.stored === 0 && zeroTemplate.row[1] === "0", JSON.stringify(zeroTemplate));
+    // Optional components and primer stock follow the polymerase (Phusion starts at 20 µl and offers 3% DMSO).
+    await s.exec("const n = document.querySelector('[data-focus=\"mix-reactions\"]'); n.value = '1'; n.dispatchEvent(new Event('change', { bubbles: true }));");
+    await redraws(() => choose("Polymerase", "Phusion High-Fidelity (HF or GC buffer)"));
+    const phusionMix = await s.exec(`const dmso = document.querySelector('[data-focus="mix-opt-DMSO"]'); dmso.click();
+      const stock = document.querySelector('[data-focus="mix-stock"]'); stock.value = '100'; stock.dispatchEvent(new Event('change', { bubbles: true }));
+      const rows = Array.from(document.querySelectorAll('.sv-mix-table tbody tr')).map(tr => Array.from(tr.children).map(td => td.textContent.trim()).join('|'));
+      const notes = document.querySelector('.sv-mix-notes').textContent;
+      dmso.click(); stock.value = '10'; stock.dispatchEvent(new Event('change', { bubbles: true }));
+      return { rows, notes };`);
+    check(
+      "Phusion starts at 20 µl, adds 3% DMSO when ticked, and warns on a 100 µM primer stock",
+      phusionMix.rows.includes("DMSO|0.6|3%") &&
+        phusionMix.rows.includes("100 µM forward primer|0.1|0.5 µM") &&
+        /NEB's table uses a 10 µM primer\./.test(phusionMix.notes) &&
+        /Phusion DNA Polymerase may be diluted in 1X Phusion HF or GC Buffer just prior to use/.test(phusionMix.notes),
+      JSON.stringify(phusionMix)
+    );
+    await redraws(() => choose("Polymerase", "Q5 High-Fidelity"));
+    // Fold the mix again so its labels do not stay in the dialog for later checks.
+    await s.click(".sv-pcr-mix .sv-fold-link");
+    check("Folding the reaction mix hides it again", await s.waitFor("!document.querySelector('.sv-mix-table')", 3000));
     const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
       const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
       edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');
@@ -2753,6 +2821,12 @@ async function main() {
       check("A Settings change leaves focus on the counted sites", await keepsFocus("button[data-more]", 460));
       await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
       await s.shot("13-dark-pcr-program");
+      await s.click(".sv-pcr-mix .sv-fold-link");
+      if (await s.waitFor("document.querySelector('.sv-mix-table')", 3000)) {
+        await s.exec("document.querySelector('.sv-pcr-mix').scrollIntoView({block:'end'})");
+        await s.shot("13-dark-pcr-mix");
+        await s.click(".sv-pcr-mix .sv-fold-link");
+      } else check("In dark, the reaction mix opens", false);
     } else check("In dark, the PCR program opens", false);
     await s.press(ESCAPE);
     await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");

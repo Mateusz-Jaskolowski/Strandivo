@@ -144,6 +144,32 @@ and CI checks that they exist.
   `aria-label` or `data-focus`; a redraw puts back the caret as well as the focus, passes
   over a control that came back disabled, and the two ResizeObservers are disconnected when
   the dialog is drawn again or closed.
+  The **reaction mix** (`src/lib/pcrMix.ts`, drawn by `src/views/pcrMixView.ts`) is the
+  setup table on the same NEB protocol page the cycling conditions come from, so a
+  polymerase has both or neither and `src/lib/pcrMix.test.ts` holds the two lists to each
+  other. Volumes are written as µl in NEB's 50 µl reaction and scaled, and that test builds
+  both of NEB's own columns back out of them: change a number only from the protocol page.
+  Phusion's smaller column is 20 µl where the others are 25, which is why the dialog starts
+  at the recipe's own `volumes[0]` rather than a volume of its own; the other volumes offered
+  keep NEB's concentrations and say so. A primer's volume follows the stock the user keeps it
+  at, to the final concentration in NEB's table, which is the same default number
+  `src/lib/polymerases.ts` holds for the Tm (a test pins them together; Settings' editable
+  primer concentration moves the Tm, not the mix). A component NEB names without an amount
+  gets no row, as OneTaq's High GC Enhancer does; OneTaq's table footnote for 3–6 kb
+  amplicons (`longEnzyme`) is shown when the product falls in that range. What is not NEB's
+  says so in a comment: the order of the rows, which is the order a bench adds them in, and
+  `SMALL_VOLUME`, under which a volume is called out as too little to pipette — with NEB's
+  own sentence about diluting the enzyme where its protocol has one, and only about what is
+  actually pipetted, so making more mix answers it. `mixText` appends any warnings to the
+  copied mix. The mix holds everything but the template, as the template is what the tubes
+  differ in, and an extra over the reactions counts for nothing at one tube, since nobody
+  makes 1.1 of them. The volume, the extra, the primer stock and the template volume (0
+  included) are habits of the bench, kept app-wide in `src/pcrMixPrefs.ts`; how many
+  reactions, what else goes in and whether the section is open last while the window does,
+  and it starts folded, as the mix is wanted at the bench rather than while a product is
+  being looked over. Only the table and the notes are drawn again when a field changes, so a
+  field keeps its focus; each mix control also carries a `data-focus` key for full-dialog
+  redraws, and the fold is the one thing that builds the section anew.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

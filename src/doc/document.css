@@ -1283,6 +1283,11 @@
   stroke: color-mix(in srgb, var(--lc, var(--primer)) 60%, var(--leader));
   stroke-dasharray: 3 2;
 }
+.sv-map-linear-leaders .sv-map-leader-feature.sv-focused,
+.sv-map-linear-leaders .sv-map-leader-primer.sv-focused {
+  stroke: var(--accent);
+  stroke-width: 1.25;
+}
 .sv-map-leader polyline.sv-map-leader-cutsite,
 .sv-map-leader.sv-map-leader-cutsite {
   stroke: var(--text-3);
@@ -1340,6 +1345,41 @@
   stroke: var(--text-2);
   stroke-width: 1.2;
 }
+.sv-map-cut line[data-cut-group] {
+  cursor: pointer;
+}
+.sv-map-cut-group {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-2);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sv-map-cut-group:hover,
+.sv-map-cut-group.sv-focused,
+.sv-map-cut-group.sv-related {
+  color: var(--accent-text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.sv-map-cut-group:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sv-map-cut-site-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sv-map-cut-site-choice {
+  justify-content: space-between;
+}
 /* A selected cut site, and in a lighter shade the other sites of its enzyme (or of every
    enzyme picked with ⌘/Ctrl-click), so an enzyme that cuts twice shows where else it does. */
 .sv-map-cut line.sv-focused,
@@ -1365,6 +1405,16 @@
 .sv-map-label.sv-focused {
   fill: var(--accent-text);
   font-weight: 700;
+}
+/* The linear map packs names at their measured widths, including on selection. */
+.sv-map-linear-names .sv-map-label-primer.sv-focused {
+  font-weight: 500;
+}
+.sv-map-linear-names .sv-map-label-feature.sv-focused {
+  font-weight: 600;
+}
+.sv-map-linear-names .sv-map-label-cut.sv-focused {
+  font-weight: 400;
 }
 /* Keep the measured weight in every state, so hovering or selecting never widens a name. */
 .sv-map-label.sv-map-region-label {
@@ -2298,6 +2348,55 @@
 }
 .sv-pcr-copy {
   margin-left: auto;
+}
+/* The reaction mix, which sits under the program and folds to its heading. */
+.sv-pcr-mix {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sv-mix-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.sv-mix-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* Wide enough for a volume and its stepper, so the five fields fit on one line. */
+.sv-mix-num {
+  width: 92px;
+}
+.sv-mix-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+/* Nothing in the recipe is clickable, so its rows take neither the cursor nor the hover tint. */
+.sv-table.sv-mix-table tbody tr {
+  cursor: default;
+}
+.sv-table.sv-mix-table tbody tr:hover {
+  background: none;
+}
+/* The template goes in each tube on its own, which sets its row apart from the mix's. */
+.sv-table.sv-mix-table tbody tr.sv-mix-own,
+.sv-table.sv-mix-table tbody tr.sv-mix-own:hover {
+  background: var(--side);
+}
+.sv-mix-table tfoot td {
+  padding: 8px 12px;
+  font-weight: 500;
+  border-top: 1px solid var(--line-2);
+}
+.sv-mix-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .sv-prog {
   width: 100%;

@@ -70,9 +70,10 @@ and CI checks that they exist.
   move outside at a large label size, and under its bar on the linear map. A stripe is a
   group of the stripe drawn and a wider clear stroke the pointer finds. Region names are
   plain grey at regular weight after a square of the region's colour: beside the circular
-  map on a light solid leader from the stripe, or in rows under the linear map's lane,
-  packed across the CDSs in it so neighbours' names never collide. Hovering a stripe or
-  name highlights every piece of that region and outlines its owning CDS, including for a
+  map or below the linear map's lane on a light solid leader from the stripe. On the
+  linear map, region labels share rows with short feature names so both can use the
+  space under nearby features. Hovering a stripe or name highlights its leader and
+  every piece of that region and outlines its owning CDS, including for a
   nested region. This is local map state, cleared on redraw or hiding the view, never a
   store selection. Selection styling wins, and label weight stays fixed in every state
   to match its measured width. Map tooltips name the owning CDS as well as region details.

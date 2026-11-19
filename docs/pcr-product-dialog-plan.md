@@ -1,18 +1,9 @@
 # PCR product dialog: remaining work
 
 The dialog now has a product overview, a gel of the template and the product beside the
-chosen digest, and an editable line program, following the design agreed on 16 November
-2026. The program starts from sourced NEB conditions; custom values keep the source they
-started from and Copy program uses the current values.
-
-## Reaction mix
-
-A folding section will hold volume, reaction count, extra volume, primer stock concentration
-and template volume. Water adjusts to fit. Source every recipe from the named NEB product;
-keep unavailable values absent. Final primer concentration follows the polymerase's NEB Tm
-settings. Warn about small pipetting volumes and suggest a working dilution where useful.
-Remember volume, extra and stock concentration app-wide; reaction count lasts only while
-the window stays open.
+chosen digest, an editable line program, and a folding reaction mix, following the design
+agreed on 16 November 2026. The program starts from sourced NEB conditions; custom values
+keep the source they started from and Copy program uses the current values.
 
 ## Printable PCR plan
 

@@ -16,6 +16,11 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Read crowded linear maps**: leaders connect displaced feature, protein region,
+  primer and cut-site names to their marks, and primer arrows stay close to the
+  backbone even when their names need more room.
+- **Pick overlapping cut sites**: zoomed-out linear maps show a count where cut marks
+  overlap. Open the count to see the enzymes and pick an individual cut.
 - **Inspect protein regions by name**: a selected region has its own heading, residue
   range and actions, with a link back to its CDS and the same bases selected on the map
   and in the sequence. Regions sit near the top of the CDS, with a list that opens when a
@@ -74,6 +79,12 @@ with Unreleased's notes and leaves them where they are.
   the sites in a tail with too few bases beyond them. The cycling program is drawn as a
   line you can edit: change a temperature, a time or a number of cycles, copy the
   program as it stands, or put it back the way the protocol has it.
+- **Set up the PCR reaction**: the product dialog now works out the mix from NEB's own
+  protocol for the polymerase you picked — buffer, dNTPs, primers, enzyme and water at the
+  volume you run — and makes a master mix for as many reactions as you are setting up, with
+  a little over so the last tube is still full. It follows the stock your primers are kept
+  at, offers NEB's GC enhancer or DMSO where the protocol has one, says when a volume is too
+  small to pipette accurately, and copies as a list for your notebook.
 - **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
   genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
   it, with the annealing temperature and an extension time worked out from the product's

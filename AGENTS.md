@@ -228,6 +228,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   stripe or name highlights its pieces and outlines the owning CDS without changing
   selection. Hover and selection keep region text at its measured weight, so names never
   widen into their neighbours.
+  On the linear map, label rows are placed independently of the marks
+  (`src/lib/linearMapLabels.ts`). Short features and protein regions share the room
+  below their lane, primers get arrow lanes based on their binding spans, and cut ticks
+  stay next to the backbone. A displaced name has a leader from its mark. Leave room
+  for the leaders that have yet to reach their labels, including where several marks
+  share a position.
+  Linear cut ticks within a pixel of the first tick in their group share a count.
+  Each tick keeps its own coordinate, and the count opens a list whose rows select
+  or pick a single site just as its map label would. Grouping follows the drawing's
+  scale, so sites gain individual names as soon as the ticks can be told apart.
 - **Sortable tables** use `sortHeader` (`src/ui/sortHead.ts`) and `src/lib/tableSort.ts`,
   each keeping its sort in local storage. A column sorts its useful way first (newest,
   most clones, worst status). Where the table's own order means something, as in the

@@ -24,6 +24,7 @@ import { sweep, sweptRange } from "../lib/mapDrag.ts";
 import { gcRuns, joinAtOrigin, overviewWindow, type GcRun } from "../lib/gc.ts";
 import { GC_CHIP_LABEL, gcChipTitle, gcRunTitle, gcWindowText } from "./gcStrip.ts";
 import { layoutName, LENGTH_SIZE, type NameLines } from "../lib/mapName.ts";
+import { groupLinearCutSites, layoutLinearLabels, maxLinearLabelWidth, type LinearLabel, type PlacedLinearLabel } from "../lib/linearMapLabels.ts";
 import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
 import { openEnzymeDialog } from "./enzymeDialog.ts";
 
@@ -47,6 +48,56 @@ interface LabelItem {
   width: number;
   y: number;
   ly: number;
+}
+
+interface LinearMapLabel extends Pick<LabelItem, "kind" | "id" | "region" | "color" | "unique"> {
+  text: string;
+  title: string;
+  textWidth: number;
+  /** Offset from the label track to the edge of the mark. */
+  from: number;
+}
+
+interface LinearCutGroup {
+  kind: "cut-group";
+  id: string;
+  text: string;
+  sites: CutSite[];
+}
+
+/** A mark across a gap or the origin is named at its widest drawn piece. */
+function widestPiece(pieces: Range[]): Range {
+  return pieces.reduce((widest, p) => p.end - p.start > widest.end - widest.start ? p : widest);
+}
+
+const pieceCentre = (p: Range) => (p.start + p.end + 1) / 2;
+
+/** Leave the mark where its leader can pass the stripes or arrows in front of it. */
+function exposedCentre(pieces: Range[], blockers: Range[]): number {
+  const middle = pieceCentre(widestPiece(pieces));
+  if (!blockers.some(b => b.start <= middle && middle <= b.end + 1)) return middle;
+  const ordered = [...blockers].sort((a, b) => a.start - b.start);
+  let nearest = middle;
+  let distance = Infinity;
+  const consider = (start: number, end: number) => {
+    if (end < start) return;
+    const x = pieceCentre({ start, end });
+    if (Math.abs(x - middle) < distance) {
+      nearest = x;
+      distance = Math.abs(x - middle);
+    }
+  };
+  for (const piece of pieces) {
+    let start = piece.start;
+    for (const b of ordered) {
+      if (b.end < start) continue;
+      if (b.start > piece.end) break;
+      consider(start, b.start - 1);
+      start = b.end + 1;
+    }
+    consider(start, piece.end);
+  }
+  return nearest;
 }
 
 /** Width of the mark before a primer's label, and the space after it, for labels of `px`. */
@@ -335,11 +386,11 @@ export class MapView {
   private svg: SVGSVGElement | null = null;
   private selLayer: SVGGElement | null = null;
   private geom: Geometry | null = null;
-  private shapes = new Map<string, SVGElement[]>();
-  private focused: SVGElement[] = [];
+  private shapes = new Map<string, Element[]>();
+  private focused: Element[] = [];
   private hoveredKey: string | null = null;
-  private hovered: SVGElement[] = [];
-  private hoveredParents: SVGElement[] = [];
+  private hovered: Element[] = [];
+  private hoveredParents: Element[] = [];
   private chips: Record<string, HTMLButtonElement> = {};
   private modeButtons: { circular: HTMLButtonElement; linear: HTMLButtonElement };
   private sliders: { rotate: HTMLInputElement; zoom: HTMLInputElement; label: HTMLInputElement };
@@ -525,9 +576,10 @@ export class MapView {
       this.svg = null;
       return;
     }
-    const svg = linear ? this.buildLinear(d) : this.buildCircular(d);
+    const cutGroupButtons = new Map<string, HTMLButtonElement>();
+    const svg = linear ? this.buildLinear(d, cutGroupButtons) : this.buildCircular(d);
     this.svg = svg;
-    this.svgHost.replaceChildren(svg);
+    this.svgHost.replaceChildren(svg, ...cutGroupButtons.values());
     // Zoom enlarges the drawing inside the scrollable area.
     this.svgHost.style.width = linear ? "" : `${o.mapZoom * 100}%`;
     this.svgHost.style.height = linear ? "" : `${o.mapZoom * 100}%`;
@@ -860,7 +912,7 @@ export class MapView {
 
   // ---------- linear ----------
 
-  private buildLinear(d: SeqData): SVGSVGElement {
+  private buildLinear(d: SeqData, cutGroupButtons: Map<string, HTMLButtonElement>): SVGSVGElement {
     const o = this.ctx.options;
     const n = d.sequence.length;
     const styles = featureStyles(d);
@@ -872,100 +924,108 @@ export class MapView {
     const scale = (width - 2 * m) / n;
     const X = (p: number) => m + p * scale;
     const labelFont = (w: number) => `${w} ${labelPx}px ${sans}`;
-    // Feature names under their bars sit on a tint of their colour, as on the circular map.
     const cp = chipPad(labelPx);
     const cutFont = `400 ${labelPx * CUT_SCALE}px ${mono}`;
+    const swatch = glyphSize(labelPx);
+    const swatchOffset = swatch + glyphGap(labelPx);
+    const step = Math.max(14, labelPx * 1.12 + 4);
+    const label = (name: string, x: number, mark: Omit<LinearMapLabel, "text" | "textWidth">): LinearLabel<LinearMapLabel> => {
+      const region = mark.region !== undefined;
+      const font = mark.kind === "cutsite" ? cutFont : labelFont(region ? 400 : mark.kind === "primer" ? 500 : 600);
+      const extra = region ? swatchOffset : mark.kind === "feature" ? 2 * cp : 0;
+      const max = maxLinearLabelWidth(width) - extra;
+      let text = name;
+      let w = textWidth(text, font);
+      if (w > max) {
+        const chars = Array.from(name);
+        let lo = 0, hi = chars.length;
+        while (hi - lo > 1) {
+          const mid = Math.floor((lo + hi) / 2);
+          const short = `${chars.slice(0, mid).join("").trimEnd()}…`;
+          if (textWidth(short, font) <= max) lo = mid;
+          else hi = mid;
+        }
+        text = `${chars.slice(0, lo).join("").trimEnd()}…`;
+        w = textWidth(text, font);
+      }
+      return { item: { ...mark, text, textWidth: w }, x, width: w + extra };
+    };
 
-    // Enzyme label rows, from the backbone upwards.
+    // Keep the cut ticks next to the backbone and pack primer arrows by their binding
+    // spans. Label rows are independent of the height or width of those marks.
     const cuts = o.cutsites ? cutSites(d, o) : [];
-    const rows: number[] = [];
-    const placed = cuts.map(c => {
-      const text = c.enzyme;
-      const w = textWidth(text, cutFont) + 6;
-      // Centred on the cut, but kept inside the drawing near the ends.
-      const x = Math.max(2, Math.min(width - w - 2, X(c.cut) - w / 2));
-      let row = 0;
-      while (rows[row] !== undefined && rows[row] > x) row++;
-      rows[row] = x + w;
-      return { c, x, w, row };
+    const cutGroups = groupLinearCutSites(cuts, scale);
+    const cutLabels = cutGroups.map((sites): LinearLabel<LinearMapLabel | LinearCutGroup> => {
+      const first = sites[0];
+      if (sites.length === 1) return label(first.enzyme, X(first.cut), {
+        kind: "cutsite", id: first.id, unique: first.cuts === 1, title: cutTitle(first), from: 0
+      });
+      const text = `${fmt(sites.length)} sites`;
+      return {
+        item: { kind: "cut-group", id: first.id, text, sites },
+        x: X((first.cut + sites[sites.length - 1].cut) / 2),
+        width: textWidth(text, cutFont) + 10
+      };
     });
-    const rowH = labelPx + 4;
-    const primerRows: number[] = [];
+    const cutLayout = layoutLinearLabels(cutLabels, width, step);
+    const cutSpace = cuts.length ? cutLayout.height + 6 : 0;
     const primers = o.primers ? d.primers : [];
-    const primerPlaced = primers.map(p => {
-      const a = X(p.start);
-      const b = X(p.end + 1);
-      const w = Math.max(b - a, textWidth(p.name, labelFont(500)) + 4);
-      let row = 0;
-      while (primerRows[row] !== undefined && primerRows[row] > a) row++;
-      primerRows[row] = a + w + 4;
-      return { p, a, b, row };
-    });
-    const labelTop = 8;
-    const labelsH = rows.length * rowH;
-    const primerTop = labelTop + labelsH + (rows.length ? 10 : 0);
-    const primerH = primerRows.length * (labelPx + 10);
-    const baseY = primerTop + primerH + 8;
+    const primerLanes = assignLanes(primers.map(p => ({ item: p, start: p.start, end: p.end + 1 })), n, 1.5 / scale);
+    const primerLaneCount = Math.max(0, ...Array.from(primerLanes.values(), l => l + 1));
+    const primerBands = primers.map(p => ({
+      p, pieces: rangePieces(p, n), offset: (primerLaneCount - 1 - primerLanes.get(p)!) * PRIMER_STEP
+    }));
+    const primerLayout = layoutLinearLabels(primerBands.map(({ p, pieces, offset }) => {
+      const blockers = offset ? primerBands.flatMap(b => b.offset < offset ? b.pieces : []) : [];
+      return label(p.name, X(exposedCentre(pieces, blockers)), {
+        kind: "primer", id: p.id, color: primerColors(p).color, title: `${p.name} · primer`, from: offset
+      });
+    }), width, step);
+    const primerOrigin = 8 + primerLayout.height;
+    const primerHeight = primerLaneCount ? 8 + (primerLaneCount - 1) * PRIMER_STEP : 0;
+    const baseY = primerOrigin + primerHeight + cutSpace;
 
-    // Features that only touch share a lane. A name too long for its bar goes under it,
-    // in as many rows as the lane's names need.
+    // Inline feature names leave the space below their lane to regions and short features.
     const feats = o.features ? d.features : [];
     const lanes = assignLanes(
-      feats.map(f => ({ item: f.id, start: f.start, end: (f.end + 1) % n || n })),
+      feats.map(f => ({ item: f, start: f.start, end: f.end + 1 })),
       n,
       0
     );
-    const laneCount = Math.max(1, ...Array.from(lanes.values()).map(l => l + 1));
-    // Regions of a protein are stripes along the bottom of its bar, named in rows under its
-    // lane's feature names.
-    const swatch = glyphSize(labelPx);
-    const swatchGap = glyphGap(labelPx);
-    const regionBands = new Map(feats.map(f => {
-      const rows = layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none");
-      const drawn = rows.flatMap(row => {
+    const laneCount = Math.max(0, ...Array.from(lanes.values(), l => l + 1));
+    const laneNames: LinearLabel<LinearMapLabel>[][] = Array.from({ length: laneCount }, () => []);
+    const featureBands = feats.map(f => {
+      const lane = lanes.get(f)!;
+      const names = laneNames[lane];
+      const regionRows = layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none");
+      const regions = regionRows.flatMap(row => {
         const pieces = regionSpans(f, row.region, n).flatMap(sp => rangePieces(sp, n));
-        if (!pieces.length) return [];
-        const w = swatch + swatchGap + textWidth(row.region.name, labelFont(400));
-        return [{ ...row, pieces, w, x: Math.max(2, Math.min(X(pieces[0].start), width - w - 8)), labelRow: -1 }];
+        return pieces.length ? [{ ...row, pieces }] : [];
       });
-      return [f.id, { rows: drawn, lanes: Math.max(0, ...rows.map(r => r.lane + 1)) }] as const;
-    }));
-    // Region names go in rows under their lane, shared by the CDSs in it.
-    const regionLabelRows = Array.from({ length: laneCount }, (_, l) => {
-      const ends: number[] = [];
-      const named = feats.filter(f => (lanes.get(f.id) ?? 0) === l).flatMap(f => regionBands.get(f.id)!.rows);
-      for (const r of named.sort((a, b) => a.x - b.x)) {
-        let row = 0;
-        while (ends[row] !== undefined && ends[row] > r.x) row++;
-        ends[row] = r.x + r.w + 8;
-        r.labelRow = row;
+      for (const { region, pieces, index, lane } of regions) {
+        const blockers = lane ? regions.flatMap(r => r.lane < lane ? r.pieces : []) : [];
+        names.push(label(region.name, X(exposedCentre(pieces, blockers)), {
+          kind: "feature", id: f.id, region: index, color: regionColor(region),
+          title: mapRegionTitle(region, f), from: -stripeDepth(lane)[0]
+        }));
       }
-      return ends.length;
+      const room = stripeRoom(Math.max(0, ...regions.map(r => r.lane + 1)));
+      const pieces = rangePieces(f, n);
+      const piece = widestPiece(f.locations?.length ? f.locations.flatMap(r => rangePieces(r, n)) : pieces);
+      const nameX = X(pieceCentre(piece));
+      const inline = (piece.end - piece.start + 1) * scale > textWidth(f.name, labelFont(600)) + 16 && fitsAcross(labelPx, 16, room);
+      const title = `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`;
+      const style = styles.get(f.id)!;
+      if (!inline) {
+        names.push(label(f.name, nameX, { kind: "feature", id: f.id, color: style.fill, title, from: 0 }));
+      }
+      return { f, pieces, regions, lane, room, nameX, inline, title, style };
     });
-    // A name goes under its bar when it is too long for it, or too tall beside its stripes.
-    const room = (f: SeqFeature) => stripeRoom(regionBands.get(f.id)!.lanes);
-    const nameBelow = (f: SeqFeature) => X((f.end >= f.start ? f.end : n - 1) + 1) - X(f.start) <= textWidth(f.name, labelFont(600)) + 16 || (room(f) > 0 && !fitsAcross(labelPx, 16, room(f)));
-    const nameRow = new Map<string, number>();
-    const nameRowEnds: number[][] = Array.from({ length: laneCount }, () => []);
-    // A name starts under its feature's start, moved left if it would run off the end.
-    const nameWidth = (f: SeqFeature) => 2 * cp + textWidth(shortLabel(f.name), labelFont(600));
-    const nameX = (f: SeqFeature) => Math.max(2, Math.min(X(f.start), width - 2 - nameWidth(f)));
-    for (const f of [...feats].sort((a, b) => a.start - b.start)) {
-      if (!nameBelow(f)) continue;
-      const x = nameX(f);
-      const ends = nameRowEnds[lanes.get(f.id) ?? 0];
-      let row = 0;
-      while (ends[row] !== undefined && ends[row] > x) row++;
-      ends[row] = x + nameWidth(f) + 6;
-      nameRow.set(f.id, row);
-    }
-    const nameStep = Math.max(14, labelPx + 4);
+    const featureLayouts = laneNames.map(names => layoutLinearLabels(names, width, step));
     // The ruler's numbers sit between the backbone and the features, and GC under them.
     const gcTop = baseY + (o.ruler ? 22 : 8);
     const laneY: number[] = [gcTop + (o.mapGc ? GC_RING + 2 * GC_GAP : 0)];
-    for (let l = 0; l < laneCount; l++) {
-      laneY.push(laneY[l] + 16 + Math.max(1, nameRowEnds[l].length) * nameStep + regionLabelRows[l] * nameStep);
-    }
+    featureLayouts.forEach((layout, lane) => laneY.push(laneY[lane] + 16 + layout.height + 4));
     // ORFs in thin lanes under the features.
     const orfList = o.orfs ? orfs(d, o.orfOptions) : [];
     const oLanes = assignLanes(
@@ -1004,22 +1064,65 @@ export class MapView {
     root.appendChild(defs);
     const featureLayer = s("g", { "font-size": labelPx, "dominant-baseline": "central" });
     const regionLayer = s("g");
+    const leaders = s("g", { class: "sv-map-leader sv-map-linear-leaders", "pointer-events": "none" });
+    const names = s("g", { class: "sv-map-linear-names", "font-size": labelPx, "dominant-baseline": "central" });
+    const drawNames = (placed: PlacedLinearLabel<LinearMapLabel | LinearCutGroup>[], origin: number, sign: 1 | -1) => {
+      for (const { item, left, x, width, dir, stem, distance, bend } of placed) {
+        const { kind, id, text } = item;
+        const group = kind === "cut-group";
+        const region = group ? undefined : item.region;
+        const type = group ? "cutsite" : region !== undefined ? "region" : kind;
+        const y = origin + sign * distance;
+        const style = !group && item.color ? `--lc:${item.color}` : undefined;
+        const points = [[x, origin + (group ? 0 : item.from)]];
+        if (bend) points.push([x, origin + sign * bend.from], [stem, origin + sign * bend.to]);
+        if (dir) points.push([stem, y], [left + (dir < 0 ? width : 0) - 2 * dir, y]);
+        else points.push([stem, y - sign * (step / 2 - 1.5)]);
+        const leader = s("polyline", { points: points.map(p => p.map(f1).join(",")).join(" "), class: `sv-map-leader-${type}`, style, "data-id": id, "data-region": region, "data-cut-group": group ? id : undefined });
+        leaders.appendChild(leader);
+        if (group) {
+          const height = step - 4;
+          const button = h("button", {
+            type: "button", class: "sv-map-cut-group", "data-cut-group": id, "aria-haspopup": "dialog",
+            "aria-label": `Show ${fmt(item.sites.length)} cut sites`,
+            style: { left: `${left}px`, top: `${y - height / 2}px`, width: `${width}px`, height: `${height}px`, fontSize: `${labelPx * CUT_SCALE}px` },
+            onclick: () => this.openCutGroup(item.sites, button)
+          }, text);
+          cutGroupButtons.set(id, button);
+          for (const site of item.sites) {
+            this.addShape(`cutsite:${site.id}`, leader);
+            this.addShape(`cutsite:${site.id}`, button);
+          }
+          continue;
+        }
+        const key = `${kind}:${id}${region === undefined ? "" : `:region:${region}`}`;
+        this.addShape(key, leader);
+
+        const chip = kind === "feature" && region === undefined ? labelChip(item, left, y, item.textWidth, labelPx, 1) : null;
+        const mark = chip ?? (region !== undefined ? labelGlyph(item, left, y, swatch, 1) : null);
+        if (mark) {
+          names.appendChild(mark);
+          this.addShape(key, mark);
+        }
+        const label = s("text", { x: f1(left + (chip ? cp : mark ? swatchOffset : 0)), y: f1(y), class: labelClass(item), style, "data-kind": kind, "data-id": id, "data-region": region }, text, s("title", null, item.title));
+        names.appendChild(label);
+        this.addShape(key, label);
+      }
+    };
     // Features that touch meet: an arrowhead sits in a notch in its neighbour.
     // The two ends of the line don't meet, even for a circular sequence.
-    const touching = arrowNeighbours(feats, f => lanes.get(f.id) ?? 0, n + 1);
+    const touching = arrowNeighbours(feats, f => lanes.get(f)!, n + 1);
     // The arrowhead of a feature, from the width of the piece it is drawn on.
     const headOf = (g: SeqFeature) => {
       const w = g.strand === 1 ? X(g.end + 1) - X(g.start <= g.end ? g.start : 0) : X(g.start <= g.end ? g.end + 1 : n) - X(g.start);
       return Math.min(8, Math.max(1.5, w) * 0.5);
     };
-    feats.forEach((f, i) => {
-      const lane = lanes.get(f.id) ?? 0;
+    featureBands.forEach(({ f, pieces, lane, style: st, regions, room, nameX, inline, title }, i) => {
       const y = laneY[lane];
-      const st = styles.get(f.id)!;
       const nb = touching.get(f);
-      const pieces = f.start <= f.end ? [[f.start, f.end + 1]] : [[f.start, n], [0, f.end + 1]];
       const shapes: string[] = [];
-      for (const [a, b] of pieces) {
+      for (const { start: a, end } of pieces) {
+        const b = end + 1;
         const x1 = X(a);
         const x2 = Math.max(X(b), x1 + 1.5);
         const head = Math.min(8, (x2 - x1) * 0.5);
@@ -1033,16 +1136,15 @@ export class MapView {
           { left: f.strand === -1 && atStart ? head : 0, right: f.strand === 1 && atEnd ? head : 0 },
           { left: atStart && nb?.before ? headOf(nb.before) : 0, right: atEnd && nb?.after ? headOf(nb.after) : 0 }
         );
-        const path = s("path", { d: dpath, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id }, s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)}`));
+        const path = s("path", { d: dpath, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id }, s("title", null, title));
         featureLayer.appendChild(path);
         this.addShape(`feature:${f.id}`, path);
         shapes.push(dpath);
       }
       // Regions: stripes along the bottom of the bar, cut to its shape, with names in rows below.
-      const bands = regionBands.get(f.id)!;
       const clip = `sv-region-clip-${i}`;
-      if (bands.rows.length) defs.appendChild(s("clipPath", { id: clip }, ...shapes.map(d => s("path", { d }))));
-      for (const { region, index, lane: regionLane, pieces: parts, x, labelRow } of bands.rows) {
+      if (regions.length) defs.appendChild(s("clipPath", { id: clip }, ...shapes.map(d => s("path", { d }))));
+      for (const { region, index, lane: regionLane, pieces: parts } of regions) {
         const key = `feature:${f.id}:region:${index}`;
         const [yOut, yIn] = stripeDepth(regionLane).map(v => y + 16 - v);
         for (const g of parts) {
@@ -1053,12 +1155,6 @@ export class MapView {
           regionLayer.appendChild(stripe);
           this.addShape(key, stripe);
         }
-        const ry = y + 16 + Math.max(1, nameRowEnds[lane].length) * nameStep + labelRow * nameStep + nameStep / 2;
-        const mark = labelGlyph({ kind: "feature", id: f.id, region: index, color: regionColor(region) }, x, ry, swatch, 1)!;
-        const label = s("text", { x: f1(x + swatch + swatchGap), y: f1(ry), class: labelClass({ kind: "feature", region: index }), "data-kind": "feature", "data-id": f.id, "data-region": index }, region.name, s("title", null, mapRegionTitle(region, f)));
-        featureLayer.append(mark, label);
-        this.addShape(key, mark);
-        this.addShape(key, label);
       }
       for (const gap of featureGaps(f, n)) {
         for (const g of rangePieces(gap, n)) {
@@ -1068,22 +1164,12 @@ export class MapView {
           featureLayer.appendChild(s("line", { x1: f1(gx1), x2: f1(gx2), y1: y + 8, y2: y + 8, stroke: st.fill, "stroke-width": 2, "pointer-events": "none" }));
         }
       }
-      const x1 = X(f.start);
-      const x2 = X((f.end >= f.start ? f.end : n - 1) + 1);
-      if (!nameBelow(f)) {
-        featureLayer.appendChild(s("text", { x: f1((x1 + x2) / 2), y: f1(y + (16 - room(f)) / 2), "text-anchor": "middle", "font-weight": 600, fill: st.text, class: "sv-map-arctext", "data-kind": "feature", "data-id": f.id }, f.name));
-      } else {
-        const ty = y + 16 + nameStep / 2 + (nameRow.get(f.id) ?? 0) * nameStep;
-        const mark = { kind: "feature" as const, id: f.id, color: st.fill };
-        const name = shortLabel(f.name);
-        const nx = nameX(f);
-        const chip = labelChip(mark, nx, ty, textWidth(name, labelFont(600)), labelPx, 1);
-        featureLayer.appendChild(chip);
-        this.addShape(`feature:${f.id}`, chip);
-        featureLayer.appendChild(s("text", { x: f1(nx + cp), y: f1(ty), class: labelClass(mark), style: `--lc:${st.fill}`, "data-kind": "feature", "data-id": f.id }, name));
+      if (inline) {
+        featureLayer.appendChild(s("text", { x: f1(nameX), y: f1(y + (16 - room) / 2), "text-anchor": "middle", "font-weight": 600, fill: st.text, class: "sv-map-arctext", "data-kind": "feature", "data-id": f.id }, f.name));
       }
     });
-    root.append(featureLayer, regionLayer);
+    featureLayouts.forEach((layout, lane) => drawNames(layout.labels, laneY[lane] + 16, 1));
+    root.append(featureLayer, leaders, regionLayer, names);
 
     const orfLayer = s("g");
     for (const x of orfList) {
@@ -1100,42 +1186,76 @@ export class MapView {
     }
     root.appendChild(orfLayer);
 
-    const primerLayer = s("g", { "font-size": labelPx, "dominant-baseline": "central" });
-    for (const { p, a, b, row } of primerPlaced) {
-      const y = baseY - 10 - row * (labelPx + 10);
-      const head = Math.min(6, (b - a) / 2);
-      const d2 =
-        p.strand === 1
-          ? `M${f1(a)},${y - 2} H${f1(b - head)} L${f1(b)},${y} L${f1(b - head)},${y + 2} H${f1(a)} Z`
-          : `M${f1(a + head)},${y - 2} H${f1(b)} V${y + 2} H${f1(a + head)} L${f1(a)},${y} Z`;
-      // The name sits on the primer's own arrow, so it needs no mark of its own.
+    const primerLayer = s("g");
+    for (const { p, pieces, offset } of primerBands) {
+      const y = primerOrigin + offset;
       const own = primerColors(p).color;
-      const path = s("path", { d: d2, class: "sv-map-primer", style: own ? `--pc:${own}` : undefined, "data-kind": "primer", "data-id": p.id }, s("title", null, `${p.name} · primer`));
-      primerLayer.appendChild(path);
-      this.addShape(`primer:${p.id}`, path);
-      primerLayer.appendChild(s("text", { x: f1(a), y: y - labelPx * 0.75, class: labelClass({ kind: "primer" }), style: own ? `--lc:${own}` : undefined, "data-kind": "primer", "data-id": p.id }, p.name));
+      for (const piece of pieces) {
+        const a = X(piece.start);
+        const b = Math.max(a + 1.5, X(piece.end + 1));
+        const head = Math.min(6, (b - a) / 2);
+        const d = barPath(a, b, y, 4, {
+          left: p.strand === -1 && piece.start === p.start ? head : 0,
+          right: p.strand === 1 && piece.end === p.end ? head : 0
+        }, { left: 0, right: 0 });
+        const path = s("path", { d, class: "sv-map-primer", style: own ? `--pc:${own}` : undefined, "data-kind": "primer", "data-id": p.id }, s("title", null, `${p.name} · primer`));
+        primerLayer.appendChild(path);
+        this.addShape(`primer:${p.id}`, path);
+      }
     }
+    drawNames(primerLayout.labels, primerOrigin, -1);
     root.appendChild(primerLayer);
 
-    const cutLayer = s("g", { "font-size": labelPx, "dominant-baseline": "central" });
-    for (const { c, x, w, row } of placed) {
-      const y = labelTop + (rows.length - 1 - row) * rowH + rowH / 2;
-      const mark = { kind: "cutsite" as const, id: c.id, unique: c.cuts === 1 };
-      const leader = s("line", { x1: f1(X(c.cut)), y1: f1(y + rowH / 2), x2: f1(X(c.cut)), y2: baseY, class: "sv-map-leader sv-map-leader-cutsite" });
-      cutLayer.appendChild(leader);
-      this.addShape(`cutsite:${c.id}`, leader);
-      const t = s("text", { x: f1(x + w / 2), y: f1(y), "text-anchor": "middle", class: labelClass(mark), "data-kind": "cutsite", "data-id": c.id }, c.enzyme, s("title", null, cutTitle(c)));
-      cutLayer.appendChild(t);
-      this.addShape(`cutsite:${c.id}`, t);
+    const cutLayer = s("g", { class: "sv-map-cut" });
+    const cutOrigin = baseY - 6;
+    drawNames(cutLayout.labels, cutOrigin, -1);
+    for (const sites of cutGroups) {
+      const group = sites.length > 1 ? sites[0].id : undefined;
+      const open = group ? (e: MouseEvent) => {
+        e.preventDefault();
+        this.openCutGroup(sites, cutGroupButtons.get(group)!);
+      } : undefined;
+      for (const c of sites) {
+        const x = f1(X(c.cut));
+        const tick = s("line", {
+          x1: x, x2: x, y1: cutOrigin, y2: baseY, class: c.cuts === 1 ? "sv-map-unique" : undefined,
+          "data-kind": group ? undefined : "cutsite", "data-id": c.id, "data-cut-group": group, onclick: open, oncontextmenu: open
+        }, s("title", null, cutTitle(c)));
+        cutLayer.appendChild(tick);
+        this.addShape(`cutsite:${c.id}`, tick);
+      }
     }
     root.appendChild(cutLayer);
 
     const svg = s("svg", { viewBox: `0 0 ${f1(width)} ${f1(height)}`, width: f1(width), height: f1(height), class: "sv-map-svgel", role: "img", "aria-label": `Linear map of ${d.name}`, "font-family": sans }, root);
-    this.geom = { n, rotation: 0, circular: false, x0: m, scale, selTop: primerTop - 4, selBottom: height - 4 };
+    this.geom = { n, rotation: 0, circular: false, x0: m, scale, selTop: 4, selBottom: height - 4 };
     return svg;
   }
 
-  private addShape(key: string, el: SVGElement) {
+  private openCutGroup(sites: CutSite[], button: HTMLButtonElement) {
+    button.focus({ preventScroll: true });
+    const dlg = this.ctx.openDialog({ title: `${fmt(sites.length)} cut sites`, width: 360 });
+    const rows = sites.map(site => {
+      const hit = { kind: "cutsite", id: site.id } as const;
+      return h("button", {
+        type: "button", class: "sv-btn sv-btn-quiet sv-map-cut-site-choice", "data-site": site.id,
+        onclick: (e: MouseEvent) => {
+          if (isPickClick(e)) pickSite(this.ctx, site.id, "map");
+          else this.selectAnnotation(hit);
+          dlg.close();
+        },
+        oncontextmenu: (e: MouseEvent) => {
+          e.preventDefault();
+          const target = menuTargetAt(this.ctx, hit, null, f => this.selectAnnotation(f), "map");
+          dlg.close();
+          if (target) this.ctx.contextMenu(target, { x: e.clientX, y: e.clientY }, true);
+        }
+      }, site.enzyme, h("span", { class: "sv-mono sv-dim" }, site.cut === 0 ? "Before base 1" : `After base ${fmt(site.cut)}`));
+    });
+    dlg.body.append(h("div", { class: "sv-map-cut-site-choices" }, rows));
+  }
+
+  private addShape(key: string, el: Element) {
     const list = this.shapes.get(key);
     if (list) list.push(el);
     else this.shapes.set(key, [el]);
@@ -1163,6 +1283,7 @@ export class MapView {
       for (const [key, els] of this.shapes) {
         if (!key.startsWith("cutsite:") || key === `${focus?.kind}:${focus?.id}` || !picked.includes(enzymeOf(key.slice(8)))) continue;
         for (const el of els) {
+          if (el.classList.contains("sv-focused") || el.classList.contains("sv-related")) continue;
           el.classList.add("sv-related");
           this.focused.push(el);
         }
@@ -1355,7 +1476,7 @@ export class MapView {
       const on = e.target as Element;
       pressed = null;
       // The rename field is a text field like any other.
-      if (on.closest(".sv-map-name-edit")) return;
+      if (on.closest(".sv-map-name-edit, [data-cut-group]")) return;
       // Any other press finishes renaming, also one whose default the map prevents below.
       this.renaming?.input.blur();
       this.hoverRegion(null);
@@ -1442,7 +1563,7 @@ export class MapView {
     });
     this.svgHost.addEventListener("contextmenu", e => {
       const on = e.target as Element;
-      if (on.closest(".sv-map-name-edit")) return;
+      if (on.closest(".sv-map-name-edit, [data-cut-group]")) return;
       e.preventDefault();
       const el = on.closest("[data-kind]");
       const hit = el ? hitOf(el) : null;

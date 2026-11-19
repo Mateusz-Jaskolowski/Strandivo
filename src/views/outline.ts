@@ -298,7 +298,7 @@ export class Outline {
           title: `${c.enzyme} · ${c.site.toUpperCase()} · ${cutCountText(c.sites, c.cuts)}${c.methylation ? `\n${methylationNote(c.methylation, c.enzyme)}` : ""}`,
           onclick: (e: MouseEvent) => (isPickClick(e) ? pickSite(this.ctx, c.id, "outline") : this.select({ kind: "cutsite", id: c.id }, c.start, c.end))
         },
-        c.enzyme,
+        h("span", null, c.enzyme, c.methylation?.blocked ? h("sup", { class: "sv-methyl-mark" }, "m") : null),
         h("span", { class: "sv-mono sv-dim" }, fmt(c.start + 1))
       )
     );

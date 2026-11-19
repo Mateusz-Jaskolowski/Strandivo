@@ -4,6 +4,7 @@
 // Virtual digests and how their fragments would run on an agarose gel.
 
 import { digest, fragmentLength, type Fragment } from "./cloning.ts";
+import type { DnaMethylation } from "./methylation.ts";
 import type { Range, SeqData } from "./seqdata.ts";
 
 export interface Ladder {
@@ -79,9 +80,12 @@ export interface DigestResult {
   uncut: boolean;
 }
 
-/** What the enzymes cut a sequence into. With no enzymes or no cuts a linear sequence stays whole. */
-export function digestSequence(d: SeqData, enzymes: string[]): DigestResult {
-  const fragments = digest(d, enzymes);
+/**
+ * What the enzymes cut a sequence into. With no enzymes or no cuts a linear sequence stays
+ * whole. Given where the DNA was grown, sites methylation blocks don't cut.
+ */
+export function digestSequence(d: SeqData, enzymes: string[], methylation?: DnaMethylation): DigestResult {
+  const fragments = digest(d, enzymes, methylation);
   if (!fragments.length && d.circular) return { fragments: [], uncut: true };
   return { fragments: [...fragments].sort((a, b) => fragmentSize(b) - fragmentSize(a)), uncut: false };
 }

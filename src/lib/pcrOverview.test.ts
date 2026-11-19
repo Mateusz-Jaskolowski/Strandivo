@@ -28,6 +28,7 @@ import {
   type PcrGelLane
 } from "./pcrOverview.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
+import { hostMethylation, methylationNote, PCR_DNA } from "./methylation.ts";
 import { reverseComplement, type SeqData } from "./seqdata.ts";
 const opts: EnzymeOptions = { enzymeSource: "common", enzymeFilter: "unique6", labEnzymes: [], personalEnzymes: [] };
 const doc = (sequence: string): SeqData => ({ name: "PCR", sequence, circular: false, features: [], primers: [], sources: [], description: "" });
@@ -439,7 +440,7 @@ test("sites past the last lane are counted where they cut, one chip for each cro
 test("the chip over a crowd sits at the mean of the anchors it counts, not at its first or last", () => {
   // Five sites cut together fill the five lanes; three more cut at 110, 120 and 131 of 1,000, so
   // they have no lane and are one crowd, as they are within 40 px of each other.
-  const site = (enzyme: string, cut: number) => ({ id: `${enzyme}@${cut - 3}`, enzyme, site: "", start: cut - 3, end: cut + 2, cut, bottomCut: cut, forward: true, overhang: "", cuts: 1 });
+  const site = (enzyme: string, cut: number) => ({ id: `${enzyme}@${cut - 3}`, enzyme, site: "", start: cut - 3, end: cut + 2, cut, bottomCut: cut, forward: true, overhang: "", cuts: 1, sites: 1 });
   const named = [100, 101, 102, 103, 104].map((cut, i) => site(`N${i}`, cut));
   const crowded = [site("A", 110), site("B", 120), site("C", 131)];
   const { labels, crowds, lanes } = productLabels([...named, ...crowded], 1000, 1000, [...named, ...crowded].map(() => 60));
@@ -614,4 +615,23 @@ test("the gel's smallest band is where one runs, so a supercoiled plasmid counts
   // A product alone has its own sizes to go by.
   assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "complex", 500, digest)), 200);
   assert.equal(smallestGelBand(pcrGelLanes(doc(oneSite), "complex", 500, null)), 500);
+});
+
+test("a PCR product is unmethylated: DpnI can't cut it and Dam blocks none of its sites, unlike in the template", () => {
+  const template = "ACGT".repeat(10) + "TTTCTAGATCAA" + "ACGT".repeat(10);
+  const f = { name: "F", start: 4, end: 23, strand: 1 as const, bases: template.slice(4, 24) };
+  const r = { name: "R", start: 72, end: 91, strand: -1 as const, bases: reverseComplement(template.slice(72, 92)) };
+  const product = pcrProduct(template, false, f, r)!;
+  const dna = hostMethylation("");
+  const data = productOverview(product, template, false, { ...opts, enzymeSource: "lab", labEnzymes: ["DpnI", "XbaI"], enzymeFilter: "all", methylation: dna });
+  const dpn = data.sites.find(s => s.enzyme === "DpnI")!;
+  assert.equal(dpn.methylation?.blocked, true);
+  assert.equal(methylationNote(dpn.methylation!, "DpnI"), "Won't cut: DpnI needs Dam methylation, which a PCR product lacks.");
+  assert.equal(data.sites.find(s => s.enzyme === "XbaI")!.methylation, undefined);
+  assert.ok(data.digests.every(d => !d.enzymes.includes("DpnI")));
+  // The template, grown in a dam⁺ strain: DpnI cuts it and XbaI's site, running into GATC, doesn't.
+  const grown: SeqData = { name: "t", sequence: template, circular: true, features: [], primers: [], sources: [], description: "" };
+  assert.deepEqual(templateDigestSizes(grown, ["DpnI"], dna), [template.length]);
+  assert.deepEqual(templateDigestSizes(grown, ["XbaI"], dna), []);
+  assert.deepEqual(templateDigestSizes(grown, ["XbaI"], PCR_DNA), [template.length]);
 });

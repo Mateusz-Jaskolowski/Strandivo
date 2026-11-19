@@ -5,6 +5,7 @@
 // Results are cached on the sequence so redraws stay cheap.
 
 import { extraKey, sourceEnzymes, rescanSites, scanSites, selectSites, type CutSite, type EnzymeOptions, type SiteHit } from "../lib/enzymes.ts";
+import { methylationKey } from "../lib/methylation.ts";
 import { amberSuppressed, codingPositions, translateCodon } from "../lib/genetics.ts";
 import { findOrfs, frameLabel, type Orf, type OrfOptions } from "../lib/orfs.ts";
 import { gcProfile } from "../lib/gc.ts";
@@ -143,11 +144,12 @@ export function cutSites(d: SeqData, o: EnzymeOptions): CutSite[] {
     const hits = hitCache && hitCache.extra === extra ? rescanSites(hitCache, d.sequence, d.circular, names) : scanSites(d.sequence, d.circular, names);
     hitCache = { sequence: d.sequence, circular: d.circular, extra, hits };
   }
-  const key = JSON.stringify([o.enzymeSource, o.enzymeFilter, names]);
+  // Which sites methylation blocks depends on the strain, which changes what passes the filter.
+  const key = JSON.stringify([o.enzymeSource, o.enzymeFilter, names, methylationKey(o.methylation)]);
   if (!cutCache || cutCache.hits !== hitCache.hits) cutCache = { hits: hitCache.hits, lists: new Map() };
   let sites = cutCache.lists.get(key);
   if (!sites) {
-    sites = selectSites(hitCache.hits, o);
+    sites = selectSites(hitCache.hits, o, d);
     if (cutCache.lists.size >= MAX_SITE_LISTS) cutCache.lists.delete(cutCache.lists.keys().next().value!);
     cutCache.lists.set(key, sites);
   }

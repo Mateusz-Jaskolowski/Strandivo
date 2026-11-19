@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Analysis of the final, linear PCR product, including tails and primer edits.
-import { cutsBothSides, enzymeName, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { blockedSite, cutsBothSides, enzymeName, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { methylationKey, PCR_DNA, type DnaMethylation } from "./methylation.ts";
 import { gcProfile, overviewWindow } from "./gc.ts";
 import { digestSequence, fragmentSize, LADDERS, SUPERCOILED_RUNS_AS } from "./gel.ts";
 import { gcPercent } from "./labinfo.ts";
@@ -36,12 +37,14 @@ let digested: { sequence: string; circular: boolean; enzymes: string; sizes: num
  * The template cut by a digest's enzymes, as top-strand sizes largest first, so a lane of it
  * can run beside the product's. A circular template cut once gives one fragment of its whole
  * length, as the plasmid is only opened up; enzymes that don't cut it at all give none, which
- * is what a site a primer's 5′ tail brought in looks like from here.
+ * is what a site a primer's 5′ tail brought in looks like from here. The template is grown
+ * in cells (`methylation`, its file's strain), so Dam or Dcm methylation may block a site
+ * the unmethylated product cuts, and DpnI cuts it where it can't cut the product.
  */
-export function templateDigestSizes(template: SeqData, enzymes: readonly string[]): number[] {
-  const key = [...enzymes].sort().join("+");
+export function templateDigestSizes(template: SeqData, enzymes: readonly string[], methylation?: DnaMethylation): number[] {
+  const key = `${[...enzymes].sort().join("+")}|${methylationKey(methylation)}`;
   if (digested && digested.sequence === template.sequence && digested.circular === template.circular && digested.enzymes === key) return digested.sizes;
-  const sizes = digestSequence(template, [...enzymes]).fragments.map(fragmentSize);
+  const sizes = digestSequence(template, [...enzymes], methylation).fragments.map(fragmentSize);
   digested = { sequence: template.sequence, circular: template.circular, enzymes: key, sizes };
   return sizes;
 }
@@ -69,13 +72,13 @@ export interface PcrGelLane {
  * The template is the open file, which is what is in the tube for a plasmid or a colony, as
  * the plasmid is in the cells. For genomic DNA or cDNA it is not, so only the product runs.
  */
-export function pcrGelLanes(template: SeqData, kind: TemplateKind, productLength: number, digest: SuggestedDigest | null): PcrGelLane[] {
+export function pcrGelLanes(template: SeqData, kind: TemplateKind, productLength: number, digest: SuggestedDigest | null, methylation?: DnaMethylation): PcrGelLane[] {
   const length = template.sequence.length;
   const lanes: PcrGelLane[] = [];
   if (kind !== "complex") {
     if (template.circular) lanes.push({ of: "template", what: "Template, supercoiled", sizes: [length], runsAs: length * SUPERCOILED_RUNS_AS });
     else if (length !== productLength) lanes.push({ of: "template", what: "Template, uncut", sizes: [length] });
-    const cut = digest ? templateDigestSizes(template, digest.enzymes) : [];
+    const cut = digest ? templateDigestSizes(template, digest.enzymes, methylation) : [];
     if (digest && (template.circular ? cut.length > 0 : cut.length > 1)) lanes.push({ of: "template", what: `Template, ${digestName(digest)}`, sizes: cut });
   }
   lanes.push({ of: "product", what: "Product, uncut", sizes: [productLength] });
@@ -88,18 +91,26 @@ export function smallestGelBand(lanes: readonly PcrGelLane[]): number {
   return Math.min(...lanes.map(lane => lane.runsAs ?? Math.min(...lane.sizes)));
 }
 
+/**
+ * The product's sites, digests and GC. A PCR product is unmethylated whatever its template
+ * was grown in, so no site of it is blocked by Dam or Dcm, and DpnI, which needs Dam
+ * methylation, cuts none: its sites are drawn with the reason, and no digest uses it.
+ */
 export function productOverview(product: PcrProduct, template: string, circular: boolean, options: EnzymeOptions) {
   const members = sourceEnzymes(options);
   const hits = scanSites(product.sequence, false, members);
+  const unmethylated = { ...options, methylation: PCR_DNA };
+  const dna = { sequence: product.sequence, circular: false };
+  const cutting = hits.filter(h => !blockedSite(product.sequence, false, h, PCR_DNA));
   const templateCounts = templateCutCounts(template, circular, members);
   const window = overviewWindow(product.length);
   const gc = gcProfile(product.sequence, false, window);
   const tails = { left: alignPrimer(product.forward, template).tail.length, right: alignPrimer(product.reverse, template).tail.length };
   // A site can straddle a tail/paired-base boundary and still be introduced by that tail.
-  const tailSites = selectSites(hits, { ...options, enzymeFilter: "all" }).filter(h => h.start < tails.left || h.end >= product.length - tails.right);
+  const tailSites = selectSites(hits, { ...unmethylated, enzymeFilter: "all" }, dna).filter(h => h.start < tails.left || h.end >= product.length - tails.right);
   return {
     hits,
-    sites: selectSites(hits, options),
+    sites: selectSites(hits, unmethylated, dna),
     templateCounts,
     gc,
     window,
@@ -107,7 +118,9 @@ export function productOverview(product: PcrProduct, template: string, circular:
     gcPercent: gcPercent(product.sequence),
     tails,
     tailSites,
-    digests: suggestedDigests(product.length, hits, members)
+    digests: suggestedDigests(product.length, cutting, members),
+    /** The template's, from its file's strain, for its lanes of the gel. */
+    templateMethylation: options.methylation
   };
 }
 

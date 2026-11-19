@@ -5175,6 +5175,9 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   text-align: center;
 }
 
+.sv-fold-list {
+  flex: none;
+}
 /* Turn features into regions: a tick, swatch and name, residues, kind, and why if marked. */
 .sv-fold-row {
   display: grid;

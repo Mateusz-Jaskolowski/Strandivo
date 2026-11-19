@@ -155,7 +155,9 @@ and CI checks that they exist.
   Protein regions section and the CDS's right-click menu, both shown only while a row
   would start ticked, so a CDS with only DNA or regions inside never nags; or from a
   feature's right-click (`foldTargets`), with only that feature ticked, asking which CDS
-  when several hold it. Its swatches show the colours applying gives (`foldColors`).
+  when several hold it. Select all includes every tickable row, even those that start
+  unticked; it never selects a feature in separate pieces. Its swatches show the colours
+  applying gives (`foldColors`).
 - **Library designs on regions** are optional and separate from their kind: a CDR or a
   variable domain does not automatically vary between clones. `variableProteinFeatures`
   projects only marked regions into the existing read-analysis model, as noncoding

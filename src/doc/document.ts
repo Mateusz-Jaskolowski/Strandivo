@@ -411,7 +411,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       toolButton("gel", "Digest…", () => openDigestDialog(ctx)),
       toolButton("clone", "Simulate cloning…", () => openCloningDialog(ctx)),
       sep(),
-      toolButton("export", "Export GenBank or FASTA", () => void exportMenu())
+      toolButton("export", "Export GenBank or FASTA", openExportDialog)
     ),
     inspectorButton
   );
@@ -794,14 +794,24 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     }
   }
 
-  async function exportMenu() {
-    const choice = await choose("Export", "Save a copy of this sequence in another format.", [
-      { label: "Cancel", value: "cancel" as const },
-      { label: "FASTA…", value: "fasta" as const },
-      { label: "GenBank with protein regions…", value: "regions" as const },
-      { label: "GenBank…", value: "genbank" as const, primary: true }
-    ], "cancel" as const);
-    if (choice !== "cancel") await exportAs(choice === "regions" ? "genbank" : choice, choice === "regions");
+  function openExportDialog() {
+    const dlg = ctx.openDialog({ title: "Export", note: "Save a copy of this sequence.", width: 440 });
+    const format = h(
+      "select",
+      { class: "sv-input" },
+      h("option", { value: "genbank" }, "GenBank"),
+      h("option", { value: "regions" }, "GenBank with protein regions"),
+      h("option", { value: "fasta" }, "FASTA")
+    );
+    dlg.body.append(h("label", { class: "sv-dlg-field" }, h("span", { class: "sv-dlg-label" }, "Format"), format));
+    dlg.footer.append(
+      h("button", { type: "button", class: "sv-btn", onclick: dlg.close }, "Cancel"),
+      h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => {
+        const choice = format.value;
+        dlg.close();
+        void exportAs(choice === "fasta" ? "fasta" : "genbank", choice === "regions");
+      } }, "Export…")
+    );
   }
 
   // ---------- reads ----------

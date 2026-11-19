@@ -330,7 +330,7 @@ test("nested and overlapping regions have separate lanes, and map detail keeps t
   assert.equal(new Set(rows.map(r => r.lane)).size, 3);
   assert.deepEqual(layoutRegions(regions, "domains").map(r => r.index), [0, 2]);
   assert.deepEqual(layoutRegions(regions, "none"), []);
-  assert.deepEqual(regionTree(regions).map(r => [r.region.name, r.depth]), [["VHH", 0], ["CDR1", 1], ["Site", 0]]);
+  assert.deepEqual(regionTree(regions).map(r => [r.region.name, r.depth, r.parent]), [["VHH", 0, null], ["CDR1", 1, 0], ["Site", 0, null]]);
   assert.equal(regionTree([{ ...parent, parentId: "cdr1" }, { ...child, start: 1, end: 20 }]).length, 2, "a bad file cannot create an infinite tree");
 });
 

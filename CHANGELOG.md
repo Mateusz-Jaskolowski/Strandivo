@@ -26,6 +26,17 @@ with Unreleased's notes and leaves them where they are.
   for the strain only when a chosen enzyme won't cut. A PCR product is unmethylated, so
   its digests cut where the template's don't, and DpnI cuts only the template. Enzyme
   details lists what Dam, Dcm and CpG methylation do to each enzyme.
+- **Read crowded linear maps**: leaders connect displaced feature, protein region,
+  primer and cut-site names to their marks, and primer arrows stay close to the
+  backbone even when their names need more room.
+- **Pick overlapping cut sites**: zoomed-out linear maps show a count where cut marks
+  overlap. Open the count to see the enzymes and pick an individual cut.
+- **Inspect protein regions by name**: a selected region has its own heading, residue
+  range and actions, with a link back to its CDS and the same bases selected on the map
+  and in the sequence. Regions sit near the top of the CDS, with a list that opens when a
+  diagram label won't fit and separate residue numbers for the construct and UniProt.
+- **Edit a feature's location**: use Edit feature in the inspector to change its type,
+  direction or positions.
 - **A clearer enzyme library**: Lab stock and My enzymes show where each enzyme cuts, as
   G^AATTC or GGTCTCN^NNNN, and the ends it leaves, so Acc65I and KpnI are easy to tell
   apart. My enzymes keeps your chosen enzymes in a box of their own, updated as you tick,
@@ -40,6 +51,9 @@ with Unreleased's notes and leaves them where they are.
   My enzymes to see who sells it.
 - **Double-click a protein**: on the map or in the Sequence tab, a double-click on a CDS,
   one of its regions or an ORF opens its Protein details.
+- **Protein schematics**: open Details & schematic… in the inspector to copy the figure
+  or save it as PNG or SVG, with an optional transparent background. Click the highlighted
+  region again to select the whole CDS.
 - **Enzyme details**: double-click a cut site, or choose Enzyme details… from its
   right-click menu or the inspector, to see the enzyme's cut drawn on both strands, who
   sells it, its isoschizomers and neoschizomers (Acc65I for KpnI), where it cuts your
@@ -75,6 +89,12 @@ with Unreleased's notes and leaves them where they are.
   the sites in a tail with too few bases beyond them. The cycling program is drawn as a
   line you can edit: change a temperature, a time or a number of cycles, copy the
   program as it stands, or put it back the way the protocol has it.
+- **Set up the PCR reaction**: the product dialog now works out the mix from NEB's own
+  protocol for the polymerase you picked — buffer, dNTPs, primers, enzyme and water at the
+  volume you run — and makes a master mix for as many reactions as you are setting up, with
+  a little over so the last tube is still full. It follows the stock your primers are kept
+  at, offers NEB's GC enhancer or DMSO where the protocol has one, says when a volume is too
+  small to pipette accurately, and copies as a list for your notebook.
 - **A cycling program for a PCR product**: pick the polymerase and the template (plasmid,
   genomic DNA or cDNA, or a colony) in the PCR product dialog to see NEB's program for
   it, with the annealing temperature and an extension time worked out from the product's

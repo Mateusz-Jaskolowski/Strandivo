@@ -618,6 +618,55 @@ async function main(outDir) {
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
 
+    // --- the protein schematic's selection and exported images ---
+    await s.exec("window.__strandivo.showHome()");
+    await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));
+    await s.click("//*[contains(@class,'sv-outline-regions')]/button[span[normalize-space()='CDR1']]");
+    const regionIndex = name => s.exec(`
+      return Array.from(document.querySelectorAll('.sv-outline-regions [data-region]'))
+        .find(row => row.querySelector('.sv-list-name').textContent === arguments[0]).dataset.region;
+    `, name);
+    const firstRegion = await regionIndex("CDR1");
+    const secondRegion = await regionIndex("CDR2");
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space()='Details & schematic…']");
+    const regionBlock = index => `//*[local-name()='rect' and @data-region='${index}' and contains(@class,'sv-figure-pick')]`;
+    const selectedBlock = index => `document.querySelector('.sv-figure rect[data-region="${index}"].sv-selected')`;
+    check("The schematic opens with the selected region highlighted", await s.waitFor(selectedBlock(firstRegion), 3000));
+    await s.click(regionBlock(firstRegion));
+    check("Clicking the highlighted region again selects the whole CDS", await s.exec(`
+      const { data, selection } = window.__strandivo.store;
+      const { focus, range } = selection;
+      const cds = data.features.find(f => f.id === focus?.id);
+      const edit = Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent === 'Edit region…');
+      return cds?.name === 'Nanobody' && focus.region === undefined && range?.start === cds.start && range.end === cds.end &&
+        !document.querySelector('.sv-figure .sv-selected') && edit?.disabled;
+    `));
+    check("The whole CDS also offers the schematic in the inspector", await s.waitFor(
+      "document.querySelector('.sv-inspector [data-section=protein] .sv-link')?.textContent === 'Details & schematic…'", 3000));
+    await s.click(regionBlock(secondRegion));
+    check("Another region can still be selected from the schematic", await s.waitFor(`${selectedBlock(secondRegion)} && window.__strandivo.store.selection.focus?.region === ${secondRegion}`, 3000));
+
+    for (const transparent of [false, true]) {
+      if (transparent) await s.click("//label[normalize-space()='Transparent background']/input");
+      const before = await s.exec("return window.__e2eDownloads.length");
+      await s.click("//button[normalize-space()='Save as PNG…']");
+      await s.click("//button[normalize-space()='Save as SVG…']");
+      const saved = await s.waitFor(`window.__e2eDownloads.length === ${before + 2}`, 5000);
+      const files = saved ? await s.execAsync(`
+        (async () => {
+          const [png, svg] = window.__e2eDownloads.slice(-2);
+          const image = await createImageBitmap(png.blob.slice(0, png.blob.size, 'image/png'));
+          const g = document.createElement('canvas').getContext('2d');
+          g.drawImage(image, 0, 0);
+          image.close();
+          const xml = new DOMParser().parseFromString(await svg.blob.text(), 'image/svg+xml');
+          return { pixel: Array.from(g.getImageData(0, 0, 1, 1).data), white: xml.querySelector('svg > rect[width="100%"]')?.getAttribute('fill') ?? null,
+            labels: Array.from(xml.querySelectorAll('text'), label => label.textContent) };
+        })().then(done, e => done(String(e)));`) : null;
+      check(`The schematic exports PNG and SVG with ${transparent ? 'a transparent' : 'a white'} background`,
+        files?.pixel?.join() === (transparent ? '0,0,0,0' : '255,255,255,255') && files.white === (transparent ? null : '#ffffff') && files.labels.includes('CDR1'), JSON.stringify(files));
+    }
+
     // Reports arrive a moment after what they report.
     await sleep(1000);
     check("Nothing the page did broke its Content Security Policy", violations.length === 0, violations.slice(0, 5).join("; "));

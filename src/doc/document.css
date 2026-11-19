@@ -741,6 +741,10 @@
   padding: 16px 16px 14px;
   border-bottom: 1px solid var(--line);
 }
+.sv-feature-head p,
+.sv-region-detail p {
+  margin: 0;
+}
 .sv-insp-title {
   display: flex;
   align-items: center;
@@ -894,9 +898,15 @@
   margin-left: -10px;
   white-space: nowrap;
 }
+.sv-insp-section .sv-count {
+  text-transform: none;
+}
 .sv-insp-section.sv-folded {
   padding-top: 9px;
   padding-bottom: 9px;
+}
+.sv-add-note {
+  align-self: flex-start;
 }
 .sv-section-actions {
   display: flex;
@@ -1274,6 +1284,11 @@
   stroke: color-mix(in srgb, var(--lc, var(--primer)) 60%, var(--leader));
   stroke-dasharray: 3 2;
 }
+.sv-map-linear-leaders .sv-map-leader-feature.sv-focused,
+.sv-map-linear-leaders .sv-map-leader-primer.sv-focused {
+  stroke: var(--accent);
+  stroke-width: 1.25;
+}
 .sv-map-leader polyline.sv-map-leader-cutsite,
 .sv-map-leader.sv-map-leader-cutsite {
   stroke: var(--text-3);
@@ -1331,6 +1346,41 @@
   stroke: var(--text-2);
   stroke-width: 1.2;
 }
+.sv-map-cut line[data-cut-group] {
+  cursor: pointer;
+}
+.sv-map-cut-group {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-2);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sv-map-cut-group:hover,
+.sv-map-cut-group.sv-focused,
+.sv-map-cut-group.sv-related {
+  color: var(--accent-text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.sv-map-cut-group:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sv-map-cut-site-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sv-map-cut-site-choice {
+  justify-content: space-between;
+}
 /* A selected cut site, and in a lighter shade the other sites of its enzyme (or of every
    enzyme picked with ⌘/Ctrl-click), so an enzyme that cuts twice shows where else it does. */
 .sv-map-cut line.sv-focused,
@@ -1372,6 +1422,16 @@
 .sv-map-label.sv-focused {
   fill: var(--accent-text);
   font-weight: 700;
+}
+/* The linear map packs names at their measured widths, including on selection. */
+.sv-map-linear-names .sv-map-label-primer.sv-focused {
+  font-weight: 500;
+}
+.sv-map-linear-names .sv-map-label-feature.sv-focused {
+  font-weight: 600;
+}
+.sv-map-linear-names .sv-map-label-cut.sv-focused {
+  font-weight: 400;
 }
 /* Keep the measured weight in every state, so hovering or selecting never widens a name. */
 .sv-map-label.sv-map-region-label {
@@ -2305,6 +2365,55 @@
 }
 .sv-pcr-copy {
   margin-left: auto;
+}
+/* The reaction mix, which sits under the program and folds to its heading. */
+.sv-pcr-mix {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sv-mix-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.sv-mix-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* Wide enough for a volume and its stepper, so the five fields fit on one line. */
+.sv-mix-num {
+  width: 92px;
+}
+.sv-mix-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+/* Nothing in the recipe is clickable, so its rows take neither the cursor nor the hover tint. */
+.sv-table.sv-mix-table tbody tr {
+  cursor: default;
+}
+.sv-table.sv-mix-table tbody tr:hover {
+  background: none;
+}
+/* The template goes in each tube on its own, which sets its row apart from the mix's. */
+.sv-table.sv-mix-table tbody tr.sv-mix-own,
+.sv-table.sv-mix-table tbody tr.sv-mix-own:hover {
+  background: var(--side);
+}
+.sv-mix-table tfoot td {
+  padding: 8px 12px;
+  font-weight: 500;
+  border-top: 1px solid var(--line-2);
+}
+.sv-mix-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .sv-prog {
   width: 100%;
@@ -4872,7 +4981,7 @@ main.sv-enzyme-section-body {
 .sv-outline-feature-head > .sv-list-row { min-width: 0; }
 .sv-outline-feature-head > .sv-icon-btn { margin-left: 2px; }
 .sv-outline-regions .sv-list-row { font-size: 11px; }
-.sv-protein-diagram { margin: 8px 0 10px; }
+.sv-protein-diagram { margin: 2px 0; }
 .sv-protein-ruler { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3); margin-bottom: 5px; }
 .sv-protein-tracks { position: relative; border-top: 2px solid var(--line); margin: 0 2px; }
 .sv-protein-region {
@@ -4881,9 +4990,32 @@ main.sv-enzyme-section-body {
   color: #fff; font: 600 10px var(--sans); overflow: hidden; white-space: nowrap;
   text-overflow: ellipsis; cursor: pointer;
 }
-.sv-protein-region:hover { filter: brightness(1.1); }
+.sv-protein-region:is(:hover, .sv-region-highlight):not(.sv-selected) {
+  outline: 1px solid var(--text-2);
+  outline-offset: 1px;
+  z-index: 1;
+}
 .sv-protein-region.sv-selected { outline: 2px solid var(--text); outline-offset: 2px; z-index: 1; }
-/* Expand…: the protein as a figure (src/lib/proteinFigure.ts), on white as it is saved. */
+.sv-region-list-head { padding: 0; }
+.sv-region-list-item {
+  position: relative;
+}
+.sv-region-list .sv-list-row {
+  padding-block: 4px;
+  gap: 6px;
+}
+.sv-region-list-nested .sv-list-row { padding-left: 24px; }
+.sv-region-list .sv-list-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.sv-region-list .sv-list-row.sv-region-highlight:not(.sv-selected) { background: var(--hover); }
+.sv-region-group-toggle {
+  position: absolute;
+  top: 3px;
+}
+.sv-region-group-toggle[aria-expanded="false"] > .sv-icon { transform: rotate(-90deg); }
+/* The protein schematic (src/lib/proteinFigure.ts) in Protein details. */
 .sv-figure-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 12.5px; color: var(--text-2); }
 .sv-figure-control { display: inline-flex; align-items: center; gap: 7px; }
 .sv-figure-paper {
@@ -4971,10 +5103,20 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   gap: 4px 14px;
 }
 .sv-region-detail {
+  gap: 8px;
+}
+.sv-region-detail .sv-insp-heading { overflow-wrap: anywhere; }
+.sv-region-path {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 5px;
+  color: var(--text-3);
+}
+.sv-region-path .sv-link {
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 .sv-region-actions {
   display: grid;

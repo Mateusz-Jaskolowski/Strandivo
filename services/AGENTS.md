@@ -25,10 +25,17 @@ and CI checks that they exist.
   report GitHub turns down gets the maintainer an email with GitHub's reason and nothing
   from the report (`failureEmail`). As anyone can send reports, a D1 database
   (`services/feedback/schema.sql`) keeps two numbers a day, reports and refusals, and
-  nothing else: past `DAILY_REPORTS` the Worker answers 503 and emails the maintainer
-  once (`limitEmail`), and only the day's first refusal is emailed. It answers 503, not
-  429, as every copy reads 429 as "wait a minute" but shows any other answer's reason as
-  it is. If the database fails, reports go through as before it. The App's three secrets
-  and the maintainer's address are Worker secrets, never in the repository; its README
-  says how to set them up. Deploy it with
+  nothing else. Past `DAILY_REPORTS` reports less refusals, the Worker answers 503 and
+  emails the maintainer when the day fills (`limitEmail`); past `DAILY_FAILURES` refusals
+  it stops asking GitHub until midnight and answers 502. A report takes its place before
+  GitHub is asked and a refusal gives it back, so reports sent together can't pass the
+  limit: never count after GitHub answers. If GitHub makes the issue but its answer is an
+  error or is lost, that counts as a refusal too, so such a day can file more than
+  `DAILY_REPORTS`. A report turned away keeps its place and refusals are never taken back
+  during the day, so either limit can close a day early (the feedback README says how to
+  reopen it). Only the day's first refusal is emailed. It answers 503, not 429, as every
+  copy reads 429 as "wait a minute" but shows any other answer's reason as it is. If the
+  database fails, reports go through as before it. The App's three secrets and the
+  maintainer's address are Worker secrets, never in the repository; its README says how
+  to set them up. Deploy it with
   `npx wrangler@4 deploy --config services/feedback/wrangler.toml`.

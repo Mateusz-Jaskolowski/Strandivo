@@ -463,6 +463,8 @@ async function main() {
     // Unfolded here, it stays open in every file, which the ORF and region checks below rely on.
     await s.click(".sv-inspector [data-fold='translation']");
     check("Clicking its heading unfolds the translation", await s.waitFor("/MSIQHFRV/.test(document.querySelector('.sv-inspector')?.textContent) && document.querySelector('.sv-inspector [data-fold=\"translation\"]').getAttribute('aria-expanded') === 'true'", 3000));
+    check("The CDS starts with a compact protein summary", await s.exec("const p = document.querySelector('.sv-inspector [data-fold=protein]'); return p.getAttribute('aria-expanded') === 'false' && p.textContent.includes('31.6 kDa');"));
+    await s.click(".sv-inspector [data-fold='protein']");
     // ExPASy ProtParam gives AmpR 31,557.28 Da, ε280 27,960 reduced and 28,085 with its one cystine.
     const proteinFacts = await s.exec("return document.querySelector('.sv-inspector [data-section=\"protein\"]')?.textContent || ''");
     check("The inspector shows the protein's mass and ε280, as ProtParam does", /31\.6 kDa/.test(proteinFacts) && /27,960 M⁻¹ cm⁻¹/.test(proteinFacts) && /28,085 with disulfides/.test(proteinFacts) && /0\.886 at 1 mg\/mL/.test(proteinFacts), proteinFacts);
@@ -955,6 +957,74 @@ async function main() {
     await s.exec(`const el = document.querySelector('${enterField}'); el.value = '${enterBefore}'; el.dispatchEvent(new Event('input'));`);
     await s.press(ENTER);
     check("Typing the generated value back and pressing Enter leaves the program unmodified, focus still there", (await s.waitFor("document.querySelector('.sv-prog-modified')?.hidden", 3000)) && (await s.exec(`return document.activeElement === document.querySelector('${enterField}');`)));
+    // The reaction mix is NEB's own table for the polymerase, folded until the bench wants it.
+    check("The reaction mix is folded under the program", await s.exec("return document.querySelector('.sv-pcr-mix .sv-fold-link')?.textContent.trim() === 'Show' && !document.querySelector('.sv-mix-table')"));
+    await s.click(".sv-pcr-mix .sv-fold-link");
+    check("Clicking Show opens the reaction mix", await s.waitFor("document.querySelector('.sv-mix-table')", 3000));
+    const mixRows = await s.exec("return Array.from(document.querySelectorAll('.sv-mix-table tbody tr')).map(tr => Array.from(tr.children).map(td => td.textContent.trim()).join('|'))");
+    check(
+      "The mix is NEB's own M0491 table at the 25 µl it starts from",
+      JSON.stringify(mixRows) ===
+        JSON.stringify([
+          "5X Q5 Reaction Buffer|5|1X",
+          "10 mM dNTPs|0.5|200 µM",
+          "10 µM forward primer|1.25|0.5 µM",
+          "10 µM reverse primer|1.25|0.5 µM",
+          "Q5 High-Fidelity DNA Polymerase|0.25|0.02 U/µl",
+          "Nuclease-free water|15.8|",
+          "Template DNA|1|< 1,000 ng"
+        ]),
+      JSON.stringify(mixRows)
+    );
+    check(
+      "One tube's 0.25 µl of polymerase is called out, with NEB's own dilution",
+      /Too little to pipette accurately: Q5 High-Fidelity DNA Polymerase 0\.25 µl\. The Q5 High-Fidelity DNA Polymerase may be diluted in 1X Q5 Reaction Buffer just prior to use/.test(await s.exec("return document.querySelector('.sv-mix-notes').textContent"))
+    );
+    const mixMany = await s.exec(`const n = document.querySelector('[data-focus="mix-reactions"]'); n.value = '8'; n.dispatchEvent(new Event('change', { bubbles: true }));
+      return { head: Array.from(document.querySelectorAll('.sv-mix-table th')).map(th => th.textContent.trim()), firstRow: Array.from(document.querySelectorAll('.sv-mix-table tbody tr')[0].children).map(td => td.textContent.trim()), total: Array.from(document.querySelector('.sv-mix-table tfoot tr').children).map(td => td.textContent.trim()), warn: document.querySelectorAll('.sv-mix-notes .sv-text-warn').length };`);
+    check(
+      "Eight reactions make a master mix a tenth over, and the volume is no longer small",
+      // Field by field: what comes back from the browser keeps its arrays in order, not its keys.
+      JSON.stringify(mixMany.head) === JSON.stringify(["Component", "Per reaction, µl", "Mix (8.8 reactions), µl", "Final"]) &&
+        JSON.stringify(mixMany.firstRow) === JSON.stringify(["5X Q5 Reaction Buffer", "5", "44", "1X"]) &&
+        JSON.stringify(mixMany.total) === JSON.stringify(["Master mix", "24", "211.2", ""]) &&
+        mixMany.warn === 0,
+      JSON.stringify(mixMany)
+    );
+    const copiedMix = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__mixCopied = text; } } });
+      document.querySelector('[data-focus="copy-mix"]').click(); return window.__mixCopied;`);
+    check("Copy mix gives the recipe as a notebook would take it", /Q5 High-Fidelity DNA Polymerase \(NEB M0491\), 25 µl × 8.8 reactions/.test(copiedMix) && /Template DNA: 1 µl in each tube/.test(copiedMix) && /Master mix: 211.2 µl in all, 24 µl per tube/.test(copiedMix), copiedMix);
+    await s.exec("delete navigator.clipboard; delete window.__mixCopied;");
+    await s.exec("document.querySelector('.sv-pcr-mix').scrollIntoView({block:'end'})");
+    await s.shot("04-pcr-mix");
+    // Template volume of 0 is saved as 0 rather than falling back to the 1 µl default.
+    const zeroTemplate = await s.exec(`const t = document.querySelector('[data-focus="mix-template"]'); t.value = '0'; t.dispatchEvent(new Event('change', { bubbles: true }));
+      const stored = JSON.parse(localStorage.getItem('strandivo.pcrMix') || '{}');
+      const row = Array.from(document.querySelectorAll('.sv-mix-table tbody tr.sv-mix-own td')).map(td => td.textContent.trim());
+      t.value = '1'; t.dispatchEvent(new Event('change', { bubbles: true }));
+      return { stored: stored.templateVolume, row };`);
+    check("Template volume of 0 µl is kept in storage and shown in the table", zeroTemplate.stored === 0 && zeroTemplate.row[1] === "0", JSON.stringify(zeroTemplate));
+    // Optional components and primer stock follow the polymerase (Phusion starts at 20 µl and offers 3% DMSO).
+    await s.exec("const n = document.querySelector('[data-focus=\"mix-reactions\"]'); n.value = '1'; n.dispatchEvent(new Event('change', { bubbles: true }));");
+    await redraws(() => choose("Polymerase", "Phusion High-Fidelity (HF or GC buffer)"));
+    const phusionMix = await s.exec(`const dmso = document.querySelector('[data-focus="mix-opt-DMSO"]'); dmso.click();
+      const stock = document.querySelector('[data-focus="mix-stock"]'); stock.value = '100'; stock.dispatchEvent(new Event('change', { bubbles: true }));
+      const rows = Array.from(document.querySelectorAll('.sv-mix-table tbody tr')).map(tr => Array.from(tr.children).map(td => td.textContent.trim()).join('|'));
+      const notes = document.querySelector('.sv-mix-notes').textContent;
+      dmso.click(); stock.value = '10'; stock.dispatchEvent(new Event('change', { bubbles: true }));
+      return { rows, notes };`);
+    check(
+      "Phusion starts at 20 µl, adds 3% DMSO when ticked, and warns on a 100 µM primer stock",
+      phusionMix.rows.includes("DMSO|0.6|3%") &&
+        phusionMix.rows.includes("100 µM forward primer|0.1|0.5 µM") &&
+        /NEB's table uses a 10 µM primer\./.test(phusionMix.notes) &&
+        /Phusion DNA Polymerase may be diluted in 1X Phusion HF or GC Buffer just prior to use/.test(phusionMix.notes),
+      JSON.stringify(phusionMix)
+    );
+    await redraws(() => choose("Polymerase", "Q5 High-Fidelity"));
+    // Fold the mix again so its labels do not stay in the dialog for later checks.
+    await s.click(".sv-pcr-mix .sv-fold-link");
+    check("Folding the reaction mix hides it again", await s.waitFor("!document.querySelector('.sv-mix-table')", 3000));
     const copiedProgram = await s.exec(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__pcrCopied = text; } } });
       const edit = (key, value) => { const el = document.querySelector('[data-focus="program-' + key + '"]'); el.value = value; el.dispatchEvent(new Event('input')); };
       edit('1:1:temp', '64'); edit('1:1:seconds', '1 min 30 s'); edit('1:0:cycles', '30');
@@ -1222,6 +1292,8 @@ async function main() {
     // A feature's note is typed in the inspector and saved as its /note, quotes and all.
     const typedNote = 'Says "stop" here, and goes on long enough to wrap onto another line of the file';
     await s.exec(`${doc} const f = s.data.features[0]; s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+    await s.waitFor("document.querySelector('.sv-add-note, [aria-label=\"Feature note\"]')", 5000);
+    await s.exec("document.querySelector('.sv-add-note')?.click();");
     await s.waitFor("document.querySelector('[aria-label=\"Feature note\"]')", 5000);
     // Cleared without an event, so the first key press replaces any note the feature had.
     await s.exec("const note = document.querySelector('[aria-label=\"Feature note\"]'); note.value = ''; note.scrollIntoView({ block: 'nearest' });");
@@ -1633,9 +1705,11 @@ async function main() {
     // The map only draws while it shows.
     await s.exec("window.__strandivo.command('show-map')");
     check("They are drawn inside the CDS", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
-    check("The inspector draws them with their list folded", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2 && document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'false'", 3000));
+    check("The inspector draws both regions", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2", 3000));
     check("Independent regions need no top-level/all choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     check("The entry goes in the file's cross-references", await s.exec(`${doc} return s.data.features.find(f => f.id === window.__strandivoCds).notes.db_xref.includes("UniProtKB/Swiss-Prot:P62593");`));
+    await s.click(".sv-inspector .sv-protein-region");
+    check("An imported region labels both coordinate systems", await s.waitFor("/Construct residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent) && /UniProtKB P62593 · residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent)", 3000));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
 
@@ -1662,7 +1736,7 @@ async function main() {
       const actions = document.querySelector('.sv-region-actions');
       const buttons = Array.from(actions.querySelectorAll('button'));
       const bounds = actions.getBoundingClientRect();
-      return buttons.map(b => b.textContent.trim()).join('|') === 'Edit region…|Copy AA sequence|Add as feature|Remove' &&
+      return buttons.map(b => b.textContent.trim()).join('|') === 'Edit region…|Copy AA sequence|Add as feature|Remove region' &&
         buttons.every((button, i) => Math.abs(button.getBoundingClientRect()[i % 2 ? 'right' : 'left'] - bounds[i % 2 ? 'right' : 'left']) < 1);
     `));
     const domainId = await s.exec(`${doc} return JSON.parse(decodeURIComponent(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions[0].split('|')[5])).id;`);
@@ -1698,10 +1772,29 @@ async function main() {
     await fillProteinRegion("CDR1 edited", "CDR", 9, 19, domainId);
     await s.click("//button[normalize-space(.)='Save region']", "xpath");
     check("A region's bounds and name can be edited", await s.waitFor("Array.from(document.querySelectorAll('.sv-outline [data-region]')).some(r => r.textContent.includes('CDR1 edited') && r.textContent.includes('9–19'))", 5000));
+    check("The inspector names the selected region and links back to its parent", await s.waitFor(`(() => {
+      const panel = document.querySelector('.sv-inspector');
+      return panel.querySelector('.sv-insp-heading')?.textContent === 'CDR1 edited' &&
+        Array.from(panel.querySelectorAll('.sv-region-path button')).map(b => b.textContent).join('/') === 'AmpR/Test domain' &&
+        !panel.querySelector('[aria-label="Feature name"]') && !panel.textContent.includes('Delete feature');
+    })()`, 5000));
+    check("The region list opens when the diagram label clips", await s.waitFor("document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'true' && document.querySelector('.sv-region-list [aria-pressed=true]')?.textContent.includes('CDR1 edited')", 5000));
+    const rangeBeforeJump = await s.exec(`${doc} return s.selection.range;`);
+    const regionKept = `${doc} const r = s.selection.range, before = arguments[0]; return !!before && s.selection.focus?.region === 1 && r?.start === before.start && r?.end === before.end && r.end - r.start + 1 === 33;`;
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='View in sequence']", "xpath");
+    check("Viewing the region in Sequence keeps its own bases selected", await s.waitFor("document.querySelectorAll('.sv-row').length > 0", 5000) && await s.exec(regionKept, rangeBeforeJump));
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='View on map']", "xpath");
+    check("Viewing the region back on Map keeps its bases selected", await s.exec(regionKept, rangeBeforeJump));
+    await s.click(".sv-region-path button:last-child");
+    check("The parent link selects the enclosing region", await s.waitFor("document.querySelector('.sv-region-detail h2')?.textContent === 'Test domain'", 5000));
+    await s.click(".sv-region-group-toggle");
+    check("The list can fold a region's children", await s.exec("return document.querySelector('.sv-region-list [role=group]').hidden;"));
+    await s.click(".sv-inspector .sv-protein-region[aria-label^='CDR1 edited,']");
+    check("Picking a child in the diagram reveals it in the list", await s.waitFor("document.querySelector('.sv-region-list [aria-pressed=true]')?.textContent.includes('CDR1 edited') && !document.querySelector('.sv-region-list [role=group]').hidden", 5000));
     await s.shot("11-protein-regions");
 
     // Protein details draw the protein as a figure: a nested region is a bracket under its parts.
-    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Details…']", "xpath");
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Details & schematic…']", "xpath");
     const figureNames = `
       const names = Array.from(document.querySelectorAll('.sv-figure text[data-region]')).map(t => t.getBoundingClientRect());
       const apart = names.every((a, i) => names.every((b, j) => i <= j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));`;
@@ -1711,8 +1804,13 @@ async function main() {
     await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     check("At top level the figure draws the domain as a block", await s.waitFor("document.querySelectorAll('.sv-figure rect[data-region]').length === 1 && document.querySelectorAll('.sv-figure text[data-region]').length === 1 && document.querySelector('.sv-figure rect[data-region]').dataset.region === '0'", 5000));
     await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true }));");
-    await s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    await s.exec("document.querySelector('.sv-figure text[data-region=\"0\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    const clickCdr = () => s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    await clickCdr();
     check("Clicking a block in the figure selects its region", await s.waitFor("window.__strandivo.store.selection.focus?.region === 1 && document.querySelector('.sv-figure rect[data-region=\"1\"]').classList.contains('sv-selected')", 5000));
+    await clickCdr();
+    check("Clicking the selected block again returns to its CDS", await s.waitFor("window.__strandivo.store.selection.focus?.id === window.__strandivoCds && window.__strandivo.store.selection.focus.region === undefined && !document.querySelector('.sv-figure .sv-selected')", 5000));
+    await clickCdr();
     check("The figure can be copied or saved as PNG or SVG", await s.exec("const labels = Array.from(document.querySelectorAll('.sv-dialog-foot button')).map(b => b.textContent.trim()); return ['Copy image', 'Save as PNG…', 'Save as SVG…'].every(l => labels.includes(l));"));
     check("Protein details give both coefficients for a protein with a pair of Cys", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-protein-facts dt')).map(d => d.textContent).join() === 'Length,Mass,ε280, Cys reduced,ε280, disulfides,Counted';"));
     check("Protein details fold the list of regions under the figure", await s.exec("return document.querySelector('.sv-dialog .sv-fold-link')?.getAttribute('aria-expanded') === 'false' && !document.querySelector('.sv-dialog .sv-list-row');"));
@@ -1888,7 +1986,7 @@ async function main() {
     await s.exec(`${doc} s.undo(); window.__strandivo.command('show-sequence');`);
 
     await s.exec(`${doc} s.undo(); s.selectRange({ start: s.data.features.find(f => f.id === window.__strandivoCds).start, end: s.data.features.find(f => f.id === window.__strandivoCds).end }, { kind: "feature", id: window.__strandivoCds, region: 1 }, "e2e"); window.__strandivo.command('show-map');`);
-    await s.click("//button[normalize-space(.)='Remove']", "xpath");
+    await s.click("//button[normalize-space(.)='Remove region']", "xpath");
     check("Removing a region keeps its CDS", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 1", 5000));
     check("Removing the last nested region hides the map detail choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     await s.exec(`${doc} s.undo(); s.undo(); s.undo(); s.undo();`);
@@ -2752,6 +2850,12 @@ async function main() {
       check("A Settings change leaves focus on the counted sites", await keepsFocus("button[data-more]", 460));
       await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
       await s.shot("13-dark-pcr-program");
+      await s.click(".sv-pcr-mix .sv-fold-link");
+      if (await s.waitFor("document.querySelector('.sv-mix-table')", 3000)) {
+        await s.exec("document.querySelector('.sv-pcr-mix').scrollIntoView({block:'end'})");
+        await s.shot("13-dark-pcr-mix");
+        await s.click(".sv-pcr-mix .sv-fold-link");
+      } else check("In dark, the reaction mix opens", false);
     } else check("In dark, the PCR program opens", false);
     await s.press(ESCAPE);
     await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");

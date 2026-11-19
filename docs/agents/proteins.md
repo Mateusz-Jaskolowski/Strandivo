@@ -26,8 +26,9 @@ and CI checks that they exist.
   until it is back on whole ones. They count only while they round to its residues:
   anything that sets the residues alone (the region editor, a version that doesn't know
   them) makes them stale, and then the residues win. Each also keeps the
-  entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
-  makes a real one for files going to other software.
+  entry's numbers, which can differ from the construct's in a fusion. The inspector
+  browses regions in construct residues and labels the entry's coordinates separately.
+  "Add as feature" makes a real one for files going to other software.
 - **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
   after the original qualifier fields holds stable ids, colour, a parent id, a library
   design, the user's note (lines joined by line breaks) and, for a region between codons,
@@ -54,7 +55,10 @@ and CI checks that they exist.
   Regions toggle hides or shows them without changing its top-level/all detail choice.
   Visibility and detail are remembered separately. Nested
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
-  whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
+  whole CDS. A selected region has its own inspector header and a path back to its
+  enclosing region and CDS. View in sequence and View on map carry its own range across.
+  The inspector's list opens by default if diagram labels clip, with collapsible groups
+  that reopen when a descendant is selected. The editor is in `src/views/proteinRegionDialog.ts`.
   Both map modes draw a region as a stripe in its colour along its CDS's outer edge (the
   linear map's bar's bottom edge), inside the band and cut to its shape, so the CDS keeps
   its colour and its name in the rest of the band. Filling the arrow with segments was
@@ -66,9 +70,10 @@ and CI checks that they exist.
   move outside at a large label size, and under its bar on the linear map. A stripe is a
   group of the stripe drawn and a wider clear stroke the pointer finds. Region names are
   plain grey at regular weight after a square of the region's colour: beside the circular
-  map on a light solid leader from the stripe, or in rows under the linear map's lane,
-  packed across the CDSs in it so neighbours' names never collide. Hovering a stripe or
-  name highlights every piece of that region and outlines its owning CDS, including for a
+  map or below the linear map's lane on a light solid leader from the stripe. On the
+  linear map, region labels share rows with short feature names so both can use the
+  space under nearby features. Hovering a stripe or name highlights its leader and
+  every piece of that region and outlines its owning CDS, including for a
   nested region. This is local map state, cleared on redraw or hiding the view, never a
   store selection. Selection styling wins, and label weight stays fixed in every state
   to match its measured width. Map tooltips name the owning CDS as well as region details.
@@ -81,14 +86,15 @@ and CI checks that they exist.
   translation is shown. They use `src/views/regionTracks.ts` to pack and draw both the
   bars and captions, so names do not collide or widen the scroller. The primer's panel
   shows all regions in its visible template window, including neighbouring boundaries.
-- **The protein figure** (in Protein details, `src/views/proteinDialog.ts`, opened by
-  Details… in the inspector's Protein section) is laid out once, as shapes with
-  concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
+- **The protein figure** (in Protein details, `src/views/proteinDialog.ts`) opens from
+  Details & schematic… in the inspector for a CDS or one of its regions. It is laid out
+  once as shapes with concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
   as SVG in the dialog, paints on a canvas for the PNG and writes as the SVG file, so all
   three match. Painting from the shapes, not loading the SVG as an image, keeps `data:`
   and `blob:` images out of the Content Security Policy, and lets Copy image make the PNG
-  within the click, which Safari's clipboard requires. Regions with drawn parts are
-  brackets under them; the rest are blocks, the longest on the protein's line and one
+  within the click, which Safari's clipboard requires. The Transparent background checkbox
+  applies to both formats and Copy image, with white as the default. Regions with drawn
+  parts are brackets under them; the rest are blocks, the longest on the protein's line and one
   inside another in a lane under it. A name goes straight over its block where it can
   without hiding a neighbour's leader, else on an elbow leader, a crowd of them rising to
   a peak (left half pointing left) so no leader crosses a name; a randomised test holds
@@ -97,8 +103,9 @@ and CI checks that they exist.
   shell writes its bytes with `write_bytes`, which takes them as the request's body
   rather than JSON, with the path in a header.
 - **Protein details** keeps the sequence in sight: the list of regions under the figure
-  starts folded (the figure shows and picks them all). Edit region… there gives the
-  dialog's place to the region editor, which brings Protein details back when it closes,
+  starts folded (the figure shows and picks them all). Picking the selected region again
+  selects its whole CDS. Edit region… there gives the dialog's place to the region editor,
+  which brings Protein details back when it closes,
   saved or not (`onClose` of `openProteinRegionDialog`); opened from the inspector, the
   editor closes to the window. Stacking the editor over it was the alternative, but it
   would darken the window twice and leave numbers from before the edit showing beneath.

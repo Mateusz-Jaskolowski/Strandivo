@@ -19,12 +19,12 @@ function load(): FoldState {
   }
 }
 
-export function sectionFolded(id: InspectorFold): boolean {
-  return foldedIn(state, id);
+export function sectionFolded(id: InspectorFold, defaultFolded?: boolean): boolean {
+  return foldedIn(state, id, defaultFolded);
 }
 
-export function toggleSection(id: InspectorFold) {
-  state = withFold(state, id, !foldedIn(state, id));
+export function setSectionFolded(id: InspectorFold, folded: boolean) {
+  state = withFold(state, id, folded);
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch {

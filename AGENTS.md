@@ -208,10 +208,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (`src/views/inspector.ts`), folded or opened by clicking the heading. The choice is kept
   per kind of section for the whole app, not per file, in local storage
   (`src/inspectorFolds.ts`). Long ones seldom wanted at a glance (a CDS's translation, its
-  qualifiers, what lies inside a feature, the list under a protein's diagram) start folded,
-  and a section nobody has touched follows its default. Folding never hides a problem or
-  what is selected: warnings go in the head, and a picked region's details stay under
-  its folded heading (`keep`).
+  qualifiers, what lies inside a feature) start folded. A section nobody has touched
+  follows its default, which can depend on what is shown: the list under a protein's
+  diagram opens when its names don't fit. A feature's type, strand and location are
+  summarised in the header and edited together under Edit feature. Folding never hides
+  a warning or the current selection's identity.
 - **Canvases** never take the full height of what they draw: the alignment's reads draw
   only the rows near the pane, as a canvas above 268 million pixels draws blank in WebKit
   (the Mac app) and a plate of traces would take hundreds of megabytes.
@@ -226,11 +227,21 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   Protein regions are stripes in their colours along the outer edge of their CDS, inside
   it, which otherwise stays as it is (`docs/agents/proteins.md` says why). Their names are
   plain, regular-weight grey with a light solid leader, after a small square of the
-  region's colour. Unlike enzymes, regions got a mark (Nov 2026): a protein's many small
+  region's colour. Unlike enzymes, regions all got a mark (Nov 2026): a protein's many small
   regions fan their leaders out, and names were hard to match to them. Hovering a region's
   stripe or name highlights its pieces and outlines the owning CDS without changing
   selection. Hover and selection keep region text at its measured weight, so names never
   widen into their neighbours.
+  On the linear map, label rows are placed independently of the marks
+  (`src/lib/linearMapLabels.ts`). Short features and protein regions share the room
+  below their lane, primers get arrow lanes based on their binding spans, and cut ticks
+  stay next to the backbone. A displaced name has a leader from its mark. Leave room
+  for the leaders that have yet to reach their labels, including where several marks
+  share a position.
+  Linear cut ticks within a pixel of the first tick in their group share a count.
+  Each tick keeps its own coordinate, and the count opens a list whose rows select
+  or pick a single site just as its map label would. Grouping follows the drawing's
+  scale, so sites gain individual names as soon as the ticks can be told apart.
 - **Sortable tables** use `sortHeader` (`src/ui/sortHead.ts`) and `src/lib/tableSort.ts`,
   each keeping its sort in local storage. A column sorts its useful way first (newest,
   most clones, worst status). Where the table's own order means something, as in the

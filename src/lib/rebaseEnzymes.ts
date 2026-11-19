@@ -624,3 +624,1060 @@ ZraI	GAC^GTC	GACGTC	3	3	0	INV
 ZrmI	AGT^ACT	AGTACT	3	3	0	IV
 Zsp2I	ATGCA^T	ATGCAT	5	1	0	V
 `;
+
+/**
+ * How Dam (dam), Dcm (dcm) and CpG (cpg) methylation affect the enzymes above, from
+ * REBASE's methylation sensitivity pages of 11/17/2026. One line per way a methylase's site
+ * can overlap an enzyme's: name, methylase, the site with codes narrowed to the bases meant
+ * in lower case (empty when none are), the methylated bases (t5: the top strand's sixth
+ * base of the site searched for; b0: the bottom strand's base paired with the first) and
+ * what the reports say (cut, impaired, blocked). Untested overlaps aren't listed.
+ */
+export const REBASE_METHYLATION = `
+AarI	cpg		t6	impaired
+AatII	cpg		t5	blocked
+AatII	cpg		t2 b3	blocked
+AatII	cpg		t5 b0	blocked
+AatII	cpg		t2 b0 b3	blocked
+AatII	cpg		t2 t5 b0 b3	blocked
+AccI	cpg		t5	blocked
+AccI	cpg	GTcgAC	t2 b3	blocked
+AccI	cpg		t5 b0	blocked
+AccI	cpg	GTcgAC	t2 b0 b3	blocked
+AccI	cpg	GTcgAC	t2 t5 b0 b3	blocked
+AccII	cpg		t0 b1	blocked
+AccII	cpg		t0 t2 b1 b3	blocked
+AccIII	dam		t5	blocked
+AccIII	dam		t5 b0	blocked
+AccIII	cpg		t2 b3	cut
+Acc65I	dcm		t5	impaired
+Acc65I	dcm		t5 b0	blocked
+Acc65I	cpg		t5	impaired
+Acc65I	cpg		t5 b0	blocked
+AccB7I	dcm		t1	impaired,blocked
+AccB7I	dcm		t1 b9	blocked
+AccBSI	cpg		t5	cut
+AciI	cpg		t3	blocked
+AciI	cpg		t1 b2	blocked
+AciI	cpg		t1 t3 b2	blocked
+AclI	cpg		t2 b3	blocked
+AdeI	cpg	CACgNNGTG	t2 b3	impaired
+AdeI	cpg	CACgNcGTG	t2 t5 b3 b6	blocked
+AfeI	cpg		t2 b3	blocked
+AflIII	cpg	ACgYGT	t1 b2	cut
+AflIII	cpg	ACgcGT	t1 t3 b2 b4	cut,impaired
+AgeI	cpg		t2 b3	blocked
+AhdI	cpg		t10	cut
+AhdI	cpg	GACgNNNNGTC	t2 b3	cut
+AhdI	cpg		t10 b0	impaired
+AhdI	cpg	GACgNNNNGTC	t2 b0 b3	cut
+AhdI	cpg	GACNNNNcGTC	t7 b0 b8	blocked
+AhdI	cpg	GACgNNNcGTC	t2 t7 b3 b8	cut
+AhdI	cpg	GACgNNNNGTC	t2 t10 b0 b3	blocked
+AhdI	cpg	GACgNNNcGTC	t2 t7 b0 b3 b8	blocked
+AhdI	cpg	GACgNNNcGTC	t2 t7 t10 b0 b3 b8	cut
+AjiI	cpg		t2 b3	blocked
+AjiI	cpg		t2 t5 b3	blocked
+AjnI	dcm		t1 b3	cut
+AjuI	cpg		b0	cut
+AleI	cpg	CACgNNNGTG	t2 b3	cut
+AleI	cpg	CACgNNcGTG	t2 t6 b3 b7	impaired
+AlfI	cpg		t11	cut
+AloI	dcm		t12	cut
+AloI	cpg		t12	cut
+AloI	cpg		b0	blocked
+AloI	cpg	GAACgNNNNNTCC	t3 b4	cut
+AloI	cpg		t12 b0	blocked
+AloI	cpg	GAACgNNNNNTCC	t3 t12 b4	blocked
+AloI	cpg	GAACgNNNNNTCC	t3 b0 b4	blocked
+AloI	cpg	GAACgNNNNNTCC	t3 t12 b0 b4	blocked
+AlwI	dam		t2 b3	blocked
+AlwI	dcm		b0	cut
+AlwI	cpg		t4	cut
+AlwI	cpg		b0	cut
+AlwI	cpg		t4 b0	cut
+Alw21I	cpg		t5	cut
+Alw21I	cpg		t5 b0	cut
+Alw26I	cpg		t4	cut
+Alw26I	cpg		b0	blocked
+Alw26I	cpg		t4 b0	blocked
+Alw44I	cpg		t5	blocked
+Alw44I	cpg		t5 b0	blocked
+AlwNI	dcm		t0 b2	blocked
+AlwNI	dcm		t0 t6 b2 b8	blocked
+ApaI	dcm		t5	impaired,blocked
+ApaI	dcm		t5 b0	impaired,blocked
+ApaI	cpg		t5	impaired,blocked
+ApaI	cpg		t5 b0	impaired,blocked
+ApaLI	cpg		t5	blocked
+ApaLI	cpg		t5 b0	blocked
+ApeKI	cpg		t4	impaired
+ApeKI	cpg		t4 b0	blocked
+ApoI	cpg	RAATTc	t5	cut
+ApoI	cpg	gAATTc	t5 b0	cut
+AscI	dcm		t7	cut
+AscI	dcm		t7 b0	cut
+AscI	cpg		t7	cut
+AscI	cpg		t2 b3	blocked
+AscI	cpg		t7 b0	cut
+AscI	cpg		t2 b0 b3	blocked
+AscI	cpg		t4 b0 b5	blocked
+AscI	cpg		t2 t4 b3 b5	blocked
+AscI	cpg		t2 t7 b0 b3	blocked
+AscI	cpg		t2 t4 b0 b3 b5	blocked
+AscI	cpg		t2 t4 t7 b0 b3 b5	blocked
+AsiSI	dam		t3 b4	cut
+AsiSI	cpg		t7	cut
+AsiSI	cpg		t1 b2	blocked
+AsiSI	cpg		t7 b0	cut
+AsiSI	cpg		t1 b0 b2	blocked
+AsiSI	cpg		t5 b0 b6	blocked
+AsiSI	cpg		t1 t5 b2 b6	blocked
+AsiSI	cpg		t1 t7 b0 b2	blocked
+AsiSI	cpg		t1 t5 b0 b2 b6	blocked
+AsiSI	cpg		t1 t5 t7 b0 b2 b6	blocked
+AspLEI	cpg		t3	blocked
+AspLEI	cpg		t3 b0	blocked
+AspLEI	cpg		t1 b0 b2	blocked
+AspLEI	cpg		t1 t3 b0 b2	blocked
+AspS9I	dcm		t4	blocked
+AspS9I	dcm		t4 b0	blocked
+AspS9I	cpg		t4	blocked
+AspS9I	cpg		t4 b0	blocked
+AsuII	cpg		t2 b3	cut
+AsuNHI	cpg		t5	cut
+AvaI	cpg		t2 b3	blocked
+AvaII	dcm		t4	blocked
+AvaII	dcm		t4 b0	blocked
+AvaII	cpg		t4	blocked
+AvaII	cpg		t4 b0	blocked
+AviII	cpg		t2 b3	blocked
+BaeI	dcm	ACNNNNGTAcC	t10	cut
+BaeI	cpg		t10	cut
+BaeI	cpg	ACgNNNGTAYC	t1 b2	cut
+BaeI	cpg	ACNNNcGTAYC	t5 b6	cut
+BaeI	cpg	ACgNNNGTAYC	t1 t10 b2	cut
+BaeI	cpg	ACNNNcGTAYC	t5 t10 b6	blocked
+BaeI	cpg	ACgNNcGTAYC	t1 t5 b2 b6	cut
+BaeI	cpg	ACgNNcGTAYC	t1 t5 t10 b2 b6	cut
+BaeGI	dcm	GKGCcC	t5	cut
+BaeGI	dcm	GgGCcC	t5 b0	cut
+BaeGI	cpg		t5	cut
+BaeGI	cpg		t5 b0	cut
+BalI	dcm		t4	impaired
+BamHI	dam		t2 b3	cut
+BamHI	dcm		t5	cut
+BamHI	dcm		t5 b0	cut
+BamHI	cpg		t5	cut
+BamHI	cpg		t5 b0	cut
+BanI	dcm		t5	impaired
+BanI	dcm		t5 b0	blocked
+BanI	cpg		t5	impaired
+BanI	cpg	GGcgCC	t2 b3	cut
+BanI	cpg		t5 b0	blocked
+BanI	cpg	GGcgCC	t2 b0 b3	impaired
+BanI	cpg	GGcgCC	t2 t5 b0 b3	blocked
+BanII	dcm	GRGCcC	t5	cut
+BanII	dcm	GgGCcC	t5 b0	cut
+BanII	cpg		t5	cut
+BanII	cpg		t5 b0	cut
+BauI	cpg		t2 b3	cut
+BbrPI	cpg		t2 b3	blocked
+BbsI	cpg		t5	cut
+BbsI	cpg		b0	cut
+BbsI	cpg		t5 b0	cut
+BbvI	cpg		t4	cut
+BbvI	cpg		b0	cut
+BbvI	cpg		t4 b0	cut
+BbvCI	cpg		t6	impaired
+BccI	cpg		t4	cut
+BceAI	cpg		t4	blocked
+BceAI	cpg		t1 b2	blocked
+BceAI	cpg		t1 t4 b2	blocked
+BcgI	dam		t2	impaired,blocked
+BciVI	dcm		t5	cut
+BciVI	cpg		t5	cut
+BciVI	cpg		b0	cut
+BciVI	cpg		t5 b0	cut
+BclI	dam		t2	impaired
+BclI	dam		t2 b3	blocked
+BcnI	cpg	CCgGG	t1 b2	impaired
+BcoDI	cpg		t4	impaired
+BcoDI	cpg		b0	cut
+BcoDI	cpg		t4 b0	impaired
+BfuI	dcm		t5	cut
+BfuI	cpg		t5	cut
+BfuI	cpg		b0	cut
+BfuAI	cpg		t5	impaired
+BglI	dcm		t2	cut
+BglI	cpg		t10	impaired
+BglI	cpg	GCCgNNNNGGC	t2 b3	cut
+BglI	cpg		t10 b0	blocked
+BglI	cpg	GCCgNNNNGGC	t2 b0 b3	cut
+BglI	cpg	GCCNNNNcGGC	t7 b0 b8	cut
+BglI	cpg	GCCgNNNcGGC	t2 t7 b3 b8	cut
+BglI	cpg	GCCgNNNNGGC	t2 t10 b0 b3	blocked
+BglI	cpg	GCCgNNNcGGC	t2 t7 b0 b3 b8	blocked
+BglI	cpg	GCCgNNNcGGC	t2 t7 t10 b0 b3 b8	blocked
+BglII	dam		t2 b3	cut
+BlpI	cpg		t6	cut
+BlpI	cpg		t6 b0	cut
+Bme1390I	dcm		t1 b3	blocked
+BmgBI	cpg		t5	impaired
+BmgBI	cpg		t2 b3	blocked
+BmgBI	cpg		t2 t5 b3	blocked
+BmtI	cpg		t5	cut
+BmtI	cpg		t5 b0	cut
+BoxI	cpg		t9	cut
+BoxI	cpg	GACgNNNGTC	t2 b3	impaired
+BoxI	cpg		t9 b0	cut
+BoxI	cpg	GACgNNcGTC	t2 t6 b3 b7	blocked
+BoxI	cpg	GACgNNcGTC	t2 t6 b0 b3 b7	blocked
+BoxI	cpg	GACgNNcGTC	t2 t6 t9 b0 b3 b7	blocked
+BpiI	cpg		t5	cut
+BpiI	cpg		b0	cut
+BplI	cpg		t10	cut
+BpmI	dcm		t0 b2	cut
+Bpu10I	cpg		t6	cut
+Bpu1102I	cpg		t6	cut
+Bpu1102I	cpg		t6 b0	cut
+BsaI	dcm		b0	cut,blocked
+BsaI	cpg		t5	cut
+BsaI	cpg		b0	cut,blocked
+BsaI	cpg		t5 b0	impaired,blocked
+Bsa29I	dam		t0 b1	blocked
+Bsa29I	dam		t0 t4 b1 b5	blocked
+BsaAI	cpg		t2 b3	blocked
+BsaBI	dam		t1 b2	blocked
+BsaBI	dam		t1 t7 b2 b8	blocked
+BsaBI	cpg		t9	impaired
+BsaBI	cpg		t9 b0	blocked
+BsaHI	dcm	GRCGcC	t5	cut
+BsaHI	dcm	GgCGcC	t5 b0	blocked
+BsaHI	cpg		t5	cut
+BsaHI	cpg		t2 b3	blocked
+BsaHI	cpg		t5 b0	blocked
+BsaHI	cpg		t2 b0 b3	blocked
+BsaHI	cpg		t2 t5 b0 b3	blocked
+BsaJI	dcm		t1	cut
+BsaJI	cpg	CCgNGG	t1 b2	cut
+BsaJI	cpg	CCgcGG	t1 t3 b2 b4	cut
+BsaWI	dam	WCCGGa	t5	cut
+BsaWI	dam	tCCGGa	t5 b0	cut
+BsaWI	cpg		t2 b3	cut
+BsaXI	dcm		t10	cut
+BsaXI	cpg		t10	cut
+BsaXI	cpg	ACgNNNNCTCC	t1 b2	cut
+BsaXI	cpg	ACgNNNNCTCC	t1 t10 b2	cut
+Bsc4I	dcm		t1	blocked
+Bsc4I	dcm		t1 b9	blocked
+Bsc4I	cpg	CCgNNNNNNGG	t1 b2	blocked
+Bsc4I	cpg	CCgNNNNNcGG	t1 t8 b2 b9	blocked
+Bse8I	dam		t1 b2	blocked
+Bse8I	dam		t1 t7 b2 b8	blocked
+Bse8I	cpg		t9	cut
+Bse8I	cpg		t9 b0	blocked
+BseDI	dcm		t1	cut
+BseDI	cpg	CCgNGG	t1 b2	cut
+BseDI	cpg	CCgcGG	t1 t3 b2 b4	cut
+Bse3DI	cpg		b0	cut
+BseGI	dcm		b0	cut
+BseGI	cpg		b0	cut
+BseJI	dam		t1 b2	blocked
+BseJI	dam		t1 t7 b2 b8	blocked
+BseJI	cpg		t9	cut
+BseLI	dcm		t1	impaired
+BseLI	dcm		t1 b9	blocked
+BseLI	cpg	CCgNNNNNNGG	t1 b2	impaired
+BseLI	cpg	CCgNNNNNcGG	t1 t8 b2 b9	blocked
+BseMI	cpg		b0	cut
+BseRI	cpg		b0	cut
+BseSI	dcm	GKGCcC	t5	cut
+BseSI	dcm	GgGCcC	t5 b0	cut
+BseSI	cpg		t5	cut
+BseSI	cpg		t5 b0	cut
+BseXI	cpg		t4	cut
+BseXI	cpg		b0	cut
+BseXI	cpg		t4 b0	cut
+BseYI	cpg		t5	blocked
+BsgI	cpg		b0	cut
+Bsh1236I	cpg		t0 b1	blocked
+Bsh1236I	cpg		t0 t2 b1 b3	blocked
+Bsh1285I	dam	CGatCG	t2 b3	blocked
+Bsh1285I	cpg		t0 t4 b1 b5	blocked
+BshNI	dcm		t5	impaired
+BshNI	dcm		t5 b0	blocked
+BshNI	cpg		t5	impaired
+BshNI	cpg	GGcgCC	t2 b3	impaired
+BshNI	cpg		t5 b0	blocked
+BshNI	cpg	GGcgCC	t2 t5 b0 b3	blocked
+BshTI	cpg		t2 b3	blocked
+BsiEI	dam	CGatCG	t2 b3	cut
+BsiEI	cpg		t0 b1	impaired
+BsiEI	cpg		t0 t4 b1 b5	blocked
+BsiHKAI	cpg		t5	cut
+BsiHKAI	cpg		t5 b0	cut
+BsiWI	cpg		t0 b1	blocked
+BsiWI	cpg		t0 t4 b1 b5	blocked
+BslI	dcm		t1	cut,impaired
+BslI	dcm		t1 b9	blocked
+BslI	cpg	CCgNNNNNNGG	t1 b2	cut,impaired
+BslI	cpg	CCgNNNNNcGG	t1 t8 b2 b9	blocked
+BsmI	cpg		t5	cut
+BsmI	cpg		b0	cut
+BsmI	cpg		t5 b0	cut
+BsmAI	cpg		t4	impaired,blocked
+BsmAI	cpg		b0	cut
+BsmAI	cpg		t4 b0	blocked
+BsmBI	cpg		t5	impaired
+BsmBI	cpg		t0 b1	blocked
+BsmBI	cpg		t0 t5 b1	blocked
+BsmFI	dcm		b0	blocked
+BsmFI	cpg		t4	blocked
+BsmFI	cpg		b0	blocked
+BsmFI	cpg		t4 b0	blocked
+Bso31I	dcm		b0	impaired
+Bso31I	cpg		t5	cut
+Bso31I	cpg		b0	impaired
+BsoBI	cpg		t2 b3	cut
+Bsp68I	dam		t5	cut
+Bsp68I	dam		t5 b0	cut
+Bsp68I	cpg		t1 t3 b2 b4	blocked
+Bsp119I	cpg		t2 b3	blocked
+Bsp120I	dcm		t5	blocked
+Bsp120I	dcm		t5 b0	blocked
+Bsp120I	cpg		t5	blocked
+Bsp120I	cpg		t5 b0	blocked
+Bsp143I	dam		t1 b2	cut
+Bsp143I	cpg		t3	blocked
+Bsp143I	cpg		t3 b0	blocked
+Bsp1286I	dcm	GDGCcC	t5	cut
+Bsp1286I	dcm	GgGCcC	t5 b0	cut
+Bsp1286I	cpg		t5	cut
+Bsp1286I	cpg		t5 b0	cut
+Bsp1720I	cpg		t6	cut
+Bsp1720I	cpg		t6 b0	cut
+BspDI	dam		t0 b1	blocked
+BspDI	dam		t0 t4 b1 b5	blocked
+BspDI	cpg		t2 b3	blocked
+BspEI	dam		t5	blocked
+BspEI	dam		t5 b0	blocked
+BspEI	cpg		t2 b3	impaired
+BspFNI	cpg		t0 b1	blocked
+BspFNI	cpg		t0 t2 b1 b3	blocked
+BspHI	dam		t5	cut,impaired,blocked
+BspHI	dam		t5 b0	blocked
+BspLI	dcm		t5	cut
+BspLI	dcm		t5 b0	blocked
+BspLI	cpg		t5	cut
+BspLI	cpg		t5 b0	blocked
+BspMI	cpg		t5	cut
+BspPI	dam		t2 b3	blocked
+BspPI	dcm		b0	cut
+BspPI	cpg		t4	cut
+BspPI	cpg		b0	cut
+BspQI	cpg		t6	cut
+BspQI	cpg		b0	cut
+BspQI	cpg		t6 b0	cut
+BsrBI	cpg		t5	cut
+BsrBI	cpg		t1 b2	impaired
+BsrBI	cpg		t1 t5 b2	blocked
+BsrDI	cpg		b0	cut
+BsrFI	cpg	RCCGGc	t5	cut
+BsrFI	cpg		t2 b3	blocked
+BsrFI	cpg	gCCGGc	t5 b0	cut
+BsrFI	cpg	gCCGGY	t2 b0 b3	blocked
+BsrFI	cpg	gCCGGc	t2 t5 b0 b3	blocked
+BssECI	dcm		t1	cut
+BssECI	cpg	CCgNGG	t1 b2	cut
+BssECI	cpg	CCgcGG	t1 t3 b2 b4	cut
+BssHII	cpg		t5	impaired
+BssHII	cpg		t1 b2	blocked
+BssHII	cpg		t5 b0	impaired
+BssHII	cpg		t1 b0 b2	blocked
+BssHII	cpg		t3 b0 b4	blocked
+BssHII	cpg		t1 t3 b2 b4	blocked
+BssHII	cpg		t1 t5 b0 b2	blocked
+BssHII	cpg		t1 t3 b0 b2 b4	blocked
+BssHII	cpg		t1 t3 t5 b0 b2 b4	blocked
+BssSI	cpg		t2 b3	cut
+Bst6I	cpg		t5	blocked
+Bst1107I	cpg		t5	impaired,blocked
+Bst1107I	cpg		t5 b0	blocked
+BstAPI	cpg		t10	cut
+BstAPI	cpg		t10 b0	blocked
+BstBI	cpg		t2 b3	blocked
+BstC8I	cpg	GCgcGC	t1 t3 b2 b4	blocked
+BstC8I	cpg	GCgcGC	t1 t3 b0 b2 b4	blocked
+BstC8I	cpg	GCgcGC	t1 t3 t5 b0 b2 b4	blocked
+BstDSI	cpg	CCgYGG	t1 b2	cut
+BstEII	dcm		t6	cut
+BstEII	dcm		t6 b0	cut
+BstEII	cpg		t6	cut
+BstEII	cpg		t6 b0	cut
+BstF5I	dcm		b0	cut
+BstF5I	cpg		b0	cut
+BstHHI	cpg		t3	cut
+BstKTI	dam		t1 b2	blocked
+BstKTI	cpg		t3	cut
+BstKTI	cpg		t3 b0	cut
+BstMAI	cpg		t4	cut
+BstMWI	cpg		t10	impaired
+BstMWI	cpg	GCgNNNNNNGC	t1 b2	blocked
+BstMWI	cpg	GCgNNNNNNGC	t1 b0 b2	blocked
+BstMWI	cpg	GCNNNNNNcGC	t8 b0 b9	blocked
+BstMWI	cpg	GCgNNNNNcGC	t1 t8 b2 b9	blocked
+BstMWI	cpg	GCgNNNNNNGC	t1 t10 b0 b2	blocked
+BstMWI	cpg	GCgNNNNNcGC	t1 t8 b0 b2 b9	blocked
+BstMWI	cpg	GCgNNNNNcGC	t1 t8 t10 b0 b2 b9	blocked
+BstNI	dcm		t1 b3	cut
+BstOI	dcm		t1 b3	cut
+BstSCI	dcm		t1 b3	blocked
+BstSLI	dcm	GKGCcC	t5	cut
+BstSLI	cpg		t5	cut
+BstUI	cpg		t0 b1	blocked
+BstUI	cpg		t0 t2 b1 b3	blocked
+Bst2UI	dcm		t1 b3	cut
+BstV1I	cpg		t4	cut
+BstV1I	cpg		b0	cut
+BstV2I	cpg		t5	cut
+BstXI	dcm		t1	cut
+BstXI	dcm		t1 b10	blocked
+BstYI	dam		t2 b3	cut
+BstYI	dcm	RGATCc	t5	cut
+BstYI	dcm	gGATCc	t5 b0	cut
+BstYI	cpg	RGATCc	t5	cut
+BstYI	cpg	gGATCc	t5 b0	cut
+BstZ17I	cpg		t5	impaired
+BstZ17I	cpg		t5 b0	blocked
+BsuI	cpg		b0	cut
+Bsu15I	dam		t0 b1	blocked
+Bsu15I	dam		t0 t4 b1 b5	blocked
+Bsu15I	cpg		t2 b3	blocked
+BsuRI	dcm		t3	cut
+BsuRI	dcm		t3 b0	cut
+BsuRI	cpg		t3	cut
+BsuRI	cpg		t3 b0	cut
+BtgI	cpg	CCgYGG	t1 b2	cut
+BtgI	cpg	CCgcGG	t1 t3 b2 b4	cut
+BtgZI	cpg		b0	cut
+BtgZI	cpg		t1 b2	impaired
+BtgZI	cpg		t1 b0 b2	impaired
+BtrI	cpg		t5	cut
+BtrI	cpg		t2 b3	blocked
+BtrI	cpg		t2 t5 b3	blocked
+BtsI	cpg		b0	cut
+BtsCI	dcm		b0	cut
+BtsCI	cpg		b0	cut
+BveI	cpg		t5	impaired
+Cac8I	cpg		t5	impaired
+Cac8I	cpg	GCgNGC	t1 b2	impaired
+Cac8I	cpg		t5 b0	impaired
+Cac8I	cpg	GCgNGC	t1 b0 b2	blocked
+Cac8I	cpg	GCNcGC	t3 b0 b4	impaired
+Cac8I	cpg	GCgcGC	t1 t3 b2 b4	blocked
+Cac8I	cpg	GCgNGC	t1 t5 b0 b2	blocked
+Cac8I	cpg	GCgcGC	t1 t3 b0 b2 b4	blocked
+Cac8I	cpg	GCgcGC	t1 t3 t5 b0 b2 b4	blocked
+CaiI	dcm		t0 b2	blocked
+CaiI	dcm		t0 t6 b2 b8	blocked
+CfoI	cpg		t1 b2	blocked
+CfoI	cpg		t1 b0 b2	blocked
+CfoI	cpg		t1 t3 b0 b2	blocked
+Cfr9I	cpg		t2 b3	impaired
+Cfr10I	cpg		t2 b3	blocked
+Cfr10I	cpg	gCCGGY	t2 b0 b3	blocked
+Cfr10I	cpg	gCCGGc	t2 t5 b0 b3	blocked
+Cfr13I	dcm		t4	blocked
+Cfr13I	dcm		t4 b0	blocked
+Cfr13I	cpg		t4	blocked
+Cfr13I	cpg		t4 b0	blocked
+Cfr42I	cpg		t1 t3 b2 b4	blocked
+ClaI	dam		t0 b1	blocked
+ClaI	dam		t0 t4 b1 b5	blocked
+ClaI	cpg		t2 b3	blocked
+CpoI	cpg		t0 t5 b1 b6	blocked
+CseI	cpg		t2 b3	blocked
+CseI	cpg		t2 t4 b3	blocked
+CseI	cpg		t2 b0 b3	blocked
+CseI	cpg		t2 t4 b0 b3	blocked
+CspI	cpg		t0 b1	blocked
+CspI	cpg		t0 t5 b1 b6	blocked
+Csp6I	cpg		t3	cut
+Csp6I	cpg		t3 b0	cut
+CspCI	cpg	CAANNNNcGTGG	t7 b8	cut
+CviAI	dam		t1 b2	blocked
+CviKI-1	dcm	RGCc	t3	cut
+CviKI-1	dcm	gGCc	t3 b0	cut
+CviKI-1	cpg	RGCc	t3	cut
+CviKI-1	cpg	gGCc	t3 b0	cut
+CviQI	cpg		t3	cut
+CviQI	cpg		t3 b0	cut,impaired
+DpnI	dam		t1 b2	cut
+DpnI	cpg		t3	blocked
+DpnI	cpg		t3 b0	blocked
+DpnII	dam		t1	blocked
+DpnII	dam		t1 b2	blocked
+DraIII	cpg	CACgNNGTG	t2 b3	impaired
+DraIII	cpg	CACgNcGTG	t2 t5 b3 b6	cut
+DrdI	cpg		t11	cut
+DrdI	cpg	GACgNNNNNGTC	t2 b3	cut
+DrdI	cpg		t11 b0	impaired
+DrdI	cpg	GACgNNNNNGTC	t2 b0 b3	impaired
+DrdI	cpg	GACNNNNNcGTC	t8 b0 b9	blocked
+DrdI	cpg	GACgNNNNcGTC	t2 t8 b3 b9	blocked
+DrdI	cpg	GACgNNNNNGTC	t2 t11 b0 b3	blocked
+DrdI	cpg	GACgNNNNcGTC	t2 t8 b0 b3 b9	blocked
+DrdI	cpg	GACgNNNNcGTC	t2 t8 t11 b0 b3 b9	blocked
+EaeI	dcm	YGGCCa	t4	blocked
+EaeI	dcm	tGGCCa	t4 b1	blocked
+EaeI	cpg	cGGCCR	t0 b1	blocked
+EaeI	cpg	cGGCCg	t0 t4 b1 b5	blocked
+EagI	cpg		t0 b1	blocked
+EagI	cpg		t0 t4 b1 b5	blocked
+Eam1104I	cpg		t5	cut
+Eam1105I	cpg		t10	cut
+Eam1105I	cpg	GACgNNNNGTC	t2 b3	cut
+Eam1105I	cpg	GACgNNNcGTC	t2 t7 b3 b8	cut
+EarI	cpg		t5	impaired
+EciI	dam		t5	blocked
+EciI	dcm		b0	cut
+EciI	cpg		b0	cut
+EciI	cpg		t2 b3	blocked
+EciI	cpg		t2 b0 b3	blocked
+Ecl136II	cpg		t5	impaired,blocked
+Ecl136II	cpg		t5 b0	blocked
+Eco24I	dcm	GRGCcC	t5	cut
+Eco24I	dcm	GgGCcC	t5 b0	cut
+Eco24I	cpg		t5	cut
+Eco24I	cpg		t5 b0	cut
+Eco31I	dcm		b0	impaired
+Eco31I	cpg		t5	cut
+Eco31I	cpg		b0	impaired
+Eco32I	cpg		t5	cut
+Eco32I	cpg		t5 b0	cut
+Eco47I	dcm		t4	blocked
+Eco47I	dcm		t4 b0	blocked
+Eco47I	cpg		t4	blocked
+Eco47I	cpg		t4 b0	blocked
+Eco47III	cpg		t2 b3	blocked
+Eco52I	cpg		t0 t4 b1 b5	blocked
+Eco72I	cpg		t2 b3	blocked
+Eco88I	cpg		t2 b3	impaired
+Eco91I	dcm		t6	cut
+Eco91I	dcm		t6 b0	cut
+Eco91I	cpg		t6	cut
+Eco91I	cpg		t6 b0	cut
+Eco105I	cpg		t2 b3	blocked
+Eco147I	dcm		t4 b1	blocked
+EcoNI	dcm		t1	cut
+EcoNI	dcm		t1 b9	cut
+EcoO109I	dcm	RGGNCCt	t5	blocked
+EcoO109I	dcm	RGGNCCc	t6	cut
+EcoO109I	dcm	gGGNCCt	t5 b0	blocked
+EcoO109I	dcm	aGGNCCt	t5 b1	blocked
+EcoO109I	dcm	gGGNCCc	t6 b0	cut
+EcoO109I	cpg	RGGNCCc	t6	cut
+EcoO109I	cpg	gGGNCCc	t6 b0	cut
+EcoRI	cpg		t5	cut,impaired
+EcoRI	cpg		t5 b0	impaired,blocked
+EcoRII	dcm		t1 b3	blocked
+EcoRV	cpg		t5	cut
+EcoRV	cpg		t5 b0	cut,impaired
+Eco53kI	cpg		t5	cut
+Eco53kI	cpg		t5 b0	blocked
+EheI	dcm		t5	cut
+EheI	dcm		t5 b0	cut
+EheI	cpg		t5	cut
+EheI	cpg		t2 b3	blocked
+EheI	cpg		t5 b0	cut
+EheI	cpg		t2 b0 b3	blocked
+EheI	cpg		t2 t5 b0 b3	blocked
+Esp3I	cpg		t5	cut
+Esp3I	cpg		t0 b1	blocked
+Esp3I	cpg		t0 t5 b1	blocked
+FaqI	dcm		b0	cut
+FaqI	cpg		t4	blocked
+FaqI	cpg		b0	cut
+FaqI	cpg		t4 b0	blocked
+FauI	cpg		t4	cut,impaired
+FauI	cpg		t2 b3	blocked
+FauI	cpg		t2 t4 b3	blocked
+Fnu4HI	cpg		t4	blocked
+Fnu4HI	cpg	GCgGC	t1 b2	blocked
+Fnu4HI	cpg		t4 b0	blocked
+Fnu4HI	cpg	GCgGC	t1 b0 b2	blocked
+Fnu4HI	cpg	GCcGC	t2 b0 b3	blocked
+Fnu4HI	cpg	GCgGC	t1 t4 b0 b2	blocked
+FokI	dcm		b0	cut,impaired
+FokI	cpg		b0	cut,impaired
+FriOI	dcm	GRGCcC	t5	cut
+FriOI	cpg		t5	cut
+FseI	dcm		t7	cut
+FseI	dcm		t7 b0	impaired
+FseI	cpg		t7	cut
+FseI	cpg		t3 b4	blocked
+FseI	cpg		t7 b0	impaired
+FseI	cpg		t3 b0 b4	blocked
+FseI	cpg		t3 t7 b0 b4	blocked
+FspI	cpg		t2 b3	blocked
+FspAI	cpg		t3 b4	blocked
+FspAI	cpg	gTGCGCAY	t3 b0 b4	blocked
+FspAI	cpg	gTGCGCAc	t3 t7 b0 b4	blocked
+Fsp4HI	cpg	GCgGC	t1 b2	blocked
+Fsp4HI	cpg		t4 b0	blocked
+Fsp4HI	cpg	GCgGC	t1 b0 b2	blocked
+Fsp4HI	cpg	GCcGC	t2 b0 b3	blocked
+Fsp4HI	cpg	GCgGC	t1 t4 b0 b2	blocked
+GsaI	cpg		t5	blocked
+GsuI	dcm		t0 b2	blocked
+HaeII	dcm	RGCGCc	t5	cut
+HaeII	dcm	gGCGCc	t5 b0	cut
+HaeII	cpg	RGCGCc	t5	cut
+HaeII	cpg		t2 b3	blocked
+HaeII	cpg	gGCGCc	t5 b0	cut
+HaeII	cpg	gGCGCY	t2 b0 b3	blocked
+HaeII	cpg	gGCGCc	t2 t5 b0 b3	blocked
+HaeIII	dcm		t3	cut
+HaeIII	dcm		t3 b0	cut,impaired
+HaeIII	cpg		t3	cut
+HaeIII	cpg		t3 b0	cut,impaired
+HgaI	cpg		t4	impaired,blocked
+HgaI	cpg		b0	cut
+HgaI	cpg		t2 b3	blocked
+HgaI	cpg		t4 b0	blocked
+HgaI	cpg		t2 t4 b3	blocked
+HgaI	cpg		t2 b0 b3	blocked
+HgaI	cpg		t2 t4 b0 b3	blocked
+HhaI	cpg		t3	cut
+HhaI	cpg		t1 b2	blocked
+HhaI	cpg		t3 b0	blocked
+HhaI	cpg		t1 b0 b2	blocked
+HhaI	cpg		t1 t3 b0 b2	blocked
+Hin1I	dcm	GRCGcC	t5	impaired
+Hin1I	cpg		t5	impaired
+Hin1I	cpg		t2 b3	blocked
+Hin1I	cpg		t2 b0 b3	blocked
+Hin1I	cpg		t2 t5 b0 b3	blocked
+Hin6I	cpg		t1 b2	blocked
+Hin6I	cpg		t1 b0 b2	blocked
+Hin6I	cpg		t1 t3 b0 b2	blocked
+HinP1I	cpg		t3	cut
+HinP1I	cpg		t1 b2	blocked
+HinP1I	cpg		t3 b0	blocked
+HinP1I	cpg		t1 b0 b2	blocked
+HinP1I	cpg		t1 t3 b0 b2	blocked
+HincII	cpg		t5	cut,impaired
+HincII	cpg	GTcgAC	t2 b3	cut,impaired
+HincII	cpg		t5 b0	blocked
+HincII	cpg	GTcgAC	t2 b0 b3	blocked
+HincII	cpg	GTcgAC	t2 t5 b0 b3	blocked
+HindII	cpg		t5	blocked
+HindII	cpg		t5 b0	blocked
+HindII	cpg	GTcgAC	t2 b0 b3	blocked
+HindII	cpg	GTcgAC	t2 t5 b0 b3	blocked
+HinfI	cpg		t4	cut,impaired,blocked
+HinfI	cpg		t4 b0	impaired,blocked
+HpaI	cpg		t5	cut
+HpaI	cpg		t5 b0	blocked
+HpaII	cpg		t1 b2	blocked
+HphI	dam		t4	blocked
+HphI	dcm		b0	cut
+HphI	cpg		b0	cut
+Hpy8I	cpg		t5	impaired
+Hpy99I	cpg		t0 b1	impaired
+Hpy99I	cpg		t0 t3 b1 b4	blocked
+Hpy166II	cpg		t5	impaired
+Hpy166II	cpg		t5 b0	blocked
+Hpy188I	dam		t4	blocked
+Hpy188I	dam		t4 b0	blocked
+Hpy188I	cpg	TCgGA	t1 b2	cut
+Hpy188III	dam		t5	blocked
+Hpy188III	dam		t5 b0	blocked
+Hpy188III	cpg	TCgNGA	t1 b2	blocked
+Hpy188III	cpg	TCgcGA	t1 t3 b2 b4	blocked
+HpyAV	cpg		t4	impaired
+HpyCH4III	cpg	ACgGT	t1 b2	cut
+HpyCH4IV	cpg		t1 b2	blocked
+HpyF10VI	cpg		t10	impaired
+HpyF10VI	cpg	GCgNNNNNNGC	t1 b2	impaired
+HpyF10VI	cpg		t10 b0	blocked
+HpyF10VI	cpg	GCgNNNNNNGC	t1 t10 b0 b2	blocked
+HpyF10VI	cpg	GCgNNNNNcGC	t1 t8 t10 b0 b2 b9	blocked
+HpySE526I	cpg		t1 b2	blocked
+HspAI	cpg		t3	cut
+KasI	dcm		t5	cut
+KasI	dcm		t5 b0	cut
+KasI	cpg		t5	cut
+KasI	cpg		t2 b3	blocked
+KasI	cpg		t5 b0	cut
+KasI	cpg		t2 b0 b3	blocked
+KasI	cpg		t2 t5 b0 b3	blocked
+KpnI	dcm		t5	cut
+KpnI	dcm		t5 b0	cut
+KpnI	cpg		t5	cut
+KpnI	cpg		t5 b0	cut
+Kpn2I	dam		t5	cut
+Kpn2I	dam		t5 b0	cut
+Kpn2I	cpg		t2 b3	blocked
+KspI	cpg		t1 t3 b2 b4	blocked
+Ksp22I	dam		t2 b3	blocked
+KspAI	cpg		t5	impaired
+KspAI	cpg		t5 b0	blocked
+Kzo9I	dam		t1 b2	cut
+LguI	cpg		t6	cut
+LguI	cpg		b0	cut
+LweI	cpg		t4	impaired
+MabI	dcm		t2 b4	cut
+MamI	dam		t1 b2	blocked
+MamI	dam		t1 t7 b2 b8	blocked
+MbiI	cpg		t5	blocked
+MbiI	cpg		t1 b2	impaired
+MbiI	cpg		t1 t5 b2	blocked
+MboI	dam		t1 b2	blocked
+MboI	cpg		t3	cut,impaired
+MboI	cpg		t3 b0	cut,impaired
+MboII	dam		t4	blocked
+MboII	cpg		b0	cut
+MhlI	dcm	GDGCcC	t5	cut
+MhlI	cpg		t5	cut
+MlsI	dcm		t4	blocked
+MlsI	dcm		t4 b1	blocked
+MluI	cpg		t1 b2	blocked
+MluI	cpg		t1 t3 b2 b4	blocked
+MlyI	cpg		t4	cut
+MlyI	cpg		b0	cut
+MlyI	cpg		t4 b0	cut
+MmeI	dam		b0	cut
+MmeI	cpg		t5	blocked
+MmeI	cpg	TCCgAC	t2 b3	cut
+MmeI	cpg	TCCgAC	t2 t5 b3	blocked
+MnlI	cpg		t3	cut
+MroI	dam		t5	cut
+MroI	cpg		t2 b3	blocked
+MroXI	cpg		t9	cut
+MscI	dcm		t4	blocked
+MscI	dcm		t4 b1	blocked
+MslI	cpg	CAcgNNNRTG	t2 b3	cut
+MslI	cpg	CAcgNNcgTG	t2 t6 b3 b7	cut
+MspI	cpg		t1 b2	cut,impaired
+MspR9I	dcm		t1 b3	blocked
+MssI	cpg		t7	cut
+MssI	cpg		t7 b0	cut
+MvaI	dcm		t1 b3	cut
+Mva1269I	cpg		t5	cut
+Mva1269I	cpg		b0	cut
+MwoI	cpg		t10	cut
+MwoI	cpg	GCgNNNNNNGC	t1 b2	cut
+MwoI	cpg		t10 b0	cut
+MwoI	cpg	GCgNNNNNNGC	t1 b0 b2	impaired
+MwoI	cpg	GCNNNNNNcGC	t8 b0 b9	impaired
+MwoI	cpg	GCgNNNNNcGC	t1 t8 b2 b9	impaired
+MwoI	cpg	GCgNNNNNNGC	t1 t10 b0 b2	blocked
+MwoI	cpg	GCgNNNNNcGC	t1 t8 b0 b2 b9	blocked
+MwoI	cpg	GCgNNNNNcGC	t1 t8 t10 b0 b2 b9	blocked
+NaeI	cpg		t5	impaired
+NaeI	cpg		t2 b3	blocked
+NaeI	cpg		t5 b0	blocked
+NaeI	cpg		t2 b0 b3	blocked
+NaeI	cpg		t2 t5 b0 b3	blocked
+NarI	dcm		t5	cut
+NarI	dcm		t5 b0	cut
+NarI	cpg		t5	cut
+NarI	cpg		t2 b3	blocked
+NarI	cpg		t5 b0	cut
+NarI	cpg		t2 b0 b3	blocked
+NarI	cpg		t2 t5 b0 b3	blocked
+NciI	cpg	CCgGG	t1 b2	impaired,blocked
+NdeII	dam		t1 b2	blocked
+NdeII	cpg		t3	cut
+NdeII	cpg		t3 b0	cut
+NgoMIV	cpg		t5	impaired
+NgoMIV	cpg		t2 b3	blocked
+NgoMIV	cpg		t5 b0	blocked
+NgoMIV	cpg		t2 b0 b3	blocked
+NgoMIV	cpg		t2 t5 b0 b3	blocked
+NheI	cpg		t5	impaired,blocked
+NheI	cpg		t5 b0	blocked
+NlaIV	dcm		t5	blocked
+NlaIV	dcm		t5 b0	blocked
+NlaIV	cpg		t5	blocked
+NlaIV	cpg		t5 b0	blocked
+NmeAIII	cpg		b0	cut
+NmeAIII	cpg		t2 b3	cut
+NmeAIII	cpg		t2 b0 b3	cut
+NmuCI	cpg		t4	impaired
+NmuCI	cpg		t4 b0	impaired
+NotI	cpg		t7	cut
+NotI	cpg		t1 b2	blocked
+NotI	cpg		t7 b0	cut
+NotI	cpg		t1 b0 b2	blocked
+NotI	cpg		t5 b0 b6	blocked
+NotI	cpg		t1 t5 b2 b6	blocked
+NotI	cpg		t1 t7 b0 b2	blocked
+NotI	cpg		t1 t5 b0 b2 b6	blocked
+NotI	cpg		t1 t5 t7 b0 b2 b6	blocked
+NruI	dam		t5	blocked
+NruI	dam		t5 b0	blocked
+NruI	cpg		t1 b2	blocked
+NruI	cpg		t1 t3 b2 b4	blocked
+NsbI	cpg		t2 b3	blocked
+NspI	cpg	RCATGc	t5	cut
+NspI	cpg	gCATGc	t5 b0	cut
+NspV	cpg		t2 b3	blocked
+OliI	cpg	CACgNNcGTG	t2 t6 b3 b7	impaired
+PaeI	cpg		t5	cut
+PaeI	cpg		t5 b0	cut
+PaeR7I	cpg		t2 b3	impaired,blocked
+PagI	dam		t5	impaired
+PaqCI	cpg		t6	impaired
+PasI	dcm		t2 b4	cut
+PauI	cpg		t1 t3 b2 b4	blocked
+PauI	cpg		t1 t3 b0 b2 b4	blocked
+PauI	cpg		t1 t3 t5 b0 b2 b4	blocked
+PctI	cpg		t5	cut
+PdiI	cpg		t2 b3	blocked
+PdiI	cpg		t2 b0 b3	blocked
+PdiI	cpg		t2 t5 b0 b3	blocked
+PdmI	cpg		t9	impaired
+PdmI	cpg		t9 b0	blocked
+PfeI	cpg		t4	blocked
+PfeI	cpg		t4 b0	blocked
+Pfl23II	cpg		t0 t4 b1 b5	blocked
+PflFI	cpg		t8	cut
+PflFI	cpg	GACgNNGTC	t2 b3	cut
+PflFI	cpg		t8 b0	cut
+PflFI	cpg	GACgNNGTC	t2 b0 b3	cut
+PflFI	cpg	GACNNcGTC	t5 b0 b6	cut
+PflFI	cpg	GACgNcGTC	t2 t5 b3 b6	cut
+PflFI	cpg	GACgNNGTC	t2 t8 b0 b3	cut
+PflFI	cpg	GACgNcGTC	t2 t5 b0 b3 b6	cut
+PflFI	cpg	GACgNcGTC	t2 t5 t8 b0 b3 b6	cut
+PflMI	dcm		t1	blocked
+PflMI	dcm		t1 b9	blocked
+PfoI	dam		t6	impaired
+PfoI	dcm		t2 b4	blocked
+PfoI	cpg	TCCgGGA	t2 b3	blocked
+PleI	cpg		t4	cut
+PleI	cpg		b0	cut
+PleI	cpg		t4 b0	blocked
+Ple19I	dam		t2 b3	cut
+PluTI	dcm		t5	cut
+PluTI	dcm		t5 b0	cut
+PluTI	cpg		t5	cut
+PluTI	cpg		t2 b3	blocked
+PluTI	cpg		t5 b0	cut
+PluTI	cpg		t2 b0 b3	blocked
+PluTI	cpg		t2 t5 b0 b3	blocked
+PmeI	cpg		t7	cut
+PmeI	cpg		t7 b0	cut
+PmlI	cpg		t2 b3	blocked
+Ppu21I	cpg		t2 b3	blocked
+PpuMI	dcm	RGGWCCt	t5	blocked
+PpuMI	dcm	RGGWCCc	t6	cut
+PpuMI	dcm	gGGWCCt	t5 b0	blocked
+PpuMI	dcm	aGGWCCt	t5 b1	blocked
+PpuMI	dcm	gGGWCCc	t6 b0	cut
+PpuMI	cpg	RGGWCCc	t6	cut
+PpuMI	cpg	gGGWCCc	t6 b0	cut
+PshAI	cpg		t9	cut
+PshAI	cpg	GACgNNNGTC	t2 b3	cut
+PshAI	cpg		t9 b0	impaired
+PshAI	cpg	GACgNNNGTC	t2 b0 b3	impaired
+PshAI	cpg	GACNNNcGTC	t6 b0 b7	impaired
+PshAI	cpg	GACgNNcGTC	t2 t6 b3 b7	impaired
+PshAI	cpg	GACgNNNGTC	t2 t9 b0 b3	blocked
+PshAI	cpg	GACgNNcGTC	t2 t6 b0 b3 b7	blocked
+PshAI	cpg	GACgNNcGTC	t2 t6 t9 b0 b3 b7	blocked
+Psp5II	dcm	RGGWCCt	t5	blocked
+Psp5II	dcm	gGGWCCt	t5 b0	blocked
+Psp5II	dcm	aGGWCCt	t5 b1	blocked
+Psp1406I	cpg		t2 b3	blocked
+PspGI	dcm		t1 b3	blocked
+PspN4I	dcm		t5	impaired
+PspN4I	cpg		t5	impaired
+PspOMI	dcm		t5	blocked
+PspOMI	dcm		t5 b0	blocked
+PspOMI	cpg		t5	blocked
+PspOMI	cpg		t5 b0	blocked
+PspXI	cpg	VCTCGAGc	t7	cut,impaired
+PspXI	cpg		t3 b4	impaired
+PspXI	cpg	gCTCGAGc	t7 b0	impaired
+PspXI	cpg	gCTCGAGB	t3 b0 b4	impaired
+PspXI	cpg	gCTCGAGc	t3 t7 b0 b4	impaired
+PsrI	cpg		b0	impaired
+PstNI	dcm		t6	cut
+PsuI	dam		t2 b3	cut
+PsuI	dcm	RGATCc	t5	cut
+PsuI	dcm	gGATCc	t5 b0	cut
+PsuI	cpg	RGATCc	t5	cut
+PsuI	cpg	gGATCc	t5 b0	cut
+PsyI	cpg		t8	cut
+PsyI	cpg	GACgNNGTC	t2 b3	cut
+PsyI	cpg		t8 b0	cut
+PsyI	cpg	GACgNNGTC	t2 b0 b3	cut
+PsyI	cpg	GACNNcGTC	t5 b0 b6	cut
+PsyI	cpg	GACgNcGTC	t2 t5 b3 b6	cut
+PsyI	cpg	GACgNNGTC	t2 t8 b0 b3	cut
+PsyI	cpg	GACgNcGTC	t2 t5 b0 b3 b6	cut
+PsyI	cpg	GACgNcGTC	t2 t5 t8 b0 b3 b6	cut
+PvuI	dam		t2 b3	cut
+PvuI	cpg		t0 b1	blocked
+PvuI	cpg		t0 t4 b1 b5	blocked
+RigI	cpg		t3 b4	blocked
+RigI	cpg		t3 b0 b4	blocked
+RigI	cpg		t3 t7 b0 b4	blocked
+RsaI	cpg		t3	cut,impaired
+RsaI	cpg		t3 b0	impaired,blocked
+RsaNI	cpg		t3	cut
+RsrII	cpg		t0 b1	blocked
+RsrII	cpg		t0 t5 b1 b6	blocked
+SacI	cpg		t5	cut
+SacI	cpg		t5 b0	cut
+SacII	cpg		t1 b2	blocked
+SacII	cpg		t1 t3 b2 b4	blocked
+SalI	cpg		t5	impaired
+SalI	cpg		t2 b3	blocked
+SalI	cpg		t5 b0	blocked
+SalI	cpg		t2 b0 b3	blocked
+SalI	cpg		t2 t5 b0 b3	blocked
+SapI	cpg		t6	cut
+SapI	cpg		b0	cut
+SapI	cpg		t6 b0	cut
+SatI	cpg		t4	blocked
+SatI	cpg	GCgGC	t1 b2	blocked
+SatI	cpg		t4 b0	blocked
+SatI	cpg	GCgGC	t1 b0 b2	blocked
+SatI	cpg	GCcGC	t2 b0 b3	blocked
+SatI	cpg	GCgGC	t1 t4 b0 b2	blocked
+Sau96I	dcm		t4	blocked
+Sau96I	dcm		t4 b0	blocked
+Sau96I	cpg		t4	blocked
+Sau96I	cpg		t4 b0	blocked
+Sau3AI	dam		t1 b2	cut
+Sau3AI	cpg		t3	impaired,blocked
+Sau3AI	cpg		t3 b0	blocked
+SchI	cpg		t4	cut
+SchI	cpg		b0	cut
+ScrFI	dcm		t1 b3	blocked
+ScrFI	cpg	CCgGG	t1 b2	blocked
+SduI	dcm	GDGCcC	t5	cut
+SduI	dcm	GgGCcC	t5 b0	cut
+SduI	cpg		t5	cut
+SduI	cpg		t5 b0	cut
+SexAI	dcm		t2 b4	blocked
+SfaNI	cpg		t4	cut
+SfaNI	cpg		b0	cut
+SfaNI	cpg		t4 b0	impaired
+SfiI	dcm		t3	impaired
+SfiI	dcm		t12	cut
+SfiI	dcm		t3 t12	impaired
+SfiI	dcm		t3 b0	impaired
+SfiI	dcm		t12 b0	cut
+SfiI	dcm		t3 t12 b0	impaired
+SfiI	cpg		t12	cut
+SfiI	cpg	GGCCgNNNNGGCC	t3 b4	impaired
+SfiI	cpg		t12 b0	cut
+SfiI	cpg	GGCCgNNNNGGCC	t3 b0 b4	impaired
+SfiI	cpg	GGCCNNNNcGGCC	t8 b0 b9	impaired
+SfiI	cpg	GGCCgNNNcGGCC	t3 t8 b4 b9	blocked
+SfiI	cpg	GGCCgNNNNGGCC	t3 t12 b0 b4	impaired
+SfiI	cpg	GGCCgNNNcGGCC	t3 t8 b0 b4 b9	impaired,blocked
+SfiI	cpg	GGCCgNNNcGGCC	t3 t8 t12 b0 b4 b9	blocked
+SfoI	dcm		t5	cut
+SfoI	dcm		t5 b0	blocked
+SfoI	cpg		t5	cut
+SfoI	cpg		t2 b3	blocked
+SfoI	cpg		t5 b0	blocked
+SfoI	cpg		t2 b0 b3	blocked
+SfoI	cpg		t2 t5 b0 b3	blocked
+SfuI	cpg		t2 b3	cut
+SgfI	dam		t3 b4	cut
+SgfI	cpg		t1 t5 b2 b6	blocked
+SgfI	cpg		t1 t5 b0 b2 b6	blocked
+SgfI	cpg		t1 t5 t7 b0 b2 b6	blocked
+SgrAI	cpg	CgCCGGYG	t0 b1	cut
+SgrAI	cpg		t3 b4	blocked
+SgrAI	cpg	CgCCGGYG	t0 t3 b1 b4	blocked
+SgrAI	cpg	CgCCGGcG	t0 t6 b1 b7	blocked
+SgrAI	cpg	CgCCGGcG	t0 t3 t6 b1 b4 b7	blocked
+SgsI	dcm		t7	cut
+SgsI	dcm		t7 b0	cut
+SgsI	cpg		t7	cut
+SgsI	cpg		t7 b0	cut
+SgsI	cpg		t2 t4 b3 b5	blocked
+SgsI	cpg		t2 t4 b0 b3 b5	blocked
+SgsI	cpg		t2 t4 t7 b0 b3 b5	blocked
+SmaI	cpg		t2 b3	blocked
+SmlI	cpg	CTcgAG	t2 b3	cut
+SmoI	cpg	CTcgAG	t2 b3	cut
+SnaBI	cpg		t2 b3	blocked
+SphI	cpg		t5	cut
+SphI	cpg		t5 b0	cut
+SrfI	cpg		t7	cut
+SrfI	cpg		t3 b4	blocked
+SrfI	cpg		t7 b0	cut
+SrfI	cpg		t3 b0 b4	blocked
+SrfI	cpg		t3 t7 b0 b4	blocked
+SsiI	cpg		t1 b2	blocked
+SsiI	cpg		t1 t3 b2	blocked
+StuI	dcm		t4	blocked
+StuI	dcm		t4 b1	blocked
+StyD4I	dcm		t1 b3	blocked
+StyD4I	cpg	CCgGG	t1 b2	impaired
+TaaI	cpg	ACgGT	t1 b2	impaired
+TaiI	cpg		t1 b2	blocked
+TaqI	dam		t3	blocked
+TaqI	dam		t3 b0	blocked
+TaqI	cpg		t1 b2	cut
+TauI	cpg	GCgGC	t1 b2	blocked
+TauI	cpg	GCgGC	t1 b0 b2	blocked
+TauI	cpg	GCcGC	t2 b0 b3	blocked
+TauI	cpg	GCgGC	t1 t4 b0 b2	blocked
+TfiI	cpg		t4	cut
+TfiI	cpg		t4 b0	blocked
+TseI	cpg		t4	cut
+TseI	cpg		t4 b0	blocked
+Tsp45I	cpg		t4	cut
+Tsp45I	cpg		t4 b0	cut
+TspMI	cpg		t2 b3	blocked
+Tth111I	cpg		t8	cut
+Tth111I	cpg	GACgNNGTC	t2 b3	cut
+Tth111I	cpg		t8 b0	cut
+Tth111I	cpg	GACgNNGTC	t2 b0 b3	cut
+Tth111I	cpg	GACNNcGTC	t5 b0 b6	cut
+Tth111I	cpg	GACgNcGTC	t2 t5 b3 b6	cut
+Tth111I	cpg	GACgNNGTC	t2 t8 b0 b3	cut
+Tth111I	cpg	GACgNcGTC	t2 t5 b0 b3 b6	cut
+Tth111I	cpg	GACgNcGTC	t2 t5 t8 b0 b3 b6	cut
+Van91I	dcm		t1 b9	blocked
+VneI	cpg		t5	blocked
+VneI	cpg		t5 b0	blocked
+XapI	cpg	RAATTc	t5	cut
+XapI	cpg	gAATTc	t5 b0	cut
+XbaI	dam		t5	blocked
+XbaI	dam		t5 b0	blocked
+XceI	cpg	RCATGc	t5	cut
+XceI	cpg	gCATGc	t5 b0	cut
+XcmI	dcm		t1	cut
+XcmI	dcm		t1 b13	cut
+XhoI	cpg		t2 b3	impaired
+XhoII	dam		t2 b3	cut
+XmaI	cpg		t2 b3	cut,impaired
+XmiI	cpg	GTcgAC	t2 b3	blocked
+XmiI	cpg		t5 b0	blocked
+XmiI	cpg	GTcgAC	t2 b0 b3	blocked
+XmiI	cpg	GTcgAC	t2 t5 b0 b3	blocked
+XmnI	cpg		t9	cut
+XmnI	cpg		t9 b0	cut,blocked
+ZraI	cpg		t5	cut
+ZraI	cpg		t2 b3	blocked
+ZraI	cpg		t5 b0	cut
+ZraI	cpg		t2 b0 b3	blocked
+ZraI	cpg		t2 t5 b0 b3	blocked
+`;
+
+/** Enzymes that cut only DNA with this methylation (REBASE's "methyl-directed" enzymes). */
+export const METHYL_DIRECTED: Readonly<Record<string, string>> = {
+  DpnI: "dam"
+};

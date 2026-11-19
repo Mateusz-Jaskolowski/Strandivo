@@ -271,12 +271,14 @@ assembled, with the line of the first part.
 | 47 | method note (gibson) | "Fragments join across 20 bp overlaps; PCR primers add any missing overlap, half on each side." |
 | 48 | method note (infusion) | "The insert's primers carry 15 bases of each vector end." |
 | 49 | method note (golden gate) | "A Type IIS enzyme cuts every part; their overhangs set the order." |
-| 123 | dialog title | "Simulate cloning" |
-| 123 | dialog note | "Assemble inserts into …." |
-| 353 | empty source hint | "Open the insert's file in another tab, or choose a file." |
-| 472 | ligation problem | "The insert's ends don't match the vector's, so they can't be ligated. Pick enzymes with matching overhangs, or blunt ends on both." |
-| 486 | direction note | "The insert can ligate in either orientation — screen colonies by digest or sequencing." |
-| 488 | self-ligation note | "The vector ends are compatible and may self-ligate; consider dephosphorylating the vector." |
+| 89 | enzyme count (some sites blocked) | "… sites · … predicted cuts" (otherwise "… cuts" / "doesn't cut") |
+| 137 | dialog title | "Simulate cloning" |
+| 137 | dialog note | "Assemble inserts into …." |
+| 387 | empty source hint | "Open the insert's file in another tab, or choose a file." |
+| 517 | ligation problem | "The insert's ends don't match the vector's, so they can't be ligated. Pick enzymes with matching overhangs, or blunt ends on both." |
+| 531 | direction note | "The insert can ligate in either orientation — screen colonies by digest or sequencing." |
+| 533 | self-ligation note | "The vector ends are compatible and may self-ligate; consider dephosphorylating the vector." |
+| — | methylation warning | Shared with Digest (`src/views/methylationWarning.ts`). |
 
 ---
 
@@ -284,15 +286,21 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 53 | dialog title | "Digest" |
-| 53 | dialog note | "Choose enzymes to see the fragments and how they would run on a gel." |
-| 337 | gel note | "Band brightness is proportional to fragment mass. Fragments within ~2% in size co-migrate as a single band." |
-| 118 | enzyme count (some sites blocked) | "… sites · … predicted cuts" (otherwise "… cuts") |
-| 308 | methylation warning (only when a chosen enzyme won't cut) | "… (… sites · … predicted cut): " and the site notes (see Methylation notes) |
-| 326 | strain select (screen readers) | "Strain … was grown in" |
-| 327 | strain option (blank) | "Not set (Dam⁺ Dcm⁺ assumed)" |
-| 342 | label | "Grown in" |
-| 343 | hint | "Sets Host / strain on …'s Info tab." |
+| 66 | dialog title | "Digest" |
+| 66 | dialog note | "Choose enzymes to see the fragments and how they would run on a gel." |
+| 358 | gel note | "Band brightness is proportional to fragment mass. Fragments within ~2% in size co-migrate as a single band." |
+| 90 | enzyme count (some sites blocked) | "… sites · … predicted cuts" (otherwise "… cuts") |
+
+### Methylation warning (Digest and Cloning) — `src/views/methylationWarning.ts`
+
+| Line | Where | Text |
+|------|-------|------|
+| 36 | warning (only when a chosen enzyme won't cut) | "… (… sites · … predicted cut): " and the site notes (see Methylation notes) |
+| 43 | strain select (screen readers) | "Strain … was grown in" |
+| 44 | strain option (blank) | "Not set (Dam⁺ Dcm⁺ assumed)" |
+| 59 | label | "Grown in" |
+| 60 | hint (open tab) | "Sets Host / strain on …'s Info tab." |
+| 60 | hint (file picked from disk) | "Only for this simulation: … isn't open in a tab." |
 
 ---
 

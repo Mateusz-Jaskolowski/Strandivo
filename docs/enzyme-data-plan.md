@@ -85,7 +85,9 @@ generator, which writes what they say into `src/lib/rebaseEnzymes.ts`:
   tested" are left out.
 - `msget?<enzyme>`: every report on modified bases for one enzyme. A few enzymes with
   reports are missing from the damlist pages (BclI and DpnII, November 2026); for those,
-  the reports whose marks Dam or Dcm could make are taken from here.
+  the reports whose marks Dam or Dcm could make on dsDNA are taken from here (single-strand
+  hemi-methylated tests whose other-strand partner lies inside the site are skipped, since
+  E. coli Dam and Dcm methylate both strands).
 - `laplist?s<company>` (http://rebase.neb.com/cgi-bin/laplist?sN) sums up coverage: "N/A
   = no overlap exists, + = all results documented, - = untested cases remain". The
   generator doesn't read it. It was used to check that `canOverlap` agrees with REBASE on
@@ -128,7 +130,7 @@ Decisions (17–19 November 2026):
 - **From REBASE, not suppliers.** It needs no permission (NEB, Thermo Fisher and Promega
   were asked in November 2026; none had agreed), and REBASE's terms are already kept.
 - **A small superscript "m" after a blocked site's name**, in the label's own grey, with
-  its tick dashed. Left as it was, XbaI or ClaI can look like a clean unique cutter and
+  its tick dashed (and on outline chips). Left as it was, XbaI or ClaI can look like a clean unique cutter and
   then fail at the bench; left out, a site the user knows is there vanishes; struck
   through, it reads as removed and is hard to read at small sizes; faded, it looks like
   the grey that means "cuts more than once"; a coloured tag or symbol pulls more attention
@@ -144,11 +146,13 @@ Decisions (17–19 November 2026):
   the DNA was grown, amber suppression about where the protein is made (clone in DH5α,
   express in BL21(DE3)). A suppressor strain is mentioned beside the field, with a link to
   the setting.
-- **The Digest dialog asks only when a chosen enzyme is blocked** (or would be, for a
-  strain it doesn't know). It offers the strain and writes it to the named file's field,
-  which redraws every lane of that file. A question on every digest gets clicked past. A
-  search by name in its list still finds an enzyme that cuts nowhere, as "1 site · 0
-  predicted cuts", so the reason can be read.
+- **The Digest and Simulate cloning dialogs ask only when a chosen enzyme is blocked** (or
+  would be, for a strain it doesn't know). Each offers the strain and writes it to the
+  named open file's field (or keeps it for that simulation when a cloning insert was
+  picked from disk), redrawing every lane or fragment of that file. A question on every
+  reaction gets clicked past. A search by name in Digest (and every enzyme with a site in
+  Simulate cloning) still lists an enzyme that cuts nowhere, as "1 site · 0 predicted
+  cuts", so the reason can be read.
 
 Later: cloning products made from DNA of different origins; amber suppression per file
 (`useAmberSuppression` is window-wide, and caches of codons key on it); a separate

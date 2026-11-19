@@ -15,7 +15,10 @@ import { parseSequenceFile } from "../doc/fileio.ts";
 import { fromParsed } from "../doc/convert.ts";
 import { pickFiles } from "../platform.ts";
 import { SEQUENCE_EXTENSIONS } from "../lib/files.ts";
-import { extraKey, reactionEnzymes, scanSites, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
+import { extraKey, reactionEnzymes, scanSites, siteCounts, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
+import { parseComments } from "../lib/labinfo.ts";
+import { cutCountText, hostMethylation, methylationKey, type DnaMethylation } from "../lib/methylation.ts";
+import { HOST_FIELD } from "../lib/strains.ts";
 import {
   digest,
   endLabel,
@@ -38,6 +41,7 @@ import {
 import { TM_METHODS } from "../lib/primers.ts";
 import { rangeLength, type Range, type SeqData } from "../lib/seqdata.ts";
 import { copyText } from "./inspector.ts";
+import { methylationWarning, type MethylationTarget } from "./methylationWarning.ts";
 import { field, plural, rerender } from "./primerDialogs.ts";
 
 type Method = "restriction" | "gibson" | "infusion" | "goldengate";
@@ -49,9 +53,7 @@ const METHODS: { id: Method; label: string; note: string }[] = [
   { id: "goldengate", label: "Golden Gate", note: "A Type IIS enzyme cuts every part; their overhangs set the order." }
 ];
 
-interface Source {
-  title: string;
-  data: SeqData;
+interface Source extends MethylationTarget {
   selection: Range | null;
 }
 
@@ -70,19 +72,27 @@ interface InsertRow {
 /** Kept between openings in this window. */
 const memory = { method: "restriction" as Method, goldenGate: "BsaI" };
 
-const counts = new WeakMap<SeqData, { key: string; m: Map<string, number> }>();
-/** How many times each enzyme in the list, or in the lab's stock (`extra`), cuts a sequence. */
-function cutCountsOf(d: SeqData, extra: readonly string[]): Map<string, number> {
-  const key = extraKey(extra);
+interface Counts {
+  /** Predicted cuts, once methylation has blocked what it blocks. */
+  cuts: Map<string, number>;
+  sites: Map<string, number>;
+}
+const counts = new WeakMap<SeqData, { key: string; m: Counts }>();
+/** Sites of each enzyme in the list, or in the lab's stock (`extra`), and how many are predicted to cut. */
+function cutCountsOf(d: SeqData, extra: readonly string[], dna: DnaMethylation): Counts {
+  const key = `${extraKey(extra)}|${methylationKey(dna)}`;
   const known = counts.get(d);
   if (known?.key === key) return known.m;
-  const m = new Map<string, number>();
-  for (const hit of scanSites(d.sequence, d.circular, extra)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
+  const m: Counts = { cuts: new Map(), sites: new Map() };
+  for (const [name, c] of siteCounts(scanSites(d.sequence, d.circular, extra), d.sequence, d.circular, dna)) {
+    m.cuts.set(name, c.cuts);
+    m.sites.set(name, c.sites);
+  }
   counts.set(d, { key, m });
   return m;
 }
 
-const cutText = (k: number) => (k ? plural(k, "cut") : "doesn't cut");
+const countText = (n: number, k: number) => (n === k ? (k ? plural(k, "cut") : "doesn't cut") : cutCountText(n, k));
 
 /** A fragment as "1,201–2,686 · 2,617 bp · AmpR, ori". */
 function fragmentText(f: Fragment, n: number): string {
@@ -120,7 +130,8 @@ export function openCloningDialog(ctx: DocContext) {
   const vector = ctx.store.data;
   const vectorSel = ctx.store.selection;
   const nV = vector.sequence.length;
-  const sources: Source[] = ctx.otherSequences().map(s => ({ title: s.data.name || s.title, data: s.data, selection: s.selection }));
+  const vectorFile: MethylationTarget = { title: vector.name || "This vector", data: vector, methylation: ctx.options.methylation, setHost: text => ctx.setHost(text) };
+  const sources: Source[] = ctx.otherSequences().map(s => ({ title: s.data.name || s.title, data: s.data, methylation: s.methylation, setHost: text => s.setHost(text), selection: s.selection }));
   let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
   let offOptions = () => {};
   const dlg = ctx.openDialog({ onClose: () => offOptions(), title: "Simulate cloning", note: `Assemble inserts into ${vector.name || "this vector"}.`, width: 820 });
@@ -152,16 +163,17 @@ export function openCloningDialog(ctx: DocContext) {
   const update = () => rerender(dlg, render);
   offOptions = ctx.onOptions(update);
 
-  const enzymeSelect = (d: SeqData, value: string, label: string, onChange: (v: string) => void, names?: string[]) => {
+  const enzymeSelect = (d: SeqData, dna: DnaMethylation, value: string, label: string, onChange: (v: string) => void, names?: string[]) => {
     const members = names ?? sourceEnzymes({ ...ctx.options, enzymeSource });
-    const cuts = cutCountsOf(d, [...members, value].filter(Boolean));
-    const list = names ? [...names] : reactionEnzymes(cuts, members, value ? [value] : []);
+    const { cuts, sites } = cutCountsOf(d, [...members, value].filter(Boolean), dna);
+    // Keep enzymes whose sites methylation blocks in the menu so they can be chosen and explained.
+    const list = names ? [...names] : reactionEnzymes(sites, members, value ? [value] : []);
     if (value && !list.includes(value)) list.unshift(value);
     const el = h(
       "select",
       { class: "sv-input", "aria-label": label },
       names ? "" : h("option", { value: "" }, "None"),
-      ...list.map(x => h("option", { value: x, selected: x === value }, `${x} · ${cutText(cuts.get(x) ?? 0)}`))
+      ...list.map(x => h("option", { value: x, selected: x === value }, `${x} · ${countText(sites.get(x) ?? 0, cuts.get(x) ?? 0)}`))
     ) as HTMLSelectElement;
     el.addEventListener("change", () => onChange(el.value));
     return el;
@@ -185,8 +197,10 @@ export function openCloningDialog(ctx: DocContext) {
     for (const p of picked) {
       try {
         const parsed = await parseSequenceFile(p.bytes, p.path ?? p.name);
-        const data = fromParsed(parsed.sequences[0]).data;
-        sources.push({ title: data.name || p.name, data: { ...data, name: data.name || p.name }, selection: null });
+        const loaded = fromParsed(parsed.sequences[0]);
+        const data = loaded.data;
+        const host = parseComments(Array.isArray(loaded.extra.comments) ? loaded.extra.comments : undefined).fields.find(([k]) => k === HOST_FIELD)?.[1] ?? "";
+        sources.push({ title: data.name || p.name, data: { ...data, name: data.name || p.name }, methylation: hostMethylation(host), selection: null });
         row.source = sources.length - 1;
         row.region = "all";
         row.fragment = null;
@@ -240,7 +254,7 @@ export function openCloningDialog(ctx: DocContext) {
   /** The opened vector for restriction cloning and enzyme-opened assemblies. */
   const vectorPieces = () => {
     const enzymes = vectorEnzymes.filter(Boolean);
-    return enzymes.length ? digest(vector, enzymes) : [];
+    return enzymes.length ? digest(vector, enzymes, vectorFile.methylation) : [];
   };
   const backboneOf = (pieces: Fragment[]) => (keep !== null && pieces[keep] ? pieces[keep] : largest(pieces));
 
@@ -251,8 +265,8 @@ export function openCloningDialog(ctx: DocContext) {
     const enzymeRow = () => {
       const pieces = vectorPieces();
       const row: Node[] = [
-        field("Enzyme", enzymeSelect(vector, vectorEnzymes[0], "First vector enzyme", v => setVectorEnzyme(0, v))),
-        field("Second enzyme", enzymeSelect(vector, vectorEnzymes[1], "Second vector enzyme", v => setVectorEnzyme(1, v)))
+        field("Enzyme", enzymeSelect(vector, vectorFile.methylation, vectorEnzymes[0], "First vector enzyme", v => setVectorEnzyme(0, v))),
+        field("Second enzyme", enzymeSelect(vector, vectorFile.methylation, vectorEnzymes[1], "Second vector enzyme", v => setVectorEnzyme(1, v)))
       ];
       if (pieces.length > 1) {
         const bb = backboneOf(pieces)!;
@@ -268,6 +282,10 @@ export function openCloningDialog(ctx: DocContext) {
       }
       return h("div", { class: "sv-clone-fields" }, field("Enzymes", enzymeSourceSelect(enzymeSource, "Cloning enzyme list", source => { enzymeSource = source; update(); })), ...row);
     };
+    const pushWarn = (enzymes: readonly string[], onChange: () => void) => {
+      const w = methylationWarning(vectorFile, enzymes, onChange);
+      if (w) parts.push(w);
+    };
     if (method === "goldengate") {
       parts.push(
         h(
@@ -277,6 +295,7 @@ export function openCloningDialog(ctx: DocContext) {
             "Enzyme",
             enzymeSelect(
               vector,
+              vectorFile.methylation,
               memory.goldenGate,
               "Golden Gate enzyme",
               v => {
@@ -288,8 +307,13 @@ export function openCloningDialog(ctx: DocContext) {
           )
         )
       );
+      pushWarn([memory.goldenGate], update);
     } else if (method === "restriction") {
       parts.push(enzymeRow());
+      pushWarn(vectorEnzymes, () => {
+        keep = null;
+        update();
+      });
     } else {
       parts.push(
         segmented("How the vector is opened", [["enzymes", "Cut with enzymes"], ["pcr", "Amplify by PCR"]], openByPcr ? "pcr" : "enzymes", v => {
@@ -308,7 +332,13 @@ export function openCloningDialog(ctx: DocContext) {
               : `Primers amplify the whole vector from the cursor (base ${fmt(vectorSel.caret + 1)}), where the inserts go. Select bases first to replace them instead.`
           )
         );
-      } else parts.push(enzymeRow());
+      } else {
+        parts.push(enzymeRow());
+        pushWarn(vectorEnzymes, () => {
+          keep = null;
+          update();
+        });
+      }
     }
     return h("section", { class: "sv-clone-section" }, h("h3", { class: "sv-clone-head" }, "Vector", h("span", { class: "sv-pane-note" }, `${vector.name} · ${fmt(nV)} bp · ${vector.circular ? "circular" : "linear"}`)), ...parts);
   }
@@ -316,12 +346,12 @@ export function openCloningDialog(ctx: DocContext) {
   function insertsSection(): Node {
     const many = method !== "restriction";
     const noun = method === "goldengate" ? "Part" : "Insert";
-    const list = (many ? rows : rows.slice(0, 1)).map((row, i) => {
+    const list = (many ? rows : rows.slice(0, 1)).flatMap((row, i) => {
       const s = sources[row.source];
       const fields: Node[] = [field(many && rows.length > 1 ? `${noun} ${i + 1}` : noun, sourceSelect(row, `${noun} ${i + 1}`))];
       if (s && method === "restriction") {
-        fields.push(field("Enzyme", enzymeSelect(s.data, enzymesOf(row)[0], "First insert enzyme", v => setEnzyme(row, 0, v))));
-        fields.push(field("Second enzyme", enzymeSelect(s.data, enzymesOf(row)[1], "Second insert enzyme", v => setEnzyme(row, 1, v))));
+        fields.push(field("Enzyme", enzymeSelect(s.data, s.methylation, enzymesOf(row)[0], "First insert enzyme", v => setEnzyme(row, 0, v))));
+        fields.push(field("Second enzyme", enzymeSelect(s.data, s.methylation, enzymesOf(row)[1], "Second insert enzyme", v => setEnzyme(row, 1, v))));
         const pieces = insertPieces(row);
         if (pieces.length > 1) {
           const chosen = insertFragment(row, pieces);
@@ -352,7 +382,17 @@ export function openCloningDialog(ctx: DocContext) {
         many && rows.length > 1
           ? h("button", { type: "button", class: "sv-icon-btn sv-clone-remove", "aria-label": `Remove ${noun.toLowerCase()} ${i + 1}`, title: "Remove", onclick: () => { rows.splice(i, 1); update(); } }, iconSvg("x", 14))
           : "";
-      return h("div", { class: "sv-clone-insert" }, h("div", { class: "sv-clone-fields" }, ...fields), remove);
+      const rowEl = h("div", { class: "sv-clone-insert" }, h("div", { class: "sv-clone-fields" }, ...fields), remove);
+      const warn =
+        s && method === "restriction"
+          ? methylationWarning(s, enzymesOf(row), () => {
+              for (const r of rows) if (r.source === row.source) r.fragment = null;
+              update();
+            })
+          : s && method === "goldengate"
+            ? methylationWarning(s, [memory.goldenGate], update)
+            : null;
+      return warn ? [rowEl, warn] : [rowEl];
     });
     const empty = !sources.length
       ? h("p", { class: "sv-small sv-dim" }, `Open the ${noun.toLowerCase()}'s file in another tab, or choose a file.`)
@@ -364,7 +404,7 @@ export function openCloningDialog(ctx: DocContext) {
   const insertPieces = (row: InsertRow): Fragment[] => {
     const s = sources[row.source];
     const enzymes = enzymesOf(row).filter(Boolean);
-    return s && enzymes.length ? digest(s.data, enzymes) : [];
+    return s && enzymes.length ? digest(s.data, enzymes, s.methylation) : [];
   };
   const insertFragment = (row: InsertRow, pieces: Fragment[]): Fragment | null => {
     if (row.fragment !== null && pieces[row.fragment]) return pieces[row.fragment];
@@ -397,7 +437,13 @@ export function openCloningDialog(ctx: DocContext) {
     if (method === "restriction") return restriction(out, chosen[0]);
     if (method === "goldengate") {
       if (!chosen.length) return { ...out, waiting: "Choose the parts to assemble." };
-      const r = goldenGate([{ name: vector.name, data: vector }, ...chosen.map(x => ({ name: sources[x.source].title, data: sources[x.source].data }))], memory.goldenGate);
+      const r = goldenGate(
+        [
+          { name: vector.name, data: vector, methylation: vectorFile.methylation },
+          ...chosen.map(x => ({ name: sources[x.source].title, data: sources[x.source].data, methylation: sources[x.source].methylation }))
+        ],
+        memory.goldenGate
+      );
       out.problems = r.problems;
       if (r.product && r.layout) {
         out.product = { ...r.product, name: productName([vector.name, ...r.order.slice(1).map(f => f.source.name)]), description: `Golden Gate assembly with ${memory.goldenGate} of ${r.order.map(f => f.source.name).join(", ")}.` };
@@ -499,6 +545,8 @@ export function openCloningDialog(ctx: DocContext) {
   // ---------- render ----------
 
   function render() {
+    // The open file's strain may have been changed on its Info tab meanwhile.
+    vectorFile.methylation = ctx.options.methylation;
     const methodBar = segmented(
       "Cloning method",
       METHODS.map(m => [m.id, m.label]),

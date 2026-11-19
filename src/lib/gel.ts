@@ -117,6 +117,24 @@ export function bands(sizes: number[], resolution = 0.02): Band[] {
 
 const INTEGER = new Intl.NumberFormat("en-US");
 
+/** Up to this many fragments a lane's sizes are named one by one; more are counted instead. */
+export const NAMED_SIZES = 4;
+
+/** "2,635 + 51 bp", or "6 fragments, 2,686 bp in all": what a lane runs, as a key beside the gel says it. */
+export function laneSizesText(sizes: readonly number[]): string {
+  if (sizes.length <= NAMED_SIZES) return `${sizes.map(size => INTEGER.format(Math.round(size))).join(" + ")} bp`;
+  return `${sizes.length} fragments, ${INTEGER.format(sizes.reduce((a, b) => a + b, 0))} bp in all`;
+}
+
+/**
+ * "pUC19 · EcoRI, HindIII · 2,635 + 51 bp": one of the Digest dialog's lanes in the key
+ * under a gel saved as an image, where nothing can be hovered to ask.
+ */
+export function digestLaneText(title: string, enzymes: readonly string[], result: DigestResult, length: number): string {
+  const sizes = result.uncut ? `uncut plasmid, ${INTEGER.format(length)} bp` : laneSizesText(result.fragments.map(fragmentSize));
+  return `${title} · ${enzymes.length ? enzymes.join(", ") : "no enzyme"} · ${sizes}`;
+}
+
 /** "pUC19 EcoRI–HindIII 2,635 bp": what a fragment opened in its own tab is called. */
 export function fragmentName(f: Fragment, sourceName: string): string {
   const ends = `${f.left.enzyme ?? "end"}–${f.right.enzyme ?? "end"}`;

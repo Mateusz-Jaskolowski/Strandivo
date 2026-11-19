@@ -34,6 +34,28 @@ function check(name, ok, detail = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
+/**
+ * Clicks the buttons `labels` names inside `scope` (a class) and gives back what they saved,
+ * caught with `window.__strandivoSave` as WebDriver can't answer a save dialog: text as it
+ * is, and a PNG as its size in pixels and whether it says its resolution.
+ */
+async function savedImages(s, scope, labels) {
+  await s.exec(`window.__e2eSaved = {}; window.__strandivoSave = (name, contents) => {
+    if (typeof contents === 'string') { window.__e2eSaved[name] = contents; return; }
+    const v = new DataView(contents.buffer, contents.byteOffset);
+    window.__e2eSaved[name] = { png: String.fromCharCode(...contents.subarray(1, 4)) === 'PNG', width: v.getUint32(16), height: v.getUint32(20), dpi: String.fromCharCode(...contents.subarray(0, 100)).includes('pHYs') };
+  };`);
+  for (const label of labels) await s.click(`//*[contains(@class,'${scope}')]//button[contains(., '${label}')]`, "xpath");
+  await s.waitFor(`Object.keys(window.__e2eSaved).length === ${labels.length}`, 10000);
+  const saved = await s.exec("const out = window.__e2eSaved; delete window.__strandivoSave; delete window.__e2eSaved; return out;");
+  const svg = Object.entries(saved).find(([name]) => name.endsWith(".svg"));
+  const png = Object.entries(saved).find(([name]) => name.endsWith(".png"));
+  return { svgName: svg?.[0] ?? "", svg: svg?.[1] ?? "", pngName: png?.[0] ?? "", png: png?.[1] ?? {} };
+}
+
+/** An SVG file that opens as it looks elsewhere: every style its own, nothing only the page understood. */
+const standaloneSvg = svg => /^<\?xml/.test(svg) && /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
+
 async function wd(method, url, body) {
   const res = await fetch(DRIVER + url, {
     method,
@@ -885,6 +907,14 @@ async function main() {
     const reach = await s.exec(`const ys = selector => Array.from(document.querySelectorAll('.sv-pcr-gel ' + selector)).map(b => Number(b.getAttribute('y')));
       return { ladder: document.querySelector(".sv-dialog select[aria-label='Ladder']").value, samples: Math.max(...ys('.sv-gel-band[data-lane]')), ladderLowest: Math.max(...ys('.sv-gel-band:not([data-lane])')) };`);
     check("A short product opens the gel on a ladder that reaches its smallest band", reach.ladder === "1kb-plus" && reach.samples <= reach.ladderLowest, JSON.stringify(reach));
+    // The gel as an image: said to be simulated, the key under it, as nothing can be hovered there.
+    const pcrGel = await savedImages(s, "sv-gel-export", ["Save as SVG", "Save as PNG"]);
+    check(
+      "Under the product's gel, Save as SVG… saves it with the ladder and each lane in a key",
+      standaloneSvg(pcrGel.svg) && pcrGel.svg.includes(">Simulated agarose gel<") && pcrGel.svg.includes(">1 kb Plus ladder<") && pcrGel.svg.includes(">Product, ScaI · 564 + 314 bp<") && pcrGel.svg.includes('fill="#1c2130"') && pcrGel.svgName.endsWith(" PCR product gel.svg"),
+      `${pcrGel.svgName}: ${pcrGel.svg.slice(0, 300)}`
+    );
+    check("And Save as PNG… a sharp PNG that says its resolution", pcrGel.png.png && Math.max(pcrGel.png.width, pcrGel.png.height) >= 2000 && pcrGel.png.dpi, JSON.stringify(pcrGel.png));
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
     // A ladder picked holds for the window, so this is the 1 kb ladder the Digest dialog's checks below start on.
@@ -1527,6 +1557,17 @@ async function main() {
     check("EcoRI and HindIII cut out pUC19's 51 bp MCS piece, the sizes adding up to the plasmid", sizes.length === 2 && sizes[1] === 51 && sizes[0] + sizes[1] === amp.len, `${JSON.stringify(sizes)} of ${amp.len} bp`);
     check("The gel shows a band for each fragment next to the ladder", await s.exec("return document.querySelectorAll('.sv-dialog .sv-gel-pick').length === 2 && document.querySelectorAll('.sv-dialog .sv-gel-band').length > 5"));
     await s.shot("10-digest");
+    // The gel as an image: as it would run, with nothing picked, said to be simulated, and a
+    // key saying what each lane holds.
+    await s.exec("document.querySelector('.sv-dialog .sv-gel-pick').dispatchEvent(new MouseEvent('click', { bubbles: true }))");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-gel-band-on')", 3000);
+    const digestGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG", "Save as PNG"]);
+    check(
+      "The Digest dialog's Save as SVG… saves the gel with its ladder, lanes and a key, nothing picked",
+      standaloneSvg(digestGel.svg) && digestGel.svg.includes(">Simulated agarose gel<") && digestGel.svg.includes(" · EcoRI, HindIII · 2,635 + 51 bp<") && digestGel.svg.includes(">10 kb<") && !digestGel.svg.includes("#ffd166") && digestGel.svgName.endsWith(" digest gel.svg"),
+      `${digestGel.svgName}: ${digestGel.svg.slice(0, 300)}`
+    );
+    check("Its Save as PNG… saves a sharp PNG that says its resolution", digestGel.png.png && Math.max(digestGel.png.width, digestGel.png.height) >= 2000 && digestGel.png.dpi, JSON.stringify(digestGel.png));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
     check("Done closes the Digest dialog", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
 

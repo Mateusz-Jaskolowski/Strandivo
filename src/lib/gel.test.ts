@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { bandY, bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, ladderReaching, LADDERS } from "./gel.ts";
+import { bandY, bands, digestLaneText, digestSequence, fragmentName, fragmentSize, fragmentSpan, laneSizesText, ladderReaching, LADDERS } from "./gel.ts";
 import type { SeqData } from "./seqdata.ts";
 
 const puc19 = (): SeqData => {
@@ -85,4 +85,16 @@ test("gel: it opens on the first ladder that reaches the smallest band, else the
   assert.equal(ladderReaching(50, [b, a]).id, "b");
   // Wherever one reaches, the smallest band is drawn clear of the bottom edge.
   for (let size = 100; size <= 20000; size += 7) assert.ok(bandY(size, ladderReaching(size)) < 0.99, `${size} bp`);
+});
+
+test("a gel image's key names each lane's sizes, and counts them past four", () => {
+  assert.equal(laneSizesText([2635, 51]), "2,635 + 51 bp");
+  assert.equal(laneSizesText([1000.4]), "1,000 bp");
+  assert.equal(laneSizesText([500, 400, 300, 200, 100]), "5 fragments, 1,500 bp in all");
+  const d = puc19();
+  const n = d.sequence.length;
+  assert.equal(digestLaneText("pUC19", ["EcoRI", "HindIII"], digestSequence(d, ["EcoRI", "HindIII"]), n), "pUC19 · EcoRI, HindIII · 2,635 + 51 bp");
+  // A plasmid nothing cuts runs supercoiled, which its size alone wouldn't say.
+  assert.equal(digestLaneText("pUC19", [], digestSequence(d, []), n), "pUC19 · no enzyme · uncut plasmid, 2,686 bp");
+  assert.equal(digestLaneText("pUC19", ["NotI"], digestSequence(d, ["NotI"]), n), "pUC19 · NotI · uncut plasmid, 2,686 bp");
 });

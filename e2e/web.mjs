@@ -220,6 +220,38 @@ class Session {
 
 // ---------- the checks ----------
 
+/**
+ * Clicks Save as SVG… and Save as PNG… inside `scope` (a class), each answered by a file of
+ * the page's private file system named `name`, and gives back what was written: the SVG's
+ * text, and the PNG's size in pixels and whether it says its resolution.
+ */
+async function savedImages(s, scope, name) {
+  const out = {};
+  for (const kind of ["svg", "png"]) {
+    out[kind] = await s.execAsync(`
+      (async () => {
+        const root = await navigator.storage.getDirectory();
+        window.showSaveFilePicker = async () => root.getFileHandle('${name}.${kind}', { create: true });
+        const button = Array.from(document.querySelectorAll('.${scope} button')).find(b => b.textContent.includes('Save as ${kind.toUpperCase()}'));
+        button.click();
+        for (let i = 0; i < 50; i++) {
+          await new Promise(r => setTimeout(r, 100));
+          const file = await (await root.getFileHandle('${name}.${kind}')).getFile();
+          if (!file.size) continue;
+          if ('${kind}' === 'svg') return file.text();
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const v = new DataView(bytes.buffer);
+          return { png: String.fromCharCode(...bytes.subarray(1, 4)) === 'PNG', width: v.getUint32(16), height: v.getUint32(20), dpi: String.fromCharCode(...bytes.subarray(0, 100)).includes('pHYs') };
+        }
+        return null;
+      })().then(done, e => done(String(e)));`);
+  }
+  return out;
+}
+
+/** An SVG file that opens as it looks elsewhere: every style its own, nothing only the page understood. */
+const standaloneSvg = svg => typeof svg === "string" && /^<\?xml/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
+
 async function main(outDir) {
   mkdirSync(outDir, { recursive: true });
   const checks = [];
@@ -454,6 +486,21 @@ async function main(outDir) {
     await s.exec("window.__strandivo.command('save-as')");
     const copied = (await s.waitFor("window.__strandivo.tabs().includes('pUC19-copy.gb')", 5000)) ? await s.exec(fileText, "pUC19-copy.gb") : "";
     check("Save As writes the file chosen in the browser's save dialog, and the tab follows it", /^LOCUS {7}pUC19_from_the_browser/.test(copied), copied.slice(0, 40));
+
+    // --- the Digest dialog's gel as an image, saved through the browser's save dialog ---
+    await s.exec("window.__strandivo.command('digest')");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
+    for (const enzyme of ["EcoRI", "HindIII"]) await s.click(`//*[contains(@class,'sv-dialog')]//input[@data-enzyme='${enzyme}']`);
+    await s.waitFor("document.querySelectorAll('.sv-dialog .sv-digest-row').length === 2", 3000);
+    const gelSaved = await savedImages(s, "sv-dialog-foot", "pUC19 gel");
+    check(
+      "The gel saves as an SVG through the browser's save dialog, styles and key included",
+      standaloneSvg(gelSaved.svg) && gelSaved.svg.includes(">Simulated agarose gel<") && gelSaved.svg.includes(" · EcoRI, HindIII · 2,635 + 51 bp<"),
+      gelSaved.svg.slice(0, 200)
+    );
+    check("And as a sharp PNG that says its resolution", gelSaved.png?.png && Math.max(gelSaved.png.width, gelSaved.png.height) >= 2000 && gelSaved.png.dpi, JSON.stringify(gelSaved.png));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     check(
       "Recent files keep files with a handle, shown by name",
       await s.exec("window.__strandivo.showHome(); return Array.from(document.querySelectorAll('.sv-home-recent-name')).map(e => e.textContent).includes('pUC19-copy.gb') && Array.from(document.querySelectorAll('.sv-home-recent-dir')).every(e => !e.textContent.includes('web:'));")

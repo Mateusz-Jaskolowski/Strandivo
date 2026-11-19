@@ -3,7 +3,8 @@
 
 // The Digest dialog: choose enzymes, see the fragments and how they would run on an
 // agarose gel. The open file is the first lane; other open files (or the same file with
-// other enzymes) can be added as more lanes. Any fragment opens as a new unsaved tab.
+// other enzymes) can be added as more lanes. Any fragment opens as a new unsaved tab, and
+// the gel can be copied or saved as an image, with a key to its lanes.
 
 import { h } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
@@ -13,8 +14,10 @@ import type { DocContext } from "../doc/context.ts";
 import { extraKey, reactionEnzymes, scanSites, siteCounts, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
 import { cutCountText, methylationKey, type DnaMethylation } from "../lib/methylation.ts";
 import { endLabel } from "../lib/cloning.ts";
-import { bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, SUPERCOILED_RUNS_AS, type DigestResult } from "../lib/gel.ts";
-import { currentLadder, gelSvg, ladderSelect, type GelLane } from "./gelDraw.ts";
+import { bands, digestLaneText, digestSequence, fragmentName, fragmentSize, fragmentSpan, SUPERCOILED_RUNS_AS, type DigestResult } from "../lib/gel.ts";
+import { imageFileName } from "../lib/imageExport.ts";
+import { currentLadder, gelFigure, gelSvg, ladderSelect, type GelKeyRow, type GelLane } from "./gelDraw.ts";
+import { imageButtons } from "./imageExport.ts";
 import { methylationWarning, type MethylationTarget } from "./methylationWarning.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { plural, rerender } from "./primerDialogs.ts";
@@ -236,6 +239,18 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
     });
   }
 
+  /** What each lane holds, under the gel saved as an image. */
+  function gelKey(): GelKeyRow[] {
+    return [{ lane: "M", text: currentLadder().name }, ...lanes.map((lane, i) => ({ lane: String(i + 1), text: digestLaneText(lane.title, lane.enzymes, resultOf(lane), lane.data.sequence.length) }))];
+  }
+
+  const exportGel = imageButtons({
+    what: "the gel",
+    fileName: () => imageFileName(here.name, "digest gel", "Digest"),
+    title: () => `Simulated digest of ${lanes.map(l => l.title).filter((t, i, all) => all.indexOf(t) === i).join(", ")}`,
+    figure: () => gelFigure(gelLanes(), currentLadder(), { ariaLabel: "Simulated agarose gel" }, gelKey())
+  });
+
   function table(): HTMLElement {
     const lane = lanes[current];
     const r = resultOf(lane);
@@ -321,7 +336,10 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
         )
       )
     );
-    dlg.footer.replaceChildren(h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Done"));
+    dlg.footer.replaceChildren(
+      h("div", { class: "sv-foot-start sv-foot-group", role: "group", "aria-label": "Export gel" }, ...exportGel),
+      h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Done")
+    );
   }
 
   render();

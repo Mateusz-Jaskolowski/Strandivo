@@ -698,10 +698,11 @@ async function main(outDir) {
     check("Another region can still be selected from the schematic", await s.waitFor(`${selectedBlock(secondRegion)} && window.__strandivo.store.selection.focus?.region === ${secondRegion}`, 3000));
 
     for (const transparent of [false, true]) {
-      if (transparent) await s.click("//label[normalize-space()='Transparent background']/input");
+      // In the dialog: the map's Export image menu, behind it, has the same controls.
+      if (transparent) await s.click("//*[contains(@class,'sv-dialog')]//label[normalize-space()='Transparent background']/input");
       const before = await s.exec("return window.__e2eDownloads.length");
-      await s.click("//button[normalize-space()='Save as PNG…']");
-      await s.click("//button[normalize-space()='Save as SVG…']");
+      await s.click("//*[contains(@class,'sv-dialog')]//button[normalize-space()='Save as PNG…']");
+      await s.click("//*[contains(@class,'sv-dialog')]//button[normalize-space()='Save as SVG…']");
       const saved = await s.waitFor(`window.__e2eDownloads.length === ${before + 2}`, 5000);
       const files = saved ? await s.execAsync(`
         (async () => {

@@ -653,8 +653,8 @@ export function openPrimerDialog(ctx: DocContext, opts: PrimerDialogMode) {
       previewBanner.hidden = true;
     }
 
-    // Measure monospace width once preview box is laid out.
-    const probe = h("span", { class: "sv-bases", style: { position: "absolute", visibility: "hidden" } }, "ACGTACGTAC");
+    // Measure monospace width using the same `.sv-row-track` font as the base rows.
+    const probe = h("span", { class: "sv-row-track sv-bases", style: { position: "absolute", visibility: "hidden" } }, "ACGTACGTAC");
     previewBox.appendChild(probe);
     const measured = probe.getBoundingClientRect().width / 10;
     probe.remove();
@@ -674,7 +674,7 @@ export function openPrimerDialog(ctx: DocContext, opts: PrimerDialogMode) {
     const draftAl = isSaved && al ? al : alignPrimer(draftPrimer, d.sequence);
     const bindLen = rangeLength(site, n);
     const tailLen = draftAl.tail.length;
-    const availW = Math.max(460, previewBox.clientWidth - GUTTER - 28);
+    const availW = Math.max(360, previewBox.clientWidth - GUTTER - 36);
     const bpr = Math.max(40, Math.min(n, Math.floor(availW / chPx)));
     const total = Math.min(n, Math.max(bpr, Math.min(bpr * 2, bindLen + tailLen + 28)));
     const rowsNeeded = total > bpr ? 2 : 1;
@@ -710,8 +710,8 @@ export function openPrimerDialog(ctx: DocContext, opts: PrimerDialogMode) {
       const piece = primerPiece(draftAl, draftPrimer, n, d.circular, colOf);
       const hasFwd = draftPrimer.strand === 1 && !!piece;
       const hasRev = draftPrimer.strand === -1 && !!piece;
-      const fwdBand = hasFwd && piece!.raised;
-      const revBand = hasRev && piece!.raised;
+      const fwdBand = hasFwd && (piece!.raised || piece!.end3 !== null);
+      const revBand = hasRev && (piece!.raised || piece!.end3 !== null);
       const fwdH = hasFwd ? laneHeight(fwdBand) : 0;
       const revH = hasRev ? laneHeight(revBand) : 0;
 
@@ -736,23 +736,33 @@ export function openPrimerDialog(ctx: DocContext, opts: PrimerDialogMode) {
       }
       const featLanes = featRuns.length ? Math.max(...featRuns.map(x => x.lane)) + 1 : 0;
 
-      let y = 6;
-      const yRuler = y;
-      y += 14;
+      let y = 4;
       const yFwd = y;
       y += fwdH;
       const yTop = y;
       y += 18;
+      const yRuler = y;
+      y += 12;
       const yBot = y;
       y += 18;
-      const yRev = y + 2;
-      y += revH + (revH ? 2 : 0);
+      const strandsH = yBot + 18 - yTop;
+      const yRev = y;
+      y += revH;
       const yFeats = y + (featLanes ? 4 : 0);
-      y += featLanes * 22 + 8;
+      y += featLanes * 22 + 6;
 
       const gutter = h("div", { class: "sv-pdlg-gutter", style: { width: `${GUTTER}px`, height: `${y}px` } });
       gutter.appendChild(abs(`right:6px;top:${yTop}px;line-height:18px`, "sv-row-number", fmt(rowPos[0] + 1)));
-      const track = h("div", { class: "sv-ctx-track", style: { width: ch(len), height: `${y}px` } });
+      const track = h("div", { class: "sv-row-track", style: { width: ch(len), height: `${y}px` } });
+
+      // 10-base stripes, matching Sequence and Primers views.
+      for (let i = 0; i < len; i++) {
+        if (Math.floor(rowPos[i] / 10) % 2 === 0 && (i === 0 || rowPos[i] % 10 === 0)) {
+          let j = i;
+          while (j + 1 < len && Math.floor(rowPos[j + 1] / 10) === Math.floor(rowPos[i] / 10)) j++;
+          track.appendChild(abs(`left:${ch(i)};width:${ch(j - i + 1)};top:${yTop - 1}px;height:${strandsH + 1}px`, "sv-stripe"));
+        }
+      }
 
       // Highlight site on both strands.
       const ls = idxOf(site.start) - offset;
@@ -761,7 +771,7 @@ export function openPrimerDialog(ctx: DocContext, opts: PrimerDialogMode) {
       if (shows) {
         const a0 = Math.max(0, ls);
         const b0 = Math.min(len - 1, le);
-        track.appendChild(abs(`left:${ch(a0)};width:${ch(b0 - a0 + 1)};top:${yTop - 1}px;height:38px`, activeEntry.kind === "partial" ? "sv-ctx-site sv-pdlg-site-partial" : "sv-ctx-site"));
+        track.appendChild(abs(`left:${ch(a0)};width:${ch(b0 - a0 + 1)};top:${yTop - 1}px;height:${strandsH + 1}px`, activeEntry.kind === "partial" ? "sv-ctx-site sv-pdlg-site-partial" : "sv-ctx-site"));
       }
 
       const topBases = rowPos.map(pos => d.sequence[pos]).join("");

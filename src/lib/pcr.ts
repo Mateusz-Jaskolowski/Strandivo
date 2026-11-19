@@ -4,7 +4,7 @@
 // PCR products: what a forward and a reverse primer amplify from a template, and the
 // product as a new document (features and primers inside it carried over). Pure functions.
 
-import { alignPrimer, type PrimerAlignment } from "./primerAlign.ts";
+import { alignPrimer, type PrimerAlignment, type PrimerOp } from "./primerAlign.ts";
 import { findBindingSites } from "./primers.ts";
 import { basesIn, deleteRange, insertBases, rangeLength, replaceRange, reverseComplement, setOrigin, type Range, type SeqData } from "./seqdata.ts";
 
@@ -41,15 +41,23 @@ interface SiteEdit {
   bases: string;
 }
 
-/** What a primer writes over its site: each run of changed, inserted or skipped bases. */
-function siteEdits(a: PrimerAlignment, p: PlacedPrimer): SiteEdit[] {
+const DEFINITE = /^[ACGT]$/i;
+const AMBIGUOUS = /^[RYSWKMBDHVN]$/i;
+
+/**
+ * What a primer writes over its site: each run of changed, inserted or skipped bases, and
+ * each template base left ambiguous (N, R, Y…) under a base of the primer that is definite:
+ * alignment counts them as matching, but the product holds the primer's own base there.
+ */
+function siteEdits(a: PrimerAlignment, p: PlacedPrimer, template: string): SiteEdit[] {
   const fwd = p.strand === 1;
   const ops = a.ops.filter(op => op.kind !== "tail");
+  const writes = (op: PrimerOp) => op.kind !== "match" || (DEFINITE.test(p.bases[op.i]) && AMBIGUOUS.test(template[op.pos]));
   const out: SiteEdit[] = [];
   for (let k = 0; k < ops.length; k++) {
-    if (ops[k].kind === "match") continue;
+    if (!writes(ops[k])) continue;
     let e = k;
-    while (e + 1 < ops.length && ops[e + 1].kind !== "match") e++;
+    while (e + 1 < ops.length && writes(ops[e + 1])) e++;
     const block = ops.slice(k, e + 1);
     const primerBases = block.filter(op => op.i >= 0).map(op => p.bases[op.i]).join("").toUpperCase();
     const positions = block.filter(op => op.pos >= 0).map(op => op.pos);
@@ -71,7 +79,7 @@ function siteEdits(a: PrimerAlignment, p: PlacedPrimer): SiteEdit[] {
 function productEdits(template: string, circular: boolean, forward: PlacedPrimer, reverse: PlacedPrimer) {
   const n = template.length;
   const offset = (pos: number) => (circular ? (((pos - forward.start) % n) + n) % n : pos - forward.start);
-  return [...siteEdits(alignPrimer(forward, template), forward), ...siteEdits(alignPrimer(reverse, template), reverse)]
+  return [...siteEdits(alignPrimer(forward, template), forward, template), ...siteEdits(alignPrimer(reverse, template), reverse, template)]
     .map(e => ({ at: offset(e.from), length: e.to === null ? 0 : offset(e.to) - offset(e.from) + 1, bases: e.bases }))
     .sort((a, b) => b.at - a.at);
 }

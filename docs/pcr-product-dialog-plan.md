@@ -1,13 +1,9 @@
 # PCR product dialog: remaining work
 
-The dialog now has a product overview and an editable line program, following the design
-agreed on 16 November 2026. The program starts from sourced NEB conditions; custom values
-keep the source they started from and Copy program uses the current values.
-
-## Gel
-
-Show the undigested linear product beside the chosen digest using the existing gel logic.
-Fragment sizes remain top-strand lengths; the gel keeps its own colours in every theme.
+The dialog now has a product overview, a gel of the template and the product beside the
+chosen digest, and an editable line program, following the design agreed on 16 November
+2026. The program starts from sourced NEB conditions; custom values keep the source they
+started from and Copy program uses the current values.
 
 ## Reaction mix
 

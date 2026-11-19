@@ -1,25 +1,43 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Lab stock and a separate personal selection, shared across documents. Recognition and
-// cut positions come from TeselaGen; stock products, locations and notes are user text.
+// Lab stock and a separate personal selection, shared across documents. Sites and cuts
+// come from REBASE (src/lib/enzymes.ts); stock products, locations and notes are user text.
 
 import "./doc/document.css";
 import { enzymeLibrary } from "./enzymeLibrary.ts";
-import { enzymeName, enzymeSite, KNOWN_ENZYMES } from "./lib/enzymes.ts";
+import { enzymeCut, enzymeName, KNOWN_ENZYMES } from "./lib/enzymes.ts";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, parseEnzymeLibrary, parseEnzymeTable, type EnzymeStock, type LabEnzyme } from "./lib/enzymeLibrary.ts";
 import { chooseSavePath, isDesktop, onEnzymeLibrarySection, pickFiles, saveText, setWindowTitle, type EnzymeLibrarySection } from "./platform.ts";
+import { naturalOrder, nextTableSort, parseTableSort, sortedBy, type TableSort } from "./lib/tableSort.ts";
 import { h, toast } from "./ui/dom.ts";
 import { fmt } from "./ui/format.ts";
 import { iconSvg } from "./ui/icons.ts";
 import { choose } from "./ui/modal.ts";
+import { sortHeader } from "./ui/sortHead.ts";
+import { cutCells } from "./views/enzymeCut.ts";
 import { mountPersonalEnzymes } from "./views/personalEnzymesPanel.ts";
 
 /** How long typing pauses before a cell saves (it also saves when the cell is left). */
 const SAVE_DELAY = 700;
 const LIST_ID = "sv-known-enzymes";
 
+/** The stock table's columns that sort, and the sort kept between visits. */
+type StockSortKey = "enzyme" | "product" | "location";
+const STOCK_SORT_KEY = "strandivo.enzymeStockSort";
+const STOCK_SORT_KEYS: StockSortKey[] = ["enzyme", "product", "location"];
+const BY_ENZYME: TableSort<StockSortKey> = { key: "enzyme", descending: false };
+
+function loadStockSort(): TableSort<StockSortKey> {
+  try {
+    return parseTableSort(JSON.parse(localStorage.getItem(STOCK_SORT_KEY) || "null"), STOCK_SORT_KEYS, BY_ENZYME) ?? BY_ENZYME;
+  } catch {
+    return BY_ENZYME;
+  }
+}
+
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const plural = (n: number, one: string) => `${fmt(n)} ${n === 1 ? one : `${one}s`}`;
 
 /** Returns a disposer for the browser's panel, which may be opened and closed repeatedly. */
 export function mountEnzymeLibrary(root: HTMLElement, embedded = false, initial?: EnzymeLibrarySection): () => void {
@@ -39,7 +57,10 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false, initial?
     dispose?.();
     body.replaceChildren();
     buttons.forEach((b, i) => b.setAttribute("aria-pressed", String((i === 0 ? "lab" : "personal") === section)));
-    hint.textContent = section === "personal" ? "Your personal selection of restriction enzymes." : isDesktop ? "Your lab's restriction enzyme stock." : "Your lab's enzyme stock (saved in this browser; Export… keeps a backup).";
+    hint.textContent =
+      section === "personal"
+        ? `Enzymes you choose to show on maps and use in digests${isDesktop ? "." : ", saved in this browser."}`
+        : `Your lab's restriction enzymes and where they are kept${isDesktop ? "." : ", saved in this browser (Export… keeps a backup)."}`;
     dispose = section === "personal" ? mountPersonalEnzymes(body) : mountLabStock(body);
   }
   root.appendChild(h("div", { class: "sv-app sv-libwin sv-enzyme-library" },
@@ -52,12 +73,12 @@ export function mountEnzymeLibrary(root: HTMLElement, embedded = false, initial?
 }
 
 function mountLabStock(root: HTMLElement): () => void {
-  const count = h("span", { class: "sv-count" });
+  const count = h("span", { class: "sv-count sv-small sv-dim" });
   const status = h("span", { class: "sv-small sv-dim", role: "status" });
-  const search = h("input", { class: "sv-input sv-input-filter", type: "search", placeholder: "Search enzymes, products, locations and notes", "aria-label": "Search the enzyme library" }) as HTMLInputElement;
+  const search = h("input", { class: "sv-input sv-input-filter", type: "search", placeholder: "Search stock", title: "Search enzymes, products, freezer locations and notes", "aria-label": "Search the enzyme library" }) as HTMLInputElement;
   const table = h("div", { class: "sv-table-wrap sv-libwin-table" });
-  const panel = h("div", { class: "sv-libwin-panel", hidden: true });
-  // Every name TeselaGen knows, offered as the user types; the curated ones come first.
+  const panel = h("div", { class: "sv-enzyme-add-card", hidden: true });
+  // Every enzyme sold, offered as the user types; the curated ones come first.
   const known = h("datalist", { id: LIST_ID }, KNOWN_ENZYMES.map(name => h("option", { value: name })));
 
   let saving = 0;
@@ -93,6 +114,13 @@ function mountLabStock(root: HTMLElement): () => void {
   const openAdd = () => {
     if (enzymeLibrary.error) return;
     const enzyme = h("input", { class: "sv-input", list: LIST_ID, "aria-label": "New stock enzyme", placeholder: "e.g. EcoRI", required: true, autocomplete: "off", spellcheck: "false" }) as HTMLInputElement;
+    // The cut of the enzyme named so far, so the isoschizomer chosen is the one in the tube.
+    const preview = h("span", { class: "sv-enzyme-add-cut", "aria-live": "polite" });
+    const showCut = () => {
+      const c = enzymeCut(enzyme.value);
+      preview.textContent = c ? `${c.notation} · ${c.ends}` : "";
+    };
+    enzyme.addEventListener("input", showCut);
     const product = h("input", { class: "sv-input", "aria-label": "New stock product", placeholder: "e.g. NEB EcoRI-HF (R3101)" }) as HTMLInputElement;
     const location = h("input", { class: "sv-input", "aria-label": "New stock freezer location", placeholder: "e.g. −20 °C, freezer 2, box A" }) as HTMLInputElement;
     const notes = h("input", { class: "sv-input", "aria-label": "New stock notes", placeholder: "Optional" }) as HTMLInputElement;
@@ -108,15 +136,19 @@ function mountLabStock(root: HTMLElement): () => void {
         const added = await enzymeLibrary.add([entry]);
         toast(added ? `Added ${entry.product}.` : "That stock record is already in the library.", added ? "success" : "info");
         if (added) product.value = location.value = notes.value = enzyme.value = "";
+        showCut();
         enzyme.focus();
       }).finally(() => { submit.disabled = false; });
     } },
-    h("label", null, "Enzyme", enzyme),
+    h("label", null, "Enzyme", enzyme, preview),
     h("label", null, "Product / supplier", product),
     h("label", null, "Freezer location", location),
     h("label", null, "Notes", notes),
-    h("div", { class: "sv-lib-import-actions sv-enzyme-add-actions" }, submit, h("button", { type: "button", class: "sv-btn sv-btn-small sv-btn-quiet", onclick: closePanel }, "Done")));
-    panel.replaceChildren(h("h2", { class: "sv-section-title" }, "Add an enzyme"), form, h("p", { class: "sv-small sv-dim" }, "Pick the exact isoschizomer for the cut site and overhang (e.g. Acc65I vs. KpnI), and put the vendor name or HF version in Product / supplier."));
+    h("div", { class: "sv-enzyme-add-actions" },
+      submit,
+      h("button", { type: "button", class: "sv-btn sv-btn-small sv-btn-quiet", onclick: closePanel }, "Done"),
+      h("p", { class: "sv-small sv-dim" }, "Name the isoschizomer you have, as their ends can differ (Acc65I, KpnI); HF versions and suppliers go under Product.")));
+    panel.replaceChildren(h("h2", { class: "sv-section-title" }, "Add an enzyme"), form);
     panel.hidden = false;
     enzyme.focus();
   };
@@ -227,17 +259,35 @@ function mountLabStock(root: HTMLElement): () => void {
   const exportButton = h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => void exportList() }, iconSvg("download", 14), "Export…") as HTMLButtonElement;
 
   // Rows keep their places while the user works, so editing an enzyme or product doesn't
-  // send its row elsewhere; they are sorted again when the window opens or the search changes.
+  // send its row elsewhere; they are sorted again when the window opens, the search or the
+  // sort changes. Records without the sorted field go last.
   let order: string[] = [];
+  let sort = loadStockSort();
+  const byEnzyme = (a: LabEnzyme, b: LabEnzyme) => naturalOrder.compare(a.enzyme, b.enzyme) || naturalOrder.compare(a.product, b.product) || naturalOrder.compare(a.location, b.location);
   const sortRows = () => {
-    order = [...enzymeLibrary.all]
-      .sort((a, b) => a.enzyme.localeCompare(b.enzyme) || a.product.localeCompare(b.product) || a.location.localeCompare(b.location))
-      .map(e => e.id);
+    order = sortedBy(enzymeLibrary.all, sort, (key, a, b) => naturalOrder.compare(a[key], b[key]), byEnzyme, (key, e) => !e[key]).map(e => e.id);
   };
+  const header = (label: string, key: StockSortKey, cls: string) =>
+    sortHeader({
+      label,
+      key,
+      cls,
+      sort,
+      onSort: k => {
+        sort = nextTableSort(sort, k) ?? BY_ENZYME;
+        try {
+          localStorage.setItem(STOCK_SORT_KEY, JSON.stringify(sort));
+        } catch {
+          /* storage unavailable: the sort lasts until the window closes */
+        }
+        sortRows();
+        render();
+      }
+    });
 
   const render = () => {
     const lib = enzymeLibrary.all;
-    count.textContent = enzymeLibrary.loaded ? fmt(lib.length) : "";
+    count.textContent = enzymeLibrary.loaded ? plural(lib.length, "enzyme") : "";
     addButton.disabled = importButton.disabled = !!enzymeLibrary.error || !enzymeLibrary.loaded;
     exportButton.disabled = !!enzymeLibrary.error || !lib.length;
     if (!enzymeLibrary.loaded) {
@@ -255,7 +305,11 @@ function mountLabStock(root: HTMLElement): () => void {
     }
     updateStatus();
     if (!lib.length) {
-      table.replaceChildren(h("div", { class: "sv-empty sv-libwin-empty" }, h("p", null, "Track your lab's restriction enzymes and freezer locations. Select “Lab enzymes” on a map to show only their cut sites."), h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: openAdd }, iconSvg("plus", 14), "Add enzyme…")));
+      table.replaceChildren(h("div", { class: "sv-empty sv-libwin-empty" },
+        h("p", null, "Track your lab's restriction enzymes and freezer locations. Choose “Lab enzymes” on a map to show only their cut sites."),
+        h("div", { class: "sv-lib-import-actions" },
+          h("button", { class: "sv-btn sv-btn-primary", type: "button", onclick: openAdd }, iconSvg("plus", 14), "Add enzyme…"),
+          h("button", { class: "sv-btn", type: "button", onclick: () => void importList() }, iconSvg("upload", 14), "Import…"))));
       return;
     }
     const byId = new Map(lib.map(e => [e.id, e]));
@@ -264,20 +318,28 @@ function mountLabStock(root: HTMLElement): () => void {
     order.push(...lib.filter(e => !placed.has(e.id)).map(e => e.id));
     const q = search.value.trim().toLowerCase();
     const shown = order.map(id => byId.get(id)!).filter(e => [e.enzyme, e.product, e.location, e.notes].some(v => v.toLowerCase().includes(q)));
-    if (!shown.length) { table.replaceChildren(h("p", { class: "sv-list-empty" }, "No matching enzymes.")); return; }
+    if (q) count.textContent = `${fmt(shown.length)} of ${plural(lib.length, "enzyme")}`;
+    if (!shown.length) { table.replaceChildren(h("div", { class: "sv-empty" }, `No stock matches “${search.value.trim()}”.`)); return; }
     table.replaceChildren(h("table", { class: "sv-table sv-libwin-grid sv-enzyme-grid" },
-      h("thead", null, h("tr", null, ...["Enzyme", "Recognition site", "Product / supplier", "Freezer location", "Notes", ""].map(label => h("th", { scope: "col" }, label)))),
+      h("thead", null, h("tr", null,
+        header("Enzyme", "enzyme", "sv-td-enzyme"),
+        h("th", { scope: "col", class: "sv-td-site", title: "^ marks the cut in the top strand; N is any base, and (N)9 nine of them." }, "Recognition site"),
+        h("th", { scope: "col", class: "sv-td-ends" }, "Ends"),
+        header("Product / supplier", "product", "sv-td-product"),
+        header("Freezer location", "location", "sv-td-location"),
+        h("th", { scope: "col", class: "sv-td-notes" }, "Notes"),
+        h("th", { scope: "col" }, ""))),
       h("tbody", null, ...shown.map(entry => {
-        const site = enzymeSite(entry.enzyme);
+        const cut = cutCells(entry.enzyme);
         return h("tr", { "data-stock-row": entry.id },
           h("td", null, cell(entry, "enzyme", "Enzyme")),
-          site
-            ? h("td", { class: "sv-mono" }, site)
-            : h("td", { class: "sv-dim sv-small", title: "Kept as written. Choose a known enzyme to show its sites." }, "Not in this version's enzyme list"),
+          ...(cut
+            ? cut.map(c => h("td", null, c))
+            : [h("td", { class: "sv-dim sv-small", colspan: "2", title: "Kept as written. Choose a known enzyme to show its sites." }, "Not in this version's enzyme list")]),
           h("td", null, cell(entry, "product", "Product")),
           h("td", null, cell(entry, "location", "Freezer location")),
           h("td", null, cell(entry, "notes", "Notes")),
-          h("td", null, h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": `Remove ${entry.product}`, title: "Remove from the library", onclick: () => void remove(entry) }, iconSvg("trash", 14)))
+          h("td", { class: "sv-td-remove" }, h("button", { type: "button", class: "sv-icon-btn sv-icon-btn-small", "aria-label": `Remove ${entry.product}`, title: "Remove from the library", onclick: () => void remove(entry) }, iconSvg("trash", 14)))
         );
       }))
     ));
@@ -306,12 +368,13 @@ function mountLabStock(root: HTMLElement): () => void {
     }
   });
   window.addEventListener("pagehide", flushAll);
-  root.appendChild(h("div", { class: "sv-app sv-libwin" },
+  root.appendChild(h("div", { class: "sv-enzyme-section" },
     known,
-    h("header", { class: "sv-libwin-head" },
-      h("span", { class: "sv-count", "aria-label": "Stock records" }, count),
-      h("div", { class: "sv-libwin-tools" }, h("div", { class: "sv-outline-filter sv-libwin-search sv-enzyme-search" }, iconSvg("search", 14), search), addButton, importButton, exportButton, status)
-    ), panel, h("main", { class: "sv-libwin-body" }, table)
+    h("div", { class: "sv-enzyme-toolbar" },
+      h("div", { class: "sv-outline-filter sv-libwin-search sv-enzyme-search" }, iconSvg("search", 14), search),
+      count,
+      h("div", { class: "sv-enzyme-toolbar-end" }, status, addButton, importButton, exportButton)
+    ), panel, h("main", { class: "sv-libwin-body sv-enzyme-section-body" }, table)
   ));
   sortRows();
   render();

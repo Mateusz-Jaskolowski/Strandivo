@@ -170,6 +170,7 @@ assembled, with the line of the first part.
 | 755 | orf note | "Detected from the sequence and not saved in the file. Add it as a feature to save it." |
 | 847 | hint (nothing selected) | "Click a feature, primer or cut site to inspect it, or drag across the map or sequence to select bases." |
 | 849 | status | "Cursor at … of …." |
+| 967 | button (cut site) | "Enzyme details…" |
 
 ---
 
@@ -284,6 +285,25 @@ assembled, with the line of the first part.
 | 53 | dialog title | "Digest" |
 | 53 | dialog note | "Choose enzymes to see the fragments and how they would run on a gel." |
 | 337 | gel note | "Band brightness is proportional to fragment mass. Fragments within ~2% in size co-migrate as a single band." |
+
+---
+
+## Enzyme details dialog — `src/views/enzymeDialog.ts`
+
+| Line | Where | Text |
+|------|-------|------|
+| 69 | dialog title, note | the enzyme's name; "Site, cut and suppliers from REBASE." |
+| 87 | figure (screen readers) | "… cuts …: …" (its site and ends) |
+| 78 | sections | "Cut" / "In this sequence" / "Lab stock" |
+| 78 | unknown enzyme | "Not in this version's enzyme list." |
+| 79 | facts | "Site" / "REBASE writes" / "Ends" / "Sold by" / "Isoschizomers" / "Neoschizomers" |
+| 75 | tooltip (another enzyme) | "…: show its details" |
+| 89 | note | "Isoschizomers cut the same site the same way; neoschizomers cut it elsewhere, leaving other ends." |
+| 94 | doesn't cut | "… doesn't cut …." |
+| 99 | facts (in this sequence) | "Site" / "… sites" / "Fragment" / "… fragments"; a long list ends ", and … more" |
+| 111 | no stock | "Not in your lab's stock." / "Loading…" |
+| 121 | toast | "Added … to My enzymes." / "Removed … from My enzymes." |
+| 132 | buttons | "Add to My enzymes" / "Remove from My enzymes" / "Close" / "Digest with ……" |
 
 ---
 
@@ -459,15 +479,33 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 63 | toast (unknown enzyme) | "Unknown enzyme “…”. Choose a standard name from the list." |
-| 93 | guidance | "Pick the exact isoschizomer for the cut site and overhang (e.g. Acc65I vs. KpnI), and put the vendor name or HF version in Product / supplier." |
-| 112 | import dialog | "Add … stock records to your current list, or replace all …?" |
-| 139 | confirm (remove) | "Remove …? Remove this enzyme from your lab's stock list?" |
-| 143 | confirm (start new) | "The unreadable file will be kept alongside the new list as a backup." |
-| 232 | empty | "Track your lab's restriction enzymes and freezer locations. Select “Lab enzymes” on a map to show only their cut sites." |
-| 250 | unknown enzyme in list | "Not in this version's enzyme list" |
-| 286 | subtitle (desktop) | "Your lab's restriction enzyme stock." |
-| 286 | subtitle (browser) | "Your lab's restriction enzyme stock (saved in this browser — Export… to keep a backup)." |
+| 62 | subtitle (My enzymes) | "Enzymes you choose to show on maps and use in digests." (browser: "…, saved in this browser.") |
+| 63 | subtitle (Lab stock) | "Your lab's restriction enzymes and where they are kept." (browser: "…, saved in this browser (Export… keeps a backup).") |
+| 78 | search | "Search stock" (tooltip: "Search enzymes, products, freezer locations and notes") |
+| 110 | toast (unknown enzyme) | "Unknown enzyme “…”. Choose a standard name from the list." |
+| 150 | guidance (adding) | "Name the isoschizomer you have, as their ends can differ (Acc65I, KpnI); HF versions and suppliers go under Product." |
+| 170 | import dialog | "Add … stock records to your current list, or replace all …?" |
+| 197 | confirm (remove) | "Remove …? Remove this enzyme from your lab's stock list?" |
+| 201 | confirm (start new) | "The unreadable file will be kept alongside the new list as a backup." |
+| 309 | empty | "Track your lab's restriction enzymes and freezer locations. Choose “Lab enzymes” on a map to show only their cut sites." |
+| 322 | no match | "No stock matches “…”." |
+| 326 | column tooltip | "^ marks the cut in the top strand; N is any base, and (N)9 nine of them." |
+| 338 | unknown enzyme in list | "Not in this version's enzyme list" |
+
+My enzymes — `src/views/personalEnzymesPanel.ts`, and the cut — `src/views/enzymeCut.ts`
+
+| Line | Where | Text |
+|------|-------|------|
+| 21 | group headings (All enzymes) | "In lab stock" / "Common enzymes" / "Other enzymes" |
+| 47 | search | "Search by name or site" |
+| 148 | unknown enzyme | "Not in this version's enzyme list" |
+| 150 | name tooltip | "…, sold by …" (suppliers as REBASE names them) |
+| 244 | box titles | "My selected enzymes" / "All enzymes" (each with its count, "… of …" while searching) |
+| 282 | empty (My selected enzymes) | "No selected enzyme matches “…”." / "No enzymes selected yet." |
+| 286 | no match (All enzymes) | "No enzyme matches “…”." |
+| 20 (enzymeCut) | tooltip, cuts both sides | "Bases from the site to the cut, top strand/bottom strand" |
+| 28 (enzymeCut) | tooltip, cut rewritten | "REBASE writes …" |
+| `src/lib/enzymes.ts` | ends, cutting both sides | "Cuts both sides" |
 
 ---
 
@@ -551,7 +589,7 @@ assembled, with the line of the first part.
 | 121 | selection | "Copy" / "Copy reverse complement" / "Add forward primer" / "Add reverse primer" / "Design primers to amplify…" / "Mutagenesis primers…" / "Add feature" / "Reverse-complement selection" / "Delete bases" |
 | 139 | feature | "Copy DNA" / "Copy protein" / "Design primers to amplify…" / "Rename…" / "Delete feature" |
 | 169 | primer | "Copy sequence" / "Copy for ordering" / "Show on map" / "Show in sequence" / "Show in Primers tab" / "PCR product…" / "Save to library" / "In the lab library" / "Make it a reverse primer" / "Make it a forward primer" / "Rename…" / "Delete primer" |
-| 188 | cut site | "Copy recognition site" / "Digest with …" |
+| 224 | cut site | "Copy recognition site" / "Enzyme details…" / "Digest with …" / "Add to My enzymes" / "Remove from My enzymes" |
 | 190 | ORF | "Copy DNA" / "Copy protein" / "Add as feature" |
 | 193 | cursor | "Select all" / "Set origin here" / "Reverse-complement sequence" |
 | 222 | reads: read | "Copy sequence" / "Move to clone" / "Take out of clone" / "Remove read" |

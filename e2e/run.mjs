@@ -131,6 +131,10 @@ class Session {
   async clickAt([x, y]) {
     await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
   }
+  async doubleClickAt([x, y]) {
+    const click = [{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }];
+    await this.pointer([{ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport" }, ...click, { type: "pause", duration: 50 }, ...click], { release: true });
+  }
   /** Drags the mouse between two points of the page (CSS pixels from its top left). */
   async drag(from, to) {
     const at = ([x, y], duration = 0) => ({ type: "pointerMove", x: Math.round(x), y: Math.round(y), origin: "viewport", duration });
@@ -161,11 +165,15 @@ class Session {
 
 const CTRL = "\uE009";
 const SHIFT = "\uE008";
+const ARROW_LEFT = "\uE012";
 const ARROW_RIGHT = "\uE014";
+const ALT = "\uE00A";
 const ESCAPE = "\uE00C";
 const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
+const TAB = "\uE004";
 const PAGE_UP = "\uE00E";
+const PAGE_DOWN = "\uE00F";
 
 /** Drawn width of the first row's bases relative to the width the layout gives them (1.0 = lined up). */
 const SEQUENCE_FIT = `
@@ -196,7 +204,10 @@ const addTouching = `${doc} const lac = s.data.features.find(f => f.name === "la
   s.apply({ ...s.data, features: [...s.data.features, { id: "e2e-touch", name: "lac promoter", type: "promoter", start: lac.end + 1, end: lac.end + 31, strand: -1, notes: {}, raw: {} }] }, "Add feature");
   return lac.id;`;
 
-/** Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS. */
+/**
+ * Exercise real clicks: a codon is plain DNA, while its name and double-click select the CDS.
+ * A double-click on its amino acids opens nothing, as they are clicked to pick codons.
+ */
 async function checkCodonClicks(s, root, label) {
   const c = await s.exec(`${doc}
     const el = document.querySelector(arguments[0] + ' .sv-codon');
@@ -211,8 +222,8 @@ async function checkCodonClicks(s, root, label) {
   const single = await selected();
   check(`${label}: one click selects the codon's three bases without selecting the feature`, single.range?.start === c.start && single.range?.end === c.end && !single.focus && (c.end - c.start + c.length) % c.length === 2, JSON.stringify(single));
   await s.doubleClick(hit);
-  const double = await selected();
-  check(`${label}: a double-click selects the whole feature`, double.range?.start === c.featureStart && double.range?.end === c.featureEnd && double.focus?.id === c.id, JSON.stringify(double));
+  const double = { ...await selected(), dialog: await s.exec("return !!document.querySelector('.sv-dialog');") };
+  check(`${label}: a double-click selects the whole feature and opens nothing`, double.range?.start === c.featureStart && double.range?.end === c.featureEnd && double.focus?.id === c.id && !double.dialog, JSON.stringify(double));
   await s.click(hit);
   await s.click(`${root} [data-id="${c.id}"] .sv-feature-caption, ${root} .sv-feature-caption[data-id="${c.id}"]`);
   const caption = await selected();
@@ -389,6 +400,43 @@ async function main() {
     await s.press(ESCAPE);
     await s.exec(`${doc} s.undo();`);
     check("Undo brings the old name back", await s.exec(`${doc} return s.data.name === arguments[0] && ${mapName} === arguments[0];`, nameBefore));
+    // A double-click on a CDS opens its Protein details, as its right-click menu does.
+    const ampAt = await s.exec(`${doc}
+      const f = s.data.features.find(f => f.name === 'AmpR');
+      for (const el of document.querySelectorAll('.sv-map-svg [data-kind="feature"][data-id="' + f.id + '"]:not([data-region])')) {
+        const b = el.getBoundingClientRect();
+        for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) {
+          const x = b.left + (b.width * i) / 10, y = b.top + (b.height * j) / 10;
+          if (document.elementFromPoint(x, y)?.closest('[data-kind]') === el) return [x, y];
+        }
+      }
+      return null;`);
+    check("A point on AmpR is found on the map", !!ampAt);
+    if (ampAt) {
+      await s.doubleClickAt(ampAt);
+      check("Double-clicking a CDS on the map opens its Protein details", await s.waitFor("document.querySelector('.sv-dialog .sv-protein-seq') && document.querySelector('.sv-dialog')?.textContent.includes('AmpR')", 3000));
+      await s.press(ESCAPE);
+      await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    }
+    // …and one on a cut site opens its Enzyme details.
+    const kpnAt = await s.exec(`
+      const el = document.querySelector('.sv-map-svgel text[data-id^="KpnI@"]');
+      const b = el?.getBoundingClientRect();
+      if (!b) return null;
+      const x = b.left + b.width / 2, y = b.top + b.height / 2;
+      return document.elementFromPoint(x, y)?.closest('[data-kind]') === el.closest('[data-kind]') ? [x, y] : null;`);
+    check("A point on KpnI's name is found on the map", !!kpnAt);
+    if (kpnAt) {
+      await s.doubleClickAt(kpnAt);
+      check("Double-clicking a cut site on the map opens its Enzyme details", await s.waitFor("document.querySelector('.sv-dialog .sv-enzyme-cut-figure')?.dataset.enzyme === 'KpnI' && document.querySelector('.sv-dialog-title')?.textContent === 'KpnI'", 3000));
+      check("Enzyme details give KpnI's cut, its ends, who sells it and its neoschizomer", await s.exec("const t = document.querySelector('.sv-dialog')?.textContent || ''; return t.includes('GGTAC^C') && t.includes('3′ GTAC') && t.includes('Sold by') && t.includes('Neoschizomers') && t.includes('Acc65I') && t.includes('In this sequence');"));
+      await s.click("//*[contains(@class,'sv-dialog-body')]//button[normalize-space(.)='Acc65I']", "xpath");
+      check("A neoschizomer's name opens its own details in their place", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && document.querySelector('.sv-dialog-title')?.textContent === 'Acc65I' && document.querySelector('.sv-dialog').textContent.includes('G^GTACC') && !!document.querySelector('.sv-dialog .sv-facts')?.textContent.includes('KpnI')", 3000));
+      check("Enzyme details find Acc65I's site though the map's list leaves it out", await s.exec("return /Site\\d/.test(document.querySelector('.sv-dialog [aria-label=\"In this sequence\"]')?.textContent.replace(/\\s+/g, '') || '');"));
+      await s.shot("01b-enzyme-details");
+      await s.press(ESCAPE);
+      await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    }
     // A long name wraps inside the ruler's numbers instead of running across them.
     await s.exec(`${doc} s.apply({ ...s.data, name: 'testing how it works and seeing how the long text works' }, 'Rename');`);
     await sleep(300);
@@ -415,6 +463,8 @@ async function main() {
     // Unfolded here, it stays open in every file, which the ORF and region checks below rely on.
     await s.click(".sv-inspector [data-fold='translation']");
     check("Clicking its heading unfolds the translation", await s.waitFor("/MSIQHFRV/.test(document.querySelector('.sv-inspector')?.textContent) && document.querySelector('.sv-inspector [data-fold=\"translation\"]').getAttribute('aria-expanded') === 'true'", 3000));
+    check("The CDS starts with a compact protein summary", await s.exec("const p = document.querySelector('.sv-inspector [data-fold=protein]'); return p.getAttribute('aria-expanded') === 'false' && p.textContent.includes('31.6 kDa');"));
+    await s.click(".sv-inspector [data-fold='protein']");
     // ExPASy ProtParam gives AmpR 31,557.28 Da, ε280 27,960 reduced and 28,085 with its one cystine.
     const proteinFacts = await s.exec("return document.querySelector('.sv-inspector [data-section=\"protein\"]')?.textContent || ''");
     check("The inspector shows the protein's mass and ε280, as ProtParam does", /31\.6 kDa/.test(proteinFacts) && /27,960 M⁻¹ cm⁻¹/.test(proteinFacts) && /28,085 with disulfides/.test(proteinFacts) && /0\.886 at 1 mg\/mL/.test(proteinFacts), proteinFacts);
@@ -429,6 +479,14 @@ async function main() {
     check("Protein translation is shown under coding features", await s.exec("return document.querySelectorAll('.sv-aa').length > 0"));
     const captions = await s.exec("return { captions: Array.from(document.querySelectorAll('.sv-seq .sv-feature-caption')).map(c => c.textContent), margin: document.querySelectorAll('.sv-seq .sv-gutter-label').length };");
     check("Coding features are named under their amino acids, not in the margin", captions.captions.some(c => /AmpR ←|lacZ/.test(c)) && captions.margin === 0, JSON.stringify(captions));
+    await s.doubleClick(".sv-seq .sv-feature-caption");
+    check("Double-clicking a CDS's name in the Sequence tab opens its Protein details", await s.waitFor("document.querySelector('.sv-dialog .sv-protein-seq')", 3000));
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.doubleClick(".sv-seq .sv-cut-label");
+    check("Double-clicking a cut site in the Sequence tab opens its Enzyme details", await s.waitFor("!!document.querySelector('.sv-dialog .sv-enzyme-cut-figure')", 3000));
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await checkCodonClicks(s, ".sv-seq", "Sequence translation");
     await checkCodonGestures(s, ".sv-seq", "Sequence translation");
     await s.click("//button[contains(@class,'sv-chip')][normalize-space()='Colour amino acids']", "xpath");
@@ -448,28 +506,139 @@ async function main() {
     const focused = await s.exec("return document.activeElement?.classList.contains('sv-clipboard')");
     check("Clicking the sequence puts the cursor there", focused);
     const n0 = (await state()).len;
+    const editCard = () => s.exec(`${doc} const c = document.querySelector('.sv-edit');
+      return { open: !!c, text: c?.textContent ?? '', on: c?.querySelector('.sv-edit-side-on')?.textContent ?? '', struck: document.querySelectorAll('.sv-gone-band').length, len: s.data.sequence.length };`);
     await s.press("GAT");
-    await sleep(1800); // a pause ends one typing step
-    await s.press("TACA");
+    await sleep(200);
+    const waiting = await editCard();
+    check("Typing at the cursor waits in a card", waiting.open && /Insert after 5/.test(waiting.text) && /3 bases/.test(waiting.text) && waiting.len === n0, JSON.stringify(waiting));
+    await s.press(ENTER);
+    await sleep(200);
+    await s.press(`TACA${ENTER}`);
     await sleep(300);
     const typed = await state();
-    check("Typing inserts bases", typed.len === n0 + 7 && typed.dirty, `${n0} → ${typed.len} bp`);
+    check("Enter inserts them", typed.len === n0 + 7 && typed.dirty, `${n0} → ${typed.len} bp`);
     await s.press("z", [CTRL]);
     await sleep(400);
     const undone = (await state()).len;
-    check("Ctrl+Z undoes one typing step", undone === n0 + 3, `${typed.len} → ${undone} bp`);
+    check("Ctrl+Z undoes one insertion", undone === n0 + 3, `${typed.len} → ${undone} bp`);
     await s.press("z", [CTRL]);
     await sleep(400);
     await s.press("y", [CTRL]);
     await sleep(400);
     const redone = (await state()).len;
     check("Ctrl+Y redoes it", redone === n0 + 3, `${undone} → ${n0} → ${redone} bp`);
+    // --- Typing over selected bases: a card asks first, and nothing changes until Replace ---
+    const over = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR');
+      const at = Math.floor((f.start + f.end) / 2);
+      s.select({ range: { start: at, end: at + 2 }, caret: at + 3, anchor: at }, 'e2e');
+      document.querySelector('.sv-clipboard').focus();
+      return { at, was: s.data.sequence.slice(at, at + 3).toUpperCase(), len: s.data.sequence.length };`);
+    const reselect = `${doc} s.select({ range: { start: ${over.at}, end: ${over.at + 2} }, caret: ${over.at + 3}, anchor: ${over.at} }, 'e2e'); document.querySelector('.sv-clipboard').focus();`;
+    const swap = [...over.was].map(c => ({ A: "T", T: "A", G: "C", C: "G" })[c] ?? "A").join("");
+    const card = () => s.exec(`${doc} const c = document.querySelector('.sv-edit');
+      return { open: !!c, text: c?.textContent ?? '', len: s.data.sequence.length, bases: s.data.sequence.slice(${over.at}, ${over.at} + 3).toUpperCase() };`);
+    await s.press(swap[0]);
+    await sleep(200);
+    const one = await card();
+    check("Typing over selected bases opens a card and changes nothing yet", one.open && /1 of 3 bases/.test(one.text) && one.len === over.len && one.bases === over.was, JSON.stringify(one));
+    await s.press(swap.slice(1));
+    await sleep(200);
+    const three = await card();
+    check("The card counts the bases and names the protein change", /3 bases for 3 · same length/.test(three.text) && /AmpR · /.test(three.text), three.text);
+    await s.shot("03-replace-card");
+    await s.press(ENTER);
+    await sleep(300);
+    const replaced = await card();
+    check("Enter replaces them in one step", !replaced.open && replaced.bases === swap && replaced.len === over.len, JSON.stringify(replaced));
+    await s.exec(`${doc} s.undo();`);
+    check("One undo brings the old bases back", (await card()).bases === over.was);
+    // A click elsewhere cancels, and the message can still replace them.
+    await s.exec(reselect);
+    await s.press("GG");
+    await sleep(200);
+    const selRow = await s.exec("return document.querySelector('.sv-sel-band')?.closest('.sv-row')?.dataset.row");
+    await s.click(`.sv-row[data-row="${selRow}"] .sv-row-track`);
+    await sleep(300);
+    const away = await card();
+    check("A click elsewhere closes the card and keeps the bases", !away.open && away.bases === over.was && away.len === over.len, JSON.stringify(away));
+    check("It says so, with Replace", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /Didn't replace/.test(t.textContent) && t.querySelector('.ps-toast-action'))", 2000));
+    await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Replace']", "xpath");
+    await sleep(300);
+    const late = await card();
+    check("Replace in the message replaces them after all", late.len === over.len - 1, `${over.len} → ${late.len} bp`);
+    await s.exec(`${doc} s.undo();`);
+    // A paste over a selection waits in the card too, and Esc keeps the bases.
+    await s.exec(`${reselect} window.__strandivo.paste('ACGTA');`);
+    await sleep(200);
+    const pasted = await card();
+    check("Pasting over selected bases waits in the card", pasted.open && /5 bases for 3/.test(pasted.text) && pasted.len === over.len, pasted.text);
+    await s.press(ESCAPE);
+    await sleep(200);
+    const kept = await card();
+    check("Esc closes it and keeps the bases", !kept.open && kept.bases === over.was && kept.len === over.len, JSON.stringify(kept));
+    // At a feature's edge the card asks which side takes new bases: neither, unless Tab chooses.
+    const ampEdge = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'AmpR');
+      s.select({ range: null, caret: f.end + 1, anchor: f.end + 1 }, 'e2e');
+      document.querySelector('.sv-clipboard').focus();
+      return { id: f.id, end: f.end };`);
+    const ampEnd = () => s.exec(`${doc} return s.data.features.find(x => x.id === ${JSON.stringify(ampEdge.id)})?.end;`);
+    await s.press("GCT");
+    await sleep(200);
+    const edge = await editCard();
+    check("At a feature's edge the card asks where new bases go, Neither first", /New bases go in/.test(edge.text) && /AmpR/.test(edge.text) && edge.on === "Neither", JSON.stringify(edge));
+    await s.shot("03-edit-card-edge");
+    await s.press(ENTER);
+    await sleep(300);
+    const outside = await ampEnd();
+    check("Neither leaves them outside the feature", outside === ampEdge.end, `${ampEdge.end} → ${outside}`);
+    await s.exec(`${doc} s.undo(); s.select({ range: null, caret: ${ampEdge.end + 1}, anchor: ${ampEdge.end + 1} }, 'e2e'); document.querySelector('.sv-clipboard').focus();`);
+    await s.press(`GCT${TAB}`);
+    await sleep(200);
+    const chosen = await editCard();
+    check("Tab picks the feature", /AmpR/.test(chosen.on), JSON.stringify(chosen));
+    await s.press(ENTER);
+    await sleep(300);
+    const inside = await ampEnd();
+    check("It then takes the new bases", inside === ampEdge.end + 3, `${ampEdge.end} → ${inside}`);
+    await s.exec(`${doc} s.undo();`);
+    // Backspace at the cursor marks bases to delete, one more with each press, and Enter deletes them.
+    await s.exec(`${doc} s.select({ range: null, caret: 200, anchor: 200 }, 'e2e'); document.querySelector('.sv-clipboard').focus();`);
+    const beforeBack = (await state()).len;
+    await s.press(BACKSPACE + BACKSPACE + BACKSPACE);
+    await sleep(200);
+    const marked = await editCard();
+    check("Backspace at the cursor marks bases to delete, one more with each press", /Delete 198–200/.test(marked.text) && marked.struck > 0 && marked.len === beforeBack, JSON.stringify(marked));
+    await s.shot("03-edit-card-delete");
+    await s.press(ENTER);
+    await sleep(300);
+    const afterBack = (await state()).len;
+    check("Enter deletes them", afterBack === beforeBack - 3, `${beforeBack} → ${afterBack} bp`);
+    await s.exec(`${doc} s.undo();`);
+    // Cut copies the selected bases at once and waits in the card to delete them; Esc keeps them.
+    const cutText = await s.exec(`${doc} s.select({ range: { start: 199, end: 208 }, caret: 209, anchor: 199 }, 'e2e');
+      const area = document.querySelector('.sv-clipboard'); area.focus();
+      const dt = new DataTransfer();
+      area.dispatchEvent(new ClipboardEvent('cut', { clipboardData: dt, bubbles: true, cancelable: true }));
+      return dt.getData('text/plain');`);
+    await sleep(200);
+    const cutCard = await editCard();
+    check("Cut waits in the card to delete the bases", /Delete 200–209/.test(cutCard.text) && cutCard.len === beforeBack, JSON.stringify({ ...cutCard, copied: cutText }));
+    await s.press(ESCAPE);
+    await sleep(200);
+    check("Esc keeps them", (await state()).len === beforeBack && !(await editCard()).open);
+    check("It says they were copied all the same", await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => /Copied 10 bases but didn't delete them/.test(t.textContent))", 2000), `copied “${cutText}”`);
     // --- Pasting what a database copies: a FASTA header, and text that isn't a sequence ---
-    const pasteLen = async (text) =>
-      s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');
-        const before = s.data.sequence.length;
+    const pasteLen = async (text) => {
+      const before = await s.exec(`${doc} s.select({ range: null, caret: 0, anchor: 0 }, 'e2e');
+        document.querySelector('.sv-clipboard').focus();
         window.__strandivo.paste(${JSON.stringify(text)});
-        return { grew: s.data.sequence.length - before, start: s.data.sequence.slice(0, 8) };`);
+        return s.data.sequence.length;`);
+      await sleep(100);
+      await s.press(ENTER);
+      await sleep(200);
+      return s.exec(`${doc} return { grew: s.data.sequence.length - ${before}, start: s.data.sequence.slice(0, 8) };`);
+    };
     const fasta = await pasteLen(">pUC19 cloning vector, complete sequence\nacgtacgu\n");
     check("Pasting a FASTA entry puts in its bases alone, U as T", fasta.grew === 8 && fasta.start === "ACGTACGT", JSON.stringify(fasta));
     await s.exec(`${doc} s.undo();`);
@@ -481,7 +650,7 @@ async function main() {
     const shiftSel = (await state()).sel.range;
     check("Shift+arrows select bases", shiftSel && shiftSel.end - shiftSel.start === 2, JSON.stringify(shiftSel));
 
-    // --- Delete with a feature selected: the feature goes first, its bases on the next press ---
+    // --- Delete with a feature selected: the feature goes first, then its bases wait in the card ---
     const lacZ = await s.exec(`${doc} const f = s.data.features.find(x => x.name === 'lacZ-alpha');
       s.select({ range: { start: f.start, end: f.end }, caret: f.end + 1, focus: { kind: 'feature', id: f.id } }, 'e2e');
       document.querySelector('.sv-clipboard').focus();
@@ -501,8 +670,12 @@ async function main() {
     await s.shot("03-delete-feature");
     await s.press(BACKSPACE);
     await sleep(300);
+    const asked = await editCard();
+    check("The next Delete asks before deleting its bases", asked.open && /Delete /.test(asked.text) && /or Delete again/.test(asked.text) && asked.len === beforeDelete.len, JSON.stringify(asked));
+    await s.press(BACKSPACE);
+    await sleep(300);
     const secondPress = await state();
-    check("The next Delete deletes its bases", secondPress.len === beforeDelete.len - (lacZ.end - lacZ.start + 1), `${beforeDelete.len} → ${secondPress.len} bp`);
+    check("Delete again deletes them", secondPress.len === beforeDelete.len - (lacZ.end - lacZ.start + 1), `${beforeDelete.len} → ${secondPress.len} bp`);
     check("It says the feature inside them went too", await s.waitFor(toastWith("/The feature MCS was inside the deleted bases/"), 2000));
     await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))]//button[normalize-space()='Undo']", "xpath");
     await sleep(300);
@@ -603,6 +776,16 @@ async function main() {
     await s.press("z", [CTRL]);
     await sleep(400);
     check("Ctrl+Z puts the primer back", JSON.stringify(await ends()) === JSON.stringify(beforeStep));
+    // A click on an end's handle takes the keyboard (WebKit focuses no button clicked), so the
+    // arrow keys move that end: the left one is this reverse primer's 3′ end.
+    const leftHandle = await s.exec("const b = Array.from(document.querySelectorAll('.sv-ctx-handle')).sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left)[0]; b.scrollIntoView({ block: 'nearest' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2];");
+    await s.clickAt(leftHandle);
+    await s.press(ARROW_LEFT);
+    await sleep(400);
+    const afterKey = await ends();
+    check("Clicking an end's handle lets the arrow keys move that end", JSON.stringify(afterKey) === JSON.stringify(afterStep), `${beforeStep} → ${afterKey}`);
+    await s.exec(`${doc} s.undo();`);
+    await sleep(300);
     const strands = await s.exec("const r = document.querySelector('.sv-ctx .sv-bases').getBoundingClientRect(); return [r.left + 30, r.top + 9, r.left + 230, r.top + 27];");
     await s.drag([strands[0], strands[1]], [strands[2], strands[3]]);
     const ctxSel = await s.exec(`${doc} return { range: s.selection.range, focus: s.selection.focus, bands: document.querySelectorAll('.sv-ctx .sv-sel-band').length, text: String(getSelection()), still: /AmpR-NdeI-F/.test(document.querySelector('.sv-ctx-name').textContent) };`);
@@ -686,9 +869,94 @@ async function main() {
       JSON.stringify(laneKey) === JSON.stringify([`1Template, supercoiled${templateSize} bp`, `2Template, ScaI${templateSize} bp`, "3Product, uncut878 bp", "4Product, ScaI564 + 314 bp"]),
       JSON.stringify(laneKey)
     );
+    // An uncut plasmid runs ahead of the same plasmid cut once, so lane 1 sits lower on the gel than lane 2 (a larger y).
+    const laneY = lane => s.exec(`const b = document.querySelector('.sv-pcr-gel .sv-gel-band[data-lane="${lane}"]'); return b ? Number(b.getAttribute('y')) : null;`);
+    const [supercoiledY, openedY] = [await laneY(1), await laneY(2)];
+    check("The supercoiled plasmid runs ahead of the same plasmid cut once", supercoiledY !== null && openedY !== null && supercoiledY > openedY, `lane 1 at y ${supercoiledY}, lane 2 at y ${openedY}`);
+    // Before a ladder is picked, the gel opens on one that reaches its smallest band (the 314 bp piece here): the 1 kb ladder stops
+    // at 500 bp, which would leave the piece on the bottom edge. So no band of the samples runs below the ladder's lowest.
+    const reach = await s.exec(`const ys = selector => Array.from(document.querySelectorAll('.sv-pcr-gel ' + selector)).map(b => Number(b.getAttribute('y')));
+      return { ladder: document.querySelector(".sv-dialog select[aria-label='Ladder']").value, samples: Math.max(...ys('.sv-gel-band[data-lane]')), ladderLowest: Math.max(...ys('.sv-gel-band:not([data-lane])')) };`);
+    check("A short product opens the gel on a ladder that reaches its smallest band", reach.ladder === "1kb-plus" && reach.samples <= reach.ladderLowest, JSON.stringify(reach));
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
+    // A ladder picked holds for the window, so this is the 1 kb ladder the Digest dialog's checks below start on.
     await choose("Ladder", "1 kb ladder");
+    // The primers' tails (7 and 10 bases) raise how well the whole primers anneal by more than 5 °C, so Q5 offers two stages.
+    const programStages = "const stages = []; for (const el of document.querySelectorAll('.sv-pcr-program [data-focus^=\"program-\"]')) { const [i, j, kind] = el.dataset.focus.slice(8).split(':'); const st = (stages[i] = stages[i] || { cycles: null, steps: [] }); if (kind === 'cycles') st.cycles = el.value + ' cycles'; if (kind === 'temp') st.steps[j] = el.getAttribute('aria-label').replace(/^Stage \\d+, | temperature, °C$/g, ''); } return stages.map(st => ({ cycles: st.cycles, steps: st.steps.filter(Boolean) }));";
+    // Runs `action`, then waits for the dialog to be drawn again: the marker goes with the old drawing's element.
+    const redraws = async action => {
+      await s.exec("document.querySelector('.sv-pcr-result').dataset.drawn = '1';");
+      await action();
+      return s.waitFor("!document.querySelector('.sv-pcr-result')?.dataset.drawn", 5000);
+    };
+    const twoStageBox = ".sv-dialog input[aria-label='Anneal in two stages']";
+    const oneStage = await s.exec(programStages);
+    check("Q5 on a plasmid has one stage of 25 cycles, with two stages offered for the tails but not ticked", oneStage.length === 3 && oneStage[1].cycles === "25 cycles" && (await s.exec(`const b = document.querySelector("${twoStageBox}"); return !!b && !b.checked;`)), JSON.stringify(oneStage));
+    check("Ticking Anneal in two stages redraws the dialog", await redraws(() => s.click(twoStageBox)));
+    const twoStages = await s.exec(programStages);
+    const twoStageText = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check(
+      "Two stages are four stages: 5 cycles on the pairing parts, then 20 on the whole primers",
+      twoStages.length === 4 && twoStages[1].cycles === "5 cycles" && twoStages[2].cycles === "20 cycles" && twoStages[1].steps.join() === "Denature,Anneal,Extend" && twoStages[2].steps.join() === "Denature,Anneal and extend",
+      JSON.stringify(twoStages)
+    );
+    check("The Anneal at row gives the temperature of each stage", /Anneal at\s*\d+ °C, then \d+ °C/.test(twoStageText) && (await s.exec(`return document.querySelector("${twoStageBox}").checked;`)), twoStageText.slice(0, 400));
+    await s.shot("04-pcr-two-stages");
+    await redraws(() => s.click(twoStageBox));
+    const backToOne = await s.exec(programStages);
+    check("Unticking it goes back to one stage of 25 cycles", backToOne.length === 3 && backToOne[1].cycles === "25 cycles" && !(await s.exec(`return document.querySelector("${twoStageBox}").checked;`)), JSON.stringify(backToOne));
+    // A site with fewer than 6 bases beyond it in a tail (XhoI and NdeI here, 4 each, as the tails' extra bases are GCGC)
+    // is listed in a fold, which stays as it was left when the dialog is drawn again.
+    const flanks = () => s.exec("const d = document.querySelector('.sv-pcr-flanks'); return d ? { open: d.open, text: d.textContent } : null;");
+    const flanksShut = await flanks();
+    check(
+      "Sites in the tails with fewer than 6 bases beyond them are listed, in a fold that starts shut",
+      flanksShut && !flanksShut.open && /Bases beyond the sites in the tails/.test(flanksShut.text) && /XhoI: 4 bp between its site and the nearest end of the product\./.test(flanksShut.text) && /NdeI: 4 bp between its site/.test(flanksShut.text),
+      JSON.stringify(flanksShut)
+    );
+    await s.click(".sv-pcr-flanks summary");
+    check("Clicking its heading opens it", await s.waitFor("document.querySelector('.sv-pcr-flanks')?.open", 3000));
+    await redraws(() => s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 525 } })"));
+    check("It stays open when the dialog is drawn again", (await flanks())?.open === true, JSON.stringify(await flanks()));
+    await s.click(".sv-pcr-flanks summary");
+    check("And clicking its heading again shuts it, as the checks below expect", await s.waitFor("document.querySelector('.sv-pcr-flanks') && !document.querySelector('.sv-pcr-flanks').open", 3000));
+    await redraws(() => s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 500 } })"));
+    // The product's own enzyme list and filter decide the sites it draws; the suggested digest is looked for in the whole list.
+    const chipTotal = "return Array.from(document.querySelectorAll('.sv-pcr-cut')).reduce((n, b) => n + (b.dataset.more ? Number(b.textContent.replace('+', '')) : 1), 0);";
+    const menuValue = label => s.exec(`return document.querySelector(".sv-dialog select[aria-label='${label}']")?.value ?? null;`);
+    const listAtStart = await menuValue("Product enzyme list");
+    const filterAtStart = await menuValue("Product cut-site filter");
+    const chipsAtStart = await s.exec(chipTotal);
+    await redraws(() => choose("Product cut-site filter", "all"));
+    const chipsEvery = await s.exec(chipTotal);
+    const digestText = () => s.exec("return document.querySelector('.sv-pcr-digest')?.textContent ?? ''");
+    check("Choosing Every site in the product's own filter draws more sites, and the digest follows the list, not the filter", chipsEvery > chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${chipsAtStart} → ${chipsEvery} sites, ${await digestText()}`);
+    await redraws(() => choose("Product enzyme list", "lab"));
+    const labText = await s.exec("return document.querySelector('.sv-pcr-overview').textContent");
+    check("A lab list with no enzymes draws none, says so and suggests no digest", (await s.exec(chipTotal)) === 0 && /No cut sites match this list and filter/.test(labText) && /No digest from this list gives fragments worth running/.test(labText), labText.slice(0, 300));
+    await redraws(() => choose("Product enzyme list", listAtStart));
+    await redraws(() => choose("Product cut-site filter", filterAtStart));
+    check("Putting both menus back draws the sites it started with", (await s.exec(chipTotal)) === chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${await s.exec(chipTotal)} sites`);
+    // Before any site is clicked, the one described is a site of the digest chosen, whichever that is. Only when
+    // the list offers a second digest, so a list with one has nothing to try.
+    const digestOptions = await s.exec("return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Suggested digest'] option\")).map(o => o.value);");
+    if (digestOptions.length > 1) {
+      const siteDetail = () => s.exec("return document.querySelector('.sv-pcr-site-detail')?.textContent ?? ''");
+      await choose("Suggested digest", digestOptions[1]);
+      const described = await siteDetail();
+      check("With no site clicked, the site described follows the digest chosen", digestOptions[1].split(" + ").some(name => described.startsWith(`${name} · `)), `${digestOptions[1]}: ${described}`);
+      await choose("Suggested digest", digestOptions[0]);
+    }
+    // Enter accepts a field's value and leaves focus in it, with the dialog open and nothing else taking the key.
+    const enterField = '[data-focus="program-1:1:temp"]';
+    const enterBefore = await s.exec(`const el = document.querySelector('${enterField}'); const previous = el.value; el.value = String(Number(previous) + 1); el.dispatchEvent(new Event('input')); el.focus(); return previous;`);
+    await s.press(ENTER);
+    const enterAfter = await s.exec(`const el = document.querySelector('${enterField}'); return { focused: document.activeElement === el, value: el.value, dialog: !!document.querySelector('.sv-dialog'), modified: !document.querySelector('.sv-prog-modified')?.hidden };`);
+    check("Enter in a program field keeps focus there, with the dialog open and the change made", enterAfter.focused && enterAfter.dialog && enterAfter.modified && enterAfter.value === String(Number(enterBefore) + 1), JSON.stringify(enterAfter));
+    await s.exec(`const el = document.querySelector('${enterField}'); el.value = '${enterBefore}'; el.dispatchEvent(new Event('input'));`);
+    await s.press(ENTER);
+    check("Typing the generated value back and pressing Enter leaves the program unmodified, focus still there", (await s.waitFor("document.querySelector('.sv-prog-modified')?.hidden", 3000)) && (await s.exec(`return document.activeElement === document.querySelector('${enterField}');`)));
     // The reaction mix is NEB's own table for the polymerase, folded until the bench wants it.
     check("The reaction mix is folded under the program", await s.exec("return document.querySelector('.sv-pcr-mix .sv-fold-link')?.textContent.trim() === 'Show' && !document.querySelector('.sv-mix-table')"));
     await s.click(".sv-pcr-mix .sv-fold-link");
@@ -737,6 +1005,7 @@ async function main() {
     await choose("Polymerase", "OneTaq, Standard buffer");
     await s.waitFor("/Tms here are for OneTaq/.test(document.querySelector('.sv-dialog')?.textContent)", 5000);
     check("Changing polymerase preserves the custom program and offers regeneration", await s.exec("return document.querySelector('[data-focus=\"program-1:1:temp\"]')?.value === '64' && !!document.querySelector('[data-focus=regenerate-program]')"));
+    check("The strip over the kept program says what it was made for, annealing and stages included", /kept from the earlier setup \(Plasmid · [\d,]+ bp · annealing at \d+ °C(?:, then \d+ °C)? · [12] stages?\)/.test(await s.exec("return document.querySelector('.sv-pcr-program .sv-pcr-strip')?.textContent ?? ''")));
     await s.click("button[data-focus=regenerate-program]");
     await s.waitFor("!document.querySelector('[data-focus=regenerate-program]')", 5000);
     const oneTaq = await s.exec("return document.querySelector('.sv-dialog').textContent");
@@ -745,8 +1014,11 @@ async function main() {
     check("The program names the product its protocol is for, beside the program", /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(oneTaq), oneTaq.slice(-500));
     await s.shot("04-pcr-onetaq");
     const invalidProgram = await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); const previous = el.value; el.value = 'unfinished'; el.dispatchEvent(new Event('input')); el.focus(); el.setSelectionRange(2, 5); return {previous, blocked:document.querySelector('[data-focus="copy-program"]').disabled};`);
+    // The marker goes with the old program view when the dialog is drawn again, so the field is read only after a redraw.
+    await s.exec("document.querySelector('.sv-pcr-program').dataset.drawn = '1';");
     await s.exec("return window.__strandivo.saveSettings({ tm: { method: 'neb', monovalent: 50, divalent: 1.5, dntp: 0.6, primer: 50, polymerase: 'q5', nebPrimer: 475 } })");
-    check("An unfinished program field blocks copying and keeps its text, focus and caret on redraw", invalidProgram.blocked && await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); return el.value === 'unfinished' && document.activeElement === el && el.selectionStart === 2 && el.selectionEnd === 5;`));
+    const invalidRedrawn = await s.waitFor("!document.querySelector('.sv-pcr-program')?.dataset.drawn", 5000);
+    check("An unfinished program field blocks copying and keeps its text, focus and caret on redraw", invalidProgram.blocked && invalidRedrawn && await s.exec(`const el = document.querySelector('[data-focus="program-1:0:seconds"]'); return el.value === 'unfinished' && document.activeElement === el && el.selectionStart === 2 && el.selectionEnd === 5;`));
     await s.press(ESCAPE);
     check("Escape cancels unfinished text without closing the PCR dialog", await s.exec(`return document.querySelector('[data-focus="program-1:0:seconds"]')?.value`) === invalidProgram.previous);
     // Reset is for a program that was changed, so change one first: with the program as the
@@ -761,6 +1033,47 @@ async function main() {
       resetReady && (await s.exec(`return document.querySelector('[data-focus="program-1:1:temp"]')?.value === ${JSON.stringify(annealed)} && document.activeElement === document.querySelector('[data-focus=copy-program]')`)),
       `annealing at ${annealed} °C`
     );
+    // The strip's button makes the dialog's polymerase the Tm method for the whole app; as the strip goes
+    // with it, the Polymerase menu takes the focus.
+    await s.click(".sv-pcr-strip button[data-focus='use-for-all']");
+    const followed = await s.waitFor("!document.querySelector('.sv-pcr-strip') && document.activeElement?.getAttribute('aria-label') === 'Polymerase'", 5000);
+    const savedTm = await s.exec("return JSON.parse(localStorage.getItem('strandivo.settings') || '{}').tm ?? null;");
+    check("Use for all Tms saves the dialog's polymerase as the Tm method, with its own primer concentration", savedTm?.method === "neb" && savedTm?.polymerase === "onetaq" && savedTm?.nebPrimer === 200, JSON.stringify(savedTm));
+    check("Then the strip is gone and the Polymerase menu has the focus", followed, await s.exec("const a = document.activeElement; return `${a?.tagName} ${a?.getAttribute('aria-label') ?? ''}, strip ${!!document.querySelector('.sv-pcr-strip')}`;"));
+    // Settings back to NEB's Q5, as the checks below expect.
+    await tmMethod("neb");
+    await s.waitFor("document.querySelector('.sv-pcr-strip')", 5000);
+    // A template the polymerase has no protocol for goes back to plasmid: Taq has a colony, Q5 has not.
+    const templateOptions = "return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Template'] option\")).map(o => o.value).join();";
+    const templateNow = "return document.querySelector(\".sv-dialog select[aria-label='Template']\").value;";
+    await redraws(() => choose("Polymerase", "Taq, Standard Taq buffer"));
+    check("Taq offers a colony as a template", (await s.exec(templateOptions)) === "plasmid,complex,colony", await s.exec(templateOptions));
+    await redraws(() => choose("Template", "colony"));
+    const colonyStart = await s.exec("return document.querySelector('[data-focus=\"program-0:0:seconds\"]')?.value ?? null;");
+    check("A colony on Taq starts with the longer first denaturation", (await s.exec(templateNow)) === "colony" && colonyStart === "5 min", `${await s.exec(templateNow)}, first step ${colonyStart}`);
+    await redraws(() => choose("Polymerase", "Q5 High-Fidelity"));
+    const q5Source = await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? null;");
+    check("Picking Q5, which has no colony, falls back to a plasmid", (await s.exec(templateOptions)) === "plasmid,complex" && (await s.exec(templateNow)) === "plasmid" && /Q5 High-Fidelity DNA Polymerase · NEB M0491/.test(q5Source), `${await s.exec(templateOptions)}; ${await s.exec(templateNow)}; ${q5Source}`);
+    // Genomic DNA or cDNA is not the plasmid open here, so its gel runs the product's lanes alone and drops the note about leftover template.
+    const laneKeyText = () => s.exec("return Array.from(document.querySelectorAll('.sv-pcr-lane-key li')).map(li => li.textContent)");
+    await redraws(() => choose("Template", "complex"));
+    const complexKey = await laneKeyText();
+    check(
+      "With genomic DNA or cDNA as the template, the gel runs the product's lanes without the plasmid's",
+      complexKey.length === 2 && /^1Product, uncut/.test(complexKey[0]) && /^2Product, \S/.test(complexKey[1]) && (await s.exec("return document.querySelector('.sv-pcr-lanes > p')?.hidden === true")),
+      JSON.stringify(complexKey)
+    );
+    // The choice is kept between dialogs, so a plasmid is chosen again.
+    await redraws(() => choose("Template", "plasmid"));
+    const plasmidKey = await laneKeyText();
+    check("Back on a plasmid the gel has the template's lanes again", plasmidKey.length === 4 && /^1Template, supercoiled/.test(plasmidKey[0]) && (await s.exec("return document.querySelector('.sv-pcr-lanes > p')?.hidden === false")), JSON.stringify(plasmidKey));
+    // A polymerase whose protocol has not been read has no program, and the dialog says so.
+    await redraws(() => choose("Polymerase", "Q5U Hot Start"));
+    const noProgram = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check("A polymerase with no protocol says there is no program for it", /There is no program for Q5U Hot Start yet\./.test(noProgram) && !(await s.exec("return !!document.querySelector('.sv-pcr-program')")), noProgram.slice(-200));
+    // And back on OneTaq, as the checks below expect.
+    await redraws(() => choose("Polymerase", "OneTaq, Standard buffer"));
+    check("The dialog is back on OneTaq with its program and a plasmid", (await s.exec(templateNow)) === "plasmid" && /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? ''")), await s.exec(templateNow));
     // A change made elsewhere (here Settings) draws the dialog again without taking focus off the control that has it,
     // whether a menu, a button in the program, one in the footer or a crowd of sites counted below.
     const keepsFocus = async (selector, nebPrimer) => {
@@ -777,6 +1090,29 @@ async function main() {
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");
     await sleep(300);
+
+    // --- a GC-rich product warns: 300 bases of G and C in place of 1,001–1,300, with a primer at each end ---
+    check("A product of ordinary GC has no GC warning", !/% GC, which can be hard to amplify/.test(pcr), pcr.slice(0, 200));
+    const beforeGc = await s.exec(`${doc} return s.data.sequence;`);
+    await s.exec(`${doc} let x = 12345;
+      const gc = Array.from({ length: 300 }, () => { x = (x * 1103515245 + 12345) % 2147483648; return (x >> 16) & 1 ? 'G' : 'C'; }).join('');
+      const rc = bases => [...bases].reverse().map(c => ({ G: 'C', C: 'G' })[c]).join('');
+      s.apply({ ...s.data, sequence: s.data.sequence.slice(0, 1000) + gc + s.data.sequence.slice(1300), primers: [...s.data.primers,
+        { id: 'e2e-gc-f', name: 'GC-F', start: 1000, end: 1019, strand: 1, bases: gc.slice(0, 20), notes: {}, raw: {} },
+        { id: 'e2e-gc-r', name: 'GC-R', start: 1280, end: 1299, strand: -1, bases: rc(gc.slice(280)), notes: {}, raw: {} }] }, 'Add GC-rich product');`);
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]", "xpath");
+    await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Forward primer']\")", 5000);
+    await choose("Forward primer", "GC-F");
+    await sleep(300);
+    await choose("Reverse primer", "GC-R");
+    await s.waitFor("document.querySelector('[data-product-length]')?.dataset.productLength === '300'", 5000);
+    const gcText = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
+    check("A GC-rich product says so, with the GC to one decimal and Q5's enhancer", /The product is 100\.0% GC, which can be hard to amplify\./.test(gcText) && /Q5 High GC Enhancer/.test(gcText) && /100\.0% GC/.test(await s.exec("return document.querySelector('.sv-pcr-overview .sv-pcr-head').textContent")), gcText.slice(0, 400));
+    await s.shot("04-pcr-gc-rich");
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.exec(`${doc} s.undo();`);
+    check("Undo takes the GC-rich bases and their primers out again", (await s.exec(`${doc} return s.data.sequence;`)) === beforeGc && !(await state()).primers.some(name => name.startsWith("GC-")));
 
     // --- mutagenesis: a codon of AmpR to alanine, from the right-click menu ---
     await s.click("button[data-tab=sequence]");
@@ -924,6 +1260,8 @@ async function main() {
     // A feature's note is typed in the inspector and saved as its /note, quotes and all.
     const typedNote = 'Says "stop" here, and goes on long enough to wrap onto another line of the file';
     await s.exec(`${doc} const f = s.data.features[0]; s.selectRange({ start: f.start, end: f.end }, { kind: "feature", id: f.id }, "e2e");`);
+    await s.waitFor("document.querySelector('.sv-add-note, [aria-label=\"Feature note\"]')", 5000);
+    await s.exec("document.querySelector('.sv-add-note')?.click();");
     await s.waitFor("document.querySelector('[aria-label=\"Feature note\"]')", 5000);
     // Cleared without an event, so the first key press replaces any note the feature had.
     await s.exec("const note = document.querySelector('[aria-label=\"Feature note\"]'); note.value = ''; note.scrollIntoView({ block: 'nearest' });");
@@ -996,6 +1334,60 @@ async function main() {
     await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
     await s.exec("window.__strandivo.showTab(1); window.__strandivo.closeTab();");
     check("Closing the product asks to save it", await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000));
+
+    // --- a dialog belongs to its file's tab ---
+    // One opened for a file closes, as Cancel does, when another tab or Home becomes the
+    // current one (a key, a click, a file opening) or when its tab closes; Escape closes only
+    // the topmost. Ends as it began: this file's tab alone, no dialog.
+    const digestOpen = () => s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
+    const noDialog = also => s.waitFor(`!document.querySelector('.sv-dialog') && ${also}`, 3000);
+    await s.exec(`window.__strandivo.open([${JSON.stringify(data("sanger", "sage-sample-reference.fa"))}])`);
+    await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.tabs()[1] !== null", 20000);
+    await s.exec("window.__strandivo.showTab(0)");
+    await sleep(300);
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.press(PAGE_DOWN, [CTRL]);
+    check("Ctrl+Page Down closes a file's dialog as it shows the next tab", await noDialog("window.__strandivo.activeTab() === 1"));
+    await s.exec("window.__strandivo.command('digest')");
+    check("The next tab opens its own dialog", await digestOpen());
+    await s.press(ESCAPE);
+    check("Escape closes the dialog of the tab shown", await noDialog("window.__strandivo.activeTab() === 1"));
+    await s.exec("window.__strandivo.showTab(0)");
+    await sleep(300);
+    check("A dialog closed with its tab stays closed when the tab is shown again", await noDialog("window.__strandivo.activeTab() === 0"));
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.exec("window.__strandivo.showHome()");
+    check("Showing Home closes a file's dialog", await noDialog("window.__strandivo.activeTab() === -1"));
+    await s.exec("window.__strandivo.showTab(0)");
+    await sleep(300);
+    // What "Open as new file…" in the PCR dialog does once the product is saved: the shell
+    // asks the window to open it.
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.execAsync(
+      "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));",
+      [data("snapgene", "pIB2-SEC13-mEGFP.dna")]
+    );
+    await s.waitFor("window.__strandivo.tabs().length === 3 && window.__strandivo.tabs()[2] !== null", 20000);
+    check("Opening a file closes a dialog left over the tab it came from", await noDialog("window.__strandivo.activeTab() === 2"));
+    await s.exec("window.__strandivo.closeTab()");
+    await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.activeTab() === 1", 5000);
+    await s.exec("window.__strandivo.command('digest')");
+    await digestOpen();
+    await s.exec("window.__strandivo.menu('close')");
+    check("Closing a file's tab, as the menu's Close does, takes its dialog with it", await noDialog("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0"));
+    await s.exec("window.__strandivo.command('digest')");
+    check("The file left works as before", await digestOpen());
+    // The menu can open another dialog over this one; each Escape closes the topmost.
+    await s.exec("window.__strandivo.command('simulate-cloning')");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-clone-methods')", 5000);
+    check("A second dialog opens over the first", (await s.exec("return document.querySelectorAll('.sv-dialog').length")) === 2);
+    await s.press(ESCAPE);
+    check("The first Escape closes only the topmost dialog", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && !!document.querySelector('.sv-dialog .sv-digest') && !document.querySelector('.sv-dialog .sv-clone-methods')", 3000));
+    await s.press(ESCAPE);
+    check("The next Escape closes the one under it", await noDialog("window.__strandivo.tabs().length === 1"));
 
     // --- ORFs and digests ---
     await s.exec("window.__strandivo.command('show-map')");
@@ -1077,6 +1469,7 @@ async function main() {
       document.querySelector('.sv-map-svgel text[data-id^="EcoRI@"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
       return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
     check("Right-clicking a picked enzyme keeps the pick and digests with them all", digestMenu.includes("Digest with BglI, EcoRI and BamHI…"), digestMenu.join(" | "));
+    check("A cut site's right-click menu offers its Enzyme details", digestMenu.includes("Enzyme details…"), digestMenu.join(" | "));
     await s.exec("window.__e2eMenu.find(e => e.label.startsWith('Digest with')).run(); delete window.__strandivoMenu;");
     await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
     const ticked = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog input[data-enzyme]:checked')).map(i => i.dataset.enzyme).sort()");
@@ -1114,20 +1507,26 @@ async function main() {
       await s.waitFor("document.querySelector('[role=status]')?.textContent === 'Saved'", 5000);
       const stockSaved = await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('load_app_data', { name: 'enzyme-library' }).then(raw => done(JSON.parse(raw)), e => done(String(e)));");
       check("Product, freezer location and edited notes are kept in the JSON file", stockSaved?.version === 1 && ["EcoRI", "PvuII"].every(enzyme => stockSaved.entries.some(e => e.enzyme === enzyme && e.product === `E2E ${enzyme}` && e.location === "Freezer 2, box A" && e.notes === (enzyme === "EcoRI" ? "Updated spare tube" : "Spare tube"))), JSON.stringify(stockSaved));
+      check("Stock rows show each enzyme's cut and the ends it leaves", await s.exec("const row = document.querySelector('input[aria-label=\"Product of E2E EcoRI\"]').closest('tr'); return row.querySelector('.sv-cut-site')?.textContent === 'G^AATTC' && row.querySelector('.sv-cut-ends')?.textContent === '5′ AATT';"));
+      const sortStock = label => s.exec("Array.from(document.querySelectorAll('.sv-enzyme-grid th button')).find(b => b.textContent.startsWith(arguments[0])).click();", label);
+      await sortStock("Product");
+      await sortStock("Product");
+      check("The stock table sorts by a clicked column, both ways", await s.exec("const products = Array.from(document.querySelectorAll('.sv-enzyme-grid input[data-field=\"product\"]')).map(i => i.value); return products.indexOf('E2E PvuII') >= 0 && products.indexOf('E2E PvuII') < products.indexOf('E2E EcoRI');"));
+      await sortStock("Enzyme");
       await s.shot("10c-enzyme-library");
       await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Enzyme library section\"] button')).find(b => b.textContent === 'My enzymes').click();");
       await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
       for (const name of ["EcoRI", "Acc65I", "PvuII"]) {
         await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = arguments[0]; q.dispatchEvent(new Event('input'));", name);
-        await s.click(`input[data-personal-enzyme='${name}']`);
-        check(`My enzymes saves ${name}`, await s.waitFor(`document.querySelector('input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
+        await s.click(`.sv-personal-enzyme-box-all input[data-personal-enzyme='${name}']`);
+        check(`My enzymes saves ${name} and lists it under My selected enzymes at once`, await s.waitFor(`document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-box-all input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
       }
-      await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input')); document.querySelector('[aria-label=\"Selected only\"]').click();");
-      check("The personal checklist shows selected names and lab membership", await s.exec("return document.querySelectorAll('[data-personal-enzyme]').length === 3 && Array.from(document.querySelectorAll('.sv-personal-enzyme-row')).filter(r => r.textContent.includes('In lab')).length === 2;"));
-      await s.exec("document.querySelector('[data-personal-enzyme=\"Acc65I\"]').focus();");
+      await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input'));");
+      check("My selected enzymes shows the chosen names and lab membership", await s.exec("const rows = document.querySelectorAll('.sv-personal-enzyme-box-selected .sv-personal-enzyme-row'); return Array.from(rows, r => r.querySelector('[data-personal-enzyme]').dataset.personalEnzyme).join() === 'Acc65I,EcoRI,PvuII' && Array.from(rows).filter(r => r.textContent.includes('In lab')).length === 2;"));
+      await s.exec("document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"Acc65I\"]').focus();");
       await s.press("\uE015");
-      check("The personal checklist keeps keyboard navigation between rows", await s.exec("return document.activeElement?.dataset.personalEnzyme === 'EcoRI';"));
-      check("Only the current checklist row is in the Tab order, so Tab leaves the list", await s.exec("return document.querySelectorAll('[data-personal-enzyme][tabindex=\"0\"]').length === 1 && document.activeElement?.getAttribute('tabindex') === '0';"));
+      check("The personal checklist keeps keyboard navigation between rows", await s.exec("return document.activeElement?.dataset.personalEnzyme === 'EcoRI' && !!document.activeElement.closest('.sv-personal-enzyme-box-selected');"));
+      check("Only the current row of each box is in the Tab order, so Tab leaves the list", await s.exec("return ['selected', 'all'].every(box => document.querySelectorAll(`.sv-personal-enzyme-box-${box} [data-personal-enzyme][tabindex=\"0\"]`).length === 1) && document.activeElement?.getAttribute('tabindex') === '0';"));
       await s.shot("10e-my-enzymes");
       await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_enzyme_library', { section: 'lab' }).then(done);");
       await s.waitFor("document.querySelector('[aria-label=\"New stock enzyme\"]') || document.querySelector('.sv-enzyme-grid')", 5000);
@@ -1242,9 +1641,11 @@ async function main() {
     // The map only draws while it shows.
     await s.exec("window.__strandivo.command('show-map')");
     check("They are drawn inside the CDS", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 2", 5000));
-    check("The inspector draws them with their list folded", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2 && document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'false'", 3000));
+    check("The inspector draws both regions", await s.waitFor("document.querySelectorAll('.sv-inspector .sv-protein-region').length === 2", 3000));
     check("Independent regions need no top-level/all choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     check("The entry goes in the file's cross-references", await s.exec(`${doc} return s.data.features.find(f => f.id === window.__strandivoCds).notes.db_xref.includes("UniProtKB/Swiss-Prot:P62593");`));
+    await s.click(".sv-inspector .sv-protein-region");
+    check("An imported region labels both coordinate systems", await s.waitFor("/Construct residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent) && /UniProtKB P62593 · residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent)", 3000));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
 
@@ -1271,7 +1672,7 @@ async function main() {
       const actions = document.querySelector('.sv-region-actions');
       const buttons = Array.from(actions.querySelectorAll('button'));
       const bounds = actions.getBoundingClientRect();
-      return buttons.map(b => b.textContent.trim()).join('|') === 'Edit region…|Copy AA sequence|Add as feature|Remove' &&
+      return buttons.map(b => b.textContent.trim()).join('|') === 'Edit region…|Copy AA sequence|Add as feature|Remove region' &&
         buttons.every((button, i) => Math.abs(button.getBoundingClientRect()[i % 2 ? 'right' : 'left'] - bounds[i % 2 ? 'right' : 'left']) < 1);
     `));
     const domainId = await s.exec(`${doc} return JSON.parse(decodeURIComponent(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions[0].split('|')[5])).id;`);
@@ -1307,10 +1708,29 @@ async function main() {
     await fillProteinRegion("CDR1 edited", "CDR", 9, 19, domainId);
     await s.click("//button[normalize-space(.)='Save region']", "xpath");
     check("A region's bounds and name can be edited", await s.waitFor("Array.from(document.querySelectorAll('.sv-outline [data-region]')).some(r => r.textContent.includes('CDR1 edited') && r.textContent.includes('9–19'))", 5000));
+    check("The inspector names the selected region and links back to its parent", await s.waitFor(`(() => {
+      const panel = document.querySelector('.sv-inspector');
+      return panel.querySelector('.sv-insp-heading')?.textContent === 'CDR1 edited' &&
+        Array.from(panel.querySelectorAll('.sv-region-path button')).map(b => b.textContent).join('/') === 'AmpR/Test domain' &&
+        !panel.querySelector('[aria-label="Feature name"]') && !panel.textContent.includes('Delete feature');
+    })()`, 5000));
+    check("The region list opens when the diagram label clips", await s.waitFor("document.querySelector('.sv-inspector [data-fold=\"region-list\"]')?.getAttribute('aria-expanded') === 'true' && document.querySelector('.sv-region-list [aria-pressed=true]')?.textContent.includes('CDR1 edited')", 5000));
+    const rangeBeforeJump = await s.exec(`${doc} return s.selection.range;`);
+    const regionKept = `${doc} const r = s.selection.range, before = arguments[0]; return !!before && s.selection.focus?.region === 1 && r?.start === before.start && r?.end === before.end && r.end - r.start + 1 === 33;`;
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='View in sequence']", "xpath");
+    check("Viewing the region in Sequence keeps its own bases selected", await s.waitFor("document.querySelectorAll('.sv-row').length > 0", 5000) && await s.exec(regionKept, rangeBeforeJump));
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='View on map']", "xpath");
+    check("Viewing the region back on Map keeps its bases selected", await s.exec(regionKept, rangeBeforeJump));
+    await s.click(".sv-region-path button:last-child");
+    check("The parent link selects the enclosing region", await s.waitFor("document.querySelector('.sv-region-detail h2')?.textContent === 'Test domain'", 5000));
+    await s.click(".sv-region-group-toggle");
+    check("The list can fold a region's children", await s.exec("return document.querySelector('.sv-region-list [role=group]').hidden;"));
+    await s.click(".sv-inspector .sv-protein-region[aria-label^='CDR1 edited,']");
+    check("Picking a child in the diagram reveals it in the list", await s.waitFor("document.querySelector('.sv-region-list [aria-pressed=true]')?.textContent.includes('CDR1 edited') && !document.querySelector('.sv-region-list [role=group]').hidden", 5000));
     await s.shot("11-protein-regions");
 
     // Protein details draw the protein as a figure: a nested region is a bracket under its parts.
-    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Details…']", "xpath");
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space(.)='Details & schematic…']", "xpath");
     const figureNames = `
       const names = Array.from(document.querySelectorAll('.sv-figure text[data-region]')).map(t => t.getBoundingClientRect());
       const apart = names.every((a, i) => names.every((b, j) => i <= j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));`;
@@ -1320,8 +1740,13 @@ async function main() {
     await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'domains'; select.dispatchEvent(new Event('change', { bubbles: true }));");
     check("At top level the figure draws the domain as a block", await s.waitFor("document.querySelectorAll('.sv-figure rect[data-region]').length === 1 && document.querySelectorAll('.sv-figure text[data-region]').length === 1 && document.querySelector('.sv-figure rect[data-region]').dataset.region === '0'", 5000));
     await s.exec("const select = document.querySelector('[aria-label=\"Regions to draw\"]'); select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true }));");
-    await s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    await s.exec("document.querySelector('.sv-figure text[data-region=\"0\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    const clickCdr = () => s.exec("document.querySelector('.sv-figure rect[data-region=\"1\"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+    await clickCdr();
     check("Clicking a block in the figure selects its region", await s.waitFor("window.__strandivo.store.selection.focus?.region === 1 && document.querySelector('.sv-figure rect[data-region=\"1\"]').classList.contains('sv-selected')", 5000));
+    await clickCdr();
+    check("Clicking the selected block again returns to its CDS", await s.waitFor("window.__strandivo.store.selection.focus?.id === window.__strandivoCds && window.__strandivo.store.selection.focus.region === undefined && !document.querySelector('.sv-figure .sv-selected')", 5000));
+    await clickCdr();
     check("The figure can be copied or saved as PNG or SVG", await s.exec("const labels = Array.from(document.querySelectorAll('.sv-dialog-foot button')).map(b => b.textContent.trim()); return ['Copy image', 'Save as PNG…', 'Save as SVG…'].every(l => labels.includes(l));"));
     check("Protein details give both coefficients for a protein with a pair of Cys", await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-protein-facts dt')).map(d => d.textContent).join() === 'Length,Mass,ε280, Cys reduced,ε280, disulfides,Counted';"));
     check("Protein details fold the list of regions under the figure", await s.exec("return document.querySelector('.sv-dialog .sv-fold-link')?.getAttribute('aria-expanded') === 'false' && !document.querySelector('.sv-dialog .sv-list-row');"));
@@ -1331,7 +1756,15 @@ async function main() {
     await s.waitFor("!!document.querySelector('.sv-dialog [aria-label=\"Region name\"]')", 5000);
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Cancel']", "xpath");
     check("Closing a region editor opened from Protein details returns to them", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1 && !!document.querySelector('.sv-dialog .sv-protein-seq') && document.querySelector('.sv-dialog .sv-figure rect[data-region=\"1\"]')?.classList.contains('sv-selected')", 5000));
-    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Close']", "xpath");
+    // Leaving the file with the editor open closes it, and the Protein details it brings back
+    // as it closes don't stay over Home or the next tab.
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Edit region…']", "xpath");
+    await s.waitFor("!!document.querySelector('.sv-dialog [aria-label=\"Region name\"]')", 5000);
+    await s.exec("window.__strandivo.showHome()");
+    check("Leaving a file with a region editor open leaves no dialog, Protein details included", await noDialog("window.__strandivo.activeTab() === -1"));
+    await s.exec("window.__strandivo.showTab(0)");
+    check("No dialog comes back with the file's tab", await noDialog("window.__strandivo.activeTab() === 0"));
+    await sleep(300);
 
     await s.exec("window.__strandivo.command('show-sequence')");
     await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds);
@@ -1406,6 +1839,63 @@ async function main() {
     await s.click("//button[normalize-space(.)='Cancel']", "xpath");
     await s.shot("11-protein-regions-sequence");
 
+    // --- dragging a region's ends in Sequence, a codon at a time ---
+    // AmpR runs right to left, so CDR1 edited's end (residue 19) is its left end.
+    const regionSpan = name => s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds);
+      const v = [].concat(f.notes.strandivo_regions).map(String).find(v => v.split('|')[0] === arguments[0]);
+      return v ? v.split('|')[2] : null;`, name);
+    // An expression for waitFor, given the region's name and residues as "9-21".
+    const spanIs = "[].concat(window.__strandivo.store.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions).map(String).some(v => v.split('|')[0] === arguments[0] && v.split('|')[2] === arguments[1])";
+    const focusedRegion = () => s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds); const focus = s.selection.focus;
+      const sorted = [].concat(f.notes.strandivo_regions).map(String).map(v => { const [name, , at] = v.split('|'); const [a, b] = at.split('-').map(Number); return { name, a, b }; }).sort((x, y) => x.a - y.a || x.b - y.b);
+      return focus?.kind === 'feature' && focus.id === f.id && focus.region !== undefined ? sorted[focus.region]?.name ?? null : null;`);
+    await s.exec("Array.from(document.querySelectorAll('.sv-outline [data-region]')).find(r => r.textContent.includes('CDR1 edited')).scrollIntoView({ block: 'nearest' });");
+    await s.click("//*[contains(@class,'sv-outline')]//*[@data-region][contains(., 'CDR1 edited')]", "xpath");
+    check("A selected region has a handle at each end in Sequence", await s.waitFor("document.querySelectorAll('.sv-seq .sv-region-handle').length === 2", 5000), String(await s.exec("return document.querySelectorAll('.sv-seq .sv-region-handle').length;")));
+    const endHandle = await s.exec(`const b = document.querySelector('.sv-seq .sv-region-handle[aria-label^="Move where CDR1 edited ends"]');
+      b.scrollIntoView({ block: 'center' });
+      const r = b.getBoundingClientRect();
+      const row = b.closest('.sv-row');
+      const bases = row.querySelector('.sv-bases');
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, cw: bases.getBoundingClientRect().width / bases.textContent.length, title: b.title };`);
+    check("Its handle says what it moves", /CDR1 edited ends, a codon at a time/.test(endHandle.title), endHandle.title);
+    // Two codons and a bit: it snaps to the nearest edge between codons.
+    await s.drag([endHandle.x, endHandle.y], [endHandle.x - 6.6 * endHandle.cw, endHandle.y]);
+    check("Dragging the end two codons out makes the region two residues longer", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-21"), await regionSpan("CDR1 edited"));
+    check("The region stays selected, with its handles", (await focusedRegion()) === "CDR1 edited" && await s.waitFor("document.querySelectorAll('.sv-seq .sv-region-handle').length === 2", 2000));
+    await s.shot("11-region-dragged");
+    await s.exec(`${doc} s.undo();`);
+    check("One undo takes the whole drag back", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-19"), await regionSpan("CDR1 edited"));
+    // The arrow keys move a handle's end too: left, into the protein, for this start.
+    // A real click, as WebKit focuses no button clicked and the handle has to take the keys.
+    const startHandle = await s.exec("const b = document.querySelector('.sv-seq .sv-region-handle[aria-label^=\"Move where CDR1 edited starts\"]'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2];");
+    await s.clickAt(startHandle);
+    await s.press(ARROW_LEFT);
+    check("An arrow key moves the end a residue", await s.waitFor(spanIs, 3000, "CDR1 edited", "10-19"), await regionSpan("CDR1 edited"));
+    check("The keyboard stays on the handle", await s.waitFor("/CDR1 edited starts/.test(document.activeElement?.getAttribute('aria-label') ?? '')", 2000));
+    await s.exec(`${doc} s.undo();`);
+    // Where two regions meet, a handle moves both, and with Alt only its own region's end.
+    // Keys rather than an Alt-drag, which some Linux desktops take for moving the window.
+    const regionsBefore = await s.exec(`${doc} return [].concat(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions);`);
+    await s.exec(`${doc} const d = s.data;
+      const fr2 = 'FR2|Region|20-25|:20-25||' + encodeURIComponent(JSON.stringify({ id: 'e2e-fr2', parentId: arguments[0] }));
+      s.apply({ ...d, features: d.features.map(f => f.id === window.__strandivoCds ? { ...f, notes: { ...f.notes, strandivo_regions: [...f.notes.strandivo_regions, fr2] } } : f) }, 'Test meeting regions');`, domainId);
+    await s.exec("Array.from(document.querySelectorAll('.sv-outline [data-region]')).find(r => r.textContent.includes('CDR1 edited')).scrollIntoView({ block: 'nearest' });");
+    await s.click("//*[contains(@class,'sv-outline')]//*[@data-region][contains(., 'CDR1 edited')]", "xpath");
+    await s.waitFor("document.querySelector('.sv-seq .sv-region-handle[aria-label^=\"Move where CDR1 edited ends\"]')", 5000);
+    const sharedHandle = await s.exec("const b = document.querySelector('.sv-seq .sv-region-handle[aria-label^=\"Move where CDR1 edited ends\"]'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { at: [r.left + r.width / 2, r.top + r.height / 2], title: b.title };");
+    check("A handle where two regions meet says Alt moves its own end alone", /CDR1 edited ends and FR2 starts, a codon at a time; Alt-drag moves only where CDR1 edited ends$/.test(sharedHandle.title), sharedHandle.title);
+    await s.clickAt(sharedHandle.at);
+    // AmpR runs right to left, so left is out of the protein, towards its end.
+    await s.press(ARROW_LEFT);
+    check("Where two regions meet, the arrow keys move both", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-20") && await s.waitFor(spanIs, 3000, "FR2", "21-25"), `${await regionSpan("CDR1 edited")}, ${await regionSpan("FR2")}`);
+    await s.press(ARROW_RIGHT, [ALT]);
+    check("With Alt, only the selected region's end moves, parting the two", await s.waitFor(spanIs, 3000, "CDR1 edited", "9-19") && await s.waitFor(spanIs, 3000, "FR2", "21-25"), `${await regionSpan("CDR1 edited")}, ${await regionSpan("FR2")}`);
+    await s.exec(`${doc} const before = JSON.stringify(arguments[0]);
+      const now = () => JSON.stringify([].concat(s.data.features.find(f => f.id === window.__strandivoCds).notes.strandivo_regions));
+      for (let i = 0; i < 4 && now() !== before; i++) s.undo();`, regionsBefore);
+    check("Undo takes the meeting region away again", await regionSpan("FR2") === null && await regionSpan("CDR1 edited") === "9-19");
+
     // A primer's context includes both overlapping regions and nearby template boundaries.
     await s.exec(`${doc} const d = s.data;
       const f = d.features.find(f => f.id === window.__strandivoCds);
@@ -1432,7 +1922,7 @@ async function main() {
     await s.exec(`${doc} s.undo(); window.__strandivo.command('show-sequence');`);
 
     await s.exec(`${doc} s.undo(); s.selectRange({ start: s.data.features.find(f => f.id === window.__strandivoCds).start, end: s.data.features.find(f => f.id === window.__strandivoCds).end }, { kind: "feature", id: window.__strandivoCds, region: 1 }, "e2e"); window.__strandivo.command('show-map');`);
-    await s.click("//button[normalize-space(.)='Remove']", "xpath");
+    await s.click("//button[normalize-space(.)='Remove region']", "xpath");
     check("Removing a region keeps its CDS", await s.waitFor("document.querySelectorAll('.sv-outline [data-region]').length === 1", 5000));
     check("Removing the last nested region hides the map detail choice", await s.exec("return document.querySelector('[aria-label=\"Protein region detail\"]').hidden;"));
     await s.exec(`${doc} s.undo(); s.undo(); s.undo(); s.undo();`);

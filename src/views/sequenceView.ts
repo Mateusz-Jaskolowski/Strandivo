@@ -21,6 +21,8 @@ import { drawRegionTracks, layoutRegionTracks, markRegionSelection, REGION_TRACK
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
+import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
+import { openEnzymeDialog } from "./enzymeDialog.ts";
 import { firstDelete } from "../lib/deletion.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
 import { enzymeOf, pickedEnzymes } from "../lib/enzymePick.ts";
@@ -29,19 +31,19 @@ import type { Orf } from "../lib/orfs.ts";
 import {
   basesFromText,
   complement,
-  deleteRange,
   DNA_CHARS,
   featureGaps,
-  insertBases,
   pieces,
   rangeLength,
-  replaceRange,
   type Range,
   type SeqData,
   type SeqFeature,
   type SeqPrimer
 } from "../lib/seqdata.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
+import { EditCard } from "./editCard.ts";
+import { applyEdit, names, verbOf, type PendingEdit } from "../lib/baseEdit.ts";
+import { edgeNear, moveRegionEdge, regionEdge, type RegionEdge } from "../lib/regionEdges.ts";
 
 const FONT_PX = 13;
 const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
@@ -162,6 +164,10 @@ export class SequenceView {
   private stale = true;
   private ctx: DocContext;
   private lastWidth = 0;
+  /** Open while an edit to bases from the keyboard waits to be applied (AGENTS.md). */
+  private card: EditCard | null = null;
+  /** The card a Cut opened, if it is the last one shown. */
+  private cutCard: EditCard | null = null;
 
   constructor(ctx: DocContext) {
     this.ctx = ctx;
@@ -210,6 +216,8 @@ export class SequenceView {
       if (w && Math.abs(w - this.lastWidth) > 2) this.invalidate();
     }).observe(this.scroller);
     ctx.store.subscribe(c => {
+      // Anything else done meanwhile, a click elsewhere above all, leaves the bases as they were.
+      if (this.card && (c.data || c.selection)) this.cancelCard(c.data ? "changed" : "moved");
       if (c.data) this.invalidate();
       else if (c.selection) {
         this.renderSelection();
@@ -223,6 +231,7 @@ export class SequenceView {
   }
 
   setVisible(v: boolean) {
+    if (!v) this.cancelCard("moved");
     this.visible = v;
     if (v && (this.stale || this.scroller.clientWidth !== this.lastWidth)) this.render();
   }
@@ -279,6 +288,7 @@ export class SequenceView {
     this.renderStrip();
     this.renderVisible();
     this.renderSelection();
+    this.placeCard();
   }
 
   /** The first base of the row at the top of the view, and how far down that row the view starts. */
@@ -805,6 +815,23 @@ export class SequenceView {
         parts.push(el);
       }
     }
+    // Bases the card would take out, struck through on each strand.
+    const gone = this.card?.pending;
+    if (gone?.range && !gone.bases) {
+      for (const [a, b] of clip(gone.range.start, gone.range.end, row.start, row.end, n)) {
+        const at = `left:${ch(a - row.start)};width:${ch(b - a + 1)}`;
+        const band = document.createElement("div");
+        band.className = "sv-gone-band";
+        band.setAttribute("style", `${at};top:${row.yTop - 1}px;height:${strandsH + 2}px`);
+        parts.push(band);
+        for (const y of o.complement ? [row.yTop, row.yBot] : [row.yTop]) {
+          const line = document.createElement("div");
+          line.className = "sv-gone-line";
+          line.setAttribute("style", `${at};top:${y + 9}px`);
+          parts.push(line);
+        }
+      }
+    }
     const caretRow = caret >= n ? this.rows.length - 1 : Math.floor(caret / this.bpr);
     if (caretRow === i) {
       const el = document.createElement("div");
@@ -816,6 +843,7 @@ export class SequenceView {
     // The selected cut site, and the other sites of its enzyme or of the picked ones.
     const { focus } = this.ctx.store.selection;
     markRegionSelection(r.el, focus);
+    this.placeRegionHandles(r.el, row);
     markCodonSelection(r.el, this.ctx.store.selection);
     const picked = pickedEnzymes(this.ctx.store.selection);
     for (const el of Array.from(r.el.querySelectorAll<HTMLElement>('[data-kind="cutsite"]'))) {
@@ -824,6 +852,129 @@ export class SequenceView {
       el.classList.toggle("sv-cut-focused", on);
       el.classList.toggle("sv-cut-related", !on && picked.includes(enzymeOf(id)));
     }
+  }
+
+  // ---------- dragging a region's ends ----------
+
+  /**
+   * Handles at both ends of the selected region, where its first and last bases are in this
+   * row. Each moves the region's end a codon at a time, with a region on the same level
+   * that meets it there (`regionEdge`), or alone with ⌥ (Alt), which only the tooltip of a
+   * handle that moves two regions mentions.
+   */
+  private placeRegionHandles(el: HTMLElement, row: RowLayout) {
+    for (const old of Array.from(el.querySelectorAll(".sv-region-handle"))) old.remove();
+    const focus = this.ctx.store.selection.focus;
+    if (focus?.kind !== "feature" || focus.region === undefined) return;
+    const index = focus.region;
+    const bar = row.regions.find(t => t.item.f.id === focus.id && t.item.index === index);
+    const track = el.querySelector<HTMLElement>(".sv-row-track");
+    if (!bar || !track) return;
+    const { sequence } = this.ctx.store.data;
+    const { f, region } = bar.item;
+    const spans = regionSpans(f, region, sequence.length);
+    if (!spans.length) return;
+    const forward = f.strand !== -1;
+    const handle = (column: number, side: "left" | "right") => {
+      const end = (side === "left") === forward ? "start" : "end";
+      const edge = regionEdge(f, sequence, index, end);
+      if (!edge) return;
+      const { alone } = edge;
+      const moves = [...edge.ends.map(i => `${edge.regions[i].name} ends`), ...edge.starts.map(i => `${edge.regions[i].name} starts`)];
+      const own = `${region.name} ${end === "start" ? "starts" : "ends"}`;
+      const label = `Move where ${own} (arrow keys)`;
+      const b = h("button", {
+        type: "button",
+        class: "sv-region-handle",
+        "aria-label": label,
+        title: `Drag to move where ${names(moves)}, a codon at a time${moves.length > 1 ? `; ${isMac ? "⌥" : "Alt"}-drag moves only where ${own}` : ""}`,
+        style: { left: `${Math.round(column * this.chPx * 100) / 100 - 6}px`, top: `${bar.y - 5}px` }
+      });
+      b.addEventListener("pointerdown", e => this.dragRegionEdge(e, f, edge, alone, index, label));
+      b.addEventListener("keydown", e => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        e.stopPropagation();
+        const moved = e.altKey ? alone : edge;
+        // On the other strand the protein runs from right to left.
+        const to = moved.at + ((e.key === "ArrowRight") === forward ? 1 : -1);
+        if (to >= moved.min && to <= moved.max) this.applyRegionEdge(f, moved, index, to, label);
+      });
+      track.appendChild(b);
+    };
+    const first = spans[0];
+    const last = spans[spans.length - 1];
+    if (first.start >= row.start && first.start <= row.end) handle(first.start - row.start, "left");
+    if (last.end >= row.start && last.end <= row.end) handle(last.end + 1 - row.start, "right");
+  }
+
+  /**
+   * Follows the pointer from the CDS as the press found it, so pressing or letting go of ⌥
+   * (Alt) partway puts a region that met this one back, or takes it along again, at once.
+   */
+  private dragRegionEdge(e: PointerEvent, f: SeqFeature, edge: RegionEdge, alone: RegionEdge, index: number, label: string) {
+    // Control-click is a right-click on a Mac.
+    if (e.button !== 0 || (e.ctrlKey && isMac)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Taken by hand, as the press is cancelled and WebKit never focuses a clicked button:
+    // the arrow keys then move this end.
+    (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+    const { sequence, circular } = this.ctx.store.data;
+    let want = edge.at;
+    let altKey = e.altKey;
+    // Where the edge is and whether it moves alone; both ways, an edge where it was is the CDS as it was.
+    let shown = `${edge.at}`;
+    const follow = () => {
+      const moved = altKey ? alone : edge;
+      const at = Math.max(moved.min, Math.min(moved.max, want));
+      const now = at === edge.at ? `${at}` : `${at}${altKey ? " alone" : ""}`;
+      if (now === shown) return;
+      shown = now;
+      this.applyRegionEdge(f, moved, index, at, label);
+    };
+    const move = (ev: PointerEvent) => {
+      this.autoScroll(ev.clientY);
+      want = edgeNear(f, sequence.length, circular, this.boundaryAt(ev.clientX, ev.clientY));
+      altKey = ev.altKey;
+      follow();
+    };
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== "Alt") return;
+      // Windows would take a lone Alt to the menu bar.
+      ev.preventDefault();
+      altKey = ev.type === "keydown";
+      follow();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("keyup", key);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("keydown", key);
+    window.addEventListener("keyup", key);
+  }
+
+  /**
+   * Moves the edge from where the drag or key press found it, as one undo step while the
+   * moves keep coming (as a primer's ends do), keeping the region selected and the keyboard
+   * on its handle, as the change draws the rows again.
+   */
+  private applyRegionEdge(f: SeqFeature, edge: RegionEdge, index: number, at: number, handle: string) {
+    const store = this.ctx.store;
+    const d = store.data;
+    const next = moveRegionEdge(f, edge, at);
+    const regions = regionsOf(next);
+    const now = regions.findIndex(r => r.id === edge.regions[index].id);
+    const range = now >= 0 ? regionRange(next, regions[now], d.sequence.length) : null;
+    const selection = range ? { range, caret: range.end + 1, focus: { kind: "feature" as const, id: f.id, region: now } } : undefined;
+    store.apply({ ...d, features: d.features.map(x => (x.id === f.id ? next : x)) }, "Move region end", selection, `region-edge:${f.id}`);
+    requestAnimationFrame(() => this.canvas.querySelector<HTMLElement>(`.sv-region-handle[aria-label="${CSS.escape(handle)}"]`)?.focus({ preventScroll: true }));
   }
 
   /** Scrolls so the selection (or caret) is on screen. */
@@ -922,6 +1073,8 @@ export class SequenceView {
     let anchor: number | null = null;
     let dragging = false;
     let target: Focus | null = null;
+    /** Pressed last: an amino acid, a name, a bar or none. */
+    let pressed: HTMLElement | null = null;
     const translation = new TranslationDrag(this.ctx, "sequence");
     let startX = 0;
     let startY = 0;
@@ -932,6 +1085,7 @@ export class SequenceView {
       this.focus();
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       target = el?.dataset.kind ? hitOf(el) : null;
+      pressed = el;
       const onCodon = translation.begin(el, e);
       if (target?.kind === "cutsite" && isPickClick(e)) {
         pickSite(this.ctx, target.id, "sequence");
@@ -983,11 +1137,17 @@ export class SequenceView {
       if (t) this.ctx.contextMenu(t, { x: e.clientX, y: e.clientY });
     });
     this.canvas.addEventListener("dblclick", e => {
-      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || (e.target as Element).closest(".sv-region-handle")) return;
       const el = (e.target as Element).closest<HTMLElement>(".sv-hit");
       // Pointer capture can send the double-click to the canvas instead of the hit area.
       const hit = el?.dataset.kind ? hitOf(el) : target;
-      if (hit) this.selectAnnotation(hit);
+      if (!hit) return;
+      this.selectAnnotation(hit);
+      if (hit.kind === "cutsite") return openEnzymeDialog(this.ctx, enzymeOf(hit.id));
+      // A CDS's name or bar, one of its regions or an ORF opens Protein details. Its amino
+      // acids, clicked to pick codons, only select it.
+      const p = (el ?? pressed)?.dataset.codonIndex === undefined ? proteinAt(this.ctx, hit) : null;
+      if (p) openProteinDialog(this.ctx, p.feature, p.of);
     });
   }
 
@@ -1049,6 +1209,7 @@ export class SequenceView {
     });
     area.addEventListener("keydown", e => {
       const mod = e.metaKey || e.ctrlKey;
+      if (this.card && this.cardKey(this.card, e, mod)) return;
       const sel = store.selection;
       const n = store.length;
       const caret = sel.caret;
@@ -1103,12 +1264,11 @@ export class SequenceView {
             return;
           }
           if (selectedRanges(sel).length) this.deleteSelection();
-          else if (e.key === "Backspace" && caret > 0) {
-            store.apply(deleteRange(store.data, { start: caret - 1, end: caret - 1 }), "Delete", { caret: caret - 1 }, "delete");
-          } else if (e.key === "Delete" && caret < n) {
-            store.apply(deleteRange(store.data, { start: caret, end: caret }), "Delete", { caret }, "delete");
+          else {
+            // At the cursor, the bases to go wait in the card, one more with each press.
+            const card = this.newCard({ range: null, at: caret, bases: "", side: "neither" }, false);
+            if (card.grow(e.key === "Backspace" ? -1 : 1)) this.showCard(card);
           }
-          this.revealCaret();
           return;
         }
       }
@@ -1137,7 +1297,14 @@ export class SequenceView {
     // Anything that slips through as text input is undone; the field mirrors the selection.
     area.addEventListener("input", () => this.syncClipboard());
     area.addEventListener("focus", () => this.el.classList.add("sv-seq-focused"));
-    area.addEventListener("blur", () => this.el.classList.remove("sv-seq-focused"));
+    area.addEventListener("blur", () => {
+      this.el.classList.remove("sv-seq-focused");
+      // Another app or window taking the keyboard leaves the card waiting; a click on
+      // another part of this one is a click elsewhere.
+      setTimeout(() => {
+        if (this.card && document.hasFocus() && document.activeElement !== area) this.cancelCard("moved");
+      });
+    });
     area.addEventListener("copy", e => {
       if (!selectedRanges(store.selection).length) return;
       e.preventDefault();
@@ -1146,6 +1313,8 @@ export class SequenceView {
     area.addEventListener("cut", e => {
       if (!selectedRanges(store.selection).length) return;
       e.preventDefault();
+      // The card's bases are not on the clipboard yet, and the selected ones stay until it goes.
+      if (this.card) return;
       e.clipboardData?.setData("text/plain", selectedBases(store.data.sequence, store.selection));
       this.deleteSelection("Cut");
     });
@@ -1166,27 +1335,33 @@ export class SequenceView {
       if (text.trim()) toast("The clipboard has no DNA bases to paste.", "info");
       return;
     }
-    this.typeBases(bases, "Paste");
+    this.typeBases(bases, true);
     if (dropped > 0) toast(`Pasted ${fmt(bases.length)} bases (left out ${fmt(dropped)} other characters).`, "info", 3500);
   }
 
-  private typeBases(bases: string, label = "Typing") {
+  /** Typed or pasted bases wait in the card: at the cursor, or over the selected ones. */
+  private typeBases(bases: string, pasted = false) {
     const store = this.ctx.store;
-    const { range, caret } = store.selection;
+    if (this.card) {
+      this.card.add(bases, pasted);
+      this.cardChanged();
+      return;
+    }
     if (store.selection.ranges) {
       toast("Select one continuous stretch to replace bases.", "info");
       return;
     }
-    if (range) {
-      const r = replaceRange(store.data, range, bases);
-      store.apply(r.data, label, { caret: r.caret }, label === "Typing" ? "typing" : undefined);
-    } else {
-      store.apply(insertBases(store.data, caret, bases), label, { caret: caret + bases.length }, label === "Typing" ? "typing" : undefined);
-    }
-    this.revealCaret();
+    const { range, caret } = store.selection;
+    const card = this.newCard({ range: range ?? null, at: range ? range.start : caret, bases: "", side: "neither" }, !!range);
+    card.add(bases, pasted);
+    this.showCard(card);
   }
 
-  deleteSelection(label = "Delete") {
+  /**
+   * Delete or Cut with bases selected: picked codons go at once, as they are picked one by
+   * one; a stretch waits in the card, which the next press or Enter applies.
+   */
+  private deleteSelection(label: "Delete" | "Cut" = "Delete") {
     const store = this.ctx.store;
     if (store.selection.ranges) {
       const next = deleteSelected(store.data, store.selection);
@@ -1194,9 +1369,160 @@ export class SequenceView {
       return;
     }
     const { range } = store.selection;
-    if (!range) return;
-    const n = store.length;
-    const caret = range.start <= range.end ? range.start : Math.max(0, range.start - (range.end + 1));
-    store.apply(deleteRange(store.data, range), label, { caret: Math.min(caret, n) });
+    if (range) this.showCard(this.newCard({ range, at: range.start, bases: "", side: "neither" }, true), label === "Cut");
+  }
+
+  // ---------- the edit card ----------
+
+  private newCard(edit: PendingEdit, fixed: boolean): EditCard {
+    const o = this.ctx.options;
+    const caseOf = (t: string) => (o.caseMode === "uppercase" ? t.toUpperCase() : o.caseMode === "lowercase" ? t.toLowerCase() : t);
+    const card: EditCard = new EditCard(this.ctx.store.data, edit, fixed, caseOf, {
+      apply: () => this.applyCard(card),
+      cancel: () => this.dismissCard(card),
+      changed: () => this.cardChanged()
+    });
+    return card;
+  }
+
+  /** `cut`: a Cut opened it, so its bases are on the clipboard whether it deletes them or not. */
+  private showCard(card: EditCard, cut = false) {
+    this.card = card;
+    this.cutCard = cut ? card : null;
+    this.canvas.appendChild(card.el);
+    this.cardChanged();
+    card.el.scrollIntoView({ block: "nearest" });
+  }
+
+  /** The card grew, shrank or now takes other bases out: placed again, with its bases marked. */
+  private cardChanged() {
+    this.placeCard();
+    this.renderSelection();
+  }
+
+  /** Above the first row of the bases it takes out, or of the cursor; below when there is no room above. */
+  private placeCard() {
+    const card = this.card;
+    if (!card || !this.rows.length) return;
+    const n = this.ctx.store.length;
+    const { range, at } = card.pending;
+    const first = range ? pieces(range, n)[0] : { start: at, end: at - 1 };
+    const i = Math.max(0, Math.min(this.rows.length - 1, Math.floor(Math.min(first.start, n - 1) / this.bpr)));
+    const row = this.rows[i];
+    const last = Math.min(first.end, row.end);
+    const x = GUTTER + 12 + ((first.start + last + 1) / 2 - row.start) * this.chPx;
+    const half = card.el.offsetWidth / 2;
+    const left = Math.max(half + 4, Math.min(this.canvas.clientWidth - half - 4, x));
+    const strands = this.ctx.options.complement ? row.yBot + 18 - row.yTop : 18;
+    const above = this.offsets[i] + row.yTop - 2;
+    const below = above + strands + 4;
+    const room = above - card.el.offsetHeight - 8 >= 0;
+    card.el.classList.toggle("sv-edit-below", !room);
+    card.el.style.left = `${left}px`;
+    card.el.style.top = `${room ? above : below}px`;
+    card.el.style.setProperty("--arrow", `${x - left}px`);
+  }
+
+  private closeCard() {
+    this.card?.el.remove();
+    this.card = null;
+    this.renderSelection();
+    this.focus();
+  }
+
+  /**
+   * Esc, its button or Undo: the user sees the sequence stay as it is, so nothing is said,
+   * except after a Cut, whose bases were copied all the same.
+   */
+  private dismissCard(card: EditCard) {
+    const cut = card === this.cutCard;
+    if (this.card === card) this.closeCard();
+    if (cut) toast(`${this.copiedText(card)}.`, "info", { key: "edit-card" });
+  }
+
+  private copiedText(card: EditCard): string {
+    const { range } = card.pending;
+    const k = range ? rangeLength(range, card.data.sequence.length) : 0;
+    return `Copied ${fmt(k)} ${k === 1 ? "base but didn't delete it" : "bases but didn't delete them"}`;
+  }
+
+  /** Closed by anything but Esc: says so, offering to make the edit all the same while nothing else changed. */
+  private cancelCard(why: "moved" | "changed") {
+    const card = this.card;
+    if (!card) return;
+    this.card = null;
+    card.el.remove();
+    this.renderSelection();
+    if (!card.ready) return;
+    const e = card.pending;
+    const verb = verbOf(e);
+    const what = e.bases.length > 12 ? `${fmt(e.bases.length)} bases` : e.bases;
+    const where = e.range ? fmtRange(e.range.start + 1, e.range.end + 1) : "";
+    const text =
+      verb === "Insert"
+        ? `Didn't insert ${what} ${e.at ? `after ${fmt(e.at)}` : "at the start"}`
+        : verb === "Delete"
+          ? card === this.cutCard
+            ? this.copiedText(card)
+            : `Didn't delete ${where}`
+          : `Didn't replace ${where} with ${what}`;
+    if (why === "changed") toast(`${text}, as the sequence changed.`, "info", { key: "edit-card" });
+    else toast(`${text}.`, "info", { key: "edit-card", action: { label: verb, run: () => this.applyCard(card) } });
+  }
+
+  private applyCard(card: EditCard) {
+    const store = this.ctx.store;
+    if (this.card === card) this.closeCard();
+    if (!card.ready) return;
+    if (store.data !== card.data) {
+      toast("The sequence has changed since, so it was left as it is.", "info");
+      return;
+    }
+    const e = card.pending;
+    const r = applyEdit(card.data, e);
+    store.apply(r.data, verbOf(e), { caret: r.caret });
+    this.revealCaret();
+  }
+
+  /** Keys while the card is open: true for those it takes. */
+  private cardKey(card: EditCard, e: KeyboardEvent, mod: boolean): boolean {
+    if (e.key === "Enter" && !mod && !e.altKey) {
+      e.preventDefault();
+      if (card.ready) this.applyCard(card);
+      return true;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.dismissCard(card);
+      return true;
+    }
+    // Tab chooses which side takes new bases at an edge, and never leaves the sequence.
+    if (e.key === "Tab" && !mod && !e.altKey) {
+      e.preventDefault();
+      if (card.cycle(e.shiftKey ? -1 : 1)) this.cardChanged();
+      return true;
+    }
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      // Selected bases waiting to go: a second press deletes them, but not one held down.
+      if (card.confirmsWithDelete && !e.repeat) this.applyCard(card);
+      else if (e.key === "Backspace" ? card.back() || card.grow(-1) : card.grow(1)) this.cardChanged();
+      return true;
+    }
+    // Undo takes back the card, not an edit before it.
+    if (mod && !e.altKey && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
+      e.preventDefault();
+      this.dismissCard(card);
+      return true;
+    }
+    if (e.key.length === 1 && !mod && !e.altKey) {
+      e.preventDefault();
+      if (DNA_CHARS.test(e.key)) {
+        card.add(e.key.toUpperCase(), false);
+        this.cardChanged();
+      } else if (e.key !== " ") toast(`“${e.key}” isn't a DNA base. Type A, C, G, T or an IUPAC code like N.`, "info", 2200);
+      return true;
+    }
+    return false;
   }
 }

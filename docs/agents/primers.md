@@ -66,6 +66,8 @@ and CI checks that they exist.
   gets no offer: its whole length doesn't pair, so it has no Tm to anneal at. A menu entry
   stands for products that share a Tm rule, not a protocol, so a program is for the product
   its protocol names (its number is shown), and its ⓘ warns that the others may differ.
+  A colony is extended as a plasmid is, for NEB counts E. coli among the simple templates;
+  only genomic DNA and cDNA take the complex rates.
   What the dialog decides before drawing (the starting polymerase, the strip that says its
   Tms differ from Settings, the whole primers' annealing temperature) is in
   `src/lib/pcrPlan.ts`, so tests reach it.
@@ -76,43 +78,65 @@ and CI checks that they exist.
   of membership, through `ViewOptions`. The filter chooses what is drawn, not what is
   suggested: a digest is looked for in the whole list, one enzyme first and a pair only
   where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
-  bar). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
+  bar, which no digest with a fragment below the smallest band of the gel's ladders,
+  100 bp today, reaches). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
   complete on both strands or whose overhangs overlap another's makes no suggestion rather
-  than a band that wouldn't be there. Beside the suggestion a gel runs four lanes in the order
-  they would be loaded: the template uncut and cut by that digest, then the product uncut
-  and cut, drawn by the renderer the Digest dialog uses (`src/views/gelDraw.ts`). The
-  template is there because carry-over from the reaction is what an extra band in a
-  product usually is, and it is cut too because every site inside the product is in the
-  template as well, unless a 5′ tail brought it in. Its sizes come from the same digest
-  the Digest dialog runs (`templateDigestSizes`, kept while the template and the enzymes
-  stay the same, as the dialog is drawn again on every change); a circular template cut
-  once gives one fragment of its whole length, and a lane that would only repeat the one
-  above it is left out. Fragments within the gel's resolution run as one band, lanes are
-  numbered and named in a key beside the gel, and the ladder is the one chosen in either
-  dialog, kept for as long as the window is open. Brightness is a band's share of its own
-  lane, so the gel says where things run, not how much of each was loaded. Names stack in `MAX_LABEL_LANES` lanes at most: a
+  than a band that wouldn't be there, and neither does an enzyme that cuts on both sides
+  of its site (BcgI, `cutsBothSides`), as only its cut after the site is found. Beside the
+  suggestion a gel runs up to four lanes in the order they would be loaded: the template
+  uncut and cut by that digest, then the product uncut and cut, drawn by the renderer the
+  Digest dialog uses (`src/views/gelDraw.ts`). The template is there because carry-over
+  from the reaction is what an extra band in a product usually is, and it is cut too
+  because every site inside the product is in the template as well, unless a 5′ tail
+  brought it in. It is the open file, so it is drawn for a plasmid or a colony, which
+  holds the plasmid, and left out for genomic DNA or cDNA, where that plasmid isn't in the
+  tube: the dialog passes the Template menu's choice on, so the gel never shows a template
+  the reaction doesn't have. Its sizes come from the same digest the Digest dialog runs
+  (`templateDigestSizes`, kept while the template and the enzymes stay the same, as the
+  dialog is drawn again on every change); a circular template cut once gives one fragment
+  of its whole length. Which lanes exist is `pcrGelLanes`, not the view: a circular
+  template runs supercoiled, and cut only when the digest cuts it; a linear one runs uncut
+  only when its length differs from the product's and cut only in two pieces or more, as a
+  lane that would only repeat the one above it is left out. Fragments within the gel's
+  resolution run as one band, lanes are numbered and named in a key beside the gel, and
+  the ladder is the one chosen in either dialog, kept for as long as the window is open.
+  Until one is chosen the Digest dialog opens on the first, and this gel on the first that
+  reaches its smallest band (`ladderReaching`, in `src/lib/gel.ts`), or on the one that goes
+  lowest when none does, following the digest chosen, as the 1 kb ladder draws every band
+  of 312 bp or less on the bottom edge.
+  Brightness is a band's share of its own lane, so the gel says where things run, not how
+  much of each was loaded. Names stack in `MAX_LABEL_LANES` lanes at most: a
   multiple cloning site holds a dozen enzymes within a few bases, and a lane each pushed
   the product, its GC and the digest out of the dialog, so the sites past those lanes keep
   their marks where they cut and a chip over each crowd counts them, naming them under the
-  strip when it is clicked. Which sites have a name of their own therefore depends on the
+  strip when it is clicked. The site described under the map is the one clicked, if it is
+  still drawn, and otherwise one the chosen digest uses (`pickSite`), so `ProductViewChoice`
+  keeps only a click, never the default, or a later digest would leave it on the first one's. Which sites have a name of their own therefore depends on the
   width, so the dialog measures the map as soon as its body is in the page rather than a
   frame later, or focus would go looking for a control the first drawing didn't have. It says what to expect on a gel, never that the
   product is the right one or that two enzymes share a buffer. What is said about the
   polymerase comes from `src/lib/pcrGuidance.ts` alone (the ends it leaves, NEB's longest
-  product, the GC enhancer): a polymerase whose row has not been read says nothing, and
-  nothing is taken from another member of its Tm family. GC is the whole product's against
-  NEB's 65% (`HIGH_GC`), as the enhancer is described for an amplicon, while the strip
+  product, the GC enhancer), and only where NEB's row for it has been read: the Ends row
+  then says "No end guidance for this polymerase yet", there is no length limit or
+  enhancer to name, and nothing is taken from another member of its Tm family. The GC
+  sentence is about the product, so every polymerase gets it, with the enhancer named
+  only where there is one. GC is the whole product's, to the one decimal the header shows,
+  against NEB's 65% (`HIGH_GC`), as the enhancer is described for an amplicon, while the strip
   shows where it runs high inside; a colony is a simple template, being E. coli, so only
   genomic DNA or cDNA takes the complex limit.
   The **program**'s line is schematic: its widths and slopes are neither time nor ramp
   rate. Temperatures, times and cycle counts are text fields, in both stages, and the last
   step holds until stopped. What is typed lives in a draft (`src/lib/pcrProgramEdit.ts`)
   and survives a redraw, unfinished text and all, while Copy is off until every field
-  reads; a temperature outside `MIN_TEMP`–`MAX_TEMP` is a slip, not a program. A value
+  reads; a temperature outside `MIN_TEMP`–`MAX_TEMP`, a cycle count past `MAX_CYCLES` or a
+  step past `MAX_SECONDS` is a slip, not a program, and one message (`PROGRAM_LIMITS`)
+  gives all the limits. A comma is refused, not read as a decimal point, since the app
+  reads commas as thousands. A value
   counts as entered when the field is left or Enter is pressed, not on the browser's change
   event alone, as a field drawn anew mid-edit fires none; Escape then goes back to that
   value instead of closing the dialog. An edited program stays, with the protocol and the
-  setup it was made for, when the inputs change, and only what `pcrProgram` is given counts
+  setup it was made for (`programContext`: template, length, annealing temperatures and
+  stages, which the strip over it and Copy name), when the inputs change, and only what `pcrProgram` is given counts
   as an input (`programInputKey`), so a primer renamed elsewhere doesn't say the setup has
   moved. Regenerate and Reset build it again from the current inputs, change no setting,
   and hand focus to Copy program, as each takes itself away. Every control needs its own
@@ -163,7 +187,8 @@ and CI checks that they exist.
 - **Translation selection** in both sequence panels uses `src/views/translationHit.ts`:
   click for one codon, drag for whole codons in the starting CDS, ⌘/Ctrl-click to toggle
   separate codons, and Shift to extend from the last clicked residue (with ⌘/Ctrl to keep
-  other picks). A double-click or the feature name selects the whole feature. A gesture
+  other picks). A double-click on them or a click on the feature name selects the whole
+  feature; in the Sequence tab a double-click on the name opens Protein details. A gesture
   remembers its original picks so dragging back shrinks the span; pointer capture means
   the codon under a moving pointer comes from `elementFromPoint`, not the event's target.
   The bases of a split codon exclude introns. Keep the primer's window in place throughout.

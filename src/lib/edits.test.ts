@@ -107,19 +107,37 @@ function randomEdit(r: R, d: SeqData, ids: number[]): { data: SeqData; ids: numb
     const gone = new Set(positions(range, n).map(i => ids[i]));
     if (gone.size >= n) return randomEdit(r, d, ids); // keep at least one base
     const kept = ids.filter(id => !gone.has(id));
-    const remaining = new Map(before.map(a => [a.id, partIds(a, ids).map(part => part.filter(id => !gone.has(id))).filter(p => p.length)]));
     if (kind === "delete") {
-      for (const [id, parts] of remaining) expected.set(id, parts.length ? parts.flat() : null);
+      for (const a of before) {
+        const parts = partIds(a, ids).map(part => part.filter(id => !gone.has(id))).filter(p => p.length);
+        expected.set(a.id, parts.length ? parts.flat() : null);
+      }
       return { data: deleteRange(d, range), ids: kept, expected, what: `delete ${range.start}..${range.end}` };
     }
-    // Replace = delete, then insert where the range was (at the end for a range across the origin).
-    const bases = randomBases(r, r.int(1, 6));
+    // Replace. As many bases take the old ones' places and nothing moves. Otherwise a part
+    // holding the whole range holds the new bases where it was, a part across an edge keeps
+    // what is outside, one inside goes; the new bases end a range across the origin.
+    const bases = randomBases(r, r.next() < 0.3 ? gone.size : r.int(1, 6));
     const res = replaceRange(d, range, bases);
-    const at = range.start > range.end ? kept.length : range.start;
     const fresh = Array.from(bases, () => nextId++);
-    const m = kept.length;
-    for (const [id, parts] of remaining) expected.set(id, parts.length ? withInsert(parts, kept[(at - 1 + m) % m], kept[at % m], fresh).flat() : null);
-    return { data: res.data, ids: [...kept.slice(0, at), ...fresh, ...kept.slice(at)], expected, what: `replace ${range.start}..${range.end} with ${bases}` };
+    const what = `replace ${range.start}..${range.end} with ${bases}`;
+    const order = positions(range, n).map(i => ids[i]);
+    if (bases.length === gone.size) {
+      const swapped = ids.map(id => (gone.has(id) ? fresh[order.indexOf(id)] : id));
+      for (const a of before) expected.set(a.id, partsOf(a).flatMap(p => positions(p, n).map(i => swapped[i])));
+      return { data: res.data, ids: swapped, expected, what };
+    }
+    for (const a of before) {
+      const parts = partIds(a, ids).flatMap(part => {
+        const i = part.indexOf(order[0]);
+        if (i >= 0 && order.every((id, k) => part[i + k] === id)) return [[...part.slice(0, i), ...fresh, ...part.slice(i + order.length)]];
+        const left = part.filter(id => !gone.has(id));
+        return left.length ? [left] : [];
+      });
+      expected.set(a.id, parts.length ? parts.flat() : null);
+    }
+    const at = range.start > range.end ? kept.length : range.start;
+    return { data: res.data, ids: [...kept.slice(0, at), ...fresh, ...kept.slice(at)], expected, what };
   }
 
   if (kind === "origin") {

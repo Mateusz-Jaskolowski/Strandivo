@@ -4,10 +4,11 @@
 import { h } from "../ui/dom.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pickDigest, pickSite, productLabels, tailSiteFlanks, templateDigestSizes, type LabelCrowd, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
-import { bands } from "../lib/gel.ts";
+import { bands, ladderReaching } from "../lib/gel.ts";
+import type { TemplateKind } from "../lib/pcrProtocols.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelBand, type GelLane } from "./gelDraw.ts";
 
@@ -22,29 +23,32 @@ export interface ProductViewChoice {
 /** Up to this many fragments the key names one by one; more are counted instead. */
 const KEY_SIZES = 4;
 
-export function pcrOverviewView(product: PcrProduct, template: SeqData, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
+export function pcrOverviewView(product: PcrProduct, template: SeqData, templateKind: TemplateKind, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
   const digest = pickDigest(data.digests, choice.digest);
   choice.digest = digest ? digestName(digest) : "";
   const detail = h("p", { class: "sv-small sv-dim sv-pcr-site-detail", "aria-live": "polite" });
   const map = h("div", { class: "sv-pcr-product-map", "aria-label": "Cut sites in the final linear product" });
-  choice.site = pickSite(data.sites, choice.site, digest)?.id ?? "";
+  // Only a click is kept here: without one, the site described follows the digest chosen at the time.
+  if (!data.sites.some(site => site.id === choice.site)) choice.site = "";
   // Filled by each drawing, as which sites are too many to name depends on the width.
   let crowds: LabelCrowd[] = [];
   const updateDetail = () => {
     const crowd = crowds.find(c => c.id === choice.more);
     if (!crowd) choice.more = "";
-    const site = crowd ? null : data.sites.find(site => site.id === choice.site);
+    const site = crowd ? null : pickSite(data.sites, choice.site, pickDigest(data.digests, choice.digest));
     detail.textContent = crowd
       ? `${crowd.sites.length} more ${crowd.sites.length === 1 ? "site" : "sites"} here: ${crowd.sites.map(m => m.site.enzyme).join(", ")}.`
       : site
         ? `${site.enzyme} · cuts after base ${fmt(site.cut)} · ${site.cuts} ${site.cuts === 1 ? "site" : "sites"} in the product, ${data.templateCounts.get(site.enzyme) ?? 0} in the template`
         : "No cut sites match this list and filter.";
-    map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(!crowd && b.dataset.site === choice.site)));
+    map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(!!site && b.dataset.site === site.id)));
     map.querySelectorAll<HTMLElement>("button[data-more]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.more === choice.more)));
   };
   const digestNote = h("p", { class: "sv-small sv-dim" });
   const gelFigure = h("div", { class: "sv-pcr-gel-figure" });
   const laneKey = h("ul", { class: "sv-pcr-lane-key sv-small" });
+  // About the template's lanes, so it goes with them.
+  const leftover = h("p", { class: "sv-small sv-dim" }, "Template left over from the reaction runs far fainter than the product.");
   const templateLength = template.sequence.length;
   const bandsOf = (sizes: number[]): GelBand[] =>
     bands(sizes).map(b => ({
@@ -53,49 +57,38 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
       title: b.fragments.length > 1 ? `${b.fragments.length} fragments of about ${fmt(Math.round(b.size))} bp` : `${fmt(b.size)} bp`
     }));
   const sizeText = (sizes: number[]) => (sizes.length <= KEY_SIZES ? `${sizes.map(size => fmt(Math.round(size))).join(" + ")} bp` : `${sizes.length} fragments, ${fmt(sizes.reduce((a, b) => a + b, 0))} bp in all`);
-  /**
-   * What the gel runs, in the order it would be loaded: the template first, so an extra band
-   * in the product can be matched against it, then the product, each whole and cut by the
-   * digest. Fragments within the gel's resolution run as one band.
-   */
-  const loaded = () => {
-    const d = pickDigest(data.digests, choice.digest);
-    const out: { what: string; sizes: number[]; lane: GelLane }[] = [];
-    const add = (what: string, sizes: number[], laneBands: GelBand[]) => out.push({ what, sizes, lane: { label: String(out.length + 1), bands: laneBands } });
-    // Named for how it runs, as a supercoiled plasmid runs ahead of its length.
-    if (template.circular)
-      add("Template, supercoiled", [templateLength], [
-        {
-          size: templateLength,
-          runsAs: templateLength * 0.7,
-          mass: templateLength,
-          class: "sv-gel-uncut",
-          title: `Uncut template, ${fmt(templateLength)} bp. Supercoiled DNA runs faster than linear DNA of the same length.`
-        }
-      ]);
-    // A linear template the length of the product would run where the product's own lane does.
-    else if (templateLength !== product.length) add("Template, uncut", [templateLength], [{ size: templateLength, mass: templateLength, title: `The template, ${fmt(templateLength)} bp` }]);
-    const cut = d ? templateDigestSizes(template, d.enzymes) : [];
-    // A linear template the enzymes leave whole comes back as itself, which lane 1 shows already.
-    if (d && (template.circular ? cut.length > 0 : cut.length > 1)) add(`Template, ${digestName(d)}`, cut, bandsOf(cut));
-    add("Product, uncut", [product.length], [{ size: product.length, mass: product.length, title: `The product, ${fmt(product.length)} bp` }]);
-    if (d) add(`Product, ${digestName(d)}`, d.sizes, bandsOf(d.sizes));
-    return out;
-  };
+  /** A lane's bands. Fragments within the gel's resolution run as one band. */
+  const laneBands = (lane: PcrGelLane): GelBand[] =>
+    lane.runsAs === undefined
+      ? bandsOf(lane.sizes)
+      : [
+          {
+            size: lane.sizes[0],
+            runsAs: lane.runsAs,
+            mass: lane.sizes[0],
+            class: "sv-gel-uncut",
+            title: `Uncut template, ${fmt(templateLength)} bp. Supercoiled DNA runs faster than linear DNA of the same length.`
+          }
+        ];
   /** Hovering a lane in the key picks it out of the gel; the ladder stays as it is. */
   const fade = (lane: number | null) => gelFigure.querySelectorAll<SVGElement>("[data-lane]").forEach(el => el.classList.toggle("sv-gel-fade", lane !== null && el.dataset.lane !== String(lane)));
   const drawGel = () => {
     const d = pickDigest(data.digests, choice.digest);
-    const rows = loaded();
+    const rows = pcrGelLanes(template, templateKind, product.length, d);
+    leftover.hidden = !rows.some(r => r.of === "template");
+    // Until a ladder is picked, the gel opens on one that reaches its smallest band. What it
+    // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.
+    const ladder = currentLadder(ladderReaching(smallestGelBand(rows)));
+    ladderMenu.value = ladder.id;
     gelFigure.replaceChildren(
       gelSvg(
-        rows.map(r => r.lane),
-        currentLadder(),
+        rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })),
+        ladder,
         {
           height: 160,
           laneWidth: 40,
           labelWidth: 46,
-          ariaLabel: `A gel of the template and the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
+          ariaLabel: `A gel of ${rows.some(r => r.of === "template") ? "the template and " : ""}the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
         }
       )
     );
@@ -104,7 +97,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
         h(
           "li",
           { onmouseenter: () => fade(i + 1), onmouseleave: () => fade(null) },
-          h("span", { class: "sv-pcr-lane-no" }, r.lane.label),
+          h("span", { class: "sv-pcr-lane-no" }, String(i + 1)),
           h("span", { class: "sv-pcr-lane-what" }, r.what),
           h("span", { class: "sv-mono" }, sizeText(r.sizes))
         )
@@ -112,12 +105,13 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
     );
   };
   // The ladder is made once, so changing it keeps the focus on its own menu.
+  const ladderMenu = ladderSelect("sv-select-quiet", drawGel);
   const lanes = h(
     "div",
     { class: "sv-pcr-lanes" },
-    h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderSelect("sv-select-quiet", drawGel)),
+    h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderMenu),
     laneKey,
-    h("p", { class: "sv-small sv-dim" }, "Template left over from the reaction runs far fainter than the product.")
+    leftover
   );
   const updateDigest = () => {
     const d = pickDigest(data.digests, choice.digest);
@@ -136,6 +130,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, data: Re
       onchange: (e: Event) => {
         choice.digest = (e.target as HTMLSelectElement).value;
         updateDigest();
+        updateDetail();
       }
     },
     data.digests.map(d => h("option", { value: digestName(d), selected: digestName(d) === choice.digest }, digestName(d)))

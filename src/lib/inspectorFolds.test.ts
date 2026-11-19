@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { foldedIn, readFolds, withFold } from "./inspectorFolds.ts";
 
 test("long sections start folded and the rest open", () => {
-  for (const id of ["translation", "qualifiers", "inside", "region-list"] as const) assert.equal(foldedIn({}, id), true, id);
+  for (const id of ["translation", "qualifiers", "inside", "region-list", "feature-fields"] as const) assert.equal(foldedIn({}, id), true, id);
   for (const id of ["note", "protein", "regions", "sequencing", "binding", "checks", "frame-translation"] as const) assert.equal(foldedIn({}, id), false, id);
 });
 
@@ -16,6 +16,8 @@ test("a choice overrides the default either way", () => {
   assert.equal(foldedIn(withFold({}, "translation", false), "translation"), false);
   assert.equal(foldedIn(withFold({}, "note", true), "note"), true);
   assert.equal(foldedIn(withFold({}, "note", true), "sequencing"), false);
+  assert.equal(foldedIn({}, "region-list", false), false);
+  assert.equal(foldedIn(withFold({}, "region-list", true), "region-list", false), true);
 });
 
 test("a stored state keeps only known sections with a yes or no", () => {

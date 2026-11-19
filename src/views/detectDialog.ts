@@ -6,7 +6,6 @@
 // until Add is pressed, and then all of it goes in as one undo step.
 
 import { h, toast } from "../ui/dom.ts";
-import { openDialog } from "../ui/modal.ts";
 import { track } from "../usage.ts";
 import { canDetectFeatures, detectFeatures } from "../platform.ts";
 import type { DocContext } from "../doc/context.ts";
@@ -25,7 +24,7 @@ import {
 
 export function openDetectDialog(ctx: DocContext) {
   const start = ctx.store.data;
-  const dlg = openDialog({
+  const dlg = ctx.openDialog({
     title: "Detect features",
     note: `Common plasmid parts found in ${start.name || "this sequence"}.`,
     width: 820

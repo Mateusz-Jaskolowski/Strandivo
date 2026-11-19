@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { nebPolymerase } from "./polymerases.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { annealingTemp, DEFAULT_TM, tmBases, withNebPolymerase, type TmSettings } from "./primers.ts";
-import { followsSettings, startPolymerase, tmStrip, wholePrimerTa } from "./pcrPlan.ts";
+import { followsSettings, programContext, startPolymerase, tmStrip, wholePrimerTa } from "./pcrPlan.ts";
 import { reverseComplement } from "./seqdata.ts";
 
 const neb = (polymerase: string, nebPrimer = nebPolymerase(polymerase).primer): TmSettings => ({ ...DEFAULT_TM, method: "neb", polymerase, nebPrimer });
@@ -85,4 +85,62 @@ test("there is no whole-primer temperature without a tail, with changes or with 
   const degenerate = "NNNN" + site.f;
   const d = alignPrimer(forward(degenerate), template);
   assert.equal(wholePrimerTa(degenerate, rBases, d, plainR, conf), null);
+});
+
+test("a tail on the reverse primer alone also gives a whole-primer temperature", () => {
+  const conf = withNebPolymerase(DEFAULT_TM, "q5");
+  const rBases = TAIL + reverseComplement(site.r);
+  const plainF = alignPrimer(forward(site.f), template);
+  const b = alignPrimer(reverse(rBases), template);
+  assert.equal(b.tail, TAIL);
+  const paired = annealingTemp(tmBases(plainF), tmBases(b), conf)!.ta;
+  const whole = wholePrimerTa(site.f, rBases, plainF, b, conf)!;
+  assert.ok(whole > paired, `${whole} should be above ${paired}`);
+});
+
+test("a changed base in either primer leaves no whole-primer temperature, whichever primer has the tail", () => {
+  const conf = withNebPolymerase(DEFAULT_TM, "q5");
+  const flip = (base: string) => (base === "A" ? "C" : "A");
+  const plainF = alignPrimer(forward(site.f), template);
+  const rBases = reverseComplement(site.r);
+  const changedR = rBases.slice(0, 10) + flip(rBases[10]) + rBases.slice(11);
+  const changedF = site.f.slice(0, 10) + flip(site.f[10]) + site.f.slice(11);
+
+  // A changed base in the reverse primer, the forward primer having the tail.
+  const tailedF = TAIL + site.f;
+  const a = alignPrimer(forward(tailedF), template);
+  const b = alignPrimer(reverse(changedR), template);
+  assert.equal(a.tail, TAIL);
+  assert.ok(b.substitutions > 0);
+  assert.equal(wholePrimerTa(tailedF, changedR, a, b, conf), null);
+
+  // The same changed base, with the tail on the reverse primer itself.
+  const tailedChangedR = TAIL + changedR;
+  const c = alignPrimer(reverse(tailedChangedR), template);
+  assert.equal(c.tail, TAIL);
+  assert.ok(c.substitutions > 0);
+  assert.equal(wholePrimerTa(site.f, tailedChangedR, plainF, c, conf), null);
+
+  // A changed base in the forward primer, the reverse primer having the tail.
+  const tailedR = TAIL + rBases;
+  const d = alignPrimer(forward(changedF), template);
+  const e = alignPrimer(reverse(tailedR), template);
+  assert.ok(d.substitutions > 0);
+  assert.equal(e.tail, TAIL);
+  assert.equal(wholePrimerTa(changedF, tailedR, d, e, conf), null);
+});
+
+test("what a program was made for names its annealing temperatures and stages, so a change in them shows", () => {
+  assert.equal(programContext("plasmid", 878, 66.4, null), "Plasmid · 878 bp · annealing at 66 °C · 1 stage");
+  assert.equal(programContext("complex", 1878, 61.6, 70.2), "Genomic DNA or cDNA · 1,878 bp · annealing at 62 °C, then 70 °C · 2 stages");
+  const base = programContext("plasmid", 878, 66, null);
+  // Only the annealing temperature, only the stages, only the second stage's temperature: each reads differently.
+  assert.notEqual(programContext("plasmid", 878, 65, null), base);
+  assert.notEqual(programContext("plasmid", 878, 66, 72), base);
+  assert.notEqual(programContext("plasmid", 878, 66, 72), programContext("plasmid", 878, 66, 73));
+  // In whole degrees, as the program uses them and the dialog says them.
+  assert.equal(programContext("plasmid", 878, 66.2, null), programContext("plasmid", 878, 65.6, null));
+  // And the template and length still show.
+  assert.notEqual(programContext("colony", 878, 66, null), base);
+  assert.notEqual(programContext("plasmid", 879, 66, null), base);
 });

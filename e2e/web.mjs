@@ -266,13 +266,26 @@ async function main(outDir) {
     await s.click("//button[normalize-space()='My enzymes']");
     await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
     check("The full enzyme catalogue renders only its visible rows", await s.exec("return document.querySelectorAll('[data-personal-enzyme]').length > 0 && document.querySelectorAll('[data-personal-enzyme]').length < 100;"));
+    check("My enzymes opens on the common enzymes, under their heading, before the rest of the catalogue", await s.waitFor("document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-group')?.firstChild?.textContent === 'Common enzymes' && document.querySelector('.sv-personal-enzyme-box-all [data-personal-enzyme]')?.dataset.personalEnzyme === 'AatII' && document.querySelector('.sv-personal-enzyme-box-selected')?.textContent.includes('No enzymes selected yet.')", 5000));
     for (const name of ["EcoRI", "Acc65I", "PvuII"]) {
       await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = arguments[0]; q.dispatchEvent(new Event('input'));", name);
-      await s.click(`//input[@data-personal-enzyme='${name}']`);
-      check(`The browser saves ${name} in My enzymes`, await s.waitFor(`document.querySelector('input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
+      await s.click(`//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='${name}']`);
+      check(`The browser saves ${name} in My enzymes and lists it under My selected enzymes`, await s.waitFor(`document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme="${name}"]')?.checked && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'`, 5000));
     }
-    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input')); document.querySelector('[aria-label=\"Selected only\"]').click();");
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = 'Pvu'; q.dispatchEvent(new Event('input'));");
+    check("A search filters both boxes", await s.exec("return Array.from(document.querySelectorAll('.sv-personal-enzyme-box-selected [data-personal-enzyme]'), i => i.dataset.personalEnzyme).join() === 'PvuII' && document.querySelector('.sv-personal-enzyme-box-selected .sv-personal-enzyme-count')?.textContent === '1 of 3' && /^\\d+ of \\d+$/.test(document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-count')?.textContent) && Array.from(document.querySelectorAll('.sv-personal-enzyme-box-all [data-personal-enzyme]')).every(i => i.dataset.personalEnzyme.toLowerCase().includes('pvu'));"));
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input'));");
+    await s.click("//*[contains(@class,'sv-personal-enzyme-box-selected')]//input[@data-personal-enzyme='Acc65I']");
+    check("Unticking in My selected enzymes takes the row out at once", await s.waitFor("!document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"Acc65I\"]') && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'", 5000));
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = 'Acc65I'; q.dispatchEvent(new Event('input'));");
+    check("…and unticks it in All enzymes", await s.exec("return document.querySelector('.sv-personal-enzyme-box-all [data-personal-enzyme=\"Acc65I\"]')?.checked === false;"));
+    await s.click("//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='Acc65I']");
+    check("Ticking it again in All enzymes brings it back", await s.waitFor("document.querySelector('.sv-personal-enzyme-box-all [data-personal-enzyme=\"Acc65I\"]')?.checked && !!document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"Acc65I\"]') && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'", 5000));
+    await s.exec("const q = document.querySelector('[aria-label=\"Search My enzymes\"]'); q.value = ''; q.dispatchEvent(new Event('input'));");
+    await s.click("//button[normalize-space()='All enzymes']");
+    check("All enzymes folds from its title, and the choice is kept", await s.exec("return document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-title')?.getAttribute('aria-expanded') === 'false' && document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-table')?.hidden && JSON.parse(localStorage.getItem('strandivo.myEnzymesFolds') || '{}').all === true;"));
     await s.shot("00a-my-enzymes");
+    await s.click("//button[normalize-space()='All enzymes']");
     await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     // The list is a row of buttons (Common, Lab, Mine); how often they cut is a select.
     const enzymeChoice = async (label, value) => s.exec("const el = document.querySelector('[aria-label=\"' + arguments[0] + '\"]'); if (el.tagName === 'SELECT') { el.value = arguments[1]; el.dispatchEvent(new Event('change', { bubbles: true })); } else el.querySelector('[data-value=\"' + arguments[1] + '\"]').click();", label, value);
@@ -317,8 +330,7 @@ async function main(outDir) {
     check("The personal list, source and filter survive reopening", await s.waitFor("document.querySelector('[aria-label=\"Which map enzymes to show\"] [aria-checked=\"true\"]')?.dataset.value === 'personal' && document.querySelector('[aria-label=\"Map cut-site filter\"]')?.value === 'unique' && document.querySelectorAll('.sv-enzyme-chip').length === 2", 15000));
     await s.click("//button[@aria-label='Enzyme library']");
     await s.click("//button[normalize-space()='My enzymes']");
-    await s.click("//input[@aria-label='Selected only']");
-    check("The reopened checklist keeps all personal selections", await s.waitFor("Array.from(document.querySelectorAll('[data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).sort().join() === 'Acc65I,EcoRI,PvuII'", 5000));
+    check("The reopened checklist keeps all personal selections", await s.waitFor("Array.from(document.querySelectorAll('.sv-personal-enzyme-box-selected [data-personal-enzyme]:checked')).map(i => i.dataset.personalEnzyme).join() === 'Acc65I,EcoRI,PvuII'", 5000));
     await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     check("Personal enzyme changes do not mark the sequence as edited", await s.exec("return !window.__strandivo.isDirty();"));
     await enzymeChoice("Which map enzymes to show", "common");
@@ -605,6 +617,55 @@ async function main(outDir) {
     await s.click("//*[contains(@class,'ps-modal-buttons')]//button[normalize-space()='Choose files…']");
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
+
+    // --- the protein schematic's selection and exported images ---
+    await s.exec("window.__strandivo.showHome()");
+    await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));
+    await s.click("//*[contains(@class,'sv-outline-regions')]/button[span[normalize-space()='CDR1']]");
+    const regionIndex = name => s.exec(`
+      return Array.from(document.querySelectorAll('.sv-outline-regions [data-region]'))
+        .find(row => row.querySelector('.sv-list-name').textContent === arguments[0]).dataset.region;
+    `, name);
+    const firstRegion = await regionIndex("CDR1");
+    const secondRegion = await regionIndex("CDR2");
+    await s.click("//*[contains(@class,'sv-inspector')]//button[normalize-space()='Details & schematic…']");
+    const regionBlock = index => `//*[local-name()='rect' and @data-region='${index}' and contains(@class,'sv-figure-pick')]`;
+    const selectedBlock = index => `document.querySelector('.sv-figure rect[data-region="${index}"].sv-selected')`;
+    check("The schematic opens with the selected region highlighted", await s.waitFor(selectedBlock(firstRegion), 3000));
+    await s.click(regionBlock(firstRegion));
+    check("Clicking the highlighted region again selects the whole CDS", await s.exec(`
+      const { data, selection } = window.__strandivo.store;
+      const { focus, range } = selection;
+      const cds = data.features.find(f => f.id === focus?.id);
+      const edit = Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent === 'Edit region…');
+      return cds?.name === 'Nanobody' && focus.region === undefined && range?.start === cds.start && range.end === cds.end &&
+        !document.querySelector('.sv-figure .sv-selected') && edit?.disabled;
+    `));
+    check("The whole CDS also offers the schematic in the inspector", await s.waitFor(
+      "document.querySelector('.sv-inspector [data-section=protein] .sv-link')?.textContent === 'Details & schematic…'", 3000));
+    await s.click(regionBlock(secondRegion));
+    check("Another region can still be selected from the schematic", await s.waitFor(`${selectedBlock(secondRegion)} && window.__strandivo.store.selection.focus?.region === ${secondRegion}`, 3000));
+
+    for (const transparent of [false, true]) {
+      if (transparent) await s.click("//label[normalize-space()='Transparent background']/input");
+      const before = await s.exec("return window.__e2eDownloads.length");
+      await s.click("//button[normalize-space()='Save as PNG…']");
+      await s.click("//button[normalize-space()='Save as SVG…']");
+      const saved = await s.waitFor(`window.__e2eDownloads.length === ${before + 2}`, 5000);
+      const files = saved ? await s.execAsync(`
+        (async () => {
+          const [png, svg] = window.__e2eDownloads.slice(-2);
+          const image = await createImageBitmap(png.blob.slice(0, png.blob.size, 'image/png'));
+          const g = document.createElement('canvas').getContext('2d');
+          g.drawImage(image, 0, 0);
+          image.close();
+          const xml = new DOMParser().parseFromString(await svg.blob.text(), 'image/svg+xml');
+          return { pixel: Array.from(g.getImageData(0, 0, 1, 1).data), white: xml.querySelector('svg > rect[width="100%"]')?.getAttribute('fill') ?? null,
+            labels: Array.from(xml.querySelectorAll('text'), label => label.textContent) };
+        })().then(done, e => done(String(e)));`) : null;
+      check(`The schematic exports PNG and SVG with ${transparent ? 'a transparent' : 'a white'} background`,
+        files?.pixel?.join() === (transparent ? '0,0,0,0' : '255,255,255,255') && files.white === (transparent ? null : '#ffffff') && files.labels.includes('CDR1'), JSON.stringify(files));
+    }
 
     // Reports arrive a moment after what they report.
     await sleep(1000);

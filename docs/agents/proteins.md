@@ -17,15 +17,22 @@ and CI checks that they exist.
   translated. They are numbered in residues of the CDS, so rotating, turning round and
   cloning need no code; only what changes the CDS's length or first base does (`carryRegions`):
   edits (from `mapAnnotations`), moving an end or turning it round in the inspector, and a
-  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Ends round to the nearest
-  codon, not down: replacing a base is a deletion and an insertion, and rounding down would
-  creep everything downstream a residue per base typed over. A replacement across a region's
-  edge can still move that edge, as it clips a feature's own end. Each also keeps the
-  entry's numbers, which is what the interface shows, as a fusion's differ. "Add as feature"
-  makes a real one for files going to other software.
+  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Each region's
+  bases go through an edit as a feature's do, so the rules for replacing bases (`AGENTS.md`)
+  hold for regions too. A base typed or deleted at a time is a third of a residue, which
+  rounding to residues would lose every time (three codons typed left everything
+  downstream three residues off), so a region left between codons keeps its exact bases
+  (`codingBases`, coding bases from 1, in the optional JSON) beside its nearest residues
+  until it is back on whole ones. They count only while they round to its residues:
+  anything that sets the residues alone (the region editor, a version that doesn't know
+  them) makes them stale, and then the residues win. Each also keeps the
+  entry's numbers, which can differ from the construct's in a fusion. The inspector
+  browses regions in construct residues and labels the entry's coordinates separately.
+  "Add as feature" makes a real one for files going to other software.
 - **Manual regions** use the same storage as imported ones. Optional URL-encoded JSON
   after the original qualifier fields holds stable ids, colour, a parent id, a library
-  design and the user's note (lines joined by line breaks); keep reading the original
+  design, the user's note (lines joined by line breaks) and, for a region between codons,
+  its exact bases; keep reading the original
   four/five-field form. Keys this version doesn't know are kept in `more` and written
   back, so a field added later survives this version rewriting the CDS's regions. Versions
   up to 0.4.0 keep only what they know: they drop every note on a CDS when they rewrite
@@ -48,7 +55,10 @@ and CI checks that they exist.
   Regions toggle hides or shows them without changing its top-level/all detail choice.
   Visibility and detail are remembered separately. Nested
   or overlapping regions occupy separate lanes. Region actions act on the region, not the
-  whole CDS. The editor is in `src/views/proteinRegionDialog.ts`.
+  whole CDS. A selected region has its own inspector header and a path back to its
+  enclosing region and CDS. View in sequence and View on map carry its own range across.
+  The inspector's list opens by default if diagram labels clip, with collapsible groups
+  that reopen when a descendant is selected. The editor is in `src/views/proteinRegionDialog.ts`.
   Both map modes draw a region as a stripe in its colour along its CDS's outer edge (the
   linear map's bar's bottom edge), inside the band and cut to its shape, so the CDS keeps
   its colour and its name in the rest of the band. Filling the arrow with segments was
@@ -60,9 +70,10 @@ and CI checks that they exist.
   move outside at a large label size, and under its bar on the linear map. A stripe is a
   group of the stripe drawn and a wider clear stroke the pointer finds. Region names are
   plain grey at regular weight after a square of the region's colour: beside the circular
-  map on a light solid leader from the stripe, or in rows under the linear map's lane,
-  packed across the CDSs in it so neighbours' names never collide. Hovering a stripe or
-  name highlights every piece of that region and outlines its owning CDS, including for a
+  map or below the linear map's lane on a light solid leader from the stripe. On the
+  linear map, region labels share rows with short feature names so both can use the
+  space under nearby features. Hovering a stripe or name highlights its leader and
+  every piece of that region and outlines its owning CDS, including for a
   nested region. This is local map state, cleared on redraw or hiding the view, never a
   store selection. Selection styling wins, and label weight stays fixed in every state
   to match its measured width. Map tooltips name the owning CDS as well as region details.
@@ -75,14 +86,15 @@ and CI checks that they exist.
   translation is shown. They use `src/views/regionTracks.ts` to pack and draw both the
   bars and captions, so names do not collide or widen the scroller. The primer's panel
   shows all regions in its visible template window, including neighbouring boundaries.
-- **The protein figure** (in Protein details, `src/views/proteinDialog.ts`, opened by
-  Details… in the inspector's Protein section) is laid out once, as shapes with
-  concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
+- **The protein figure** (in Protein details, `src/views/proteinDialog.ts`) opens from
+  Details & schematic… in the inspector for a CDS or one of its regions. It is laid out
+  once as shapes with concrete colours (`src/lib/proteinFigure.ts`), which `src/views/proteinFigure.ts` draws
   as SVG in the dialog, paints on a canvas for the PNG and writes as the SVG file, so all
   three match. Painting from the shapes, not loading the SVG as an image, keeps `data:`
   and `blob:` images out of the Content Security Policy, and lets Copy image make the PNG
-  within the click, which Safari's clipboard requires. Regions with drawn parts are
-  brackets under them; the rest are blocks, the longest on the protein's line and one
+  within the click, which Safari's clipboard requires. The Transparent background checkbox
+  applies to both formats and Copy image, with white as the default. Regions with drawn
+  parts are brackets under them; the rest are blocks, the longest on the protein's line and one
   inside another in a lane under it. A name goes straight over its block where it can
   without hiding a neighbour's leader, else on an elbow leader, a crowd of them rising to
   a peak (left half pointing left) so no leader crosses a name; a randomised test holds
@@ -91,11 +103,30 @@ and CI checks that they exist.
   shell writes its bytes with `write_bytes`, which takes them as the request's body
   rather than JSON, with the path in a header.
 - **Protein details** keeps the sequence in sight: the list of regions under the figure
-  starts folded (the figure shows and picks them all). Edit region… there gives the
-  dialog's place to the region editor, which brings Protein details back when it closes,
+  starts folded (the figure shows and picks them all). Picking the selected region again
+  selects its whole CDS. Edit region… there gives the dialog's place to the region editor,
+  which brings Protein details back when it closes,
   saved or not (`onClose` of `openProteinRegionDialog`); opened from the inspector, the
   editor closes to the window. Stacking the editor over it was the alternative, but it
   would darken the window twice and leave numbers from before the edit showing beneath.
+- **Dragging a region's ends** (`src/lib/regionEdges.ts`): in the Sequence tab a selected
+  region has a handle at each end, as a selected primer has in the Primers tab, and a drag
+  or the arrow keys move that end a codon at a time, as regions are numbered in residues.
+  Only a CDS has regions, so nothing here moves a base at a time; a part of a feature that
+  is DNA, like a promoter's −10 box, is a feature of its own. A handle moves an edge
+  between residues: its region's end, and a region on the same level (the same parent, or
+  none) that meets it there, so regions that met (FR1 and CDR1) still meet; with ⌥ (Alt)
+  held, even partway through a drag, its region's end moves alone, which parts them. Only
+  the tooltip of a handle that moves two regions says so, as elsewhere ⌥ changes nothing,
+  and nothing else needs to: a region that meets it snaps back as ⌥ is pressed. Some Linux
+  desktops take Alt-drag for moving the window, but Alt with the arrow keys still works
+  there. A parent or child ending there too stays put and only limits the move: moving it
+  along once coupled a child pulled up to its parent's end to it for good. A child can't
+  leave its parent, a parent can't leave out a child, and every region keeps a residue.
+  Nor do two regions on one level that overlap and end together move together. An end that
+  didn't move keeps its exact bases. An imported region's entry numbers move by as much as
+  it does, and it counts as edited, so the next import of its entry keeps it. The moves of
+  a drag are one undo step.
 - **Regions from a selection** use `selectedProteinResidues` for both the inspector and
   right-click menu: coordinates follow the CDS's direction and splicing, partial codons
   expand to whole residues, and a terminal stop is excluded. When several CDSs contain

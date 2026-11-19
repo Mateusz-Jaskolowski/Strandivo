@@ -2480,6 +2480,20 @@ async function main() {
     const foldOpen = await s.waitFor("window.__strandivo.tabs()[window.__strandivo.activeTab()] === 'library-parent.gb' && window.__strandivo.store", 20000);
     check("The library's parent opens again to turn its features into regions", foldOpen);
     if (foldOpen) {
+      await s.click('button[aria-label="Export GenBank or FASTA"]');
+      check("Export keeps all formats in the picker and its buttons together", await s.exec(`
+        const dlg = document.querySelector('.sv-dialog');
+        const format = dlg?.querySelector('select');
+        const [cancel, submit] = dlg?.querySelectorAll('.sv-dialog-foot button') ?? [];
+        if (!format || !cancel || !submit) return false;
+        const frame = dlg.getBoundingClientRect();
+        const left = cancel.getBoundingClientRect(), right = submit.getBoundingClientRect();
+        return format.value === 'genbank' && Array.from(format.options, option => option.textContent).join('|') === 'GenBank|GenBank with protein regions|FASTA'
+          && cancel.textContent === 'Cancel' && submit.textContent === 'Export…'
+          && left.left >= frame.left && left.right <= right.left && right.right <= frame.right && Math.abs(left.top - right.top) < 1;`));
+      await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Cancel']", "xpath");
+      check("Cancel closes Export", await s.waitFor("!document.querySelector('.sv-dialog')", 5000));
+
       // The nanobody's CDS, as testdata/library/protein-regions.gb adds it over its parts.
       await s.exec(`${doc} window.__strandivo.setView("map");
         const cds = { id: "e2e-nanobody", name: "Nanobody", type: "CDS", start: 2096, end: 2449, strand: 1, notes: {}, raw: {} };

@@ -16,6 +16,8 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **A clearer Export dialog**: pick the file format separately, with Cancel and Export
+  together at the bottom.
 - **Read crowded linear maps**: leaders connect displaced feature, protein region,
   primer and cut-site names to their marks, and primer arrows stay close to the
   backbone even when their names need more room.

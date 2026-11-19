@@ -1283,6 +1283,11 @@
   stroke: color-mix(in srgb, var(--lc, var(--primer)) 60%, var(--leader));
   stroke-dasharray: 3 2;
 }
+.sv-map-linear-leaders .sv-map-leader-feature.sv-focused,
+.sv-map-linear-leaders .sv-map-leader-primer.sv-focused {
+  stroke: var(--accent);
+  stroke-width: 1.25;
+}
 .sv-map-leader polyline.sv-map-leader-cutsite,
 .sv-map-leader.sv-map-leader-cutsite {
   stroke: var(--text-3);
@@ -1365,6 +1370,16 @@
 .sv-map-label.sv-focused {
   fill: var(--accent-text);
   font-weight: 700;
+}
+/* The linear map packs names at their measured widths, including on selection. */
+.sv-map-linear-names .sv-map-label-primer.sv-focused {
+  font-weight: 500;
+}
+.sv-map-linear-names .sv-map-label-feature.sv-focused {
+  font-weight: 600;
+}
+.sv-map-linear-names .sv-map-label-cut.sv-focused {
+  font-weight: 400;
 }
 /* Keep the measured weight in every state, so hovering or selecting never widens a name. */
 .sv-map-label.sv-map-region-label {

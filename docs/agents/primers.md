@@ -49,8 +49,9 @@ and CI checks that they exist.
   circle any two face each other going round, so `MAX_PRODUCT` is what bounds the list; a
   pair whose span is past that even after both sites are allowed for is dropped before the
   product is built, as a primer only shortens a product by template its own site covers.
-  The pairs are worked out once per document, like each primer's report, and both are
-  dropped when Settings change, as the document is then the same but the Tms are not.
+  The pairs are worked out once per document via `documentPrimerPairs` in `src/doc/analysis.ts`
+  (shared by `src/views/primersView.ts` and the inspector's Pairs section), and invalidated
+  automatically when Tm settings change, as the document is then the same but the Tms are not.
   Pairs whose Tms are further apart than the limit beside the list (`withinTmLimit`, 5 °C
   until changed, kept with the list's sort) are hidden, never dropped from the cache, and
   the note says how many with Show all; a pair with an unknown Tm always shows. The
@@ -170,6 +171,25 @@ and CI checks that they exist.
   remembers its original picks so dragging back shrinks the span; pointer capture means
   the codon under a moving pointer comes from `elementFromPoint`, not the event's target.
   The bases of a split codon exclude introns. Keep the primer's window in place throughout.
+- **Exact 3′ partial off-target sites** (`findPartialOffTargetSites` in `src/lib/primers.ts`):
+  secondary priming sites where at least 8 contiguous bases at the primer's 3′ end match
+  exactly (`PARTIAL_SITE_SEED`, zero internal mismatches, stopping at the first mismatch so
+  `meltingTemp` is exact across all 5 Tm methods) and whose Tm meets
+  `max(45 °C, primaryTm − 15 °C)` (`PARTIAL_SITE_MIN_TM`, `PARTIAL_SITE_TM_DROP`). They
+  deduplicate against `findBindingSites` and the primer's stored site, surface as a
+  `"Partial off-target"` warning in `primerReport().checks`, and never enter `findBindingSites`
+  or PCR pairing.
+- **Primer inspector & unified Primer Dialog** (`src/views/inspector.ts`,
+  `src/views/primerDialog.ts`, `src/lib/primerInsert.ts`): the inspector is read-first
+  (colour badge popover, hoisted warnings matching `report.checks`, styled sequence + Copy,
+  `sv-facts`, wrapped alignment, Checks, compatible Pairs opening `openPcrDialog` with `p:<id>`
+  keys, and editable Note). Creating (`⌘R` forward, `⇧⌘R` reverse on desktop; `Align Sequencing
+  Reads…` moved to `⇧⌘A`; right-click; toolbar; `Add by sequence…`) and editing (`Edit primer…`,
+  double-click on a primer) share `openPrimerDialog`. Keep the draft's `savedSite` (coordinates
+  + strand) separate from preview site navigation so inspecting a partial off-target never
+  moves the saved site or shifts `primerReport`'s reference. Library persistence preserves
+  `color` (`parseLibraryJson` in `src/lib/library.ts`) and deduplicates by name + sequence
+  (`libraryMatch`, matching `newEntries`).
 
 ## Decisions (and why)
 

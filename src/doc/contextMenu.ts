@@ -22,8 +22,11 @@ import type { DocContext, Tab } from "./context.ts";
 import type { Focus } from "./store.ts";
 import { openMutagenesisDialog } from "../views/mutagenesisDialog.ts";
 import { openPcrDialog } from "../views/primerDialogs.ts";
+import { openPrimerDialog } from "../views/primerDialog.ts";
 import { openProteinDialog } from "../views/proteinDialog.ts";
 import { openEnzymeDialog } from "../views/enzymeDialog.ts";
+import { noteText } from "../lib/featureNotes.ts";
+import { libraryMatch } from "../lib/library.ts";
 
 export interface ContextMenuHost {
   ctx: DocContext;
@@ -48,7 +51,7 @@ export function openContextMenu(host: ContextMenuHost, target: MenuTarget, at: {
     data: host.ctx.store.data,
     onMap,
     tab: host.ctx.tab,
-    inLibrary: bases => primerLibrary.all.some(x => x.bases === bases),
+    inLibrary: (bases, name) => (name ? libraryMatch(primerLibrary.all, name, bases).exact : primerLibrary.all.some(x => x.bases === bases)),
     enzymes: host.ctx.store.selection.enzymes,
     personalEnzymes: host.ctx.options.personalEnzymes
   }).map(convert);
@@ -184,6 +187,9 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
     case "copy-for-ordering":
       if (primer) host.copy(`${primer.name}\t${primer.bases}`, `${primer.name} (name and sequence, tab-separated)`);
       return;
+    case "edit-primer":
+      if (primer) openPrimerDialog(ctx, { mode: "edit", primerId: primer.id });
+      return;
     case "digest":
       if (target.kind === "cutsite") host.digest(digestEnzymes(target.id, store.selection.enzymes));
       return;
@@ -225,7 +231,7 @@ function run(host: ContextMenuHost, chosen: MenuItem, target: MenuTarget, onMap:
       return;
     case "save-to-library":
       if (primer) {
-        primerLibrary.add([{ name: primer.name, bases: primer.bases, notes: "", color: primer.color }]);
+        primerLibrary.add([{ name: primer.name, bases: primer.bases, notes: noteText(primer.notes), color: primer.color }]);
         toast(`Saved ${primer.name} to the lab library.`, "success", 2500);
       }
       return;

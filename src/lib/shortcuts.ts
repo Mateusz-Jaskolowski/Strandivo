@@ -21,7 +21,7 @@ export const MENU_KEYS: readonly MenuKey[] = [
   { id: "home", key: "h", shift: true },
   { id: "save", key: "s", shift: false },
   { id: "save-as", key: "s", shift: true },
-  { id: "add-reads", key: "r", shift: true },
+  { id: "add-reads", key: "a", shift: true },
   { id: "library", key: "l", shift: true },
   { id: "settings", key: ",", shift: false },
 ];
@@ -30,6 +30,7 @@ export const MENU_KEYS: readonly MenuKey[] = [
  *  text fields keep their own undo and select-all. */
 export const DOCUMENT_KEYS: readonly string[] = [
   "undo", "redo", "select-all", "invert-selection", "find",
+  "add-primer", "add-reverse-primer",
   "show-map", "show-sequence", "show-primers", "show-reads", "show-info",
 ];
 
@@ -60,7 +61,9 @@ const APP_SHORTCUTS: Record<string, Shortcut> = {
   home: { key: "H", shift: true },
   save: { key: "S" },
   "save-as": { key: "S", shift: true },
-  "add-reads": { key: "R", shift: true },
+  "add-reads": { key: "A", shift: true },
+  "add-primer": { key: "R" },
+  "add-reverse-primer": { key: "R", shift: true },
   "show-map": { key: "1" },
   "show-sequence": { key: "2" },
   "show-primers": { key: "3" },
@@ -75,7 +78,7 @@ const APP_SHORTCUTS: Record<string, Shortcut> = {
 };
 
 /**
- * The keys that reach the page in a browser. Browsers keep ⌘N, ⌘W, ⌘T and ⌘1–⌘9 (Ctrl
+ * The keys that reach the page in a browser. Browsers keep ⌘N, ⌘W, ⌘T, ⌘R and ⌘1–⌘9 (Ctrl
  * elsewhere) for themselves, ⇧⌘R reloads, and Safari's ⌥⌘W closes the other tabs, so New
  * Sequence moves to ⌥⌘N and the rest have only their buttons there. ⌘, and ⇧⌘L open
  * browser windows in some browsers, and Settings and the libraries have buttons in the bar.
@@ -117,9 +120,11 @@ export function documentShortcut(e: Keys, where: Where): string | null {
   const k = e.key.toLowerCase();
   if (k === "z") return e.shiftKey ? "redo" : "undo";
   if (k === "y") return "redo";
-  if (k === "a") return "select-all";
+  if (k === "a" && !e.shiftKey) return "select-all";
   // A browser keeps Ctrl+Shift+I and ⇧⌘I for itself.
   if (k === "i" && e.shiftKey && shortcutFor("invert-selection", where)) return "invert-selection";
+  // A browser keeps ⌘R / ⇧⌘R (Ctrl+R / Ctrl+Shift+R) for reloading the page.
+  if (k === "r" && !where.browser) return e.shiftKey ? "add-reverse-primer" : "add-primer";
   if (k === "f") return "find";
   const view = ["map", "sequence", "primers", "reads", "info"].find(v => APP_SHORTCUTS[`show-${v}`].key === e.key);
   return view ? `show-${view}` : null;

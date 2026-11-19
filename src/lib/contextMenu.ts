@@ -54,6 +54,7 @@ export type MenuAction =
   | "protein-details"
   | "copy-primer"
   | "copy-for-ordering"
+  | "edit-primer"
   | "copy-site"
   | "enzyme-details"
   | "digest"
@@ -118,8 +119,8 @@ export interface MenuContext {
   onMap: boolean;
   /** The tab the menu was opened in; primers offer the other places they show. */
   tab?: "map" | "sequence" | "primers" | "reads" | "info";
-  /** Whether a primer with these bases is in the lab library. */
-  inLibrary(bases: string): boolean;
+  /** Whether a primer with these bases (and optionally this name) is in the lab library. */
+  inLibrary(bases: string, name?: string): boolean;
   /** Enzymes picked with ⌘/Ctrl-click; a site of one of them digests with them all. */
   enzymes?: string[];
   personalEnzymes?: readonly string[];
@@ -196,9 +197,11 @@ export function menuFor(target: MenuTarget, c: MenuContext): MenuEntry[] {
       const p = d.primers.find(x => x.id === target.id);
       if (!p) return [];
       const tail = alignPrimer(p, d.sequence).tail.length > 0;
-      const saved = c.inLibrary(p.bases.toUpperCase());
+      const saved = c.inLibrary(p.bases.toUpperCase(), p.name);
       const tab = c.tab ?? (c.onMap ? "map" : "sequence");
       return tidy([
+        item("edit-primer", "Edit primer…"),
+        "separator",
         item("copy-primer", "Copy sequence"),
         item("copy-for-ordering", "Copy for ordering"),
         "separator",

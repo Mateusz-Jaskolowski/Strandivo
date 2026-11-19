@@ -3,11 +3,18 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { layoutLinearLabels, maxLinearLabelWidth, type LinearLabel } from "./linearMapLabels.ts";
+import { groupLinearCutSites, layoutLinearLabels, maxLinearLabelWidth, type LinearLabel } from "./linearMapLabels.ts";
 
 const width = 480;
 const step = 16;
 const wanted = (x: number[], labelWidth: number) => x.map((x, item) => ({ item, x, width: labelWidth }));
+
+test("linear cut groups separate at zoom, and chains of nearby ticks cannot extend a group", () => {
+  const sites = [10, 10, 11, 12, 14, 100].map((cut, id) => ({ cut, id }));
+  const groupIds = (scale: number) => groupLinearCutSites(sites, scale).map(group => group.map(site => site.id));
+  assert.deepEqual(groupIds(0.5), [[0, 1, 2, 3], [4], [5]]);
+  assert.deepEqual(groupIds(3), [[0, 1], [2], [3], [4], [5]]);
+});
 
 function checkLayout(inputs: LinearLabel<number>[]) {
   const layout = layoutLinearLabels(inputs, width, step);

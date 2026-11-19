@@ -19,6 +19,8 @@ with Unreleased's notes and leaves them where they are.
 - **Read crowded linear maps**: leaders connect displaced feature, protein region,
   primer and cut-site names to their marks, and primer arrows stay close to the
   backbone even when their names need more room.
+- **Pick overlapping cut sites**: zoomed-out linear maps show a count where cut marks
+  overlap. Open the count to see the enzymes and pick an individual cut.
 - **Inspect protein regions by name**: a selected region has its own heading, residue
   range and actions, with a link back to its CDS and the same bases selected on the map
   and in the sequence. Regions sit near the top of the CDS, with a list that opens when a

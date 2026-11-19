@@ -25,6 +25,18 @@ export interface PlacedLinearLabel<T> extends LinearLabel<T> {
 /** Measure or shorten labels to this width before placing them. */
 export const maxLinearLabelWidth = (width: number) => (width - 2 * MARGIN) * 0.8 - ELBOW;
 
+/** Group sorted cut sites whose ticks fit within one drawing pixel. */
+export function groupLinearCutSites<T extends { cut: number }>(sites: readonly T[], pxPerBase: number): T[][] {
+  const groups: T[][] = [];
+  for (const site of sites) {
+    const last = groups.at(-1);
+    // Measure from the first tick so a chain of neighbours cannot group distant cuts.
+    if (last && (site.cut - last[0].cut) * pxPerBase <= 1) last.push(site);
+    else groups.push([site]);
+  }
+  return groups;
+}
+
 type Stem<T> = LinearLabel<T> & { stem: number };
 
 /**

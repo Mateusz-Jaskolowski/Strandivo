@@ -296,7 +296,7 @@ async function checkCrowdedLinearMap(s, check, control, move) {
       const overlap = marks('overlap', 'primer')[0].getBBox();
       const paths = marks('wrap-primer', 'primer');
       const wrap = line('wrap-primer', 'primer').points.getItem(0);
-      const ticks = [...document.querySelectorAll('.sv-map-cut line[data-id]')];
+      const ticks = [...document.querySelectorAll('.sv-map-cut line[data-id]:not([data-cut-group])')];
       return {
         features: ['short-0', 'short-1', 'short-2', 'short-3'].every(id => line(id, 'feature')?.points.numberOfItems >= 3),
         regions: document.querySelectorAll('.sv-map-leader-region[data-id="crowded-cds"]').length === 3,
@@ -319,14 +319,15 @@ async function checkCrowdedLinearMap(s, check, control, move) {
       await control("Zoom", zoom);
       const collision = await s.exec(`
         const svg = document.querySelector('.sv-map-svgel');
-        const boxes = [...svg.querySelectorAll('.sv-map-linear-names > *')].map(e =>
-          ({ e, box: e.getBBox() }));
+        const bounds = svg.getBoundingClientRect();
+        const boxes = [...svg.parentElement.querySelectorAll('.sv-map-linear-names > *, .sv-map-cut-group')].map(e =>
+          ({ e, box: e.getBoundingClientRect() }));
         for (const [i, { e, box: a }] of boxes.entries()) {
-          if (a.x < 0 || a.x + a.width > svg.viewBox.baseVal.width)
+          if (a.left < bounds.left || a.right > bounds.right)
             return { outside: e.dataset.id, x: a.x, width: a.width };
           const hit = boxes.slice(i + 1).find(({ e: other, box: b }) => {
             // A feature's chip is its background, so it deliberately contains its own text.
-            if (e.dataset.id === other.dataset.id && e.dataset.region === other.dataset.region) return false;
+            if (e.dataset.id && e.dataset.id === other.dataset.id && e.dataset.region === other.dataset.region) return false;
             return a.x + a.width > b.x && b.x + b.width > a.x && a.y + a.height > b.y && b.y + b.height > a.y;
           });
           if (hit) return { ids: [e.dataset.id, hit.e.dataset.id], boxes: [a, hit.box].map(b => [b.x, b.y, b.width, b.height]) };
@@ -349,6 +350,46 @@ async function checkCrowdedLinearMap(s, check, control, move) {
           label.classList.contains('sv-focused') && label.getBBox().width === arguments[1];
       `, selector, width));
     }
+    const group = await s.exec(`
+      const key = document.querySelector('.sv-map-cut line[data-id="AvaI@411"]').dataset.cutGroup;
+      const ticks = [...document.querySelectorAll('.sv-map-cut line[data-cut-group="' + key + '"]')];
+      const xs = ticks.map(t => t.x1.baseVal.value);
+      return {
+        key, ids: ticks.map(t => t.dataset.id),
+        close: Math.max(...xs) - Math.min(...xs) <= 1.01,
+        separatedCut: !!document.querySelector('.sv-map-cut line[data-id="AccI@428"][data-cut-group]')
+      };
+    `);
+    const count = `.sv-map-cut-group[data-cut-group="${group.key}"]`;
+    const choice = '.sv-map-cut-site-choice';
+    await s.exec("document.querySelector(arguments[0]).focus();", count);
+    await s.press("\uE007"); // Enter on the count button.
+    check("A linear cut-site count opens a keyboard-accessible list of its own ticks", group.close && await s.exec(`
+      const rows = [...document.querySelectorAll(arguments[0])];
+      return rows.length >= 3 && rows.map(b => b.dataset.site).join() === arguments[1].join() &&
+        rows.some(b => b.dataset.site === 'XmaI@411' && b.textContent.includes('After base 412'));
+    `, choice, group.ids));
+    await move(`${choice}[data-site="XmaI@411"]`);
+    await s.pointer([{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
+    check("Choosing a grouped site selects its enzyme and highlights the count", await s.exec(`
+      const focus = window.__strandivo.store.selection.focus;
+      return focus?.kind === 'cutsite' && focus.id === 'XmaI@411' &&
+        !document.querySelector('.sv-map-cut-site-choice') &&
+        document.querySelector(arguments[0]).classList.contains('sv-focused');
+    `, count));
+    await move(count);
+    await s.pointer([{ type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }], { release: true });
+    check("Picking from the cut-site list keeps both picked enzymes", await s.exec(`
+      const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+      document.querySelector('.sv-map-cut-site-choice[data-site="KpnI@407"]').dispatchEvent(
+        new MouseEvent('click', { bubbles: true, [mac ? 'metaKey' : 'ctrlKey']: true }));
+      return window.__strandivo.store.selection.enzymes?.slice().sort().join() === 'KpnI,XmaI';
+    `));
+    await control("Zoom", "100");
+    check("Zooming in restores a name for a separated tick and keeps identical cuts grouped", group.separatedCut && await s.exec(`
+      return !!document.querySelector('.sv-map-label-cut[data-id="AccI@428"]') &&
+        !!document.querySelector('.sv-map-cut line[data-id="XmaI@411"][data-cut-group]');
+    `));
   } finally {
     await s.exec(`
       window.__strandivo.store.undo();

@@ -24,7 +24,7 @@ import { sweep, sweptRange } from "../lib/mapDrag.ts";
 import { gcRuns, joinAtOrigin, overviewWindow, type GcRun } from "../lib/gc.ts";
 import { GC_CHIP_LABEL, gcChipTitle, gcRunTitle, gcWindowText } from "./gcStrip.ts";
 import { layoutName, LENGTH_SIZE, type NameLines } from "../lib/mapName.ts";
-import { layoutLinearLabels, maxLinearLabelWidth, type LinearLabel, type PlacedLinearLabel } from "../lib/linearMapLabels.ts";
+import { groupLinearCutSites, layoutLinearLabels, maxLinearLabelWidth, type LinearLabel, type PlacedLinearLabel } from "../lib/linearMapLabels.ts";
 import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
 import { openEnzymeDialog } from "./enzymeDialog.ts";
 
@@ -56,6 +56,13 @@ interface LinearMapLabel extends Pick<LabelItem, "kind" | "id" | "region" | "col
   textWidth: number;
   /** Offset from the label track to the edge of the mark. */
   from: number;
+}
+
+interface LinearCutGroup {
+  kind: "cut-group";
+  id: string;
+  text: string;
+  sites: CutSite[];
 }
 
 /** A mark across a gap or the origin is named at its widest drawn piece. */
@@ -379,11 +386,11 @@ export class MapView {
   private svg: SVGSVGElement | null = null;
   private selLayer: SVGGElement | null = null;
   private geom: Geometry | null = null;
-  private shapes = new Map<string, SVGElement[]>();
-  private focused: SVGElement[] = [];
+  private shapes = new Map<string, Element[]>();
+  private focused: Element[] = [];
   private hoveredKey: string | null = null;
-  private hovered: SVGElement[] = [];
-  private hoveredParents: SVGElement[] = [];
+  private hovered: Element[] = [];
+  private hoveredParents: Element[] = [];
   private chips: Record<string, HTMLButtonElement> = {};
   private modeButtons: { circular: HTMLButtonElement; linear: HTMLButtonElement };
   private sliders: { rotate: HTMLInputElement; zoom: HTMLInputElement; label: HTMLInputElement };
@@ -569,9 +576,10 @@ export class MapView {
       this.svg = null;
       return;
     }
-    const svg = linear ? this.buildLinear(d) : this.buildCircular(d);
+    const cutGroupButtons = new Map<string, HTMLButtonElement>();
+    const svg = linear ? this.buildLinear(d, cutGroupButtons) : this.buildCircular(d);
     this.svg = svg;
-    this.svgHost.replaceChildren(svg);
+    this.svgHost.replaceChildren(svg, ...cutGroupButtons.values());
     // Zoom enlarges the drawing inside the scrollable area.
     this.svgHost.style.width = linear ? "" : `${o.mapZoom * 100}%`;
     this.svgHost.style.height = linear ? "" : `${o.mapZoom * 100}%`;
@@ -904,7 +912,7 @@ export class MapView {
 
   // ---------- linear ----------
 
-  private buildLinear(d: SeqData): SVGSVGElement {
+  private buildLinear(d: SeqData, cutGroupButtons: Map<string, HTMLButtonElement>): SVGSVGElement {
     const o = this.ctx.options;
     const n = d.sequence.length;
     const styles = featureStyles(d);
@@ -946,9 +954,20 @@ export class MapView {
     // Keep the cut ticks next to the backbone and pack primer arrows by their binding
     // spans. Label rows are independent of the height or width of those marks.
     const cuts = o.cutsites ? cutSites(d, o) : [];
-    const cutLayout = layoutLinearLabels(cuts.map(c =>
-      label(c.enzyme, X(c.cut), { kind: "cutsite", id: c.id, unique: c.cuts === 1, title: cutTitle(c), from: 0 })
-    ), width, step);
+    const cutGroups = groupLinearCutSites(cuts, scale);
+    const cutLabels = cutGroups.map((sites): LinearLabel<LinearMapLabel | LinearCutGroup> => {
+      const first = sites[0];
+      if (sites.length === 1) return label(first.enzyme, X(first.cut), {
+        kind: "cutsite", id: first.id, unique: first.cuts === 1, title: cutTitle(first), from: 0
+      });
+      const text = `${fmt(sites.length)} sites`;
+      return {
+        item: { kind: "cut-group", id: first.id, text, sites },
+        x: X((first.cut + sites[sites.length - 1].cut) / 2),
+        width: textWidth(text, cutFont) + 10
+      };
+    });
+    const cutLayout = layoutLinearLabels(cutLabels, width, step);
     const cutSpace = cuts.length ? cutLayout.height + 6 : 0;
     const primers = o.primers ? d.primers : [];
     const primerLanes = assignLanes(primers.map(p => ({ item: p, start: p.start, end: p.end + 1 })), n, 1.5 / scale);
@@ -1047,28 +1066,45 @@ export class MapView {
     const regionLayer = s("g");
     const leaders = s("g", { class: "sv-map-leader sv-map-linear-leaders", "pointer-events": "none" });
     const names = s("g", { class: "sv-map-linear-names", "font-size": labelPx, "dominant-baseline": "central" });
-    const drawNames = (placed: PlacedLinearLabel<LinearMapLabel>[], origin: number, sign: 1 | -1) => {
+    const drawNames = (placed: PlacedLinearLabel<LinearMapLabel | LinearCutGroup>[], origin: number, sign: 1 | -1) => {
       for (const { item, left, x, width, dir, stem, distance, bend } of placed) {
-        const { kind, region, id, text, textWidth, title, color, from } = item;
-        const type = region !== undefined ? "region" : kind;
-        const key = `${kind}:${id}${region === undefined ? "" : `:region:${region}`}`;
+        const { kind, id, text } = item;
+        const group = kind === "cut-group";
+        const region = group ? undefined : item.region;
+        const type = group ? "cutsite" : region !== undefined ? "region" : kind;
         const y = origin + sign * distance;
-        const style = color ? `--lc:${color}` : undefined;
-        const points = [[x, origin + from]];
+        const style = !group && item.color ? `--lc:${item.color}` : undefined;
+        const points = [[x, origin + (group ? 0 : item.from)]];
         if (bend) points.push([x, origin + sign * bend.from], [stem, origin + sign * bend.to]);
         if (dir) points.push([stem, y], [left + (dir < 0 ? width : 0) - 2 * dir, y]);
         else points.push([stem, y - sign * (step / 2 - 1.5)]);
-        const leader = s("polyline", { points: points.map(p => p.map(f1).join(",")).join(" "), class: `sv-map-leader-${type}`, style, "data-id": id, "data-region": region });
+        const leader = s("polyline", { points: points.map(p => p.map(f1).join(",")).join(" "), class: `sv-map-leader-${type}`, style, "data-id": id, "data-region": region, "data-cut-group": group ? id : undefined });
         leaders.appendChild(leader);
+        if (group) {
+          const height = step - 4;
+          const button = h("button", {
+            type: "button", class: "sv-map-cut-group", "data-cut-group": id, "aria-haspopup": "dialog",
+            "aria-label": `Show ${fmt(item.sites.length)} cut sites`,
+            style: { left: `${left}px`, top: `${y - height / 2}px`, width: `${width}px`, height: `${height}px`, fontSize: `${labelPx * CUT_SCALE}px` },
+            onclick: () => this.openCutGroup(item.sites, button)
+          }, text);
+          cutGroupButtons.set(id, button);
+          for (const site of item.sites) {
+            this.addShape(`cutsite:${site.id}`, leader);
+            this.addShape(`cutsite:${site.id}`, button);
+          }
+          continue;
+        }
+        const key = `${kind}:${id}${region === undefined ? "" : `:region:${region}`}`;
         this.addShape(key, leader);
 
-        const chip = kind === "feature" && region === undefined ? labelChip(item, left, y, textWidth, labelPx, 1) : null;
+        const chip = kind === "feature" && region === undefined ? labelChip(item, left, y, item.textWidth, labelPx, 1) : null;
         const mark = chip ?? (region !== undefined ? labelGlyph(item, left, y, swatch, 1) : null);
         if (mark) {
           names.appendChild(mark);
           this.addShape(key, mark);
         }
-        const label = s("text", { x: f1(left + (chip ? cp : mark ? swatchOffset : 0)), y: f1(y), class: labelClass(item), style, "data-kind": kind, "data-id": id, "data-region": region }, text, s("title", null, title));
+        const label = s("text", { x: f1(left + (chip ? cp : mark ? swatchOffset : 0)), y: f1(y), class: labelClass(item), style, "data-kind": kind, "data-id": id, "data-region": region }, text, s("title", null, item.title));
         names.appendChild(label);
         this.addShape(key, label);
       }
@@ -1172,13 +1208,23 @@ export class MapView {
 
     const cutLayer = s("g", { class: "sv-map-cut" });
     const cutOrigin = baseY - 6;
-    for (const c of cuts) {
-      const x = f1(X(c.cut));
-      const tick = s("line", { x1: x, x2: x, y1: cutOrigin, y2: baseY, class: c.cuts === 1 ? "sv-map-unique" : undefined, "data-kind": "cutsite", "data-id": c.id }, s("title", null, cutTitle(c)));
-      cutLayer.appendChild(tick);
-      this.addShape(`cutsite:${c.id}`, tick);
-    }
     drawNames(cutLayout.labels, cutOrigin, -1);
+    for (const sites of cutGroups) {
+      const group = sites.length > 1 ? sites[0].id : undefined;
+      const open = group ? (e: MouseEvent) => {
+        e.preventDefault();
+        this.openCutGroup(sites, cutGroupButtons.get(group)!);
+      } : undefined;
+      for (const c of sites) {
+        const x = f1(X(c.cut));
+        const tick = s("line", {
+          x1: x, x2: x, y1: cutOrigin, y2: baseY, class: c.cuts === 1 ? "sv-map-unique" : undefined,
+          "data-kind": group ? undefined : "cutsite", "data-id": c.id, "data-cut-group": group, onclick: open, oncontextmenu: open
+        }, s("title", null, cutTitle(c)));
+        cutLayer.appendChild(tick);
+        this.addShape(`cutsite:${c.id}`, tick);
+      }
+    }
     root.appendChild(cutLayer);
 
     const svg = s("svg", { viewBox: `0 0 ${f1(width)} ${f1(height)}`, width: f1(width), height: f1(height), class: "sv-map-svgel", role: "img", "aria-label": `Linear map of ${d.name}`, "font-family": sans }, root);
@@ -1186,7 +1232,30 @@ export class MapView {
     return svg;
   }
 
-  private addShape(key: string, el: SVGElement) {
+  private openCutGroup(sites: CutSite[], button: HTMLButtonElement) {
+    button.focus({ preventScroll: true });
+    const dlg = this.ctx.openDialog({ title: `${fmt(sites.length)} cut sites`, width: 360 });
+    const rows = sites.map(site => {
+      const hit = { kind: "cutsite", id: site.id } as const;
+      return h("button", {
+        type: "button", class: "sv-btn sv-btn-quiet sv-map-cut-site-choice", "data-site": site.id,
+        onclick: (e: MouseEvent) => {
+          if (isPickClick(e)) pickSite(this.ctx, site.id, "map");
+          else this.selectAnnotation(hit);
+          dlg.close();
+        },
+        oncontextmenu: (e: MouseEvent) => {
+          e.preventDefault();
+          const target = menuTargetAt(this.ctx, hit, null, f => this.selectAnnotation(f), "map");
+          dlg.close();
+          if (target) this.ctx.contextMenu(target, { x: e.clientX, y: e.clientY }, true);
+        }
+      }, site.enzyme, h("span", { class: "sv-mono sv-dim" }, site.cut === 0 ? "Before base 1" : `After base ${fmt(site.cut)}`));
+    });
+    dlg.body.append(h("div", { class: "sv-map-cut-site-choices" }, rows));
+  }
+
+  private addShape(key: string, el: Element) {
     const list = this.shapes.get(key);
     if (list) list.push(el);
     else this.shapes.set(key, [el]);
@@ -1214,6 +1283,7 @@ export class MapView {
       for (const [key, els] of this.shapes) {
         if (!key.startsWith("cutsite:") || key === `${focus?.kind}:${focus?.id}` || !picked.includes(enzymeOf(key.slice(8)))) continue;
         for (const el of els) {
+          if (el.classList.contains("sv-focused") || el.classList.contains("sv-related")) continue;
           el.classList.add("sv-related");
           this.focused.push(el);
         }
@@ -1406,7 +1476,7 @@ export class MapView {
       const on = e.target as Element;
       pressed = null;
       // The rename field is a text field like any other.
-      if (on.closest(".sv-map-name-edit")) return;
+      if (on.closest(".sv-map-name-edit, [data-cut-group]")) return;
       // Any other press finishes renaming, also one whose default the map prevents below.
       this.renaming?.input.blur();
       this.hoverRegion(null);
@@ -1493,7 +1563,7 @@ export class MapView {
     });
     this.svgHost.addEventListener("contextmenu", e => {
       const on = e.target as Element;
-      if (on.closest(".sv-map-name-edit")) return;
+      if (on.closest(".sv-map-name-edit, [data-cut-group]")) return;
       e.preventDefault();
       const el = on.closest("[data-kind]");
       const hit = el ? hitOf(el) : null;

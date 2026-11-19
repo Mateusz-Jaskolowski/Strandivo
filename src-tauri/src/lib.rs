@@ -306,7 +306,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let export_gb = MenuItemBuilder::with_id("export-genbank", "Export GenBank…").build(app)?;
     let export_fa = MenuItemBuilder::with_id("export-fasta", "Export FASTA…").build(app)?;
     let add_reads = MenuItemBuilder::with_id("add-reads", "Align Sequencing Reads…")
-        .accelerator("CmdOrCtrl+Shift+R")
+        .accelerator("CmdOrCtrl+Shift+A")
         .build(app)?;
     let show_map = MenuItemBuilder::with_id("show-map", "Map").accelerator("CmdOrCtrl+1").build(app)?;
     let show_sequence = MenuItemBuilder::with_id("show-sequence", "Sequence")
@@ -340,7 +340,12 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let reverse_complement = MenuItemBuilder::with_id("reverse-complement", "Reverse Complement").build(app)?;
     let set_origin = MenuItemBuilder::with_id("set-origin", "Set Origin at Cursor").build(app)?;
     let add_feature = MenuItemBuilder::with_id("add-feature", "Add Feature from Selection").build(app)?;
-    let add_primer = MenuItemBuilder::with_id("add-primer", "Add Primer from Selection").build(app)?;
+    let add_primer = MenuItemBuilder::with_id("add-primer", "Add Forward Primer…")
+        .accelerator("CmdOrCtrl+R")
+        .build(app)?;
+    let add_reverse_primer = MenuItemBuilder::with_id("add-reverse-primer", "Add Reverse Primer…")
+        .accelerator("CmdOrCtrl+Shift+R")
+        .build(app)?;
     let detect_features_item = MenuItemBuilder::with_id("detect-features", "Detect Features…").build(app)?;
     let digest = MenuItemBuilder::with_id("digest", "Digest…").build(app)?;
     let simulate_cloning = MenuItemBuilder::with_id("simulate-cloning", "Simulate Cloning…").build(app)?;
@@ -414,6 +419,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let tools = SubmenuBuilder::new(app, "Tools")
         .item(&add_feature)
         .item(&add_primer)
+        .item(&add_reverse_primer)
         .item(&detect_features_item)
         .separator()
         .item(&digest)

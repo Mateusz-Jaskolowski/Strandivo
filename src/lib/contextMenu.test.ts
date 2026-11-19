@@ -122,9 +122,12 @@ test("primers: the other places they show, and a PCR product", () => {
 });
 
 test("primers: flipping only without a tail, and whether it is in the library", () => {
+  assert.equal(labels({ kind: "primer", id: "plain" })[0], "Edit primer…");
   assert.ok(labels({ kind: "primer", id: "plain" }).includes("Make it a reverse primer"));
   assert.ok(!labels({ kind: "primer", id: "tailed" }).some(l => l.startsWith("Make it")));
-  const saved = menuFor({ kind: "primer", id: "plain" }, context({ inLibrary: () => true })).find(e => e !== "separator" && "action" in e && e.action === "save-to-library");
+  let seenName: string | undefined;
+  const saved = menuFor({ kind: "primer", id: "plain" }, context({ inLibrary: (_b, n) => { seenName = n; return true; } })).find(e => e !== "separator" && "action" in e && e.action === "save-to-library");
+  assert.equal(seenName, "F");
   assert.deepEqual(saved, { action: "save-to-library", label: "In the lab library", enabled: false });
   assert.equal(labels({ kind: "primer", id: "plain" }).at(-1), "Delete primer");
   // Colours without red, which marks a primer's changes, and no free picker.

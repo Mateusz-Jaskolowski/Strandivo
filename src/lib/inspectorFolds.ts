@@ -19,6 +19,7 @@ export type InspectorFold =
   | "sequencing"
   | "binding"
   | "checks"
+  | "primer-pairs"
   | "frame-translation"
   | "locations";
 
@@ -38,6 +39,7 @@ const KNOWN: ReadonlySet<string> = new Set<InspectorFold>([
   "sequencing",
   "binding",
   "checks",
+  "primer-pairs",
   "frame-translation",
   "locations"
 ]);

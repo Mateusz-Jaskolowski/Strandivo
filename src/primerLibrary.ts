@@ -6,7 +6,7 @@
 // copies for backup and for sharing with the lab.
 
 import { isDesktop } from "./platform.ts";
-import { newEntries, type LibraryEntry, type LibraryPrimer } from "./lib/library.ts";
+import { newEntries, parseLibraryJson, type LibraryEntry, type LibraryPrimer } from "./lib/library.ts";
 import { newId } from "./lib/seqdata.ts";
 
 const KEY = "strandivo.primerLibrary";
@@ -20,17 +20,7 @@ function readRaw(): string {
   }
 }
 
-function parse(raw: string): LibraryPrimer[] {
-  try {
-    const list = JSON.parse(raw);
-    if (!Array.isArray(list)) return [];
-    return list
-      .filter(p => p && typeof p.name === "string" && typeof p.bases === "string")
-      .map(p => ({ id: String(p.id || newId("lib")), name: p.name, bases: p.bases.toUpperCase(), notes: typeof p.notes === "string" ? p.notes : "" }));
-  } catch {
-    return [];
-  }
-}
+const parse = (raw: string): LibraryPrimer[] => parseLibraryJson(raw, () => newId("lib"));
 
 export class PrimerLibrary {
   private raw = readRaw();

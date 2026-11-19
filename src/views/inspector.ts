@@ -8,20 +8,23 @@ import { track } from "../usage.ts";
 import { h, toast } from "../ui/dom.ts";
 import { iconSvg, primerIcon } from "../ui/icons.ts";
 import { primerLibrary } from "../primerLibrary.ts";
-import { cutSiteById, cutSites, featureStyles, isCds, orfFeature, orfs, primerAlignment, protein } from "../doc/analysis.ts";
+import { cutSiteById, cutSites, documentPrimerPairs, featureStyles, isCds, orfFeature, orfs, primerAlignment, primerColors, protein } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { overhangText, type CutSite } from "../lib/enzymes.ts";
 import { PRIMER_COLOURS } from "../lib/contextMenu.ts";
-import { shortTail } from "../lib/primerTable.ts";
+import { libraryMatch } from "../lib/library.ts";
+import { overTmLimit, TM_APART } from "../lib/primerPairs.ts";
 import { frameLabel, type Orf } from "../lib/orfs.ts";
 import { gcPercent } from "../lib/labinfo.ts";
-import { changesText, findBindingSites, placeEdited, primerReport, selectionTmText, tmLabel, type Placement } from "../lib/primers.ts";
+import { changesText, primerReport, selectionTmText, tmLabel } from "../lib/primers.ts";
 import { translateCodon } from "../lib/genetics.ts";
 import { carryRegions, isClipped, proteinRegionTargets, regionColor, regionFeatureNotes, regionFeatureType, regionRange, regionSpans, regionsOf, regionTree, withRegions, type ProteinRegion } from "../lib/regions.ts";
 import type { VariableDesign } from "../lib/types.ts";
 import { designOf, formatDesign, parseDesign, VARIABLE_QUALIFIER, versionsFromText } from "../lib/variable.ts";
 import { matchChoice } from "./versionMatchChoice.ts";
 import { openVersionsDialog } from "./versionsDialog.ts";
+import { openPcrDialog } from "./primerDialogs.ts";
+import { openPrimerDialog } from "./primerDialog.ts";
 
 import { noteText, otherQualifiers, withNote } from "../lib/featureNotes.ts";
 import {
@@ -98,6 +101,7 @@ export class Inspector {
   private lastFeature = "";
   private collapsedRegionGroups = new Map<string, Set<string>>();
   private updateRegionList = () => {};
+  private closePopover = () => {};
   private resize: ResizeObserver;
 
   private offLibrary: () => void;
@@ -128,6 +132,7 @@ export class Inspector {
 
   /** Stops listening to the app's primer library (the document's tab closed). */
   dispose() {
+    this.closePopover();
     this.offLibrary();
     this.resize.disconnect();
   }
@@ -154,6 +159,7 @@ export class Inspector {
     // Don't rebuild (and lose focus in a field) when nothing relevant changed.
     if (key === this.lastKey && this.el.childElementCount) return;
     this.lastKey = key;
+    this.closePopover();
     this.updateRegionList = () => {};
     const d = this.ctx.store.data;
     let content: Node[];
@@ -216,12 +222,12 @@ export class Inspector {
   private foldSection(
     id: InspectorFold,
     title: string,
-    opts: { count?: number; actions?: (Node | null | false)[]; keep?: (Node | null | false)[]; defaultFolded?: boolean; summary?: string },
+    opts: { count?: number; actions?: (Node | null | false)[]; keep?: (Node | null | false)[]; defaultFolded?: boolean; summary?: string; badge?: string },
     ...children: (Node | null | false)[]
   ) {
     const open = !sectionFolded(id, opts.defaultFolded);
     const actions = (opts.actions ?? []).filter((a): a is Node => !!a);
-    const summary = opts.count === undefined ? !open && opts.summary : fmt(opts.count);
+    const summary = opts.badge ?? (opts.count === undefined ? (!open && opts.summary) : fmt(opts.count));
     return h(
       "section",
       { class: `sv-insp-section${open ? "" : " sv-folded"}`, "data-section": id },
@@ -802,51 +808,33 @@ export class Inspector {
     const al = primerAlignment(d, p);
     const bind = al.binding.length;
     const report = primerReport(p.bases, al, d.sequence, d.circular, null, p);
+    const palette = primerColors(p);
+    const tail = report.tail;
+    const changed = !!report.arms;
+    const warnings = report.checks.filter(c => c.level === "warn");
+    const okChecks = report.checks.filter(c => c.level === "ok");
 
-    const name = h("input", { class: "sv-insp-name", value: p.name, "aria-label": "Primer name", spellcheck: "false" }) as HTMLInputElement;
-    name.addEventListener("change", () => {
-      const v = name.value.trim();
-      if (v && v !== p.name) this.updatePrimer(p.id, { name: v }, "Rename primer");
-    });
-    name.addEventListener("keydown", e => e.key === "Enter" && name.blur());
-
-    // The sequence applies as it is typed (one undo step while typing goes on), so Tm,
-    // checks and the site follow; a primer that no longer binds once keeps its site.
-    const seq = h("textarea", { class: "sv-code sv-code-edit", rows: "2", spellcheck: "false", "aria-label": "Primer sequence 5′ to 3′", "data-keep": `primer-seq:${p.id}` }) as HTMLTextAreaElement;
-    seq.value = p.bases;
-    let timer = 0;
-    const clean = () => seq.value.replace(/[^A-Za-z]/g, "").toUpperCase();
-    // Where the edited primer lands: `placeEdited` keeps the site while the new bases still
-    // lie along it, so typing a long deletion doesn't shrink the site onto the 3′ arm.
-    // null means it wasn't placed and the site stayed; undefined means nothing was typed.
-    const applyBases = (): Placement | null | undefined => {
-      clearTimeout(timer);
-      delete seq.dataset.dirty;
-      const bases = clean();
-      const dd = this.ctx.store.data;
-      const cur = dd.primers.find(x => x.id === p.id);
-      if (!cur || !bases || bases === cur.bases) return undefined;
-      const place = placeEdited(cur, bases, dd.sequence, dd.circular);
-      const patch = place ? { bases, start: place.start, end: place.end, strand: place.strand } : { bases };
-      this.updatePrimer(p.id, patch, "Edit primer", `primer-seq:${p.id}`);
-      return place;
+    // Inline colour badge button + compact popover (reclaims the 8-swatch row).
+    const colorWrap = h("div", { class: "sv-color-wrap" });
+    let popover: HTMLElement | null = null;
+    const closePop = () => {
+      if (!popover) return;
+      popover.remove();
+      popover = null;
+      colorBtn.setAttribute("aria-expanded", "false");
+      window.removeEventListener("pointerdown", onOutside, true);
+      window.removeEventListener("keydown", onPopKey, true);
     };
-    seq.addEventListener("input", () => {
-      seq.dataset.dirty = "1";
-      clearTimeout(timer);
-      timer = window.setTimeout(applyBases, 200);
-    });
-    seq.addEventListener(FLUSH, applyBases);
-    seq.addEventListener("change", () => {
-      // Only a primer that couldn't be placed is worth a word: a site that was kept or
-      // moved is what the user meant.
-      if (applyBases() !== null) return;
-      const dd = this.ctx.store.data;
-      const sites = findBindingSites(clean(), dd.sequence, dd.circular);
-      toast(sites.length ? `This primer now binds ${sites.length} places; its site wasn't moved.` : "This primer no longer binds the sequence; its site wasn't moved.", "info", 4500);
-    });
-
-    // Colours: the palette without red, which marks changes, and the default.
+    const onOutside = (e: PointerEvent) => {
+      if (popover && !colorWrap.contains(e.target as Node)) closePop();
+    };
+    const onPopKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closePop();
+        colorBtn.focus();
+      }
+    };
     const swatch = (label: string, color: string | undefined, cls = "") =>
       h("button", {
         type: "button",
@@ -855,108 +843,347 @@ export class Inspector {
         "aria-label": label,
         title: label,
         "aria-pressed": String((p.color ?? "").toUpperCase() === (color ?? "").toUpperCase()),
-        onclick: () => this.updatePrimer(p.id, { color }, "Change colour")
+        onclick: () => {
+          closePop();
+          this.updatePrimer(p.id, { color }, "Change colour");
+        }
       });
-    const swatches = h("div", { class: "sv-swatches", role: "group", "aria-label": "Primer colour" }, swatch("Default colour", undefined, " sv-swatch-default"), PRIMER_COLOURS.map(c => swatch(c.name, c.hex)));
-    const stat = (label: string, value: string) => h("div", { class: "sv-stat" }, h("div", { class: "sv-stat-label" }, label), h("div", { class: "sv-stat-value" }, value));
-    const tail = report.tail;
-    const changed = !!report.arms;
-    // The primer over the template strand it pairs with (3′→5′ under it), from the
-    // alignment: `-` where one side has no base, changes in red.
-    const primerLine: Node[] = [];
-    const barLine: Node[] = [];
-    const templateLine: Node[] = [];
-    const put = (line: Node[], text: string, cls?: string) => line.push(cls ? h("span", { class: cls }, text) : document.createTextNode(text));
+    const colorBtn = h(
+      "button",
+      {
+        type: "button",
+        class: "sv-color-badge",
+        title: "Change primer colour",
+        "aria-label": "Change primer colour",
+        "aria-expanded": "false",
+        onclick: () => {
+          if (popover) {
+            closePop();
+            return;
+          }
+          popover = h(
+            "div",
+            { class: "sv-color-popover", role: "group", "aria-label": "Primer colour" },
+            swatch("Default colour", undefined, " sv-swatch-default"),
+            ...PRIMER_COLOURS.map(c => swatch(c.name, c.hex))
+          );
+          colorWrap.appendChild(popover);
+          colorBtn.setAttribute("aria-expanded", "true");
+          this.closePopover = closePop;
+          window.addEventListener("pointerdown", onOutside, true);
+          window.addEventListener("keydown", onPopKey, true);
+        }
+      },
+      primerIcon(p.strand, palette.color)
+    ) as HTMLButtonElement;
+    colorWrap.appendChild(colorBtn);
+
+    const name = h("input", { class: "sv-insp-name", value: p.name, "aria-label": "Primer name", spellcheck: "false" }) as HTMLInputElement;
+    name.addEventListener("change", () => {
+      const v = name.value.trim();
+      if (v && v !== p.name) this.updatePrimer(p.id, { name: v }, "Rename primer");
+      else name.value = p.name;
+    });
+    name.addEventListener("keydown", e => {
+      if (e.key === "Enter") name.blur();
+      else if (e.key === "Escape") {
+        name.value = p.name;
+        name.blur();
+      }
+    });
+
+    // Read-only styled sequence display (dimmed 5′ tail, crisp binding bases, red changes).
+    const seqNodes: Node[] = [];
+    for (const op of al.ops) {
+      if (op.kind === "deletion") continue;
+      const ch = p.bases[op.i] ?? "";
+      if (op.kind === "tail") seqNodes.push(h("span", { class: "sv-primer-tail" }, ch.toLowerCase()));
+      else if (op.kind === "match") seqNodes.push(document.createTextNode(ch.toUpperCase()));
+      else seqNodes.push(h("span", { class: "sv-text-bad" }, ch.toUpperCase()));
+    }
+    const seqBox = h(
+      "div",
+      { class: "sv-primer-seq-wrap" },
+      h(
+        "div",
+        {
+          class: "sv-code sv-primer-seq-box",
+          title: "Double-click to edit primer",
+          ondblclick: () => openPrimerDialog(this.ctx, { mode: "edit", primerId: p.id })
+        },
+        h("span", { class: "sv-dim" }, "5′ "),
+        ...seqNodes,
+        h("span", { class: "sv-dim" }, " 3′")
+      ),
+      h(
+        "button",
+        {
+          type: "button",
+          class: "sv-link sv-primer-copy",
+          title: "Copy primer sequence (5′→3′)",
+          onclick: () => this.actions.copy(p.bases, p.name)
+        },
+        iconSvg("copy", 13),
+        "Copy"
+      )
+    );
+
+    const tmText = (t: number | null) => (t === null ? "—" : `${t.toFixed(1)} °C`);
+    const arrow = (strand: 1 | -1) => (strand === 1 ? "→" : "←");
+
+    // Sites fact: primary site count, per-site breakdown when multiple, plus partial 3′ hits.
+    const siteChildren: Node[] = [
+      h("span", { class: report.sites !== 1 ? "sv-text-warn" : undefined }, report.sites === 1 ? "1 site" : `${report.sites} sites`)
+    ];
+    if (report.partialSites.length) {
+      siteChildren.push(
+        h("span", { class: "sv-text-warn" }, ` · ${report.partialSites.length} partial`)
+      );
+    }
+    if (report.siteList.length > 1) {
+      siteChildren.push(
+        h(
+          "div",
+          { class: "sv-primer-sites" },
+          ...report.siteList.slice(0, 4).map(s =>
+            h(
+              "button",
+              {
+                type: "button",
+                class: "sv-link sv-mono sv-primer-site-btn",
+                title: "Select this binding site",
+                onclick: () => this.ctx.store.selectRange({ start: s.start, end: s.end }, { kind: "primer", id: p.id }, "inspector")
+              },
+              `${loc(s)} ${arrow(s.strand)} · ${s.length} bp${s.tm !== null ? ` · ${s.tm.toFixed(1)} °C` : ""}`
+            )
+          ),
+          report.siteList.length > 4 ? h("div", { class: "sv-dim sv-small" }, `+${report.siteList.length - 4} more`) : null
+        )
+      );
+    }
+    if (report.partialSites.length) {
+      siteChildren.push(
+        h(
+          "div",
+          { class: "sv-primer-sites" },
+          ...report.partialSites.slice(0, 3).map(s =>
+            h(
+              "button",
+              {
+                type: "button",
+                class: "sv-link sv-mono sv-primer-site-btn sv-text-warn",
+                title: "Inspect this partial 3′ match on the sequence",
+                onclick: () => this.ctx.store.selectRange({ start: s.start, end: s.end }, undefined, "inspector")
+              },
+              `${fmt(s.strand === 1 ? s.end + 1 : s.start + 1)} ${arrow(s.strand)} · ${s.length} bp · ${s.tm.toFixed(1)} °C`
+            )
+          ),
+          report.partialSites.length > 3 ? h("div", { class: "sv-dim sv-small" }, `+${report.partialSites.length - 3} more`) : null
+        )
+      );
+    }
+
+    const factRows: [string, Node | string][] = changed
+      ? [
+          ["3′ arm Tm", tmText(report.arms!.tm3)],
+          ["5′ arm Tm", tmText(report.arms!.tm5)],
+          ["Full Tm", tmText(report.tmFull)],
+          ["GC", `${report.gc.toFixed(0)}%`],
+          ["Length", `${report.length} nt · ${changesText(report)}`],
+          ["Sites", h("div", null, ...siteChildren)]
+        ]
+      : [
+          ["Binding Tm", tmText(report.tm)],
+          ...(tail ? [["Full Tm", tmText(report.tmFull)] as [string, string]] : []),
+          [tail ? "GC (binding)" : "GC", `${report.gc.toFixed(0)}%`],
+          ["Length", tail ? `${report.length} nt · ${bind} bind` : `${report.length} nt`],
+          ["Sites", h("div", null, ...siteChildren)]
+        ];
+
+    // Wrapped alignment so long primers never clip inside the 300 px inspector.
+    type AlignCol = { p: string; pCls?: string; bar: string; t: string; tCls?: string };
+    const cols: AlignCol[] = [];
+    for (const ch of tail) cols.push({ p: ch.toLowerCase(), pCls: "sv-dim", bar: " ", t: " " });
     for (const op of al.ops) {
       if (op.kind === "tail") continue;
       const pb = op.kind === "deletion" ? "-" : p.bases[op.i].toUpperCase();
       const tb = op.kind === "insertion" ? "-" : (p.strand === 1 ? complement(d.sequence[op.pos]) : d.sequence[op.pos]).toUpperCase();
       const bad = op.kind === "match" ? undefined : "sv-text-bad";
-      put(primerLine, pb, bad);
-      put(barLine, op.kind === "match" ? "|" : " ", "sv-text-ok");
-      put(templateLine, tb, op.kind === "deletion" ? bad : undefined);
+      cols.push({ p: pb, pCls: bad, bar: op.kind === "match" ? "|" : " ", t: tb, tCls: op.kind === "deletion" ? bad : undefined });
     }
-    // A long tail doesn't pair, so only its ends are shown.
-    const tailShown = shortTail(tail.toLowerCase());
-    const pad = " ".repeat(tailShown.length);
-    const alignment = h(
-      "pre",
-      { class: "sv-align" },
-      h("span", { class: "sv-dim" }, "5′ "),
-      h("span", { class: "sv-dim", title: tailShown !== tail.toLowerCase() ? tail.toLowerCase() : null }, tailShown),
-      ...primerLine,
-      h("span", { class: "sv-dim" }, " 3′"),
-      "\n   ",
-      pad,
-      ...barLine,
-      "\n",
-      h("span", { class: "sv-dim" }, "3′ "),
-      pad,
-      ...templateLine,
-      h("span", { class: "sv-dim" }, " 5′")
-    );
-    const tmText = (t: number | null) => (t === null ? "—" : `${t.toFixed(1)} °C`);
-    const stats = changed
-      ? [
-          stat("3′ arm Tm", tmText(report.arms!.tm3)),
-          stat("5′ arm Tm", tmText(report.arms!.tm5)),
-          stat("Length", `${report.length} nt · ${changesText(report).replace(/ bases? /, " ")}`),
-          stat("Full-length Tm", tmText(report.tmFull))
-        ]
-      : [
-          stat("Binding Tm", tmText(report.tm)),
-          stat(tail ? "Full-length Tm" : "GC", tail ? tmText(report.tmFull) : `${report.gc.toFixed(0)}%`),
-          stat("Length", tail ? `${report.length} nt · ${bind} bind` : `${report.length} nt`),
-          stat(tail ? "GC (binding)" : "Sites", tail ? `${report.gc.toFixed(0)}%` : String(report.sites))
-        ];
+    const WRAP = 26;
+    const chunks: Node[] = [];
+    for (let i = 0; i < cols.length; i += WRAP) {
+      const slice = cols.slice(i, i + WRAP);
+      const first = i === 0;
+      const last = i + WRAP >= cols.length;
+      const pNodes: Node[] = [h("span", { class: "sv-dim" }, first ? "5′ " : "   ")];
+      const bNodes: Node[] = [document.createTextNode("   ")];
+      const tNodes: Node[] = [h("span", { class: "sv-dim" }, first ? "3′ " : "   ")];
+      for (const col of slice) {
+        pNodes.push(col.pCls ? h("span", { class: col.pCls }, col.p) : document.createTextNode(col.p));
+        bNodes.push(col.bar === "|" ? h("span", { class: "sv-text-ok" }, "|") : document.createTextNode(" "));
+        tNodes.push(col.tCls ? h("span", { class: col.tCls }, col.t) : document.createTextNode(col.t));
+      }
+      if (last) {
+        pNodes.push(h("span", { class: "sv-dim" }, " 3′"));
+        tNodes.push(h("span", { class: "sv-dim" }, " 5′"));
+      }
+      chunks.push(h("pre", { class: "sv-align sv-align-chunk" }, ...pNodes, "\n", ...bNodes, "\n", ...tNodes));
+    }
+    const alignment = h("div", { class: "sv-align-wrapped" }, ...chunks);
+
+    // Compatible PCR pairs (shared cache in analysis.ts, keyed with `p:` prefix for openPcrDialog).
+    const pairs = documentPrimerPairs(d).filter(pair => pair.forward.id === p.id || pair.reverse.id === p.id);
+    const pairsBody: Node = pairs.length
+      ? h(
+          "div",
+          { class: "sv-list sv-list-flush" },
+          ...pairs.map(pair => {
+            const partner = pair.forward.id === p.id ? pair.reverse : pair.forward;
+            const apart = pair.tmApart;
+            const warnApart = overTmLimit(pair, TM_APART);
+            return h(
+              "button",
+              {
+                type: "button",
+                class: "sv-list-row sv-pair-row",
+                title: `Open PCR product for ${pair.forward.name} + ${pair.reverse.name}`,
+                onclick: () => openPcrDialog(this.ctx, { forward: `p:${pair.forward.id}`, reverse: `p:${pair.reverse.id}` })
+              },
+              h("span", { class: "sv-pair-partner" }, primerIcon(partner.strand, primerColors(partner).color), partner.name),
+              h(
+                "span",
+                { class: "sv-list-meta sv-mono" },
+                `${fmt(pair.length)} bp`,
+                apart !== null ? [" · ", h("span", { class: warnApart ? "sv-text-warn" : undefined }, `Δ${apart.toFixed(1)}°`)] : null
+              )
+            );
+          })
+        )
+      : h("p", { class: "sv-small sv-dim" }, "No facing primer on the opposite strand forms a PCR product.");
+
+    const lib = libraryMatch(primerLibrary.all, p.name, p.bases);
+    const saveTitle = lib.sameBases ? `Sequence is also in library as “${lib.sameBases.name}”` : undefined;
+    const checksBadge = warnings.length ? `${warnings.length} warn · ${okChecks.length} ok` : `${okChecks.length} ok`;
 
     return [
       h(
         "div",
         { class: "sv-insp-head" },
-        h("div", { class: "sv-insp-title" }, h("span", { class: "sv-insp-icon" }, primerIcon(p.strand)), name),
+        h("div", { class: "sv-insp-title" }, colorWrap, name),
         h("div", { class: "sv-dim sv-small" }, `${p.strand === 1 ? "Forward" : "Reverse"} primer · binds ${loc(p)}`),
-        seq,
-        swatches,
-        h("div", { class: "sv-stats" }, stats),
-        this.viewOther({ start: p.start, end: p.end })
+        this.viewOther({ start: p.start, end: p.end }),
+        warnings.length
+          ? h(
+              "div",
+              { class: "sv-insp-warns" },
+              ...warnings.map(w => h("div", { class: "sv-insp-warn-row" }, iconSvg("warn", 14), h("span", null, w.text)))
+            )
+          : null,
+        seqBox,
+        this.facts(factRows)
       ),
-      this.foldSection("binding", "Where it binds", {}, alignment),
+      this.foldSection("binding", "Where it binds", { defaultFolded: !tail && !changed }, alignment),
       this.foldSection(
         "checks",
         "Checks",
-        {},
+        { badge: checksBadge, defaultFolded: warnings.length === 0 },
         h(
           "ul",
           { class: "sv-checks" },
-          report.checks.map(c => h("li", { class: c.level === "ok" ? "sv-check-ok" : "sv-check-warn" }, iconSvg(c.level === "ok" ? "check" : "warn", 15), h("span", null, c.text)))
+          ...[...warnings, ...okChecks].map(c =>
+            h("li", { class: c.level === "ok" ? "sv-check-ok" : "sv-check-warn" }, iconSvg(c.level === "ok" ? "check" : "warn", 15), h("span", null, c.text))
+          )
         ),
         h("p", { class: "sv-small sv-dim" }, tmLabel())
       ),
+      this.foldSection("primer-pairs", "Pairs", { count: pairs.length, defaultFolded: pairs.length === 0 }, pairsBody),
+      this.primerNoteSection(p),
       h(
         "div",
         { class: "sv-insp-actions" },
-        // A primer made from a selection starts on the top strand; this turns it into the
-        // primer for the other strand over the same bases.
-        !tail &&
-          this.button(
-            p.strand === 1 ? "Make it a reverse primer" : "Make it a forward primer",
-            () => this.updatePrimer(p.id, { bases: reverseComplement(p.bases), strand: p.strand === 1 ? -1 : 1 }, "Flip primer strand"),
-            { wide: true }
-          ),
-        this.button("Copy sequence", () => this.actions.copy(p.bases, p.name), { icon: "copy" }),
-        primerLibrary.all.some(x => x.bases === p.bases.toUpperCase())
-          ? h("button", { type: "button", class: "sv-btn", disabled: true, title: "A primer with this sequence is in the lab library" }, iconSvg("check", 15), "In the library")
-          : this.button("Save to library", () => {
-              primerLibrary.add([{ name: p.name, bases: p.bases, notes: "", color: p.color }]);
-              toast(`Saved ${p.name} to the lab library.`, "success", 2500);
-            }),
-        this.button("Delete", () => {
-          this.ctx.store.apply({ ...d, primers: d.primers.filter(x => x.id !== p.id) }, "Delete primer", { range: { start: p.start, end: p.end } });
-          this.ctx.noteEdit(`Deleted ${p.name}.`);
-        }, { icon: "trash", danger: true })
+        this.button("Edit primer…", () => openPrimerDialog(this.ctx, { mode: "edit", primerId: p.id }), { primary: true, wide: true }),
+        this.button(
+          "PCR product…",
+          () => openPcrDialog(this.ctx, p.strand === 1 ? { forward: `p:${p.id}` } : { reverse: `p:${p.id}` }),
+          { icon: "pcr" }
+        ),
+        lib.exact
+          ? h("button", { type: "button", class: "sv-btn", disabled: true, title: "This primer is already in the lab library" }, iconSvg("check", 15), "In the library")
+          : h(
+              "button",
+              {
+                type: "button",
+                class: "sv-btn",
+                title: saveTitle,
+                onclick: () => {
+                  primerLibrary.add([{ name: p.name, bases: p.bases, notes: noteText(p.notes), color: p.color }]);
+                  toast(`Saved ${p.name} to the lab library.`, "success", 2500);
+                }
+              },
+              "Save to library"
+            ),
+        this.button(
+          "Delete",
+          () => {
+            this.ctx.store.apply({ ...d, primers: d.primers.filter(x => x.id !== p.id) }, "Delete primer", { range: { start: p.start, end: p.end } });
+            this.ctx.noteEdit(`Deleted ${p.name}.`);
+          },
+          { icon: "trash", danger: true }
+        )
       )
     ];
+  }
+
+  /** Editable primer note (mirrors `noteSections` for features, persisting into `SeqPrimer.notes`). */
+  private primerNoteSection(p: SeqPrimer): Node {
+    const keep = `primer-note:${p.id}`;
+    const note = h("textarea", { class: "sv-input sv-insp-note", rows: "2", placeholder: "Add a note", "aria-label": "Primer note", "data-keep": keep }) as HTMLTextAreaElement;
+    note.value = noteText(p.notes);
+    const fit = () => {
+      note.style.height = "auto";
+      note.style.height = `${note.scrollHeight + 2}px`;
+    };
+    requestAnimationFrame(fit);
+    let timer = 0;
+    const apply = (tidy: boolean) => {
+      clearTimeout(timer);
+      delete note.dataset.dirty;
+      const d = this.ctx.store.data;
+      const cur = d.primers.find(x => x.id === p.id);
+      if (!cur) return;
+      const notes = withNote(cur.notes, note.value, tidy);
+      if (notes !== cur.notes) this.ctx.store.apply({ ...d, primers: d.primers.map(x => (x.id === p.id ? { ...x, notes } : x)) }, "Edit note", undefined, keep);
+    };
+    note.addEventListener("input", () => {
+      note.dataset.dirty = "1";
+      fit();
+      clearTimeout(timer);
+      timer = window.setTimeout(() => apply(false), 300);
+    });
+    note.addEventListener("change", () => apply(true));
+    note.addEventListener("blur", () => {
+      if (!note.value.trim() && note.isConnected) this.schedule(true);
+    });
+    note.addEventListener(FLUSH, () => apply(false));
+    const editing = document.activeElement instanceof HTMLTextAreaElement && document.activeElement.dataset.keep === keep;
+    const add = h(
+      "button",
+      {
+        type: "button",
+        class: "sv-link sv-add-note",
+        onclick: () => {
+          setSectionFolded("note", false);
+          addSection.replaceWith(this.foldSection("note", "Note", {}, note));
+          fit();
+          note.focus();
+        }
+      },
+      "Add note"
+    );
+    const addSection = this.section(add);
+    return note.value.trim() || editing ? this.foldSection("note", "Note", {}, note) : addSection;
   }
 
   // ---------- cut site ----------

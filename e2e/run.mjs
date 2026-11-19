@@ -698,6 +698,13 @@ async function main() {
       return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
     check("Right-clicking selected bases offers forward and reverse primers", menu.includes("Add forward primer") && menu.includes("Add reverse primer"), menu.join(", "));
     await s.exec("window.__e2eMenu.find(e => e.label === 'Add reverse primer').run();");
+    check("Add reverse primer opens the primer dialog with the selection", await s.waitFor("document.querySelector('.sv-dialog .sv-pdlg-seq-input')?.value.length === 20", 5000));
+    const previewInside = await s.exec(`const box = document.querySelector('.sv-pdlg-preview')?.getBoundingClientRect();
+      const pr = document.querySelector('.sv-pdlg-preview .sv-ctx-primer')?.getBoundingClientRect();
+      return !!(box && pr && pr.top >= box.top - 2 && pr.bottom <= box.bottom + 2 && pr.left >= box.left - 2 && pr.right <= box.right + 2);`);
+    check("Primer dialog preview renders inside its preview box", previewInside);
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Add primer']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog') && window.__strandivo.store.data.primers.length >= 1", 5000);
     const added = await s.exec(`${doc} const p = s.data.primers.at(-1); return p && { start: p.start, end: p.end, strand: p.strand, rc: p.bases === [...s.data.sequence.slice(100, 120).toUpperCase()].reverse().map(c => ({ A: 'T', T: 'A', G: 'C', C: 'G' })[c]).join('') };`);
     check("Add reverse primer adds the bottom-strand primer over the selection", added && added.start === 100 && added.end === 119 && added.strand === -1 && added.rc, JSON.stringify(added));
     await s.exec(`${doc} s.undo(); delete window.__strandivoMenu;`);

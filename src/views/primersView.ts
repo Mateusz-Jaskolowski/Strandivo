@@ -9,16 +9,17 @@ import { h, toast } from "../ui/dom.ts";
 import { track } from "../usage.ts";
 import { iconSvg, primerIcon } from "../ui/icons.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
-import { featureStyles, primerAlignment, primerColors } from "../doc/analysis.ts";
+import { documentPrimerPairs, featureStyles, primerAlignment, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { primerReport, tmLabel, type PrimerReport } from "../lib/primers.ts";
 import { DEFAULT_SORT, matchesFilter, nextSort, parseSort, primerNote, shortTail, sortRows, type ExportRow, type PrimerRow, type Sort, type SortKey } from "../lib/primerTable.ts";
-import { overTmLimit, parseTmLimit, primerPairs, TM_APART, TM_APART_MAX, withinTmLimit, type PrimerPair } from "../lib/primerPairs.ts";
+import { overTmLimit, parseTmLimit, TM_APART, TM_APART_MAX, withinTmLimit, type PrimerPair } from "../lib/primerPairs.ts";
 import { extendPick, NO_PICKS, prunePicks, togglePick, type Picks } from "../lib/picks.ts";
 import { primerLibrary } from "../primerLibrary.ts";
 import { confirmDialog, showContextMenu } from "../platform.ts";
 import type { Range, SeqData, SeqPrimer } from "../lib/seqdata.ts";
 import { exportPrimerList, openAddBySequence, openDesignDialog, openLibraryPicker, openOrderDialog, openPcrDialog, where } from "./primerDialogs.ts";
+import { openPrimerDialog } from "./primerDialog.ts";
 import { openMutagenesisDialog } from "./mutagenesisDialog.ts";
 import { PrimerContextView } from "./primerContext.ts";
 
@@ -70,7 +71,6 @@ export class PrimersView {
   /** Set while picking clears the store's selection, so that change doesn't clear the picks. */
   private picking = false;
   private reportCache: { data: SeqData; map: Map<string, PrimerReport> } | null = null;
-  private pairCache: { data: SeqData; pairs: PrimerPair[] } | null = null;
   private foot = h("p", { class: "sv-small sv-dim sv-primers-foot" });
   private listNote = h("span", { class: "sv-pane-note sv-primers-note" });
   private filterBox: HTMLElement;
@@ -172,11 +172,10 @@ export class PrimersView {
         this.markSelected();
       }
     });
-    // Options change with Settings too (the Tm method). The document is the same, so both
-    // caches have to be dropped by hand or the table would keep the Tms of the old method.
+    // Options change with Settings too (the Tm method). The document is the same, so the
+    // report cache has to be dropped by hand (`documentPrimerPairs` invalidates on Tm settings).
     ctx.onOptions(() => {
       this.reportCache = null;
-      this.pairCache = null;
       this.invalidate();
     });
   }
@@ -253,7 +252,7 @@ export class PrimersView {
   }
 
   private saveToLibrary(list: SeqPrimer[]) {
-    const added = primerLibrary.add(list.map(p => ({ name: p.name, bases: p.bases, notes: "", color: p.color })));
+    const added = primerLibrary.add(list.map(p => ({ name: p.name, bases: p.bases, notes: primerNote(p), color: p.color })));
     if (added) toast(`Saved ${added === 1 ? "1 primer" : `${added} primers`} to the lab library.`, "success", 2500);
     else toast("Every one of them is in the lab library already.", "info", 2500);
   }
@@ -351,21 +350,11 @@ export class PrimersView {
   }
 
   /**
-   * The pairs this file's primers make, worked out once per document: the switch needs their
-   * number while the list shows, so without this they would be worked out on every render.
+   * The pairs this file's primers make, shared with the inspector via `analysis.ts` so both
+   * views reuse the same cache and invalidate together when Tm settings change.
    */
   private pairs(): PrimerPair[] {
-    const d = this.ctx.store.data;
-    if (this.pairCache?.data !== d) {
-      this.pairCache = { data: d, pairs: d.primers.length ? primerPairs(this.rows(), d.sequence, d.circular) : [] };
-    }
-    return this.pairCache.pairs;
-  }
-
-  /** Each primer with the Tm the list shows, which the pairs are worked out from. */
-  private rows(): { primer: SeqPrimer; tm: number | null }[] {
-    const reports = this.reports();
-    return this.ctx.store.data.primers.map(p => ({ primer: p, tm: reports.get(p.id)?.tm ?? null }));
+    return documentPrimerPairs(this.ctx.store.data);
   }
 
   private renderPairs(all: PrimerPair[]) {
@@ -479,7 +468,8 @@ export class PrimersView {
           "data-id": p.id,
           style: leftwards ? { right: `${100 - xEnd}%` } : { left: pct(p.start) },
           title: `${p.name} · ${fmtRange(p.start + 1, p.end + 1)}`,
-          onclick: () => this.select(p)
+          onclick: () => this.select(p),
+          ondblclick: () => openPrimerDialog(this.ctx, { mode: "edit", primerId: p.id })
         },
         primerIcon(p.strand, primerColors(p).color),
         p.name
@@ -551,6 +541,10 @@ export class PrimersView {
         {
           "data-id": p.id,
           onclick: (e: MouseEvent) => this.clickRow(e, p),
+          ondblclick: (e: MouseEvent) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+            openPrimerDialog(this.ctx, { mode: "edit", primerId: p.id });
+          },
           oncontextmenu: (e: MouseEvent) => {
             e.preventDefault();
             // Right-clicking one of several picked rows offers what the selection can do;

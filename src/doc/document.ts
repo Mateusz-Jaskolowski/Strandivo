@@ -10,7 +10,7 @@ import "./document.css";
 
 import { h, icon, toast, type ToastHandle } from "../ui/dom.ts";
 import { iconSvg, type IconName } from "../ui/icons.ts";
-import { choose, dialogGroup } from "../ui/modal.ts";
+import { choose, dialogGroup, dialogOpen } from "../ui/modal.ts";
 import {
   alertDialog,
   canDetectFeatures,
@@ -34,7 +34,7 @@ import { CHECK_EXTENSION, checkFileText, matchByName, type ReadCheck } from "../
 import { rememberedReads, rememberReads } from "../readChecks.ts";
 import { rememberedRotation, rememberRotation } from "../mapRotations.ts";
 import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
-import { basesIn, newId, rangeLength, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData, type SeqPrimer } from "../lib/seqdata.ts";
+import { basesIn, newId, rangeLength, reverseComplementRange, setOrigin, type Range, type SeqData } from "../lib/seqdata.ts";
 import { PRIMER_BASES } from "../lib/contextMenu.ts";
 import { gcPercent } from "../lib/labinfo.ts";
 import { enzymePreferences } from "../lib/enzymes.ts";
@@ -58,6 +58,7 @@ import { Outline } from "../views/outline.ts";
 import { Inspector, copyText } from "../views/inspector.ts";
 import { PrimersView } from "../views/primersView.ts";
 import { openDesignDialog } from "../views/primerDialogs.ts";
+import { openPrimerDialog } from "../views/primerDialog.ts";
 import { openCloningDialog } from "../views/cloningDialog.ts";
 import { openDetectDialog } from "../views/detectDialog.ts";
 import { proteinRegionFeatures, regionsOf, variableProteinFeatures } from "../lib/regions.ts";
@@ -405,7 +406,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       redoButton,
       sep(),
       toolButton("featureAdd", "Add feature for the selection", () => addFeature()),
-      toolButton("primerAdd", "Add primer for the selection", () => addPrimer()),
+      toolButton("primerAdd", "Add primer…", () => addPrimer()),
       toolButton("detect", "Detect common features…", () => openDetectDialog(ctx)),
       sep(),
       toolButton("gel", "Digest…", () => openDigestDialog(ctx)),
@@ -678,22 +679,14 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     if (name && name !== store.data.name) store.apply({ ...store.data, name }, "Rename");
   }
 
-  /** A primer from the selected bases: on the top strand, or the bottom one (`strand` -1). */
+  /** Opens the primer dialog for the current selection (if continuous and ≤ 120 bp) or empty. */
   function addPrimer(strand: 1 | -1 = 1) {
-    const { range } = store.selection;
+    if (dialogOpen()) return;
+    const { range, ranges } = store.selection;
     const d = store.data;
-    const len = range ? rangeLength(range, d.sequence.length) : 0;
-    if (!range || len < PRIMER_BASES.min || len > PRIMER_BASES.max) {
-      toast(`Select ${PRIMER_BASES.min}–${PRIMER_BASES.max} bases to create a primer.`, "info", 4500);
-      return;
-    }
-    const id = newId("p");
-    const name = uniqueName(`Primer ${d.primers.length + 1}`, d.primers.map(p => p.name));
-    const top = basesIn(d.sequence, range).toUpperCase();
-    const primer: SeqPrimer = { id, name, start: range.start, end: range.end, strand, bases: strand === 1 ? top : reverseComplement(top), notes: {}, raw: {} };
-    store.apply({ ...d, primers: [...d.primers, primer] }, "Add primer", { range, focus: { kind: "primer", id } });
-    track("primer_added", { how: "selection" });
-    focusInspectorName();
+    const len = !ranges && range ? rangeLength(range, d.sequence.length) : 0;
+    const picked = !ranges && range && len > 0 && len <= PRIMER_BASES.max ? range : null;
+    openPrimerDialog(ctx, { mode: "create", strand, range: picked });
   }
 
   /** Designs a pair for the region, to review before adding. */
@@ -1032,7 +1025,10 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         openDetectDialog(ctx);
         return true;
       case "add-primer":
-        addPrimer();
+        addPrimer(1);
+        return true;
+      case "add-reverse-primer":
+        addPrimer(-1);
         return true;
       case "digest":
         openDigestDialog(ctx);
@@ -1276,9 +1272,4 @@ function formatName(path: string): string {
   if (["gb", "gbk", "gbff", "genbank", "ape"].includes(ext)) return "GenBank";
   if (["fa", "fasta", "fas", "fna", "ffn"].includes(ext)) return "FASTA";
   return ext.toUpperCase() || "file";
-}
-
-function uniqueName(name: string, taken: string[]): string {
-  if (!taken.includes(name)) return name;
-  for (let i = 2; ; i++) if (!taken.includes(`${name} ${i}`)) return `${name} ${i}`;
 }

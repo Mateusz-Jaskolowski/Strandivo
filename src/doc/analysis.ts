@@ -8,8 +8,9 @@ import { extraKey, sourceEnzymes, rescanSites, scanSites, selectSites, type CutS
 import { amberSuppressed, codingPositions, translateCodon } from "../lib/genetics.ts";
 import { findOrfs, frameLabel, type Orf, type OrfOptions } from "../lib/orfs.ts";
 import { gcProfile } from "../lib/gc.ts";
-import { bindingTm, changesText } from "../lib/primers.ts";
+import { bindingTm, changesText, currentTmSettings } from "../lib/primers.ts";
 import { alignPrimer, type PrimerAlignment } from "../lib/primerAlign.ts";
+import { primerPairs, type PrimerPair } from "../lib/primerPairs.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { type SeqData, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
 
@@ -44,6 +45,23 @@ export function primerTitle(d: SeqData, p: SeqPrimer): string {
  */
 export function primerTm(d: SeqData, p: SeqPrimer): number | null {
   return bindingTm(primerAlignment(d, p));
+}
+
+const pairsCache = new WeakMap<SeqData, { tmKey: string; pairs: PrimerPair[] }>();
+
+/**
+ * Compatible forward/reverse primer pairs for `d`, cached per `SeqData` snapshot and
+ * invalidated automatically whenever Tm settings change. Shared by the Primers tab and Inspector.
+ */
+export function documentPrimerPairs(d: SeqData): PrimerPair[] {
+  const tmKey = JSON.stringify(currentTmSettings());
+  const cached = pairsCache.get(d);
+  if (cached && cached.tmKey === tmKey) return cached.pairs;
+  const pairs = d.primers.length
+    ? primerPairs(d.primers.map(primer => ({ primer, tm: primerTm(d, primer) })), d.sequence, d.circular)
+    : [];
+  pairsCache.set(d, { tmKey, pairs });
+  return pairs;
 }
 
 // ---------- colours ----------

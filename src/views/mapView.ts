@@ -27,6 +27,7 @@ import { layoutName, LENGTH_SIZE, type NameLines } from "../lib/mapName.ts";
 import { groupLinearCutSites, layoutLinearLabels, maxLinearLabelWidth, type LinearLabel, type PlacedLinearLabel } from "../lib/linearMapLabels.ts";
 import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
 import { openEnzymeDialog } from "./enzymeDialog.ts";
+import { openPrimerDialog } from "./primerDialog.ts";
 
 
 interface LabelItem {
@@ -1550,6 +1551,7 @@ export class MapView {
     this.svgHost.addEventListener("dblclick", e => {
       if (!pressed || e.shiftKey || e.metaKey || e.ctrlKey) return;
       if (pressed.kind === "cutsite") return openEnzymeDialog(this.ctx, enzymeOf(pressed.id));
+      if (pressed.kind === "primer") return openPrimerDialog(this.ctx, { mode: "edit", primerId: pressed.id });
       const p = proteinAt(this.ctx, pressed);
       if (p) openProteinDialog(this.ctx, p.feature, p.of);
     });

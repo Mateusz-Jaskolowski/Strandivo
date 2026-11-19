@@ -41,6 +41,8 @@ export interface PcrMixRecipe {
   primerFinal: number;
   /** NEB's own sentence about diluting the enzyme, where its protocol has one. */
   dilute?: string;
+  /** NEB's footnote when a longer product needs more enzyme than the table's row gives. */
+  longEnzyme?: { minBp: number; maxBp: number; note: string };
   components: MixComponent[];
 }
 
@@ -50,7 +52,7 @@ const Q5: PcrMixRecipe = {
   number: "M0491",
   volumes: [25, 50],
   primerFinal: 500,
-  dilute: "Q5 may be diluted in 1X Q5 Reaction Buffer just before use to reduce pipetting errors.",
+  dilute: "The Q5 High-Fidelity DNA Polymerase may be diluted in 1X Q5 Reaction Buffer just prior to use to reduce pipetting errors.",
   components: [
     { name: "5X Q5 Reaction Buffer", role: "buffer", per50: 10, final: "1X" },
     { name: "10 mM dNTPs", role: "dntp", per50: 1, final: "200 µM" },
@@ -70,7 +72,7 @@ const PHUSION: PcrMixRecipe = {
   // NEB's smaller reaction for Phusion is 20 µl, not the 25 µl of the others.
   volumes: [20, 50],
   primerFinal: 500,
-  dilute: "Phusion may be diluted in 1X Phusion HF or GC Buffer just before use to reduce pipetting errors.",
+  dilute: "Phusion DNA Polymerase may be diluted in 1X Phusion HF or GC Buffer just prior to use to reduce pipetting errors.",
   components: [
     { name: "5X Phusion HF or GC Buffer", role: "buffer", per50: 10, final: "1X" },
     { name: "10 mM dNTPs", role: "dntp", per50: 1, final: "200 µM" },
@@ -91,6 +93,7 @@ function oneTaq(buffer: string): PcrMixRecipe {
     number: "M0481",
     volumes: [25, 50],
     primerFinal: 200,
+    longEnzyme: { minBp: 3000, maxBp: 6000, note: "For amplicons between 3–6 kb, use 2.5–5 units/50 µl rxn." },
     components: [
       { name: buffer, role: "buffer", per50: 10, final: "1X" },
       { name: "10 mM dNTPs", role: "dntp", per50: 1, final: "200 µM" },
@@ -110,7 +113,7 @@ const TAQ: PcrMixRecipe = {
   volumes: [25, 50],
   primerFinal: 200,
   components: [
-    // The only 10X buffer of the four, so a fifth of the volume less than the rest.
+    // The only 10X buffer of the four, so a tenth of the reaction volume instead of a fifth.
     { name: "10X Standard Taq Reaction Buffer", role: "buffer", per50: 5, final: "1X" },
     { name: "10 mM dNTPs", role: "dntp", per50: 1, final: "200 µM" },
     { name: "forward primer", role: "primer", final: "0.2 µM (0.05–1 µM)" },
@@ -140,9 +143,6 @@ export const MIX_VOLUMES: readonly number[] = [10, 20, 25, 50, 100];
 /** How much more mix than the reactions asked for, so the last tube is still full. */
 export const MIX_EXTRAS: readonly number[] = [0, 5, 10, 20];
 
-/** The stock a primer is kept at, µM. NEB's table uses 10. */
-export const PRIMER_STOCKS: readonly number[] = [1, 10, 100];
-
 /** The most a field takes: a primer stock in µM and a template volume in µl past these is a typo. */
 export const MAX_STOCK = 1000;
 export const MAX_TEMPLATE = 100;
@@ -163,6 +163,8 @@ export interface MixInput {
   templateVolume: number;
   /** Optional components to include, by name. */
   optional?: readonly string[];
+  /** Length of the PCR product in bp, when known, for length-specific footnotes. */
+  productLength?: number;
 }
 
 export interface MixRow {
@@ -239,7 +241,17 @@ export function pcrMix(input: MixInput): PcrMix | null {
 
 function warnings(recipe: PcrMixRecipe, input: MixInput, rows: MixRow[], spare: number): string[] {
   const out: string[] = [];
-  if (spare < 0) out.push(`The components come to ${fmtVolume(input.volume - spare)} µl, more than the ${fmtVolume(input.volume)} µl reaction: use less template or a larger reaction.`);
+  if (spare < 0) {
+    // Non-template components scale with reaction volume, so if they already exceed it a
+    // larger reaction won't make room; only a more concentrated primer stock will.
+    const advice =
+      input.volume - spare - input.templateVolume > input.volume
+        ? "use a more concentrated primer stock"
+        : input.primerStock < 10
+          ? "use a more concentrated primer stock, less template or a larger reaction"
+          : "use less template or a larger reaction";
+    out.push(`The components come to ${fmtVolume(input.volume - spare)} µl, more than the ${fmtVolume(input.volume)} µl reaction: ${advice}.`);
+  }
   // What is pipetted is the mix where there is one, so making more of it answers a small volume.
   const pipetted = (row: MixRow) => (input.reactions > 1 ? row.mix! : row.each);
   const small = rows.filter(row => row.role !== "water" && row.role !== "template" && row.each > 0 && pipetted(row) < SMALL_VOLUME);
@@ -249,6 +261,9 @@ function warnings(recipe: PcrMixRecipe, input: MixInput, rows: MixRow[], spare: 
     const dilute = recipe.dilute && small.some(row => row.role === "enzyme") ? ` ${recipe.dilute}` : "";
     const stock = input.primerStock !== 10 && small.some(row => row.role === "primer") ? " NEB's table uses a 10 µM primer." : "";
     out.push(`Too little to pipette accurately${input.reactions > 1 ? ", even in the mix" : ""}: ${names}.${dilute}${stock}`);
+  }
+  if (recipe.longEnzyme && input.productLength !== undefined && input.productLength >= recipe.longEnzyme.minBp && input.productLength <= recipe.longEnzyme.maxBp) {
+    out.push(recipe.longEnzyme.note);
   }
   return out;
 }
@@ -269,6 +284,7 @@ export function mixText(mix: PcrMix): string {
     else out.push(`${row.name}: ${fmtVolume(row.each)} µl${master ? `, ${fmtVolume(row.mix!)} µl in the mix` : ""}`);
   }
   if (master) out.push(`Master mix: ${fmtVolume(mix.mixTotal)} µl in all, ${fmtVolume(mix.perTube)} µl per tube`);
+  for (const warning of mix.warnings) out.push(`Note: ${warning}`);
   return out.join("\n");
 }
 
@@ -287,11 +303,12 @@ export const MIX_DEFAULTS: MixPrefs = { volume: null, extra: 10, primerStock: 10
 export function readMixPrefs(raw: unknown): MixPrefs {
   const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const one = (v: unknown, from: readonly number[]) => (typeof v === "number" && from.includes(v) ? v : null);
-  const some = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v > 0 && v <= max ? v : null);
+  const positive = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v > 0 && v <= max ? v : null);
+  const nonNegative = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? (v === 0 ? 0 : v) : null);
   return {
     volume: one(o.volume, MIX_VOLUMES),
     extra: one(o.extra, MIX_EXTRAS) ?? MIX_DEFAULTS.extra,
-    primerStock: some(o.primerStock, MAX_STOCK) ?? MIX_DEFAULTS.primerStock,
-    templateVolume: some(o.templateVolume, MAX_TEMPLATE) ?? MIX_DEFAULTS.templateVolume
+    primerStock: positive(o.primerStock, MAX_STOCK) ?? MIX_DEFAULTS.primerStock,
+    templateVolume: nonNegative(o.templateVolume, MAX_TEMPLATE) ?? MIX_DEFAULTS.templateVolume
   };
 }

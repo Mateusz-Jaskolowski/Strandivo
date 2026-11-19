@@ -2377,15 +2377,15 @@
   gap: 6px 16px;
 }
 /* Nothing in the recipe is clickable, so its rows take neither the cursor nor the hover tint. */
-.sv-mix-table tbody tr {
+.sv-table.sv-mix-table tbody tr {
   cursor: default;
 }
-.sv-mix-table tbody tr:hover {
+.sv-table.sv-mix-table tbody tr:hover {
   background: none;
 }
 /* The template goes in each tube on its own, which sets its row apart from the mix's. */
-.sv-mix-table tbody tr.sv-mix-own,
-.sv-mix-table tbody tr.sv-mix-own:hover {
+.sv-table.sv-mix-table tbody tr.sv-mix-own,
+.sv-table.sv-mix-table tbody tr.sv-mix-own:hover {
   background: var(--side);
 }
 .sv-mix-table tfoot td {

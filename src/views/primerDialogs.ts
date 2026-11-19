@@ -605,7 +605,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       if (programView) cancelProgramEdit = programView.cancelEdit;
       const program = programView?.el ?? h("p", { class: "sv-small sv-dim" }, !anneal ? "A primer's Tm is unknown, so there is no program." : `There is no program for ${poly.name} yet.`);
       // Last, and folded until it is wanted: the mix is what a bench sets up once the rest reads right.
-      const mixView = pcrMixView(polymerase, poly.name, pcrChoice.mix, text => void copyText(text, "the reaction mix"));
+      const mixView = pcrMixView(polymerase, poly.name, product.length, pcrChoice.mix, text => void copyText(text, "the reaction mix"));
       result = [overviewView.el, h("dl", { class: "sv-facts sv-pcr-facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)])), ...warnings.map(w => h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " ", w)), ...stageNote, program, mixView.el];
       actions.push(
         h(

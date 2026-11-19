@@ -20,7 +20,7 @@ export interface MixChoice {
 /** The most tubes the field takes: past a deep plate it is a typo. */
 const MAX_REACTIONS = 384;
 
-export function pcrMixView(polymerase: string, polyName: string, choice: MixChoice, copy: (text: string) => void): { el: HTMLElement } {
+export function pcrMixView(polymerase: string, polyName: string, productLength: number, choice: MixChoice, copy: (text: string) => void): { el: HTMLElement } {
   const el = h("section", { class: "sv-pcr-mix", "aria-label": "Reaction mix" });
   const recipe = mixRecipe(polymerase);
   const tableWrap = h("div", { class: "sv-table-wrap" });
@@ -29,7 +29,7 @@ export function pcrMixView(polymerase: string, polyName: string, choice: MixChoi
   /** The volume kept app-wide, or the one NEB's own table starts this polymerase at. */
   const volume = () => mixPrefs().volume ?? recipe!.volumes[0];
   const current = (): PcrMix =>
-    pcrMix({ polymerase, volume: volume(), reactions: choice.reactions, extra: mixPrefs().extra, primerStock: mixPrefs().primerStock, templateVolume: mixPrefs().templateVolume, optional: choice.optional })!;
+    pcrMix({ polymerase, volume: volume(), reactions: choice.reactions, extra: mixPrefs().extra, primerStock: mixPrefs().primerStock, templateVolume: mixPrefs().templateVolume, optional: choice.optional, productLength })!;
 
   const cell = (row: MixRow, master: boolean) => [
     h("td", null, row.name),
@@ -42,7 +42,7 @@ export function pcrMixView(polymerase: string, polyName: string, choice: MixChoi
     const mix = current();
     // One tube's worth is the mix, so a second column only earns its place past that.
     const master = mix.mixReactions > 1;
-    const head = [h("th", null, "Component"), h("th", { class: "sv-num" }, "Per reaction, µl"), master ? h("th", { class: "sv-num" }, `Mix for ${fmtVolume(mix.mixReactions)}, µl`) : null, h("th", null, "Final")];
+    const head = [h("th", null, "Component"), h("th", { class: "sv-num" }, "Per reaction, µl"), master ? h("th", { class: "sv-num" }, `Mix (${fmtVolume(mix.mixReactions)} reactions), µl`) : null, h("th", null, "Final")];
     const total = master
       ? h("tfoot", null, h("tr", null, h("td", null, "Master mix"), h("td", { class: "sv-num sv-mono" }, fmtVolume(mix.perTube)), h("td", { class: "sv-num sv-mono" }, fmtVolume(mix.mixTotal)), h("td", null, "")))
       : null;
@@ -66,20 +66,22 @@ export function pcrMixView(polymerase: string, polyName: string, choice: MixChoi
 
   const field = (label: string, control: HTMLElement) => h("label", { class: "sv-mix-field" }, h("span", { class: "sv-small sv-dim" }, label), control);
 
-  /** A field that takes a number: a value it can't use is put back as it was. */
-  const numberField = (label: string, value: number, min: number, max: number, step: number, set: (v: number) => void) => {
-    const input = h("input", { type: "number", class: "sv-input sv-mix-num", value: String(value), min: String(min), max: String(max), step: String(step) }) as HTMLInputElement;
+  /** A field that takes a number: a refused entry goes back to the last accepted one. */
+  const numberField = (label: string, focusKey: string, initial: number, min: number, max: number, step: number | "any", set: (v: number) => number) => {
+    let accepted = initial;
+    const input = h("input", { type: "number", class: "sv-input sv-mix-num", "data-focus": focusKey, value: String(accepted), min: String(min), max: String(max), step: String(step) }) as HTMLInputElement;
     input.addEventListener("change", () => {
-      const v = Number(input.value);
-      if (Number.isFinite(v) && v >= min && v <= max) set(v);
-      else input.value = String(value);
+      const raw = input.value.trim();
+      const v = raw === "" ? NaN : Number(raw);
+      if (Number.isFinite(v) && v >= min && v <= max) accepted = set(v);
+      input.value = String(accepted);
       update();
     });
     return field(label, input);
   };
 
-  const menu = (label: string, values: readonly number[], chosen: number, text: (v: number) => string, set: (v: number) => void) => {
-    const select = h("select", { class: "sv-input", onchange: (e: Event) => { set(Number((e.target as HTMLSelectElement).value)); update(); } }, values.map(v => h("option", { value: String(v), selected: v === chosen }, text(v))));
+  const menu = (label: string, focusKey: string, values: readonly number[], chosen: number, text: (v: number) => string, set: (v: number) => void) => {
+    const select = h("select", { class: "sv-input", "data-focus": focusKey, onchange: (e: Event) => { set(Number((e.target as HTMLSelectElement).value)); update(); } }, values.map(v => h("option", { value: String(v), selected: v === chosen }, text(v))));
     return field(label, select);
   };
 
@@ -121,11 +123,17 @@ export function pcrMixView(polymerase: string, polyName: string, choice: MixChoi
     const fields = h(
       "div",
       { class: "sv-mix-fields" },
-      menu("Volume", MIX_VOLUMES, volume(), v => `${v} µl`, v => saveMixPrefs({ volume: v })),
-      numberField("Reactions", choice.reactions, 1, MAX_REACTIONS, 1, v => (choice.reactions = Math.round(v))),
-      menu("Extra mix", MIX_EXTRAS, prefs.extra, v => (v ? `${v}%` : "None"), v => saveMixPrefs({ extra: v })),
-      numberField("Primer stock, µM", prefs.primerStock, 0.1, MAX_STOCK, 1, v => saveMixPrefs({ primerStock: v })),
-      numberField("Template, µl", prefs.templateVolume, 0, MAX_TEMPLATE, 0.5, v => saveMixPrefs({ templateVolume: v }))
+      menu("Volume", "mix-volume", MIX_VOLUMES, volume(), v => `${v} µl`, v => saveMixPrefs({ volume: v })),
+      numberField("Reactions", "mix-reactions", choice.reactions, 1, MAX_REACTIONS, 1, v => (choice.reactions = Math.round(v))),
+      menu("Extra mix", "mix-extra", MIX_EXTRAS, prefs.extra, v => (v ? `${v}%` : "None"), v => saveMixPrefs({ extra: v })),
+      numberField("Primer stock, µM", "mix-stock", prefs.primerStock, 0.1, MAX_STOCK, "any", v => {
+        saveMixPrefs({ primerStock: v });
+        return mixPrefs().primerStock;
+      }),
+      numberField("Template, µl", "mix-template", prefs.templateVolume, 0, MAX_TEMPLATE, 0.5, v => {
+        saveMixPrefs({ templateVolume: v });
+        return mixPrefs().templateVolume;
+      })
     );
     // NEB's own optional components, which the dialog's GC warning points at.
     const extras = recipe.components.filter(c => c.role === "optional");
@@ -134,7 +142,7 @@ export function pcrMixView(polymerase: string, polyName: string, choice: MixChoi
           "div",
           { class: "sv-mix-extras" },
           ...extras.map(c => {
-            const box = h("input", { type: "checkbox", checked: choice.optional.includes(c.name) }) as HTMLInputElement;
+            const box = h("input", { type: "checkbox", "data-focus": `mix-opt-${c.name}`, checked: choice.optional.includes(c.name) }) as HTMLInputElement;
             box.addEventListener("change", () => {
               choice.optional = box.checked ? [...choice.optional, c.name] : choice.optional.filter(name => name !== c.name);
               update();

@@ -5,7 +5,7 @@
 // the reaction volume, how much over the mix is made, the primer stock and the template
 // volume, in local storage. They are habits of the bench, not of one file, so every window
 // reads the same ones. How many reactions are set up is not among them: that belongs to the
-// experiment, and the dialog starts at one each time.
+// experiment and lasts only while the window stays open.
 
 import { MIX_DEFAULTS, readMixPrefs, type MixPrefs } from "./lib/pcrMix.ts";
 

@@ -799,7 +799,6 @@ BciVI	dcm		t5	cut
 BciVI	cpg		t5	cut
 BciVI	cpg		b0	cut
 BciVI	cpg		t5 b0	cut
-BclI	dam		t2	impaired
 BclI	dam		t2 b3	blocked
 BcnI	cpg	CCgGG	t1 b2	impaired
 BcoDI	cpg		t4	impaired
@@ -1116,7 +1115,6 @@ CviQI	cpg		t3 b0	cut,impaired
 DpnI	dam		t1 b2	cut
 DpnI	cpg		t3	blocked
 DpnI	cpg		t3 b0	blocked
-DpnII	dam		t1	blocked
 DpnII	dam		t1 b2	blocked
 DraIII	cpg	CACgNNGTG	t2 b3	impaired
 DraIII	cpg	CACgNcGTG	t2 t5 b3 b6	cut

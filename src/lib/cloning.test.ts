@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { compatible, cutsFor, digest, findOverlap, flip, fragmentWith, goldenGate, GIBSON, IN_FUSION, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, wholeFragment, type OverlapMethod } from "./cloning.ts";
+import { hostMethylation } from "./methylation.ts";
 import { DEFAULT_TM, meltingTemp, type TmMethod } from "./primers.ts";
 import { regionsOf, withRegions } from "./regions.ts";
 import { featureBases, reverseComplement, setOrigin, type SeqData, type SeqFeature } from "./seqdata.ts";
@@ -637,4 +638,58 @@ test("opening a circle inside a CDS renumbers the regions of the piece it keeps"
   const kept = wholeFragment(doc("p", filler(60, 7), true, [f])).data.features[0];
   assert.deepEqual([kept.start, kept.end], [0, 20]);
   assert.deepEqual(regionsOf(kept).map(r => [r.name, r.start, r.end]), [["TM2", 5, 7]]);
+});
+
+test("restriction cloning: Dam methylation blocks a site until the DNA is grown in a dam- strain", () => {
+  const clean = (n: number, seed: number) => filler(n, seed).replace(/TCTAGA|GATC/g, "ACGT");
+  // Vector has an EcoRI site and a Dam-overlapping XbaI site (TCTAGATC).
+  const vector = doc("vector", clean(600, 81) + "GAATTC" + clean(120, 82) + "AAATCTA" + "GATC" + clean(600, 83), true);
+  // Insert has clean EcoRI and XbaI sites (flanked by As so no GATC overlaps).
+  const insert = doc("insert", clean(100, 84) + "GAATTC" + clean(300, 85) + "AAATCTAGAAA" + clean(100, 86), false);
+  const damPlus = hostMethylation("");
+  const damMinus = hostMethylation("JM110");
+
+  const blockedVec = digest(vector, ["EcoRI", "XbaI"], damPlus);
+  const ins = digest(insert, ["EcoRI", "XbaI"], damPlus)[1];
+  assert.equal(blockedVec.length, 1, "Dam stops XbaI cutting, leaving the vector linearised at EcoRI only");
+  assert.equal(ligateInsert(blockedVec[0], ins).length, 0, "EcoRI/EcoRI vector ends cannot ligate to an EcoRI/XbaI insert");
+
+  const cutVec = digest(vector, ["EcoRI", "XbaI"], damMinus);
+  assert.equal(cutVec.length, 2, "JM110 (dam-) lets XbaI cut the vector");
+  const products = ligateInsert(largest(cutVec)!, ins);
+  assert.equal(products.length, 1);
+  assert.equal(products[0].flipped, false);
+});
+
+test("Golden Gate: per-part methylation blocks sites in a dcm+ strain and cuts in a dcm- strain", () => {
+  const clean = (n: number, seed: number) => filler(n, seed).replace(/GGGAC|GTCCC|CCAGG|CCTGG/g, "ACGTA");
+  // BsmFI is GGGAC(10/14) and Dcm blocks it at b0 (CCAGGGAC).
+  const [o1, o2] = ["AATG", "GCTT"];
+  const pad10 = "ACGTACGTAC"; // 10 bases between site and 4-base overhang
+  const bb = clean(400, 91);
+  const drop = clean(150, 92);
+  const gene = clean(250, 93);
+  const vector = doc("vector", bb + o1 + pad10 + "GTCCC" + drop + "GGGAC" + pad10 + o2, true);
+  // Part's left BsmFI site overlaps a Dcm site (CCAGGGAC); its right site is clean.
+  const part = doc("part", clean(100, 94) + "CCAGGGAC" + pad10 + o1 + gene + o2 + pad10 + "GTCCC" + clean(100, 95), true);
+
+  const blocked = goldenGate(
+    [
+      { name: "vector", data: vector, methylation: hostMethylation("DH5a") },
+      { name: "part", data: part, methylation: hostMethylation("DH5a") }
+    ],
+    "BsmFI"
+  );
+  assert.equal(blocked.product, null);
+  assert.match(blocked.problems.join(" "), /Every piece of part keeps a BsmFI site/);
+
+  const assembled = goldenGate(
+    [
+      { name: "vector", data: vector, methylation: hostMethylation("DH5a") },
+      { name: "part", data: part, methylation: hostMethylation("JM110") }
+    ],
+    "BsmFI"
+  );
+  assert.deepEqual(assembled.problems, []);
+  assert.ok(sameCircle(assembled.product!.sequence, bb + o1 + gene + o2));
 });

@@ -635,17 +635,17 @@ function hasSite(sequence: string, site: string): boolean {
  * again, and the rest join by their overhangs. The first part (the vector) starts the
  * chain; the overhangs decide the order and orientation of the others.
  */
-export function goldenGate(parts: { name: string; data: SeqData }[], enzyme: string): GoldenGateResult {
+export function goldenGate(parts: { name: string; data: SeqData; methylation?: DnaMethylation }[], enzyme: string): GoldenGateResult {
   const problems: string[] = [];
   const site = enzymeSite(enzyme);
   const pool: { part: number; f: Fragment }[] = [];
   parts.forEach((p, i) => {
-    const cuts = cutsFor(p.data.sequence, p.data.circular, [enzyme]);
+    const cuts = cutsFor(p.data.sequence, p.data.circular, [enzyme], p.methylation);
     if (!cuts.length) {
       problems.push(`${enzyme} doesn't cut ${p.name}.`);
       return;
     }
-    const kept = digest(p.data, [enzyme]).filter(f => f.left.kind !== "blunt" && f.right.kind !== "blunt" && !hasSite(f.data.sequence, site));
+    const kept = digest(p.data, [enzyme], p.methylation).filter(f => f.left.kind !== "blunt" && f.right.kind !== "blunt" && !hasSite(f.data.sequence, site));
     if (!kept.length) problems.push(`Every piece of ${p.name} keeps a ${enzyme} site, so nothing from it stays cut.`);
     if (kept.length > 1) problems.push(`${enzyme} cuts inside ${p.name} (${cuts.length} sites); its parts may join in other ways.`);
     for (const f of kept) pool.push({ part: i, f: { ...f, source: { ...f.source, name: p.name } } });

@@ -99,19 +99,25 @@ test("a damlist page gives each enzyme's entries and what their reports say, wit
   assert.throws(() => parseDamlist(damlist(enzyme("OddI", "GATC", drawing(["  m6", " G A T C", " C T A G", "        "]) + said("sometimes", 1)))), /"sometimes"/);
 });
 
-test("an msget page's reports are kept only where Dam could have made their marks, on DNA", () => {
+test("an msget page's reports are kept only where Dam could have made their marks on dsDNA", () => {
   const reports = parseMsget(
     msget(
       ["1447", "#DD7700", ["     h     h", " U G A U C A", " A C U A G U", "     h     h"]],
       ["2001", "#C90000", ["    m6", " T G A T C A", " A C T A G T", "      m6"]],
       ["2002", "#DD7700", ["    m6", " T G A T C A", " A C T A G T", "            "]],
-      ["2003", "#008000", ["m6", " T G A T C A", " A C T A G T", "            "]]
+      ["2003", "#008000", ["m6", " T G A T C A", " A C T A G T", "            "]],
+      ["2004", "#C90000", ["          m6", " T C T A G A", " A G A T C T", "            "]]
     )
   );
-  assert.equal(reports.length, 4);
-  // Phage DNA with uracil, and an A no GATC could methylate, are left out.
+  assert.equal(reports.length, 5);
+  // Phage DNA with uracil, an A no GATC could methylate, and hemi-methylated TGATCA (where
+  // Dam always methylates both strands) are left out; an edge overlap whose partner lies
+  // outside the site (XbaI's t5) is kept.
   const kept = entriesOf(reportsFor("dam", reports));
-  assert.deepEqual(kept.map(e => [e.marks.map(k => `${k.strand}:${k.pos}`).join(" "), e.reports.map(r => r.effect).join()]), [["0:2 1:3", "blocked"], ["0:2", "impaired"]]);
+  assert.deepEqual(kept.map(e => [e.bases, e.marks.map(k => `${k.strand}:${k.pos}`).join(" "), e.reports.map(r => r.effect).join()]), [
+    ["TGATCA", "0:2 1:3", "blocked"],
+    ["TCTAGA", "0:5", "blocked"]
+  ]);
 });
 
 test("a methylase overlaps a site where its own can reach a base, Ns aside", () => {

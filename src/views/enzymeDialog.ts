@@ -5,11 +5,12 @@
 // AGENTS.md allows under "Where things go"): its cut drawn on both strands, who sells it,
 // the enzymes with its site, where it cuts the open sequence and what that leaves, and the
 // lab's stock of it. It opens from the inspector, a cut site's right-click menu, or a
-// double-click on a cut site. Its site and suppliers come from REBASE; products, buffers
-// and methylation come later (docs/enzyme-data-plan.md).
+// double-click on a cut site. Its site, suppliers and what methylation does to it come from
+// REBASE; products and buffers come later (docs/enzyme-data-plan.md).
 
 import { cutDrawing, enzymeCut, enzymeName, enzymeRelatives, enzymeSites, enzymeSuppliers, type CutDrawing } from "../lib/enzymes.ts";
 import { digestSequence, fragmentSize } from "../lib/gel.ts";
+import { canOverlap, cutCountText, enzymeMethylation, methylationNote, siteMethylation, type EnzymeEffect, type Methylase } from "../lib/methylation.ts";
 import { enzymeLibrary } from "../enzymeLibrary.ts";
 import { personalEnzymes } from "../personalEnzymes.ts";
 import { h, toast } from "../ui/dom.ts";
@@ -49,6 +50,24 @@ function cutFigure(name: string, d: CutDrawing, label: string): SVGElement {
   return fig;
 }
 
+const METHYLASE_NAMES: Record<Methylase, string> = { dam: "Dam", dcm: "Dcm", cpg: "CpG" };
+const EFFECT_WORDS: Record<EnzymeEffect, string> = {
+  cuts: "cuts",
+  slow: "cuts slowly",
+  blocked: "blocked",
+  varies: "varies",
+  "not tested": "not tested",
+  "no overlap": "",
+  needs: "needed to cut"
+};
+
+/** Each methylation whose site can reach the enzyme's, with REBASE's verdict: "Dam blocked · Dcm not tested". */
+function methylationText(name: string, site: string): string {
+  const effects = enzymeMethylation(name, m => canOverlap(m, site));
+  const parts = (Object.keys(effects) as Methylase[]).filter(m => effects[m] !== "no overlap").map(m => `${METHYLASE_NAMES[m]} ${EFFECT_WORDS[effects[m]]}`);
+  return parts.length ? parts.join(" · ") : "Its site can't overlap a Dam, Dcm or CpG site.";
+}
+
 /** "396", "12 · 456 · 2,001", or the first ones and how many more. */
 function listed(values: number[], unit = ""): string {
   const shown = values.slice(0, LISTED).map(fmt).join(" · ");
@@ -63,9 +82,11 @@ export function openEnzymeDialog(ctx: DocContext, written: string) {
   const suppliers = enzymeSuppliers(name);
   const d = ctx.store.data;
   const sites = enzymeSites(d.sequence, d.circular, name);
-  const digest = sites.length ? digestSequence(d, [name]) : null;
+  const dna = ctx.options.methylation;
+  const effects = sites.map(x => siteMethylation(d.sequence, d.circular, x, dna));
+  const digest = sites.length ? digestSequence(d, [name], dna) : null;
   let saving = false;
-  const dlg = ctx.openDialog({ title: name, note: "Site, cut and suppliers from REBASE.", width: 640, onClose: () => (offPersonal(), offLab()) });
+  const dlg = ctx.openDialog({ title: name, note: "Site, cut, suppliers and methylation from REBASE.", width: 640, onClose: () => (offPersonal(), offLab()) });
   const facts = (rows: [string, Node | string][]) => h("dl", { class: "sv-facts sv-enzyme-facts" }, rows.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)]));
   const section = (title: string, ...body: (Node | null)[]) =>
     h("section", { class: "sv-protein-section", "aria-label": title }, h("div", { class: "sv-section-head sv-protein-head" }, h("h3", { class: "sv-section-title" }, title)), ...body);
@@ -79,6 +100,7 @@ export function openEnzymeDialog(ctx: DocContext, written: string) {
     if (cut.rebase !== cut.notation) rows.push(["REBASE writes", h("span", { class: "sv-mono" }, cut.rebase)]);
     rows.push(["Ends", cut.ends]);
     rows.push(["Sold by", suppliers.join(", ")]);
+    rows.push(["Methylation", methylationText(name, cut.site)]);
     if (relatives.isoschizomers.length) rows.push(["Isoschizomers", names(relatives.isoschizomers)]);
     if (relatives.neoschizomers.length) rows.push(["Neoschizomers", names(relatives.neoschizomers)]);
     return section(
@@ -92,13 +114,22 @@ export function openEnzymeDialog(ctx: DocContext, written: string) {
   const sequencePart = () => {
     if (!sites.length) return section("In this sequence", h("p", { class: "sv-small sv-dim" }, `${name} doesn't cut ${d.name || "this sequence"}.`));
     const sizes = digest?.fragments.map(fragmentSize) ?? [];
-    return section(
-      "In this sequence",
-      facts([
-        [sites.length === 1 ? "Site" : `${fmt(sites.length)} sites`, h("span", { class: "sv-mono" }, listed(sites.map(s => s.start + 1)))],
-        [sizes.length === 1 ? "Fragment" : `${fmt(sizes.length)} fragments`, h("span", { class: "sv-mono" }, listed(sizes, " bp"))]
-      ])
-    );
+    const notCut = sites.filter((_, i) => effects[i]?.blocked).map(x => x.start + 1);
+    // Each reason once, however many sites share it.
+    const notes = [...new Set(effects.flatMap(m => (m ? [methylationNote(m, name)] : [])))];
+    const rows: [string, Node | string][] = [[sites.length === 1 ? "Site" : `${fmt(sites.length)} sites`, h("span", { class: "sv-mono" }, listed(sites.map(s => s.start + 1)))]];
+    if (notCut.length) {
+      const marked: (Node | string)[] = [];
+      notCut.slice(0, LISTED).forEach((pos, i) => {
+        if (i) marked.push(" · ");
+        marked.push(fmt(pos), h("sup", { class: "sv-methyl-mark" }, "m"));
+      });
+      if (notCut.length > LISTED) marked.push(`, and ${fmt(notCut.length - LISTED)} more`);
+      rows.push(["Predicted", cutCountText(sites.length, sites.length - notCut.length)]);
+      rows.push(["Won't cut", h("span", { class: "sv-mono" }, ...marked)]);
+    }
+    rows.push(digest?.uncut ? ["Fragments", "None: the plasmid stays uncut"] : [sizes.length === 1 ? "Fragment" : `${fmt(sizes.length)} fragments`, h("span", { class: "sv-mono" }, listed(sizes, " bp"))]);
+    return section("In this sequence", facts(rows), ...notes.map(n => h("p", { class: "sv-small sv-dim" }, n)));
   };
 
   const labPart = () => {

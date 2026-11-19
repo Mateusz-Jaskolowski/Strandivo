@@ -4,20 +4,24 @@
 
 // Builds the app's restriction enzymes from REBASE.
 //
-//   node tools/build-enzymes.mjs [--file <withrefm>] [--out <file>]
+//   node tools/build-enzymes.mjs [--file <withrefm>] [--pages <folder>] [--out <file>]
 //
 // A maintainer runs this; the app never does. The result is committed, so builds and CI
 // need no network. It keeps the enzymes REBASE lists as sold by at least one company,
 // with their cuts as REBASE writes them, worked out here into cut positions the site
-// search uses, and the companies' REBASE codes.
+// search uses, and the companies' REBASE codes. With them, how Dam, Dcm and CpG
+// methylation affect each (tools/rebase-methylation.mjs), from about 40 of REBASE's pages
+// and a few more for enzymes those leave out; `--pages` keeps the pages in a folder and
+// reads them from there when run again.
 //
 // REBASE's files are read over plain HTTP: its HTTPS certificate doesn't verify in Node
 // (an incomplete chain). Check the regenerated file's diff before committing it. Terms
 // and the reasons for what is left out are in docs/enzyme-data-plan.md.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readMethylation } from "./rebase-methylation.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = join(root, "src/lib/rebaseEnzymes.ts");
@@ -118,9 +122,17 @@ export function selectEnzymes(text) {
   return { version, date, suppliers, kept, left };
 }
 
+/**
+ * Enzymes that cut only methylated DNA, and the methylation they need. REBASE's page for
+ * DpnI calls it a "Type II Methyl-directed restriction enzyme (recognizes the sequence only
+ * when methylated)"; its damlist entry says only that it cuts Dam-methylated GATC.
+ */
+const METHYL_DIRECTED = { DpnI: "dam" };
+
 const escape = s => s.replace(/[\\`$]/g, c => `\\${c}`);
 
-export function render({ version, date, suppliers, kept }) {
+export function render({ version, date, suppliers, kept, methylation = { lines: [], date: "" } }) {
+  const names = new Set(kept.map(e => e.name));
   return `// Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -147,6 +159,23 @@ ${Object.entries(suppliers).map(([code, name]) => `  ${code}: ${JSON.stringify(n
 export const REBASE_ENZYMES = \`
 ${kept.map(e => [e.name, e.notation, e.site, e.top, e.bottom, e.bothSides ? 1 : 0, e.suppliers].map(String).map(escape).join("\t")).join("\n")}
 \`;
+
+/**
+ * How Dam (dam), Dcm (dcm) and CpG (cpg) methylation affect the enzymes above, from
+ * REBASE's methylation sensitivity pages${methylation.date ? ` of ${methylation.date}` : ""}. One line per way a methylase's site
+ * can overlap an enzyme's: name, methylase, the site with codes narrowed to the bases meant
+ * in lower case (empty when none are), the methylated bases (t5: the top strand's sixth
+ * base of the site searched for; b0: the bottom strand's base paired with the first) and
+ * what the reports say (cut, impaired, blocked). Untested overlaps aren't listed.
+ */
+export const REBASE_METHYLATION = \`
+${methylation.lines.map(l => [l.name, l.methylase, l.bases, l.marks, l.effects].map(escape).join("\t")).join("\n")}
+\`;
+
+/** Enzymes that cut only DNA with this methylation (REBASE's "methyl-directed" enzymes). */
+export const METHYL_DIRECTED: Readonly<Record<string, string>> = {
+${Object.entries(METHYL_DIRECTED).filter(([name]) => names.has(name)).map(([name, m]) => `  ${name}: ${JSON.stringify(m)}`).join(",\n")}
+};
 `;
 }
 
@@ -165,9 +194,27 @@ async function main(args) {
     text = Buffer.from(await res.arrayBuffer()).toString("latin1");
   }
   const result = selectEnzymes(text);
-  writeFileSync(out, render(result));
-  console.log(`REBASE version ${result.version}: ${result.kept.length} enzymes sold, written to ${out}.`);
+  const pages = flag("--pages");
+  if (pages) mkdirSync(pages, { recursive: true });
+  let date = "";
+  const get = async url => {
+    const saved = pages && join(pages, `${url.slice(url.lastIndexOf("/") + 1).replace(/[^\w.+-]/g, "_")}.html`);
+    let html;
+    if (saved && existsSync(saved)) html = readFileSync(saved, "latin1");
+    else {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`REBASE answered ${res.status} for ${url}.`);
+      html = Buffer.from(await res.arrayBuffer()).toString("latin1");
+      if (saved) writeFileSync(saved, html, "latin1");
+    }
+    date ||= /<font size=2>(\d{1,2}\/\d{1,2}\/\d{4})<\/font>/.exec(html)?.[1] ?? "";
+    return html;
+  };
+  const { lines, left } = await readMethylation(result.kept, Object.keys(result.suppliers), get);
+  writeFileSync(out, render({ ...result, methylation: { lines, date } }));
+  console.log(`REBASE version ${result.version}: ${result.kept.length} enzymes sold, ${lines.length} methylation entries, written to ${out}.`);
   for (const line of result.left) console.log(`  left out ${line}`);
+  for (const line of left) console.log(`  left out ${line}`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

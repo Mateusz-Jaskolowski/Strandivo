@@ -1374,6 +1374,38 @@ async function main() {
     await s.exec("window.__strandivo.showTab(1); window.__strandivo.closeTab();");
     check("Closing the product asks to save it", await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000));
 
+    // --- Dam methylation: two XbaI sites, one running on into a GATC ---
+    // With no strain given, Dam⁺ is assumed: the first site is drawn with an "m" and doesn't
+    // cut, so XbaI counts as cutting once and the digest gives one linear band. Choosing a
+    // dam⁻ strain in the Digest dialog writes it to the file's Info tab and both sites cut.
+    const methylSeq = "ACGT".repeat(10) + "TCTAGATC" + "ACGT".repeat(18) + "TCTAGATT" + "ACGT".repeat(18);
+    await s.exec(`window.__strandivo.openNew({ name: "methyl-test", description: "", circular: true, sequence: "${methylSeq}", features: [], primers: [], sources: [] })`);
+    await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.activeTab() === 1", 10000);
+    await s.exec("window.__strandivo.setView('map')");
+    const methylMarked = await s.waitFor("document.querySelector('.sv-map-label-cut[data-id=\"XbaI@40\"] .sv-map-methyl')", 5000);
+    const methylMarks = await s.exec("return { blocked: document.querySelectorAll('.sv-map-methyl').length, other: !!document.querySelector('.sv-map-label-cut[data-id=\"XbaI@120\"]'), dashed: document.querySelectorAll('.sv-map-blocked').length };");
+    check("A site Dam methylation blocks is drawn with an m and a dashed tick, beside the one that cuts", methylMarked && methylMarks.blocked === 1 && methylMarks.other && methylMarks.dashed === 1, JSON.stringify(methylMarks));
+    await s.shot("08b-methylation-map");
+    await s.exec(`${doc} s.selectRange({ start: 40, end: 45 }, { kind: "cutsite", id: "XbaI@40" }, "e2e");`);
+    await sleep(300);
+    const inspected = await s.exec("return document.querySelector('.sv-insp-head')?.textContent ?? ''");
+    check("The inspector says how many sites cut and why this one doesn't", inspected.includes("2 sites · 1 predicted cut") && inspected.includes("Won't cut: Dam methylation (GATC overlaps the site). Assumed dam⁺ strain."), inspected.slice(0, 300));
+    await s.click("//button[contains(., 'Digest with XbaI')]", "xpath");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-digest-methyl')", 5000);
+    const digestSizes = () => s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-digest-table tr[data-size]')).map(r => r.dataset.size)");
+    const warned = await s.exec("return document.querySelector('.sv-dialog .sv-digest-methyl')?.textContent ?? ''");
+    check("The digest cuts only the unblocked site, giving one linear band, and says why", JSON.stringify(await digestSizes()) === '["200"]' && warned.includes("XbaI (2 sites · 1 predicted cut)") && warned.includes("methyl-test"), `${JSON.stringify(await digestSizes())} ${warned.slice(0, 200)}`);
+    await s.shot("08c-methylation-digest");
+    await s.exec("const el = document.querySelector(\".sv-dialog select[aria-label='Strain methyl-test was grown in']\"); el.value = 'JM110'; el.dispatchEvent(new Event('change'));");
+    const recut = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-digest-table tr[data-size]').length === 2 && !document.querySelector('.sv-dialog .sv-digest-methyl')", 5000);
+    const host = await s.exec("return Array.from(document.querySelectorAll('.ps-field-row')).find(r => r.querySelector('.ps-field-label')?.textContent === 'Host / strain')?.querySelector('input')?.value ?? null");
+    check("Choosing a dam⁻ strain there writes it to the file and both sites cut", recut && host === "JM110", `${JSON.stringify(await digestSizes())}, Host / strain ${JSON.stringify(host)}`);
+    await s.press(ESCAPE);
+    check("With the strain set, the map drops the mark", await s.waitFor("!document.querySelector('.sv-dialog') && document.querySelectorAll('.sv-map-methyl').length === 0", 5000));
+    await s.exec("window.__strandivo.closeTab()");
+    await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
+    await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+
     // --- a dialog belongs to its file's tab ---
     // One opened for a file closes, as Cancel does, when another tab or Home becomes the
     // current one (a key, a click, a file opening) or when its tab closes; Escape closes only

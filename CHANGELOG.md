@@ -16,6 +16,16 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
+  E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
+  reports have it. A blocked site stays on the map with a small "m" after its name, and
+  doesn't count as a cut, so XbaI with one of its two sites blocked shows as a unique
+  cutter, and the gel shows what would really happen. Hover for why: blocked, slowed,
+  untested, or reports disagree. Choose the strain in the Info tab's Host / strain (BL21
+  lacks Dcm, JM110 both); with none, Dam⁺ Dcm⁺ is assumed and said. The Digest dialog asks
+  for the strain only when a chosen enzyme won't cut. A PCR product is unmethylated, so
+  its digests cut where the template's don't, and DpnI cuts only the template. Enzyme
+  details lists what Dam, Dcm and CpG methylation do to each enzyme.
 - **Turn features into regions in bulk**: scroll through long lists and select or
   deselect all eligible features at once.
 - **A clearer Export dialog**: pick the file format separately, with Cancel and Export

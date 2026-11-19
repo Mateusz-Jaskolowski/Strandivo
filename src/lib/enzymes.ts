@@ -6,6 +6,7 @@
 
 import { getCutsitesFromSequence, type RestrictionEnzyme } from "@teselagen/sequence-utils";
 import { REBASE_ENZYMES, SUPPLIERS } from "./rebaseEnzymes.ts";
+import { siteMethylation, type DnaMethylation, type SiteMethylation } from "./methylation.ts";
 
 export type EnzymeSource = "common" | "lab" | "personal";
 export type EnzymeFilter = "unique6" | "unique" | "unique2" | "all";
@@ -26,6 +27,11 @@ export interface EnzymeOptions {
   enzymeFilter: EnzymeFilter;
   labEnzymes: readonly string[];
   personalEnzymes: readonly string[];
+  /**
+   * Where the DNA was grown, for Dam and Dcm methylation (`hostMethylation` in
+   * src/lib/methylation.ts). Left out, no site is predicted blocked.
+   */
+  methylation?: DnaMethylation;
 }
 
 /**
@@ -62,8 +68,12 @@ export interface CutSite {
   bottomCut: number;
   forward: boolean;
   overhang: string;
-  /** Number of times this enzyme cuts the sequence. */
+  /** Number of times this enzyme is predicted to cut the sequence: its sites less those methylation blocks. */
   cuts: number;
+  /** Number of its sites, cut or not. */
+  sites: number;
+  /** What Dam or Dcm methylation does to this site, when it does anything worth saying. */
+  methylation?: SiteMethylation;
 }
 
 /** An enzyme REBASE lists as sold, in the form the site search takes. */
@@ -284,22 +294,43 @@ function updateAround(a: string, b: string, p: number, s: number, hits: SiteHit[
 }
 
 /**
- * Sites from the chosen list, filtered by their total cut counts and sorted by position.
- * Membership preserves chosen names, so a personal Esp3I does not add BsmBI labels.
+ * Sites from the chosen list, filtered by how many times each enzyme is predicted to cut and
+ * sorted by position. Membership preserves chosen names, so a personal Esp3I does not add
+ * BsmBI labels. Given the sequence (`dna`) and `o.methylation`, a site Dam or Dcm methylation
+ * blocks is still listed, with its `methylation`, but not counted as a cut, so an enzyme with
+ * one of two sites blocked counts as a unique cutter.
  */
-export function selectSites(hits: SiteHit[], o: EnzymeOptions): CutSite[] {
+export function selectSites(hits: SiteHit[], o: EnzymeOptions, dna?: { sequence: string; circular: boolean }): CutSite[] {
   const names = new Set(sourceEnzymes(o).map(enzymeName));
   const maxCuts = o.enzymeFilter === "all" ? Infinity : o.enzymeFilter === "unique2" ? 2 : 1;
   const minSpecificity = o.enzymeFilter === "unique6" ? 6 : 0;
-  const counts = new Map<string, number>();
-  for (const h of hits) counts.set(h.enzyme, (counts.get(h.enzyme) ?? 0) + 1);
-  const out: CutSite[] = [];
+  const byEnzyme = new Map<string, SiteHit[]>();
   for (const h of hits) {
-    const cuts = counts.get(h.enzyme)!;
-    const e = ENZYMES.get(h.enzyme.toLowerCase());
-    if (!names.has(h.enzyme) || cuts > maxCuts || (e ? specificity(e) : 0) < minSpecificity) continue;
+    if (!names.has(h.enzyme)) continue;
+    const list = byEnzyme.get(h.enzyme);
+    if (list) list.push(h);
+    else {
+      const e = ENZYMES.get(h.enzyme.toLowerCase());
+      byEnzyme.set(h.enzyme, (e ? specificity(e) : 0) >= minSpecificity ? [h] : []);
+    }
+  }
+  const methylation = dna && o.methylation;
+  const out: CutSite[] = [];
+  for (const [enzyme, list] of byEnzyme) {
+    if (!list.length || (!methylation && list.length > maxCuts)) continue;
+    const effects: (SiteMethylation | null)[] = [];
+    let cuts = 0;
+    // Once it cuts more often than the filter allows, the rest of its sites needn't be looked at.
+    for (const h of list) {
+      const m = methylation ? siteMethylation(dna.sequence, dna.circular, h, methylation) : null;
+      effects.push(m);
+      if (!m?.blocked && ++cuts > maxCuts) break;
+    }
+    // One that cuts nowhere stays only where its sites alone pass (a lone blocked XbaI under
+    // unique cutters), so a filter for useful enzymes doesn't fill with blocked ones.
+    if (cuts > maxCuts || (!cuts && list.length > maxCuts)) continue;
     // Stable ids, so a selected site stays selected when the sites are recomputed.
-    out.push({ id: `${h.enzyme}@${h.start}`, ...h, cuts });
+    list.forEach((h, i) => out.push({ id: `${enzyme}@${h.start}`, ...h, cuts, sites: list.length, ...(effects[i] ? { methylation: effects[i]! } : {}) }));
   }
   out.sort((x, y) => x.cut - y.cut || x.enzyme.localeCompare(y.enzyme));
   return out;
@@ -451,24 +482,52 @@ export const TAIL_ENZYMES: { name: string; site: string }[] = ALL_ENZYMES.filter
   .map(e => ({ name: e.name, site: e.site.toUpperCase() }))
   .sort((a, b) => a.name.localeCompare(b.name));
 
-/** How many times each named enzyme cuts a sequence. */
-export function cutCounts(sequence: string, circular: boolean, names: string[]): Map<string, number> {
+/** How many times each named enzyme is predicted to cut a sequence from `methylation`'s DNA (every site, without it). */
+export function cutCounts(sequence: string, circular: boolean, names: string[], methylation?: DnaMethylation): Map<string, number> {
   const out = new Map(names.map(n => [n, 0]));
   if (!names.length || !sequence.length) return out;
-  for (const h of scanSites(sequence, circular, names)) if (out.has(h.enzyme)) out.set(h.enzyme, out.get(h.enzyme)! + 1);
+  for (const h of scanSites(sequence, circular, names)) if (out.has(h.enzyme) && !blockedSite(sequence, circular, h, methylation)) out.set(h.enzyme, out.get(h.enzyme)! + 1);
+  return out;
+}
+
+/** Whether Dam or Dcm methylation is predicted to stop a site cutting. */
+export const blockedSite = (sequence: string, circular: boolean, h: SiteHit, methylation: DnaMethylation | undefined) =>
+  !!methylation && !!siteMethylation(sequence, circular, h, methylation)?.blocked;
+
+/** An enzyme's sites in a sequence, and how many of them are predicted to cut. */
+export interface SiteCount {
+  sites: number;
+  cuts: number;
+}
+
+/** Sites and predicted cuts of every enzyme the hits are of, for lists to choose enzymes from. */
+export function siteCounts(hits: readonly SiteHit[], sequence: string, circular: boolean, methylation?: DnaMethylation): Map<string, SiteCount> {
+  const out = new Map<string, SiteCount>();
+  for (const h of hits) {
+    let c = out.get(h.enzyme);
+    if (!c) out.set(h.enzyme, (c = { sites: 0, cuts: 0 }));
+    c.sites++;
+    if (!blockedSite(sequence, circular, h, methylation)) c.cuts++;
+  }
   return out;
 }
 
 /** Cut sites of the chosen enzymes, sorted by position. */
 export function findCutSites(sequence: string, circular: boolean, o: EnzymeOptions): CutSite[] {
-  return selectSites(scanSites(sequence, circular, sourceEnzymes(o)), o);
+  return selectSites(scanSites(sequence, circular, sourceEnzymes(o)), o, { sequence, circular });
 }
 
-/** Reaction choices honour membership, but already chosen enzymes always remain available. */
-export function reactionEnzymes(counts: ReadonlyMap<string, number>, members: readonly string[], selected: readonly string[], maxCuts = Infinity, query = ""): string[] {
+/**
+ * Reaction choices honour membership, but already chosen enzymes always remain available.
+ * `counts` are predicted cuts; given `sites`, a search by name also finds an enzyme whose
+ * every site methylation blocks, so the list can say why it doesn't cut.
+ */
+export function reactionEnzymes(counts: ReadonlyMap<string, number>, members: readonly string[], selected: readonly string[], maxCuts = Infinity, query = "", sites?: ReadonlyMap<string, number>): string[] {
   const q = query.trim().toLowerCase();
+  const cutting = (name: string) => (counts.get(name) ?? 0) > 0 && counts.get(name)! <= maxCuts;
+  const blocked = (name: string) => !!q && (sites?.get(name) ?? 0) > 0 && !counts.get(name);
   return [...new Set([...selected, ...members])]
-    .filter(name => selected.includes(name) || ((counts.get(name) ?? 0) > 0 && counts.get(name)! <= maxCuts && (!q || name.toLowerCase().includes(q))))
+    .filter(name => selected.includes(name) || ((cutting(name) || blocked(name)) && (!q || name.toLowerCase().includes(q))))
     .sort((a, b) => Number(selected.includes(b)) - Number(selected.includes(a)) || a.localeCompare(b));
 }
 

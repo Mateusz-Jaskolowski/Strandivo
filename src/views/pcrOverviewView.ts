@@ -5,6 +5,7 @@ import { h } from "../ui/dom.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
 import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
+import { methylationNote } from "../lib/methylation.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
 import { bands, ladderReaching } from "../lib/gel.ts";
@@ -39,7 +40,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     detail.textContent = crowd
       ? `${crowd.sites.length} more ${crowd.sites.length === 1 ? "site" : "sites"} here: ${crowd.sites.map(m => m.site.enzyme).join(", ")}.`
       : site
-        ? `${site.enzyme} · cuts after base ${fmt(site.cut)} · ${site.cuts} ${site.cuts === 1 ? "site" : "sites"} in the product, ${data.templateCounts.get(site.enzyme) ?? 0} in the template`
+        ? `${site.enzyme} · cuts after base ${fmt(site.cut)} · ${site.sites} ${site.sites === 1 ? "site" : "sites"} in the product, ${data.templateCounts.get(site.enzyme) ?? 0} in the template${site.methylation ? ` · ${methylationNote(site.methylation, site.enzyme)}` : ""}`
         : "No cut sites match this list and filter.";
     map.querySelectorAll<HTMLElement>("button[data-site]").forEach(b => b.setAttribute("aria-pressed", String(!!site && b.dataset.site === site.id)));
     map.querySelectorAll<HTMLElement>("button[data-more]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.more === choice.more)));
@@ -74,7 +75,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   const fade = (lane: number | null) => gelFigure.querySelectorAll<SVGElement>("[data-lane]").forEach(el => el.classList.toggle("sv-gel-fade", lane !== null && el.dataset.lane !== String(lane)));
   const drawGel = () => {
     const d = pickDigest(data.digests, choice.digest);
-    const rows = pcrGelLanes(template, templateKind, product.length, d);
+    const rows = pcrGelLanes(template, templateKind, product.length, d, data.templateMethylation);
     leftover.hidden = !rows.some(r => r.of === "template");
     // Until a ladder is picked, the gel opens on one that reaches its smallest band. What it
     // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.

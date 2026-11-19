@@ -7,7 +7,8 @@
 // features and primers. Pure functions.
 
 import { DEFAULT_DESIGN, designPair, type DesignOptions } from "./design.ts";
-import { enzymeSite, scanSites } from "./enzymes.ts";
+import { blockedSite, enzymeSite, scanSites } from "./enzymes.ts";
+import type { DnaMethylation } from "./methylation.ts";
 import { DEFAULT_TM, findBindingSites, meltingTemp, TM_METHODS, type TmMethod } from "./primers.ts";
 import { carryRegions } from "./regions.ts";
 import { basesIn, deleteRange, insertBases, newId, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData } from "./seqdata.ts";
@@ -47,9 +48,10 @@ const hi = (c: Cut) => Math.max(c.top, c.bottom);
 /**
  * Where the named enzymes cut, sorted along the sequence. On a circular sequence `top` is
  * 0…n-1 and `bottom` lies within an overhang's length of it (it may pass either end); on
- * a linear one, cuts whose overhang would reach past an end are left out.
+ * a linear one, cuts whose overhang would reach past an end are left out. Given where the
+ * DNA was grown, sites Dam or Dcm methylation blocks are left out too.
  */
-export function cutsFor(sequence: string, circular: boolean, enzymes: string[]): Cut[] {
+export function cutsFor(sequence: string, circular: boolean, enzymes: string[], methylation?: DnaMethylation): Cut[] {
   const n = sequence.length;
   if (!n || !enzymes.length) return [];
   const names = new Set(enzymes);
@@ -57,7 +59,7 @@ export function cutsFor(sequence: string, circular: boolean, enzymes: string[]):
   const seen = new Set<string>();
   // Named enzymes outside the curated list (a lab's stock) are searched for too.
   for (const h of scanSites(sequence, circular, enzymes)) {
-    if (!names.has(h.enzyme)) continue;
+    if (!names.has(h.enzyme) || blockedSite(sequence, circular, h, methylation)) continue;
     let top = h.cut;
     let bottom = h.bottomCut;
     if (circular) {
@@ -122,10 +124,10 @@ export function wholeFragment(d: SeqData, range: Range | null = null): Fragment 
  * The fragments the named enzymes cut a sequence into, in order along it. A circular
  * sequence cut once gives one fragment (it is opened up); one that isn't cut gives none.
  */
-export function digest(d: SeqData, enzymes: string[]): Fragment[] {
+export function digest(d: SeqData, enzymes: string[], methylation?: DnaMethylation): Fragment[] {
   const seq = d.sequence;
   const n = seq.length;
-  const cuts = cutsFor(seq, d.circular, enzymes);
+  const cuts = cutsFor(seq, d.circular, enzymes, methylation);
   const out: Fragment[] = [];
   const add = (from: number, to: number, left: FragmentEnd, right: FragmentEnd) => {
     if (to - from <= left.bases.length || to - from <= right.bases.length) return; // overhangs overlap: nothing left

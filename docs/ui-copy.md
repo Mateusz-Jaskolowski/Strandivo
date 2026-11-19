@@ -167,6 +167,8 @@ assembled, with the line of the first part.
 | 674 | edit message (delete primer) | "Deleted …." |
 | 725 | site note (1 cut) | "Cuts this sequence once" |
 | 725 | site note (n cuts) | "Cuts this sequence … times" |
+| 957 | site note (some sites blocked) | "… sites · … predicted cuts" |
+| 963 | fact | "Methylation": the site's note (see Methylation notes) |
 | 755 | orf note | "Detected from the sequence and not saved in the file. Add it as a feature to save it." |
 | 847 | hint (nothing selected) | "Click a feature, primer or cut site to inspect it, or drag across the map or sequence to select bases." |
 | 849 | status | "Cursor at … of …." |
@@ -285,6 +287,12 @@ assembled, with the line of the first part.
 | 53 | dialog title | "Digest" |
 | 53 | dialog note | "Choose enzymes to see the fragments and how they would run on a gel." |
 | 337 | gel note | "Band brightness is proportional to fragment mass. Fragments within ~2% in size co-migrate as a single band." |
+| 118 | enzyme count (some sites blocked) | "… sites · … predicted cuts" (otherwise "… cuts") |
+| 308 | methylation warning (only when a chosen enzyme won't cut) | "… (… sites · … predicted cut): " and the site notes (see Methylation notes) |
+| 326 | strain select (screen readers) | "Strain … was grown in" |
+| 327 | strain option (blank) | "Not set (Dam⁺ Dcm⁺ assumed)" |
+| 342 | label | "Grown in" |
+| 343 | hint | "Sets Host / strain on …'s Info tab." |
 
 ---
 
@@ -292,7 +300,10 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 69 | dialog title, note | the enzyme's name; "Site, cut and suppliers from REBASE." |
+| 89 | dialog title, note | the enzyme's name; "Site, cut, suppliers and methylation from REBASE." |
+| 103 | fact | "Methylation": "Dam blocked · Dcm not tested · CpG cuts" (each of "cuts", "cuts slowly", "blocked", "varies", "not tested", "needed to cut"); "Its site can't overlap a Dam, Dcm or CpG site." |
+| 122 | facts (sites methylation blocks) | "Predicted": "… sites · … predicted cuts"; "Won't cut": their positions, marked m |
+| 125 | fact (nothing cuts a plasmid) | "Fragments": "None: the plasmid stays uncut" |
 | 87 | figure (screen readers) | "… cuts …: …" (its site and ends) |
 | 78 | sections | "Cut" / "In this sequence" / "Lab stock" |
 | 78 | unknown enzyme | "Not in this version's enzyme list." |
@@ -391,6 +402,8 @@ assembled, with the line of the first part.
 | 238 | chip labels | "Resistance" / "Origins" / "Promoters" |
 | 238 | chip empty | "none detected" |
 | 259 | lab record note | "Saved in the GenBank file. Customize fields in Settings." |
+| 113 | under Host / strain | "Methylation: Dam⁺ Dcm⁺, assumed until a strain is given." / "Methylation: Dam⁺ Dcm⁻." / "Methylation unknown: “…” isn't a strain Strandivo knows, so no site is predicted blocked." (`methylationSummary` in `src/lib/methylation.ts`) |
+| 121 | under Host / strain (suppressor strain) | "… is supE44, which reads TAG as glutamine. Translations follow the Amber stop codon setting." (the setting's name opens Settings) |
 | 274 | sequencing empty | "No reads aligned yet. Drop .ab1 files on the window to check this construct." |
 | 286 | sequencing ok | "No confident differences from this sequence." |
 
@@ -595,3 +608,21 @@ My enzymes — `src/views/personalEnzymesPanel.ts`, and the cut — `src/views/e
 | 222 | reads: read | "Copy sequence" / "Move to clone" / "Take out of clone" / "Remove read" |
 | 231 | reads: clone | "Copy consensus" / "Open clone as file" / "Split into single reads" / "Remove clone" |
 | 240 | reads: many | "Group into one clone" / "Remove … reads" |
+
+---
+
+## Methylation notes — `src/lib/methylation.ts`
+
+One sentence per methylase about a site, shown in the map's and Sequence tab's tooltips,
+the outline, the inspector, the Enzyme details and Digest dialogs and the PCR product
+dialog. A sentence about the strain follows: " Assumed dam⁺ strain." / " DH5α is dam⁺." /
+" “…” isn't a strain Strandivo knows." (none for a PCR product).
+
+| Line | Where | Text |
+|------|-------|------|
+| 269 | blocked | "Won't cut: Dam methylation (GATC overlaps the site)." / "Won't cut if the DNA has Dam methylation (GATC overlaps the site)." (unknown strain) |
+| 272 | impaired | "Cuts slowly: Dcm methylation overlaps the site." / "Cuts slowly if the DNA has Dcm methylation (CCWGG overlaps the site)." |
+| 275 | reports disagree | "Reports disagree on whether Dam methylation blocks this site." / "… slows this site." |
+| 278 | untested | "Dam methylation overlaps the site; its effect hasn't been tested." |
+| 263 | DpnI | "Won't cut: DpnI needs Dam methylation, which a PCR product lacks." / "Won't cut: DpnI needs Dam methylation." / "Cuts only if the DNA has Dam methylation." |
+| — | counts (`cutCountText`) | "cuts once" / "cuts … times" / "… sites · … predicted cuts" |

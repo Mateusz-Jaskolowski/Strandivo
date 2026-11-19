@@ -7,6 +7,7 @@
 import { isDesktop } from "./platform.ts";
 import { DEFAULT_TM, type TmSettings } from "./lib/primers.ts";
 import { DEFAULT_SIDEBAR_ORDER, foldedSections, sidebarOrder, type SidebarSection } from "./lib/sidebar.ts";
+import { STRAINS } from "./lib/strains.ts";
 import { isAppearance, type Appearance } from "./lib/themes.ts";
 
 export type SequenceCase = "noPreference" | "uppercase" | "lowercase";
@@ -82,7 +83,8 @@ export const KNOWN_FIELDS: Record<string, Omit<FieldDef, "name">> = {
   "Verified with": { kind: "text", placeholder: "e.g. reads or sequencing order" },
   "Stored at": { kind: "text", placeholder: "e.g. −80 °C freezer, box 3, A4" },
   "Antibiotic resistance": { kind: "text", placeholder: "e.g. Ampicillin" },
-  "Host / strain": { kind: "text", placeholder: "e.g. DH5α, BL21(DE3)" },
+  // Any text; a strain Strandivo knows decides Dam and Dcm methylation (src/lib/strains.ts).
+  "Host / strain": { kind: "text", placeholder: "e.g. DH5α, BL21(DE3)", options: STRAINS.map(s => s.name) },
   Backbone: { kind: "text", placeholder: "e.g. pUC19, pET-28a(+)" },
   Insert: { kind: "text", placeholder: "e.g. GFP" },
   "Codon optimized for": {

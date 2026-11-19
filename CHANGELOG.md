@@ -16,6 +16,8 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+- **Turn features into regions in bulk**: scroll through long lists and select or
+  deselect all eligible features at once.
 - **A clearer Export dialog**: pick the file format separately, with Cancel and Export
   together at the bottom.
 - **Read crowded linear maps**: leaders connect displaced feature, protein region,

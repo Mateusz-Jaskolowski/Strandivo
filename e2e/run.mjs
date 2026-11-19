@@ -2539,20 +2539,44 @@ async function main() {
           return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`, id);
         const cdsMenu = await rightClick("e2e-nanobody");
         check("The CDS's right-click menu offers to turn features into regions", cdsMenu.includes("Turn features into regions…"), cdsMenu.join(", "));
+        await s.exec(`${doc}
+          const features = Array.from({ length: 48 }, (_, index) => ({
+            id: 'e2e-part-' + index, name: 'Part ' + index, type: 'misc_feature', start: 2096 + index * 3,
+            end: 2098 + index * 3, strand: 1, notes: {}, raw: {}
+          }));
+          features.push({ ...features[0], id: 'e2e-pieces', name: 'Separate pieces', end: 2104,
+            locations: [{ start: 2096, end: 2098 }, { start: 2102, end: 2104 }] });
+          s.apply({ ...s.data, features: [...s.data.features, ...features] }, 'Add features');`);
         const cdr1 = await s.exec(`${doc} return s.data.features.find(f => f.name === 'cdr1').id;`);
         const featureMenu = await rightClick(cdr1);
         check("A feature inside it offers to become one of its regions", featureMenu.includes("Turn into region of Nanobody…"), featureMenu.join(", "));
         await s.exec("window.__e2eMenu.find(e => e.label === 'Turn into region of Nanobody…')?.run(); delete window.__strandivoMenu;");
-        const onlyOne = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 7", 5000) &&
+        const onlyOne = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 56", 5000) &&
           await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-row input[type=checkbox]')).filter(b => b.checked).map(b => b.closest('.sv-fold-row').querySelector('.sv-fold-name').textContent);");
         check("Only that feature starts ticked", JSON.stringify(onlyOne) === JSON.stringify(["cdr1"]), JSON.stringify(onlyOne));
+        check("The long feature list scrolls all the way to its last row", await s.exec(`
+          const body = document.querySelector('.sv-dialog-body');
+          const last = body?.querySelector('.sv-fold-row:last-child');
+          if (!last) return false;
+          body.scrollTop = body.scrollHeight;
+          return body.scrollTop > 0 && last.getBoundingClientRect().bottom <= body.getBoundingClientRect().bottom;`));
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Select all']", "xpath");
+        check("Select all ticks every eligible feature and leaves separate pieces alone", await s.exec(`
+          const boxes = Array.from(document.querySelectorAll('.sv-fold-row input[type=checkbox]'));
+          const pieces = document.querySelector('[data-feature="e2e-pieces"] input');
+          return boxes.filter(box => box.checked).length === 55 && pieces?.disabled && !pieces.checked
+            && document.querySelector('.sv-dialog-foot .sv-btn-primary').textContent === 'Turn 55 features into regions';`));
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Deselect all']", "xpath");
+        check("Deselect all clears the checkboxes and disables Apply", await s.exec(`
+          return !document.querySelector('.sv-fold-row input:checked') && document.querySelector('.sv-dialog-foot .sv-btn-primary').disabled;`));
+        await s.click(`.sv-fold-row[data-feature="${cdr1}"] input`);
         await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Turn 1 feature into regions']", "xpath");
         check(
           "It becomes a region of the CDS, which is selected with the region picked",
           await s.waitFor(`!window.__strandivo.store.data.features.some(f => f.id === '${cdr1}') && window.__strandivo.store.selection.focus?.id === 'e2e-nanobody' && window.__strandivo.store.selection.focus?.region === 0`, 5000),
           await s.exec(`${doc} return JSON.stringify(s.selection.focus);`)
         );
-        await s.exec(`${doc} s.undo(); s.undo();`);
+        await s.exec(`${doc} s.undo(); s.undo(); s.undo();`);
         check("Undo takes the file back to how it opened", await s.waitFor(`window.__strandivo.store.data.features.length === ${before - 1}`, 5000));
       }
       await s.exec("document.querySelector('.sv-dialog-close')?.click(); window.__strandivo.closeTab()");

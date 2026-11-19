@@ -32,6 +32,7 @@ import { orderText, primerListText, type ExportRow, type OrderFormat } from "../
 import { copyText } from "./inspector.ts";
 import { editableProgram } from "./pcrProgramView.ts";
 import { pcrOverviewView, type ProductViewChoice } from "./pcrOverviewView.ts";
+import { pcrMixView, type MixChoice } from "./pcrMixView.ts";
 import { enzymeSourceSelect } from "./enzymeControls.ts";
 import { programDraft, programInputKey, syncProgram, type ProgramDraft, type ProgramSnapshot } from "../lib/pcrProgramEdit.ts";
 import { productAdvice, productOverview } from "../lib/pcrOverview.ts";
@@ -380,8 +381,12 @@ async function saveProduct(d: SeqData, product: PcrProduct) {
   }
 }
 
-/** Kept while the window stays open: the template is a habit of the bench, not of one file. */
-const pcrChoice: { template: TemplateKind } = { template: "plasmid" };
+/**
+ * Kept while the window stays open: the template is a habit of the bench, not of one file,
+ * and so is an open reaction mix. How many reactions are set up belongs to the experiment,
+ * so it starts at one; what the mix holds is kept in `src/pcrMixPrefs.ts`.
+ */
+const pcrChoice: { template: TemplateKind; mix: MixChoice } = { template: "plasmid", mix: { open: false, reactions: 1, optional: [] } };
 
 /** An ⓘ button; what it says is shown by the caller under the row it sits in. */
 function infoButton(label: string, open: boolean, onclick: () => void): HTMLElement {
@@ -599,7 +604,9 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       if (programView) disposeViews.push(programView.dispose);
       if (programView) cancelProgramEdit = programView.cancelEdit;
       const program = programView?.el ?? h("p", { class: "sv-small sv-dim" }, !anneal ? "A primer's Tm is unknown, so there is no program." : `There is no program for ${poly.name} yet.`);
-      result = [overviewView.el, h("dl", { class: "sv-facts sv-pcr-facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)])), ...warnings.map(w => h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " ", w)), ...stageNote, program];
+      // Last, and folded until it is wanted: the mix is what a bench sets up once the rest reads right.
+      const mixView = pcrMixView(polymerase, poly.name, product.length, pcrChoice.mix, text => void copyText(text, "the reaction mix"));
+      result = [overviewView.el, h("dl", { class: "sv-facts sv-pcr-facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)])), ...warnings.map(w => h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " ", w)), ...stageNote, program, mixView.el];
       actions.push(
         h(
           "button",

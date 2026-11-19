@@ -2349,6 +2349,55 @@
 .sv-pcr-copy {
   margin-left: auto;
 }
+/* The reaction mix, which sits under the program and folds to its heading. */
+.sv-pcr-mix {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sv-mix-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.sv-mix-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* Wide enough for a volume and its stepper, so the five fields fit on one line. */
+.sv-mix-num {
+  width: 92px;
+}
+.sv-mix-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+/* Nothing in the recipe is clickable, so its rows take neither the cursor nor the hover tint. */
+.sv-table.sv-mix-table tbody tr {
+  cursor: default;
+}
+.sv-table.sv-mix-table tbody tr:hover {
+  background: none;
+}
+/* The template goes in each tube on its own, which sets its row apart from the mix's. */
+.sv-table.sv-mix-table tbody tr.sv-mix-own,
+.sv-table.sv-mix-table tbody tr.sv-mix-own:hover {
+  background: var(--side);
+}
+.sv-mix-table tfoot td {
+  padding: 8px 12px;
+  font-weight: 500;
+  border-top: 1px solid var(--line-2);
+}
+.sv-mix-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .sv-prog {
   width: 100%;
 }

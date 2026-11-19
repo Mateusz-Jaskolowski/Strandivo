@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFi
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { checkMapRegionDisplay } from "./mapRegions.mjs";
+import { checkMapImage, standaloneSvg } from "./mapImage.mjs";
 
 const [binary, outDir = "e2e-out"] = process.argv.slice(2);
 if (!binary) {
@@ -52,9 +53,6 @@ async function savedImages(s, scope, labels) {
   const png = Object.entries(saved).find(([name]) => name.endsWith(".png"));
   return { svgName: svg?.[0] ?? "", svg: svg?.[1] ?? "", pngName: png?.[0] ?? "", png: png?.[1] ?? {} };
 }
-
-/** An SVG file that opens as it looks elsewhere: every style its own, nothing only the page understood. */
-const standaloneSvg = svg => /^<\?xml/.test(svg) && /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
 
 async function wd(method, url, body) {
   const res = await fetch(DRIVER + url, {
@@ -1729,6 +1727,10 @@ async function main() {
     check("One undo takes all of them back out again", await s.waitFor(`window.__strandivo.store.data.features.length === ${featuresBefore}`, 5000));
 
     await checkMapRegionDisplay(s, check);
+    await checkMapImage(s, check, async label => {
+      const saved = await savedImages(s, "sv-map-image", [label]);
+      return label.includes("SVG") ? saved.svg : saved.png;
+    });
 
     // --- regions of a protein: a made-up entry for pUC19's AmpR, so no network is needed ---
     const featuresForRegions = await s.exec(`${doc} return s.data.features.length;`);

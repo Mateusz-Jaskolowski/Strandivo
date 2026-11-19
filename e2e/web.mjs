@@ -24,6 +24,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { createServer } from "node:http";
 import path from "node:path";
 import { checkMapRegionDisplay } from "./mapRegions.mjs";
+import { checkMapImage, standaloneSvg } from "./mapImage.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const dist = path.join(root, "dist-web");
@@ -225,9 +226,9 @@ class Session {
  * the page's private file system named `name`, and gives back what was written: the SVG's
  * text, and the PNG's size in pixels and whether it says its resolution.
  */
-async function savedImages(s, scope, name) {
+async function savedImages(s, scope, name, kinds = ["svg", "png"]) {
   const out = {};
-  for (const kind of ["svg", "png"]) {
+  for (const kind of kinds) {
     out[kind] = await s.execAsync(`
       (async () => {
         const root = await navigator.storage.getDirectory();
@@ -248,9 +249,6 @@ async function savedImages(s, scope, name) {
   }
   return out;
 }
-
-/** An SVG file that opens as it looks elsewhere: every style its own, nothing only the page understood. */
-const standaloneSvg = svg => typeof svg === "string" && /^<\?xml/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
 
 async function main(outDir) {
   mkdirSync(outDir, { recursive: true });
@@ -369,6 +367,12 @@ async function main(outDir) {
     await enzymeChoice("Map cut-site filter", "unique6");
 
     await checkMapRegionDisplay(s, check, { smoke: true });
+    // The map as an image, each save answered by a new file in the page's private file system.
+    let mapSaves = 0;
+    await checkMapImage(s, check, async label => {
+      const kind = label.includes("SVG") ? "svg" : "png";
+      return (await savedImages(s, "sv-map-image", `map ${++mapSaves}`, [kind]))[kind];
+    });
 
     // --- detection, in the worker ---
     await s.exec("window.__strandivo.command('detect-features')");

@@ -123,6 +123,42 @@ export function formatPrimerList(primers: LibraryEntry[]): string {
   return ["Name\tSequence\tNotes\tColour", ...primers.map(p => `${clean(p.name)}\t${p.bases}\t${clean(p.notes)}\t${p.color ?? ""}`)].join("\n");
 }
 
+/** Parses stored JSON library entries, preserving colour and notes across reloads. */
+export function parseLibraryJson(raw: string, makeId: () => string): LibraryPrimer[] {
+  try {
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((p): p is Record<string, unknown> => !!p && typeof p === "object" && typeof (p as Record<string, unknown>).name === "string" && typeof (p as Record<string, unknown>).bases === "string")
+      .map(p => ({
+        id: String(p.id || makeId()),
+        name: p.name as string,
+        bases: (p.bases as string).toUpperCase(),
+        notes: typeof p.notes === "string" ? p.notes : "",
+        ...(typeof p.color === "string" && /^#[0-9a-f]{6}$/i.test(p.color.trim()) ? { color: p.color.trim().toUpperCase() } : {})
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * How a candidate primer matches the existing library (same rule as `newEntries`: exact
+ * duplicate is same name + sequence; `sameBases` reports another entry with those bases
+ * under a different name so the user can still save a separately named copy).
+ */
+export function libraryMatch(existing: readonly LibraryEntry[], name: string, bases: string): { exact: boolean; sameBases: LibraryEntry | null } {
+  const b = bases.toUpperCase();
+  const n = name.trim().toLowerCase();
+  let sameBases: LibraryEntry | null = null;
+  for (const e of existing) {
+    if (e.bases.toUpperCase() !== b) continue;
+    if (e.name.trim().toLowerCase() === n) return { exact: true, sameBases: e };
+    if (!sameBases) sameBases = e;
+  }
+  return { exact: false, sameBases };
+}
+
 /** Entries that aren't already in the library (same name and sequence). */
 export function newEntries(existing: LibraryEntry[], incoming: LibraryEntry[]): LibraryEntry[] {
   const key = (e: LibraryEntry) => `${e.name.trim().toLowerCase()}\u0000${e.bases.toUpperCase()}`;

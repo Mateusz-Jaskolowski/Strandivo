@@ -68,7 +68,8 @@ export const APP_MENU: AppMenuGroup[] = [
     label: "Tools",
     items: [
       { id: "add-feature", label: "Add Feature from Selection", file: true },
-      { id: "add-primer", label: "Add Primer from Selection", file: true },
+      { id: "add-primer", label: "Add Forward Primer…", file: true },
+      { id: "add-reverse-primer", label: "Add Reverse Primer…", file: true },
       { id: "detect-features", label: "Detect Features…", file: true },
       "separator",
       { id: "digest", label: "Digest…", file: true },

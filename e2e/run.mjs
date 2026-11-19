@@ -698,6 +698,13 @@ async function main() {
       return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`);
     check("Right-clicking selected bases offers forward and reverse primers", menu.includes("Add forward primer") && menu.includes("Add reverse primer"), menu.join(", "));
     await s.exec("window.__e2eMenu.find(e => e.label === 'Add reverse primer').run();");
+    check("Add reverse primer opens the primer dialog with the selection", await s.waitFor("document.querySelector('.sv-dialog .sv-pdlg-seq-input')?.value.length === 20", 5000));
+    const previewInside = await s.exec(`const box = document.querySelector('.sv-pdlg-preview')?.getBoundingClientRect();
+      const pr = document.querySelector('.sv-pdlg-preview .sv-ctx-primer')?.getBoundingClientRect();
+      return !!(box && pr && pr.top >= box.top - 2 && pr.bottom <= box.bottom + 2 && pr.left >= box.left - 2 && pr.right <= box.right + 2);`);
+    check("Primer dialog preview renders inside its preview box", previewInside);
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Add primer']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog') && window.__strandivo.store.data.primers.length >= 1", 5000);
     const added = await s.exec(`${doc} const p = s.data.primers.at(-1); return p && { start: p.start, end: p.end, strand: p.strand, rc: p.bases === [...s.data.sequence.slice(100, 120).toUpperCase()].reverse().map(c => ({ A: 'T', T: 'A', G: 'C', C: 'G' })[c]).join('') };`);
     check("Add reverse primer adds the bottom-strand primer over the selection", added && added.start === 100 && added.end === 119 && added.strand === -1 && added.rc, JSON.stringify(added));
     await s.exec(`${doc} s.undo(); delete window.__strandivoMenu;`);
@@ -2512,6 +2519,20 @@ async function main() {
     const foldOpen = await s.waitFor("window.__strandivo.tabs()[window.__strandivo.activeTab()] === 'library-parent.gb' && window.__strandivo.store", 20000);
     check("The library's parent opens again to turn its features into regions", foldOpen);
     if (foldOpen) {
+      await s.click('button[aria-label="Export GenBank or FASTA"]');
+      check("Export keeps all formats in the picker and its buttons together", await s.exec(`
+        const dlg = document.querySelector('.sv-dialog');
+        const format = dlg?.querySelector('select');
+        const [cancel, submit] = dlg?.querySelectorAll('.sv-dialog-foot button') ?? [];
+        if (!format || !cancel || !submit) return false;
+        const frame = dlg.getBoundingClientRect();
+        const left = cancel.getBoundingClientRect(), right = submit.getBoundingClientRect();
+        return format.value === 'genbank' && Array.from(format.options, option => option.textContent).join('|') === 'GenBank|GenBank with protein regions|FASTA'
+          && cancel.textContent === 'Cancel' && submit.textContent === 'Export…'
+          && left.left >= frame.left && left.right <= right.left && right.right <= frame.right && Math.abs(left.top - right.top) < 1;`));
+      await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Cancel']", "xpath");
+      check("Cancel closes Export", await s.waitFor("!document.querySelector('.sv-dialog')", 5000));
+
       // The nanobody's CDS, as testdata/library/protein-regions.gb adds it over its parts.
       await s.exec(`${doc} window.__strandivo.setView("map");
         const cds = { id: "e2e-nanobody", name: "Nanobody", type: "CDS", start: 2096, end: 2449, strand: 1, notes: {}, raw: {} };
@@ -2557,20 +2578,44 @@ async function main() {
           return (window.__e2eMenu || []).map(e => e === 'separator' ? '—' : e.label);`, id);
         const cdsMenu = await rightClick("e2e-nanobody");
         check("The CDS's right-click menu offers to turn features into regions", cdsMenu.includes("Turn features into regions…"), cdsMenu.join(", "));
+        await s.exec(`${doc}
+          const features = Array.from({ length: 48 }, (_, index) => ({
+            id: 'e2e-part-' + index, name: 'Part ' + index, type: 'misc_feature', start: 2096 + index * 3,
+            end: 2098 + index * 3, strand: 1, notes: {}, raw: {}
+          }));
+          features.push({ ...features[0], id: 'e2e-pieces', name: 'Separate pieces', end: 2104,
+            locations: [{ start: 2096, end: 2098 }, { start: 2102, end: 2104 }] });
+          s.apply({ ...s.data, features: [...s.data.features, ...features] }, 'Add features');`);
         const cdr1 = await s.exec(`${doc} return s.data.features.find(f => f.name === 'cdr1').id;`);
         const featureMenu = await rightClick(cdr1);
         check("A feature inside it offers to become one of its regions", featureMenu.includes("Turn into region of Nanobody…"), featureMenu.join(", "));
         await s.exec("window.__e2eMenu.find(e => e.label === 'Turn into region of Nanobody…')?.run(); delete window.__strandivoMenu;");
-        const onlyOne = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 7", 5000) &&
+        const onlyOne = await s.waitFor("document.querySelectorAll('.sv-dialog .sv-fold-row').length === 56", 5000) &&
           await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-fold-row input[type=checkbox]')).filter(b => b.checked).map(b => b.closest('.sv-fold-row').querySelector('.sv-fold-name').textContent);");
         check("Only that feature starts ticked", JSON.stringify(onlyOne) === JSON.stringify(["cdr1"]), JSON.stringify(onlyOne));
+        check("The long feature list scrolls all the way to its last row", await s.exec(`
+          const body = document.querySelector('.sv-dialog-body');
+          const last = body?.querySelector('.sv-fold-row:last-child');
+          if (!last) return false;
+          body.scrollTop = body.scrollHeight;
+          return body.scrollTop > 0 && last.getBoundingClientRect().bottom <= body.getBoundingClientRect().bottom;`));
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Select all']", "xpath");
+        check("Select all ticks every eligible feature and leaves separate pieces alone", await s.exec(`
+          const boxes = Array.from(document.querySelectorAll('.sv-fold-row input[type=checkbox]'));
+          const pieces = document.querySelector('[data-feature="e2e-pieces"] input');
+          return boxes.filter(box => box.checked).length === 55 && pieces?.disabled && !pieces.checked
+            && document.querySelector('.sv-dialog-foot .sv-btn-primary').textContent === 'Turn 55 features into regions';`));
+        await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Deselect all']", "xpath");
+        check("Deselect all clears the checkboxes and disables Apply", await s.exec(`
+          return !document.querySelector('.sv-fold-row input:checked') && document.querySelector('.sv-dialog-foot .sv-btn-primary').disabled;`));
+        await s.click(`.sv-fold-row[data-feature="${cdr1}"] input`);
         await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Turn 1 feature into regions']", "xpath");
         check(
           "It becomes a region of the CDS, which is selected with the region picked",
           await s.waitFor(`!window.__strandivo.store.data.features.some(f => f.id === '${cdr1}') && window.__strandivo.store.selection.focus?.id === 'e2e-nanobody' && window.__strandivo.store.selection.focus?.region === 0`, 5000),
           await s.exec(`${doc} return JSON.stringify(s.selection.focus);`)
         );
-        await s.exec(`${doc} s.undo(); s.undo();`);
+        await s.exec(`${doc} s.undo(); s.undo(); s.undo();`);
         check("Undo takes the file back to how it opened", await s.waitFor(`window.__strandivo.store.data.features.length === ${before - 1}`, 5000));
       }
       await s.exec("document.querySelector('.sv-dialog-close')?.click(); window.__strandivo.closeTab()");

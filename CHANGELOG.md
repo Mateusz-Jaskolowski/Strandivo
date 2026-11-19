@@ -26,6 +26,10 @@ with Unreleased's notes and leaves them where they are.
   for the strain only when a chosen enzyme won't cut. A PCR product is unmethylated, so
   its digests cut where the template's don't, and DpnI cuts only the template. Enzyme
   details lists what Dam, Dcm and CpG methylation do to each enzyme.
+- **Turn features into regions in bulk**: scroll through long lists and select or
+  deselect all eligible features at once.
+- **A clearer Export dialog**: pick the file format separately, with Cancel and Export
+  together at the bottom.
 - **Read crowded linear maps**: leaders connect displaced feature, protein region,
   primer and cut-site names to their marks, and primer arrows stay close to the
   backbone even when their names need more room.

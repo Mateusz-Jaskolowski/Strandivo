@@ -277,7 +277,27 @@ export interface BindingSite {
   insertions: number;
   /** Template bases the primer skips (a deletion it makes). */
   deletions: number;
+  /** Tm of the primer at this site (3′ arm Tm when the site has changes), under current Tm settings. */
+  tm: number | null;
 }
+
+/** A partial 3′ off-target match shorter than `minAnneal` whose exact contiguous 3′ duplex still has a high Tm. */
+export interface PartialBindingSite {
+  start: number;
+  end: number;
+  strand: 1 | -1;
+  /** Contiguous exact-matching bases at the primer's 3′ end. */
+  length: number;
+  /** Exact Tm of those contiguous 3′ bases under current Tm settings. */
+  tm: number;
+}
+
+/** Minimum exact 3′ bases to seed a partial off-target search. */
+export const PARTIAL_SITE_SEED = 8;
+/** Absolute Tm floor (°C) below which partial 3′ matches are ignored. */
+export const PARTIAL_SITE_MIN_TM = 45;
+/** Maximum Tm drop (°C) below the primary site's Tm to flag a partial 3′ off-target match. */
+export const PARTIAL_SITE_TM_DROP = 15;
 
 /** A change (substitution, insertion, deletion or a mix) at most this long is bridged. */
 const MAX_CHANGE = 6;
@@ -361,12 +381,75 @@ export function findBindingSites(primer: string, template: string, circular: boo
       if (seen.has(key)) continue;
       seen.add(key);
       const a = alignPrimer({ start, end, strand, bases: p }, t);
-      sites.push({ start, end, strand, length: a.binding.length, mismatches: a.substitutions, insertions: a.insertions, deletions: a.deletions });
+      sites.push({ start, end, strand, length: a.binding.length, mismatches: a.substitutions, insertions: a.insertions, deletions: a.deletions, tm: bindingTm(a) });
     }
   };
   scan(seed, 1);
   scan(reverseComplement(seed), -1);
   return sites;
+}
+
+/**
+ * Partial off-target matches where at least `PARTIAL_SITE_SEED` contiguous exact bases at
+ * the primer's 3′ end match elsewhere on the template and that exact duplex's Tm is at
+ * least `max(PARTIAL_SITE_MIN_TM, primaryTm - PARTIAL_SITE_TM_DROP)`. Sites already in
+ * `primarySites` (or `ownSite`) are skipped. Because the matched stretch has zero internal
+ * mismatches, `meltingTemp` is exact across every supported Tm method.
+ */
+export function findPartialOffTargetSites(
+  primer: string,
+  template: string,
+  circular: boolean,
+  primarySites: readonly PrimerSite[],
+  primaryTm: number | null,
+  ownSite?: PrimerSite | null
+): PartialBindingSite[] {
+  const p = primer.toUpperCase().replace(/[^ACGT]/g, "");
+  const t = template.toUpperCase();
+  const n = t.length;
+  if (p.length < PARTIAL_SITE_SEED || !n) return [];
+  const k = PARTIAL_SITE_SEED;
+  const seed = p.slice(-k);
+  const text = circular ? t + t.slice(0, p.length) : t;
+  const minTm = primaryTm !== null ? Math.max(PARTIAL_SITE_MIN_TM, primaryTm - PARTIAL_SITE_TM_DROP) : PARTIAL_SITE_MIN_TM;
+  const threePrimeKey = (s: PrimerSite) => `${s.strand}:${s.strand === 1 ? s.end : s.start}`;
+  const skip = new Set<string>(primarySites.map(threePrimeKey));
+  if (ownSite) skip.add(threePrimeKey(ownSite));
+  const pAt = (q: number) => p[p.length - 1 - q];
+  const out: PartialBindingSite[] = [];
+
+  const scan = (needle: string, strand: 1 | -1) => {
+    let from = 0;
+    for (;;) {
+      const i = text.indexOf(needle, from);
+      if (i < 0) break;
+      from = i + 1;
+      if (i >= n) continue;
+      const end3 = strand === 1 ? (i + k - 1) % n : i % n;
+      const key = `${strand}:${end3}`;
+      if (skip.has(key)) continue;
+      const tAt = (q: number): string => {
+        if (q >= n) return "";
+        const pos = strand === 1 ? i + k - 1 - q : i + q;
+        if (!circular && (pos < 0 || pos >= n)) return "";
+        const c = t[((pos % n) + n) % n];
+        return strand === 1 ? c : reverseComplement(c);
+      };
+      let q = k;
+      while (q < p.length && tAt(q) && tAt(q) === pAt(q)) q++;
+      // Any hit of 15+ exact 3′ bases is a primary site (already skipped when primarySites came from findBindingSites).
+      if (q >= 15) continue;
+      const tm = meltingTemp(p.slice(p.length - q));
+      if (tm === null || tm < minTm) continue;
+      skip.add(key);
+      const start = strand === 1 ? (((i + k - q) % n) + n) % n : i % n;
+      const end = strand === 1 ? (i + k - 1) % n : (i + q - 1) % n;
+      out.push({ start, end, strand, length: q, tm });
+    }
+  };
+  scan(seed, 1);
+  scan(reverseComplement(seed), -1);
+  return out.sort((a, b) => b.tm - a.tm || b.length - a.length || a.start - b.start);
 }
 
 /** Where an edited primer binds, and how that was settled. */
@@ -563,6 +646,10 @@ export interface PrimerReport {
   deletions: number;
   gc: number;
   sites: number;
+  /** Primary binding sites found by `findBindingSites`, each with matched length and local Tm. */
+  siteList: BindingSite[];
+  /** Shorter exact contiguous 3′ off-target matches whose Tm meets the relative threshold. */
+  partialSites: PartialBindingSite[];
   /** Stretches of the 5′ tail that also occur in the template, longest first. */
   tailSites: TailMatch[];
   checks: PrimerCheck[];
@@ -602,6 +689,7 @@ export function primerReport(bases: string, binds: number | PrimerAlignment, tem
   const threePrime = (x: PrimerSite) => (x.strand === 1 ? x.end : x.start);
   const ownMissed = !!site && !!a && (a.arms[0]?.length ?? 0) >= OWN_SITE_ARM && !siteList.some(s => s.strand === site.strand && threePrime(s) === threePrime(site));
   const sites = siteList.length + (ownMissed ? 1 : 0);
+  const partialSites = template && sites > 0 ? findPartialOffTargetSites(seq, template, circular, siteList, tm, site) : [];
   const checks: PrimerCheck[] = [];
   const ok = (text: string, short = "OK") => checks.push({ level: "ok", short, text });
   const warn = (short: string, text: string) => checks.push({ level: "warn", short, text });
@@ -649,6 +737,16 @@ export function primerReport(bases: string, binds: number | PrimerAlignment, tem
     else ok("Binds once in this sequence");
   }
 
+  if (partialSites.length) {
+    const [top] = partialSites;
+    const at = `${INTEGER.format(top.start + 1)}–${INTEGER.format(top.end + 1)} ${top.strand === 1 ? "→" : "←"}`;
+    if (partialSites.length === 1) {
+      warn("Partial off-target", `Partial 3′ match at ${at} (${top.length} bp, Tm ${top.tm.toFixed(1)} °C).`);
+    } else {
+      warn("Partial off-target", `${partialSites.length} partial 3′ matches (highest Tm ${top.tm.toFixed(1)} °C at ${at}).`);
+    }
+  }
+
   // "Binds once" counts the 3′ end's sites, which is all a polymerase extends from; a tail
   // that matches the template as well can still anneal and prime, so it is checked apart.
   const found = template && tail.length >= MIN_TAIL_MATCH ? tailMatches(tail, template, circular) : [];
@@ -663,5 +761,5 @@ export function primerReport(bases: string, binds: number | PrimerAlignment, tem
     const more = tailSites.length > 1 ? ` and ${tailSites.length === 2 ? "one other place" : `${tailSites.length - 1} other places`}` : "";
     warn("Tail binds", `${first.length} bases of the 5′ tail also match this sequence at ${at}${more}, so the primer may prime there as well.`);
   } else if (template && tail.length >= MIN_TAIL_MATCH) ok("The 5′ tail matches nothing else here");
-  return { length: seq.length, binding, tail, tm, tmFull, arms, mismatches: a?.substitutions ?? 0, insertions: a?.insertions ?? 0, deletions: a?.deletions ?? 0, gc, sites, tailSites, checks };
+  return { length: seq.length, binding, tail, tm, tmFull, arms, mismatches: a?.substitutions ?? 0, insertions: a?.insertions ?? 0, deletions: a?.deletions ?? 0, gc, sites, siteList, partialSites, tailSites, checks };
 }

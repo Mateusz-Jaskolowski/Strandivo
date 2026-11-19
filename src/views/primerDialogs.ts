@@ -15,7 +15,7 @@ import { primerLibrary } from "../primerLibrary.ts";
 import { serialize } from "../doc/fileio.ts";
 import { fromParsed, toParsed } from "../doc/convert.ts";
 import { chooseSavePath, openFiles, openLibrary, saveText } from "../platform.ts";
-import { annealingTemp, bindingTm, changesText, crossDimer, currentTmSettings, DIMER_BASES, findBindingSites, meltingTemp, tmBases, withNebPolymerase } from "../lib/primers.ts";
+import { annealingTemp, crossDimer, currentTmSettings, DIMER_BASES, meltingTemp, tmBases, withNebPolymerase } from "../lib/primers.ts";
 import { alignPrimer } from "../lib/primerAlign.ts";
 import { NEB_POLYMERASES, nebPolymerase } from "../lib/polymerases.ts";
 import { PCR_PROTOCOLS, TEMPLATES, templatesFor, type TemplateKind } from "../lib/pcrProtocols.ts";
@@ -37,6 +37,7 @@ import { enzymeSourceSelect } from "./enzymeControls.ts";
 import { programDraft, programInputKey, syncProgram, type ProgramDraft, type ProgramSnapshot } from "../lib/pcrProgramEdit.ts";
 import { productAdvice, productOverview } from "../lib/pcrOverview.ts";
 import { PCR_GUIDANCE } from "../lib/pcrGuidance.ts";
+import { openPrimerDialog } from "./primerDialog.ts";
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
 /** Where a primer binds, with its direction: "379–395 →" or "← 465–481". */
@@ -283,53 +284,7 @@ export async function exportPrimerList(ctx: DocContext, rows: ExportRow[]) {
 // ---------- add by sequence ----------
 
 export function openAddBySequence(ctx: DocContext) {
-  const dlg = ctx.openDialog({ title: "Add a primer by its sequence", note: "Finds where the primer binds on either strand, allowing 5′ tails and mismatches.", width: 560 });
-  const name = h("input", { class: "sv-input", placeholder: "e.g. pET-seq-F", "aria-label": "Primer name" }) as HTMLInputElement;
-  const seq = h("textarea", { class: "sv-input sv-mono sv-dlg-seq", rows: "2", placeholder: "Sequence 5′→3′", "aria-label": "Primer sequence", spellcheck: "false" }) as HTMLTextAreaElement;
-  const save = h("input", { type: "checkbox" }) as HTMLInputElement;
-  const status = h("p", { class: "sv-small sv-dlg-status" });
-  const addBtn = h("button", { type: "button", class: "sv-btn sv-btn-primary", onclick: () => add() }, "Add primer") as HTMLButtonElement;
-  const bases = () => seq.value.replace(/[^A-Za-z]/g, "").toUpperCase();
-  const check = () => {
-    const b = bases();
-    const d = ctx.store.data;
-    const sites = b.length >= 15 ? findBindingSites(b, d.sequence, d.circular) : [];
-    addBtn.disabled = !sites.length;
-    if (b.length < 15) status.replaceChildren(b.length ? `${b.length} bases; at least 15 at the 3′ end must match the sequence.` : "");
-    else if (!sites.length) status.replaceChildren(h("span", { class: "sv-text-warn" }, "Doesn't bind this sequence (needs at least 15 matching bases at the 3′ end)."));
-    else {
-      const s = sites[0];
-      const tm = bindingTm(alignPrimer({ ...s, bases: b }, d.sequence));
-      const changes = changesText(s);
-      status.replaceChildren(h("span", { class: "sv-text-ok" }, iconSvg("check", 13), ` Binds ${where(s)}`), ` · ${s.length} bases on the site · Tm ${tm === null ? "—" : `${tm.toFixed(1)} °C`}${changes ? ` (3′ arm) · ${changes}` : ""}${sites.length > 1 ? ` · also ${plural(sites.length - 1, "other place")}` : ""}`);
-    }
-    return sites;
-  };
-  const add = () => {
-    const sites = check();
-    if (!sites.length) return;
-    const d = ctx.store.data;
-    const b = bases();
-    const s = sites[0];
-    const primerName = name.value.trim() || `Primer ${d.primers.length + 1}`;
-    const p: SeqPrimer = { id: newId("p"), name: uniqueName(primerName, d.primers.map(x => x.name)), start: s.start, end: s.end, strand: s.strand, bases: b, notes: {}, raw: {} };
-    ctx.store.apply({ ...d, primers: [...d.primers, p] }, "Add primer", { range: { start: p.start, end: p.end }, focus: { kind: "primer", id: p.id } });
-    track("primer_added", { how: "sequence" });
-    if (save.checked) primerLibrary.add([{ name: primerName, bases: b, notes: "" }]);
-    dlg.close();
-    if (sites.length > 1) toast(`Binds ${sites.length} sites; added at the first (${fmt(s.start + 1)}).`, "info", 5000);
-  };
-  seq.addEventListener("input", check);
-  seq.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      add();
-    }
-  });
-  name.addEventListener("keydown", e => e.key === "Enter" && seq.focus());
-  dlg.body.replaceChildren(field("Name", name), field("Sequence", seq), status, h("label", { class: "sv-check-row" }, save, "Also save it to the primer library"));
-  dlg.footer.replaceChildren(h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Cancel"), addBtn);
-  check();
+  openPrimerDialog(ctx, { mode: "create", range: null });
 }
 
 // ---------- PCR product ----------

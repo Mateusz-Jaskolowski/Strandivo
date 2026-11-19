@@ -44,6 +44,8 @@ export function openFoldDialog(ctx: DocContext, cds: SeqFeature, only?: string) 
   const ticked = new Set(rows.filter(r => (only ? r.feature.id === only && r.tickable : r.ticked)).map(r => r.feature.id));
   const kinds = new Map(rows.map(r => [r.feature.id, r.region.kind]));
   const swatches = new Map<string, HTMLElement>();
+  const boxes = new Map<string, HTMLInputElement>();
+  const bulk = h("button", { type: "button", class: "sv-btn sv-foot-start" });
   const apply = h("button", { type: "button", class: "sv-btn sv-btn-primary" }) as HTMLButtonElement;
 
   const refresh = () => {
@@ -55,14 +57,27 @@ export function openFoldDialog(ctx: DocContext, cds: SeqFeature, only?: string) 
       swatch.style.background = color ?? "";
       swatch.classList.toggle("sv-fold-swatch-none", !color);
     }
+    bulk.disabled = boxes.size === 0;
+    bulk.textContent = boxes.size > 0 && ticked.size === boxes.size ? "Deselect all" : "Select all";
     apply.disabled = chosen.length === 0;
     apply.textContent = chosen.length ? `Turn ${plural(chosen.length, "feature")} into regions` : "Turn into regions";
   };
+
+  bulk.addEventListener("click", () => {
+    const checked = ticked.size < boxes.size;
+    ticked.clear();
+    for (const [id, box] of boxes) {
+      box.checked = checked;
+      if (checked) ticked.add(id);
+    }
+    refresh();
+  });
 
   const rowFor = (row: FoldRow) => {
     const f = row.feature;
     const name = row.region.name;
     const box = h("input", { type: "checkbox", class: "sv-detect-tick", checked: ticked.has(f.id), disabled: !row.tickable, "aria-label": `${name}, residues ${row.start}–${row.end}` }) as HTMLInputElement;
+    if (row.tickable) boxes.set(f.id, box);
     box.addEventListener("change", () => {
       if (box.checked) ticked.add(f.id);
       else ticked.delete(f.id);
@@ -119,7 +134,7 @@ export function openFoldDialog(ctx: DocContext, cds: SeqFeature, only?: string) 
       !added.length ? `Deleted ${plural(already, "feature")} already among the regions of ${cds.name}.` : already ? `${what}, and deleted ${plural(already, "feature")} that already ${already === 1 ? "was one" : "were"}.` : `${what}.`
     );
   });
-  dlg.footer.replaceChildren(h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Cancel"), apply);
+  dlg.footer.replaceChildren(bulk, h("button", { type: "button", class: "sv-btn", onclick: () => dlg.close() }, "Cancel"), apply);
   refresh();
 }
 

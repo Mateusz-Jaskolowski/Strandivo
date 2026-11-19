@@ -53,6 +53,19 @@ test("an open file's own keys, on a Mac and elsewhere", () => {
   assert.equal(documentShortcut({ ...cmd, key: "y" }, macApp), "redo");
   assert.equal(documentShortcut({ ...ctrl, key: "a" }, macApp), null);
   assert.equal(documentShortcut({ ...ctrl, key: "a", altKey: true }, app), null);
+  // Unshifted A is Select All; Shift+A falls through so Align Sequencing Reads… gets it.
+  assert.equal(documentShortcut({ ...cmd, key: "a" }, macApp), "select-all");
+  assert.equal(documentShortcut({ ...cmd, key: "A", shiftKey: true }, macApp), null);
+  assert.equal(documentShortcut({ ...ctrl, key: "A", shiftKey: true }, app), null);
+  assert.equal(menuShortcut({ ...ctrl, key: "A", shiftKey: true }), "add-reads");
+  // R / Shift+R add forward / reverse primers in desktop, never intercepting reload in a browser.
+  assert.equal(documentShortcut({ ...cmd, key: "r" }, macApp), "add-primer");
+  assert.equal(documentShortcut({ ...cmd, key: "R", shiftKey: true }, macApp), "add-reverse-primer");
+  assert.equal(documentShortcut({ ...ctrl, key: "r" }, app), "add-primer");
+  assert.equal(documentShortcut({ ...ctrl, key: "R", shiftKey: true }, app), "add-reverse-primer");
+  assert.equal(documentShortcut({ ...cmd, key: "r" }, { mac: true, browser: true }), null);
+  assert.equal(documentShortcut({ ...cmd, key: "R", shiftKey: true }, { mac: true, browser: true }), null);
+  assert.equal(documentShortcut({ ...ctrl, key: "r" }, { mac: false, browser: true }), null);
   assert.equal(documentShortcut({ ...cmd, key: "3" }, macApp), "show-primers");
 });
 

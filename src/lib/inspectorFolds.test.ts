@@ -21,7 +21,7 @@ test("a choice overrides the default either way", () => {
 });
 
 test("a stored state keeps only known sections with a yes or no", () => {
-  assert.deepEqual(readFolds({ translation: false, note: true, bogus: true, inside: "yes" }), { translation: false, note: true });
+  assert.deepEqual(readFolds({ translation: false, note: true, "primer-pairs": false, bogus: true, inside: "yes" }), { translation: false, note: true, "primer-pairs": false });
   assert.deepEqual(readFolds(null), {});
   assert.deepEqual(readFolds(["translation"]), {});
   assert.deepEqual(readFolds("translation"), {});

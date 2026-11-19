@@ -1397,12 +1397,10 @@
   stroke-width: 1.4;
   stroke-dasharray: none;
 }
-/* A site Dam or Dcm methylation blocks keeps its place, with its tick (on the linear map, its
-   leader) dashed and a small "m" after its name in the name's own colour, so it reads as a
-   site that won't cut without another colour to learn. Dashed even when selected. */
-.sv-map-cut line.sv-map-blocked,
-.sv-map-leader .sv-map-leader-cutsite.sv-map-blocked,
-.sv-map-leader-cutsite.sv-map-blocked {
+/* A site Dam or Dcm methylation blocks keeps its place, with its tick dashed and a small "m"
+   after its name in the name's own colour, so it reads as a site that won't cut without
+   another colour to learn. Dashed even when selected. */
+.sv-map-cut line.sv-map-blocked {
   stroke-dasharray: 2 1.5;
   stroke-linecap: butt;
 }

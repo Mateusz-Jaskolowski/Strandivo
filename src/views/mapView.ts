@@ -1265,7 +1265,7 @@ export class MapView {
     const rows = sites.map(site => {
       const hit = { kind: "cutsite", id: site.id } as const;
       return h("button", {
-        type: "button", class: "sv-btn sv-btn-quiet sv-map-cut-site-choice", "data-site": site.id,
+        type: "button", class: "sv-btn sv-btn-quiet sv-map-cut-site-choice", "data-site": site.id, title: cutTitle(site),
         onclick: (e: MouseEvent) => {
           if (isPickClick(e)) pickSite(this.ctx, site.id, "map");
           else this.selectAnnotation(hit);
@@ -1277,7 +1277,7 @@ export class MapView {
           dlg.close();
           if (target) this.ctx.contextMenu(target, { x: e.clientX, y: e.clientY }, true);
         }
-      }, site.enzyme, h("span", { class: "sv-mono sv-dim" }, site.cut === 0 ? "Before base 1" : `After base ${fmt(site.cut)}`));
+      }, h("span", null, site.enzyme, site.methylation?.blocked ? h("sup", { class: "sv-methyl-mark" }, "m") : null), h("span", { class: "sv-mono sv-dim" }, site.cut === 0 ? "Before base 1" : `After base ${fmt(site.cut)}`));
     });
     dlg.body.append(h("div", { class: "sv-map-cut-site-choices" }, rows));
   }

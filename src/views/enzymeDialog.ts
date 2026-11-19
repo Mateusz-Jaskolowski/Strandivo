@@ -119,8 +119,14 @@ export function openEnzymeDialog(ctx: DocContext, written: string) {
     const notes = [...new Set(effects.flatMap(m => (m ? [methylationNote(m, name)] : [])))];
     const rows: [string, Node | string][] = [[sites.length === 1 ? "Site" : `${fmt(sites.length)} sites`, h("span", { class: "sv-mono" }, listed(sites.map(s => s.start + 1)))]];
     if (notCut.length) {
+      const marked: (Node | string)[] = [];
+      notCut.slice(0, LISTED).forEach((pos, i) => {
+        if (i) marked.push(" · ");
+        marked.push(fmt(pos), h("sup", { class: "sv-methyl-mark" }, "m"));
+      });
+      if (notCut.length > LISTED) marked.push(`, and ${fmt(notCut.length - LISTED)} more`);
       rows.push(["Predicted", cutCountText(sites.length, sites.length - notCut.length)]);
-      rows.push(["Won't cut", h("span", { class: "sv-mono" }, listed(notCut), h("sup", { class: "sv-methyl-mark" }, "m"))]);
+      rows.push(["Won't cut", h("span", { class: "sv-mono" }, ...marked)]);
     }
     rows.push(digest?.uncut ? ["Fragments", "None: the plasmid stays uncut"] : [sizes.length === 1 ? "Fragment" : `${fmt(sizes.length)} fragments`, h("span", { class: "sv-mono" }, listed(sizes, " bp"))]);
     return section("In this sequence", facts(rows), ...notes.map(n => h("p", { class: "sv-small sv-dim" }, n)));

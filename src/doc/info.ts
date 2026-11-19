@@ -7,6 +7,8 @@
 import { h, toast } from "../ui/dom.ts";
 import { detectFromFeatures, dsDnaKilodaltons, gcPercent, NAME_KEY, type LabFields } from "../lib/labinfo.ts";
 import { fieldDef, loadSettings } from "../settings.ts";
+import { hostMethylation, methylationSummary } from "../lib/methylation.ts";
+import { findStrain, HOST_FIELD } from "../lib/strains.ts";
 import type { Feature } from "../lib/types.ts";
 
 export interface SequenceFacts {
@@ -43,6 +45,8 @@ export interface InfoCallbacks {
   /** Called whenever a lab field changes (the document becomes unsaved). */
   changed: () => void;
   sequencing: () => SequencingSummary | null;
+  /** Opens Settings (where amber suppression is chosen). */
+  openSettings: () => void;
 }
 
 const fmt = (n: number, digits = 0) => n.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits });
@@ -87,8 +91,39 @@ export class InfoPanel {
     return this.fields.filter(([, v]) => v.trim());
   }
 
-  private get(key: string): string {
+  /** A lab field's value, "" when the file has none. */
+  value(key: string): string {
     return this.fields.find(([k]) => k === key)?.[1] ?? "";
+  }
+
+  /** Sets a lab field from elsewhere (the Digest dialog's strain), as typing it would. */
+  setField(key: string, value: string) {
+    this.set(key, value, true);
+  }
+
+  private get(key: string): string {
+    return this.value(key);
+  }
+
+  /**
+   * What the strain field means: the DNA's methylation, and for an amber suppressor, that
+   * translations follow Settings rather than the strain, as it says where the plasmid was
+   * grown, not where a protein is made.
+   */
+  private hostNotes(value: string): Node[] {
+    const strain = findStrain(value);
+    const notes: Node[] = [h("p", { class: "ps-muted ps-small ps-field-hint" }, methylationSummary(hostMethylation(value)))];
+    if (strain?.amber)
+      notes.push(
+        h(
+          "p",
+          { class: "ps-muted ps-small ps-field-hint" },
+          `${strain.name} is supE44, which reads TAG as glutamine. Translations follow the `,
+          h("button", { type: "button", class: "ps-link", onclick: () => this.cb.openSettings() }, "Amber stop codon setting"),
+          "."
+        )
+      );
+    return notes;
   }
 
   private set(key: string, value: string, rerender = false) {
@@ -182,11 +217,17 @@ export class InfoPanel {
             value,
             placeholder: def.placeholder || "",
             list: listId,
-            oninput: (e: Event) => this.set(name, (e.target as HTMLInputElement).value)
+            oninput: (e: Event) => {
+              const v = (e.target as HTMLInputElement).value;
+              this.set(name, v);
+              // Said again as it is typed, without drawing the panel again under the caret.
+              if (name === HOST_FIELD) hostNotes.replaceChildren(...this.hostNotes(v));
+            }
           }),
           listId && h("datalist", { id: listId }, (def.options || []).map(o => h("option", { value: o })))
         );
       }
+      const hostNotes = h("div", { class: "ps-field-hints" }, ...(name === HOST_FIELD ? this.hostNotes(value) : []));
       const suggestion =
         name === "Antibiotic resistance" && resistanceSuggestion && value !== resistanceSuggestion
           ? h("button", { class: "ps-link ps-small", title: "Detected from the features", onclick: () => this.set(name, resistanceSuggestion, true) }, `Use “${resistanceSuggestion}”`)
@@ -195,7 +236,7 @@ export class InfoPanel {
         "div",
         { class: "ps-field-row" },
         h("label", { class: "ps-field-label" }, name),
-        h("div", { class: "ps-field-control" }, control, suggestion),
+        h("div", { class: "ps-field-control" }, control, suggestion, name === HOST_FIELD ? hostNotes : null),
         configured.includes(name) ? h("span") : h("button", { class: "ps-link ps-link-quiet ps-small", title: "Remove this field", onclick: () => this.remove(name) }, "Remove")
       );
     };

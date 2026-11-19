@@ -689,6 +689,15 @@ body {
 .ps-field-with-list {
   width: 100%;
 }
+/* What a field's value means, under it (the strain's methylation). */
+.ps-field-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ps-field-hint {
+  margin: 0;
+}
 .ps-field-input {
   width: 100%;
   height: 30px;

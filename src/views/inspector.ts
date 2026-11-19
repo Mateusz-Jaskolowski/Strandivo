@@ -11,6 +11,7 @@ import { primerLibrary } from "../primerLibrary.ts";
 import { cutSiteById, cutSites, featureStyles, isCds, orfFeature, orfs, primerAlignment, protein } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { overhangText, type CutSite } from "../lib/enzymes.ts";
+import { cutCountText, methylationNote } from "../lib/methylation.ts";
 import { PRIMER_COLOURS } from "../lib/contextMenu.ts";
 import { shortTail } from "../lib/primerTable.ts";
 import { frameLabel, type Orf } from "../lib/orfs.ts";
@@ -916,15 +917,18 @@ export class Inspector {
     return h(
       "span",
       { class: "sv-site-links" },
-      sites.map(x =>
-        focus?.id === x.id && !this.ctx.store.selection.enzymes
-          ? h("span", { class: "sv-mono" }, fmt(x.start + 1))
+      sites.map(x => {
+        // A site methylation blocks is marked as on the map.
+        const mark = x.methylation?.blocked ? h("sup", { class: "sv-methyl-mark", title: methylationNote(x.methylation, enzyme) }, "m") : null;
+        return focus?.id === x.id && !this.ctx.store.selection.enzymes
+          ? h("span", { class: "sv-mono" }, fmt(x.start + 1), mark)
           : h(
               "button",
               { type: "button", class: "sv-link sv-mono", title: `Select this ${enzyme} site`, onclick: () => this.ctx.store.selectRange({ start: x.start, end: x.end }, { kind: "cutsite", id: x.id }, "inspector") },
-              fmt(x.start + 1)
-            )
-      )
+              fmt(x.start + 1),
+              mark
+            );
+      })
     );
   }
 
@@ -950,13 +954,14 @@ export class Inspector {
         "div",
         { class: "sv-insp-head" },
         h("div", { class: "sv-insp-title" }, h("span", { class: "sv-insp-icon" }, iconSvg("scissors", 16)), h("h2", { class: "sv-insp-heading" }, c.enzyme)),
-        h("div", { class: "sv-dim sv-small" }, c.cuts === 1 ? "Cuts this sequence once" : `Cuts this sequence ${c.cuts} times`),
+        h("div", { class: "sv-dim sv-small" }, c.sites !== c.cuts ? cutCountText(c.sites, c.cuts) : c.cuts === 1 ? "Cuts this sequence once" : `Cuts this sequence ${c.cuts} times`),
         this.facts([
           ["Site", h("span", { class: "sv-mono" }, c.site.toUpperCase())],
           ["Location", loc(c)],
           ["Cuts after", `${fmt(c.cut)} (top) · ${fmt(c.bottomCut)} (bottom)`],
           ["Ends", overhangText(c)],
-          ...(c.cuts > 1 ? [["All sites", this.siteLinks(c.enzyme)] as [string, Node]] : [])
+          ...(c.methylation ? [["Methylation", methylationNote(c.methylation, c.enzyme)] as [string, string]] : []),
+          ...(c.sites > 1 ? [["All sites", this.siteLinks(c.enzyme)] as [string, Node]] : [])
         ]),
         this.viewOther({ start: c.start, end: c.end })
       ),

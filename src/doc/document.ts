@@ -49,7 +49,9 @@ import { parseSequenceFile, serialize } from "./fileio.ts";
 import { fromParsed, toParsed, type LoadedDocument } from "./convert.ts";
 import { DocStore } from "./store.ts";
 import { openContextMenu } from "./contextMenu.ts";
-import { optionsStore, type DocContext, type Tab, type ViewOptions } from "./context.ts";
+import { optionsStore, type DocContext, type OpenSequence, type Tab, type ViewOptions } from "./context.ts";
+import { hostMethylation, methylationKey } from "../lib/methylation.ts";
+import { HOST_FIELD } from "../lib/strains.ts";
 import { InfoPanel } from "./info.ts";
 import { READ_EXTENSIONS, ReadSet } from "../sanger/readSet.ts";
 import { MapView } from "../views/mapView.ts";
@@ -121,16 +123,12 @@ function loadViewOptions(settings: Settings): ViewOptions {
     labEnzymes: enzymeLibrary.names,
     personalEnzymes: personalEnzymes.names,
     orfOptions: orfOptions(settings),
-    caseMode: settings.sequenceCase
+    caseMode: settings.sequenceCase,
+    methylation: hostMethylation("")
   };
 }
 
-/** Another open file's sequence and selection, as dialogs that combine files see it. */
-export interface OpenSequence {
-  title: string;
-  data: SeqData;
-  selection: Range | null;
-}
+export type { OpenSequence };
 
 /** What a document needs from the main window. */
 export interface DocHost {
@@ -207,7 +205,8 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
 
   // ---------- shared context ----------
   // The map's rotation is the file's own (label size is a setting, and every map opens unzoomed).
-  const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0 }, o => {
+  const hostField = labFields.find(([k]) => k === HOST_FIELD)?.[1] ?? "";
+  const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0, methylation: hostMethylation(hostField) }, o => {
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSource: o.enzymeSource, enzymeFilter: o.enzymeFilter, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap, mapRegions: o.mapRegions, proteinDetail: o.proteinDetail, sequenceRegions: o.sequenceRegions, sequenceGc: o.sequenceGc, primerGc: o.primerGc, mapGc: o.mapGc }));
     } catch {
@@ -327,6 +326,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     openDialog: o => dialogs.open(o),
     openNew: data => host.openNew(data),
     otherSequences: () => host.sequences(),
+    setHost: text => setHost(text),
     noteEdit,
     renameSequence
   };
@@ -486,7 +486,11 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     changed: () => {
       infoDirty = true;
       refreshTitle();
+      // The strain decides which sites Dam and Dcm methylation block.
+      const methylation = hostMethylation(infoPanel.value(HOST_FIELD));
+      if (methylationKey(methylation) !== methylationKey(opts.get().methylation)) opts.set({ methylation });
     },
+    openSettings: () => void openSettings(),
     sequencing: () => reads.summary(),
     setCircular: circular => store.apply({ ...store.data, circular }, circular ? "Make circular" : "Make linear"),
     openReads: () => (reads.count ? setTab("reads") : void addReads()),
@@ -505,6 +509,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     }
   });
   reads.onChange(() => tab === "info" && infoPanel.render());
+  const setHost = (text: string) => infoPanel.setField(HOST_FIELD, text);
 
   // ---------- tabs, split, inspector ----------
   function layout() {
@@ -1208,7 +1213,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     keydown,
     drop,
     confirmClose,
-    sequence: () => ({ title, data: store.data, selection: store.selection.range }),
+    sequence: () => ({ title, data: store.data, selection: store.selection.range, methylation: opts.get().methylation, setHost }),
     feedbackContext: () => ({
       view: TABS.find(t => t.id === tab)?.label ?? "Map",
       file: { name: `${stripExtension(title) || "Untitled"}.gb`, contents: () => serialize(fileJson(), "genbank") }

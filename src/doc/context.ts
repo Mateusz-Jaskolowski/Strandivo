@@ -6,6 +6,7 @@
 
 import type { MenuTarget } from "../lib/contextMenu.ts";
 import type { EnzymeOptions } from "../lib/enzymes.ts";
+import type { DnaMethylation } from "../lib/methylation.ts";
 import type { OrfOptions } from "../lib/orfs.ts";
 import type { Range, SeqData } from "../lib/seqdata.ts";
 import type { DocStore } from "./store.ts";
@@ -15,6 +16,8 @@ import type { ProteinDetail } from "../lib/regions.ts";
 export type Tab = "map" | "sequence" | "primers" | "reads" | "info";
 
 export interface ViewOptions extends EnzymeOptions {
+  /** Where the file's DNA was grown, from its Info tab's Host / strain (`hostMethylation`). */
+  methylation: DnaMethylation;
   features: boolean;
   /** Map visibility is separate from the remembered top-level/all detail choice. */
   mapRegions: boolean;
@@ -45,6 +48,17 @@ export interface ViewOptions extends EnzymeOptions {
   linearMap: boolean;
   /** How bases are shown (the file's own case is kept). */
   caseMode: "noPreference" | "uppercase" | "lowercase";
+}
+
+/** Another open file, as dialogs that combine files see it. */
+export interface OpenSequence {
+  title: string;
+  data: SeqData;
+  selection: Range | null;
+  /** Where its DNA was grown, from its Info tab's Host / strain. */
+  methylation: DnaMethylation;
+  /** Sets its Info tab's Host / strain (so its methylation), which marks it edited. */
+  setHost(text: string): void;
 }
 
 export interface Coverage {
@@ -78,7 +92,9 @@ export interface DocContext {
   /** Opens a sequence made here (a cloning product) in a new tab, unsaved. */
   openNew(data: SeqData): void;
   /** The other open files' sequences and selections. */
-  otherSequences(): { title: string; data: SeqData; selection: Range | null }[];
+  otherSequences(): OpenSequence[];
+  /** Sets this file's Host / strain, as the Info tab does, which decides `options.methylation`. */
+  setHost(text: string): void;
   /**
    * Says what an edit just made did, such as deleting a feature, with an Undo button for as
    * long as it is the last edit and the file's tab is showing.

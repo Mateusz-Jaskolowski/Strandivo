@@ -219,6 +219,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   tint of its colour (solid leader), a primer's after an arrow pointing its way (dashed), an
   enzyme's in small grey monospace with no mark (dotted), darker when it cuts once. Marks on
   enzymes were tried and made the map busy; their positions are in the tooltip and outline.
+  The one exception (Nov 2026) is a site Dam or Dcm methylation blocks: a small
+  superscript "m" after its name, in the same grey, and a dashed tick, measured as part of
+  the name. Only the few blocked sites get it, and a site that looks like a clean unique
+  cutter but won't cut is worth one (`docs/enzyme-data-plan.md` says why this mark).
   Protein regions are stripes in their colours along the outer edge of their CDS, inside
   it, which otherwise stays as it is (`docs/agents/proteins.md` says why). Their names are
   plain, regular-weight grey with a light solid leader, after a small square of the
@@ -437,7 +441,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Amber suppression** (TAG read as Q, for phage display in TG1 or XL1-Blue) is a setting
   applied the same way (`useAmberSuppression`), so everything that translates through
   `translateCodon` follows it. ORF stops get it in `OrfOptions`, and caches of
-  translations must include it in their key.
+  translations must include it in their key. The Info tab's strain doesn't set it, though
+  most cloning strains are suppressors: the strain says where the DNA was grown, not where
+  a protein is made, so the field only mentions it.
 - **Enzymes**: Common, Lab and My enzymes choose membership; a separate filter chooses
   unique 6+ cutters, unique, unique and dual, or every site. The common list
   (`src/lib/enzymes.ts`) is curated to avoid duplicate isoschizomers. Lab stock
@@ -455,6 +461,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   drawing is off. Digest and restriction cloning choose their own source, initially the
   document's, and keep already chosen reaction enzymes available through filter changes.
   Product names are user text, never read for recognition or reaction conditions.
+  Which sites Dam or Dcm methylation blocks follows the file's Info tab Host / strain
+  (`ViewOptions.methylation`, from `hostMethylation` in `src/lib/methylation.ts`; blank is
+  assumed dam⁺ dcm⁺) and is predicted site by site, from the bases around each; a blocked
+  site is still listed and drawn but isn't a cut (`CutSite.cuts` against `sites`), and a
+  PCR product is unmethylated. Caches of sites and digests key on `methylationKey`.
   Both lists are kept by the shell (`src-tauri/src/app_data.rs`, which writes only the
   files it names), with browser storage in the web version. A saved list keeps names
   this version doesn't know, leaving them off the map. An unreadable file blocks writes

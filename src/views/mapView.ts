@@ -11,6 +11,7 @@ import { fontStack, s, textWidth } from "../ui/svg.ts";
 import { cutSiteById, cutSites, featureStyles, gcValues, orfs, orfTitle, primerColors } from "../doc/analysis.ts";
 import type { DocContext } from "../doc/context.ts";
 import { type CutSite } from "../lib/enzymes.ts";
+import { cutCountText, methylationNote } from "../lib/methylation.ts";
 import type { Focus } from "../doc/store.ts";
 import { menuTargetAt } from "../doc/contextMenu.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
@@ -44,6 +45,8 @@ interface LabelItem {
   unique?: boolean;
   /** Tooltip, for labels whose shape on the map has none. */
   title?: string;
+  /** The cut site an enzyme's label names, for the mark after a blocked one. */
+  site?: CutSite;
   width: number;
   y: number;
   ly: number;
@@ -103,8 +106,25 @@ function labelGlyph(l: Pick<LabelItem, "kind" | "id" | "color" | "strand" | "reg
   return null;
 }
 
-/** An enzyme's tooltip: how often it cuts, which is what decides whether it is any use. */
-const cutTitle = (c: CutSite) => (c.cuts === 1 ? `${c.enzyme} · cuts once, at ${fmt(c.cut)}` : `${c.enzyme} · cuts ${fmt(c.cuts)} times · this cut at ${fmt(c.cut)}`);
+/**
+ * An enzyme's tooltip: how often it cuts, which is what decides whether it is any use, and
+ * what Dam or Dcm methylation does to this site.
+ */
+const cutTitle = (c: CutSite) => {
+  const count = c.sites === c.cuts && c.cuts === 1 ? `cuts once, at ${fmt(c.cut)}` : `${cutCountText(c.sites, c.cuts)} · this site at ${fmt(c.cut)}`;
+  return `${c.enzyme} · ${count}${c.methylation ? `\n${methylationNote(c.methylation, c.enzyme)}` : ""}`;
+};
+
+/**
+ * A site methylation blocks keeps its place on the map, with a small "m" after its name in
+ * the name's own grey (`.sv-map-methyl`) and its tick dashed. It is measured as part of the
+ * name, so leaders never run into the next one.
+ */
+const METHYL_MARK = "m";
+const METHYL_SCALE = 0.72;
+const cutLabelWidth = (c: CutSite, font: string, markFont: string) => textWidth(c.enzyme, font) + (c.methylation?.blocked ? textWidth(METHYL_MARK, markFont) + 1 : 0);
+const methylMark = (c: CutSite, px: number) =>
+  c.methylation?.blocked ? s("tspan", { class: "sv-map-methyl", dx: "1", dy: f1(-px * 0.38), "font-size": f1(px * METHYL_SCALE) }, METHYL_MARK) : null;
 
 /** Map tooltips name the owning CDS, including for a region nested in another region. */
 const mapRegionTitle = (r: ProteinRegion, f: SeqFeature) => `${regionTitle(r)} · region of ${f.name}`;
@@ -549,6 +569,7 @@ export class MapView {
     const gap = labelPx * 1.32;
     const labelFont = (w: number) => `${w} ${labelPx}px ${sans}`;
     const cutFont = `400 ${labelPx * CUT_SCALE}px ${mono}`;
+    const markFont = `400 ${labelPx * CUT_SCALE * METHYL_SCALE}px ${mono}`;
     const pad = Math.max(1, n * 0.002);
 
     // Feature lanes, outermost first. Features that only touch share a lane.
@@ -755,7 +776,7 @@ export class MapView {
         const [x1, y1] = pt(a, BAND_OUT);
         const [x2, y2] = pt(a, tickOut);
         const unique = c.cuts === 1;
-        const tick = s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2), class: unique ? "sv-map-unique" : undefined });
+        const tick = s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2), class: [unique ? "sv-map-unique" : "", c.methylation?.blocked ? "sv-map-blocked" : ""].join(" ").trim() || undefined });
         cuts.appendChild(tick);
         this.addShape(`cutsite:${c.id}`, tick);
         labels.push({
@@ -766,7 +787,8 @@ export class MapView {
           id: c.id,
           unique,
           title: cutTitle(c),
-          width: textWidth(c.enzyme, cutFont),
+          site: c,
+          width: cutLabelWidth(c, cutFont, markFont),
           y: 0,
           ly: 0
         });
@@ -826,6 +848,7 @@ export class MapView {
           "text",
           { x: f1(tx), y: f1(dy), "text-anchor": sgn > 0 ? "start" : "end", class: labelClass(l), style: colour, "data-kind": l.kind, "data-id": l.id, "data-region": l.region },
           l.text,
+          l.site ? methylMark(l.site, labelPx * CUT_SCALE) : null,
           l.title ? s("title", null, l.title) : null
         );
         texts.appendChild(t);
@@ -875,13 +898,13 @@ export class MapView {
     // Feature names under their bars sit on a tint of their colour, as on the circular map.
     const cp = chipPad(labelPx);
     const cutFont = `400 ${labelPx * CUT_SCALE}px ${mono}`;
+    const markFont = `400 ${labelPx * CUT_SCALE * METHYL_SCALE}px ${mono}`;
 
     // Enzyme label rows, from the backbone upwards.
     const cuts = o.cutsites ? cutSites(d, o) : [];
     const rows: number[] = [];
     const placed = cuts.map(c => {
-      const text = c.enzyme;
-      const w = textWidth(text, cutFont) + 6;
+      const w = cutLabelWidth(c, cutFont, markFont) + 6;
       // Centred on the cut, but kept inside the drawing near the ends.
       const x = Math.max(2, Math.min(width - w - 2, X(c.cut) - w / 2));
       let row = 0;
@@ -1121,10 +1144,10 @@ export class MapView {
     for (const { c, x, w, row } of placed) {
       const y = labelTop + (rows.length - 1 - row) * rowH + rowH / 2;
       const mark = { kind: "cutsite" as const, id: c.id, unique: c.cuts === 1 };
-      const leader = s("line", { x1: f1(X(c.cut)), y1: f1(y + rowH / 2), x2: f1(X(c.cut)), y2: baseY, class: "sv-map-leader sv-map-leader-cutsite" });
+      const leader = s("line", { x1: f1(X(c.cut)), y1: f1(y + rowH / 2), x2: f1(X(c.cut)), y2: baseY, class: `sv-map-leader sv-map-leader-cutsite${c.methylation?.blocked ? " sv-map-blocked" : ""}` });
       cutLayer.appendChild(leader);
       this.addShape(`cutsite:${c.id}`, leader);
-      const t = s("text", { x: f1(x + w / 2), y: f1(y), "text-anchor": "middle", class: labelClass(mark), "data-kind": "cutsite", "data-id": c.id }, c.enzyme, s("title", null, cutTitle(c)));
+      const t = s("text", { x: f1(x + w / 2), y: f1(y), "text-anchor": "middle", class: labelClass(mark), "data-kind": "cutsite", "data-id": c.id }, c.enzyme, methylMark(c, labelPx * CUT_SCALE), s("title", null, cutTitle(c)));
       cutLayer.appendChild(t);
       this.addShape(`cutsite:${c.id}`, t);
     }

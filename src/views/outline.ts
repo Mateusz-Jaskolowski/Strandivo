@@ -9,6 +9,7 @@ import { regionColor, regionRange, regionsOf, regionTitle, regionTree } from "..
 import { h } from "../ui/dom.ts";
 import { iconSvg, primerIcon, strandIcon } from "../ui/icons.ts";
 import { allCutSites, cutSites, featureStyles, primerColors, primerTm } from "../doc/analysis.ts";
+import { cutCountText, methylationNote } from "../lib/methylation.ts";
 import type { DocContext } from "../doc/context.ts";
 import type { Focus } from "../doc/store.ts";
 import { isPickClick, pickSite } from "../doc/pickEnzyme.ts";
@@ -294,7 +295,7 @@ export class Outline {
           class: "sv-enzyme-chip",
           "data-kind": "cutsite",
           "data-id": c.id,
-          title: `${c.enzyme} · ${c.site.toUpperCase()} · ${c.cuts === 1 ? "cuts once" : `cuts ${c.cuts} times`}`,
+          title: `${c.enzyme} · ${c.site.toUpperCase()} · ${cutCountText(c.sites, c.cuts)}${c.methylation ? `\n${methylationNote(c.methylation, c.enzyme)}` : ""}`,
           onclick: (e: MouseEvent) => (isPickClick(e) ? pickSite(this.ctx, c.id, "outline") : this.select({ kind: "cutsite", id: c.id }, c.start, c.end))
         },
         c.enzyme,

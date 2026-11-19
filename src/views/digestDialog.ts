@@ -10,38 +10,63 @@ import { fmt } from "../ui/format.ts";
 import { track } from "../usage.ts";
 import { enzymeSourceSelect } from "./enzymeControls.ts";
 import type { DocContext } from "../doc/context.ts";
-import { extraKey, reactionEnzymes, scanSites, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
+import { enzymeSites, extraKey, reactionEnzymes, scanSites, siteCounts, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
+import { cutCountText, hostMethylation, methylationKey, methylationNote, siteMethylation, type DnaMethylation } from "../lib/methylation.ts";
+import { STRAINS } from "../lib/strains.ts";
+import { iconSvg } from "../ui/icons.ts";
 import { endLabel } from "../lib/cloning.ts";
 import { bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, SUPERCOILED_RUNS_AS, type DigestResult } from "../lib/gel.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelLane } from "./gelDraw.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { plural, rerender } from "./primerDialogs.ts";
 
+/** An open file a lane can hold: its DNA's methylation decides which sites cut. */
+interface LaneFile {
+  title: string;
+  data: SeqData;
+  methylation: DnaMethylation;
+  /** Writes the strain back to the file's Info tab. */
+  setHost(text: string): void;
+}
+
 interface Lane {
   title: string;
   data: SeqData;
+  file: LaneFile;
   enzymes: string[];
 }
 
 /** Kept between openings in this window. */
 const memory = { allEnzymes: false };
 
-const counts = new WeakMap<SeqData, { key: string; m: Map<string, number> }>();
-/** How many times each enzyme in the list, or in the lab's stock (`extra`), cuts a sequence. */
-function cutCountsOf(d: SeqData, extra: readonly string[]): Map<string, number> {
-  const key = extraKey(extra);
+interface Counts {
+  /** Predicted cuts, once methylation has blocked what it blocks. */
+  cuts: Map<string, number>;
+  sites: Map<string, number>;
+}
+const counts = new WeakMap<SeqData, { key: string; m: Counts }>();
+/** Sites of each enzyme in the list, or in the lab's stock (`extra`), and how many are predicted to cut. */
+function cutCountsOf(d: SeqData, extra: readonly string[], dna: DnaMethylation): Counts {
+  const key = `${extraKey(extra)}|${methylationKey(dna)}`;
   const known = counts.get(d);
   if (known?.key === key) return known.m;
-  const m = new Map<string, number>();
-  for (const hit of scanSites(d.sequence, d.circular, extra)) m.set(hit.enzyme, (m.get(hit.enzyme) ?? 0) + 1);
+  const m: Counts = { cuts: new Map(), sites: new Map() };
+  for (const [name, c] of siteCounts(scanSites(d.sequence, d.circular, extra), d.sequence, d.circular, dna)) {
+    m.cuts.set(name, c.cuts);
+    m.sites.set(name, c.sites);
+  }
   counts.set(d, { key, m });
   return m;
 }
 
 export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
   const here = ctx.store.data;
-  const files = [{ title: here.name || "This sequence", data: here }, ...ctx.otherSequences().map(o => ({ title: o.data.name || o.title, data: o.data }))];
-  const lanes: Lane[] = [{ ...files[0], enzymes: [...enzymes] }];
+  // Lanes of one file share it, so a strain chosen for one refreshes them all.
+  const files: LaneFile[] = [
+    { title: here.name || "This sequence", data: here, methylation: ctx.options.methylation, setHost: text => ctx.setHost(text) },
+    ...ctx.otherSequences().map(o => ({ title: o.data.name || o.title, data: o.data, methylation: o.methylation, setHost: (text: string) => o.setHost(text) }))
+  ];
+  const lanes: Lane[] = [{ title: files[0].title, data: files[0].data, file: files[0], enzymes: [...enzymes] }];
   let current = 0;
   let filter = "";
   /** The fragment picked in the table or on the gel (in the current lane). */
@@ -53,10 +78,10 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
   offOptions = ctx.onOptions(update);
   const results = new Map<Lane, { key: string; result: DigestResult }>();
   const resultOf = (lane: Lane) => {
-    const key = lane.enzymes.join(",");
+    const key = `${lane.enzymes.join(",")}|${methylationKey(lane.file.methylation)}`;
     let r = results.get(lane);
     if (!r || r.key !== key) {
-      r = { key, result: digestSequence(lane.data, lane.enzymes) };
+      r = { key, result: digestSequence(lane.data, lane.enzymes, lane.file.methylation) };
       results.set(lane, r);
     }
     return r.result;
@@ -65,9 +90,15 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
   function enzymeList(): HTMLElement {
     const lane = lanes[current];
     const members = sourceEnzymes({ ...ctx.options, enzymeSource });
-    const cuts = cutCountsOf(lane.data, [...members, ...lane.enzymes]);
+    const { cuts, sites } = cutCountsOf(lane.data, [...members, ...lane.enzymes], lane.file.methylation);
     const q = filter.trim().toLowerCase();
-    const names = reactionEnzymes(cuts, members, lane.enzymes, memory.allEnzymes ? Infinity : 3, q);
+    // A search by name also finds an enzyme methylation stops cutting, to say so.
+    const names = reactionEnzymes(cuts, members, lane.enzymes, memory.allEnzymes ? Infinity : 3, q, sites);
+    const countText = (name: string) => {
+      const n = sites.get(name) ?? 0;
+      const k = cuts.get(name) ?? 0;
+      return n === k ? plural(k, "cut") : cutCountText(n, k);
+    };
     const rows = names.map(name =>
       h(
         "label",
@@ -84,7 +115,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
           }
         }),
         h("span", { class: "sv-digest-enzyme-name" }, name),
-        h("span", { class: "sv-dim sv-small" }, plural(cuts.get(name) ?? 0, "cut"))
+        h("span", { class: "sv-dim sv-small" }, countText(name))
       )
     );
     return h(
@@ -178,7 +209,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
     add.addEventListener("change", () => {
       const f = files[Number(add.value)];
       if (!f || !add.value) return;
-      lanes.push({ ...f, enzymes: [...lanes[current].enzymes] });
+      lanes.push({ title: f.title, data: f.data, file: f, enzymes: [...lanes[current].enzymes] });
       current = lanes.length - 1;
       picked = null;
       update();
@@ -269,8 +300,54 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
     );
   }
 
+  /**
+   * Said only when methylation stops a chosen enzyme cutting the lane's file, or would if
+   * the file names a strain this doesn't know: which enzyme, why, and the strain, which is
+   * written back to that file's Info tab and redraws every lane of it.
+   */
+  function methylationWarning(): HTMLElement | null {
+    const lane = lanes[current];
+    const f = lane.file;
+    const seq = f.data.sequence;
+    const lines: string[] = [];
+    for (const name of lane.enzymes) {
+      const found = enzymeSites(seq, f.data.circular, name).map(x => siteMethylation(seq, f.data.circular, x, f.methylation));
+      const stopping = found.filter(m => m?.effects.some(e => e.verdict === "blocked" || e.verdict === "needs"));
+      if (!stopping.length) continue;
+      const blocked = found.filter(m => m?.blocked).length;
+      const notes = [...new Set(stopping.map(m => methylationNote(m!, name)))];
+      lines.push(`${name}${blocked ? ` (${cutCountText(found.length, found.length - blocked)})` : ""}: ${notes.join(" ")}`);
+    }
+    if (!lines.length) return null;
+    const chosen = f.methylation.from === "assumed" ? "" : f.methylation.name;
+    const known = STRAINS.map(s => s.name);
+    const strain = h(
+      "select",
+      { class: "sv-input", "aria-label": `Strain ${f.title} was grown in` },
+      h("option", { value: "" }, "Not set (Dam⁺ Dcm⁺ assumed)"),
+      ...(chosen && !known.includes(chosen) ? [h("option", { value: chosen }, chosen)] : []),
+      ...known.map(n => h("option", { value: n }, n))
+    ) as HTMLSelectElement;
+    strain.value = chosen;
+    strain.addEventListener("change", () => {
+      f.methylation = hostMethylation(strain.value);
+      f.setHost(strain.value);
+      picked = null;
+      update();
+    });
+    return h(
+      "div",
+      { class: "sv-digest-methyl" },
+      ...lines.map(t => h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), ` ${t}`)),
+      h("label", { class: "sv-small sv-digest-strain" }, "Grown in", strain),
+      h("p", { class: "sv-small sv-dim" }, `Sets Host / strain on ${f.title}'s Info tab.`)
+    );
+  }
+
   let counted = false;
   function render() {
+    // The open file's strain may have been changed on its Info tab meanwhile.
+    files[0].methylation = ctx.options.methylation;
     const lane = lanes[current];
     const r = resultOf(lane);
     // Usage statistics: once per dialog, when it first shows a digest.
@@ -290,6 +367,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
           { class: "sv-digest-main" },
           h("div", { class: "sv-digest-gel" }, gelSvg(gelLanes(), currentLadder()), h("div", { class: "sv-digest-gel-side" }, h("label", { class: "sv-small sv-dim" }, "Ladder"), ladder, h("p", { class: "sv-small sv-dim" }, "Band brightness is proportional to fragment mass. Fragments within ~2% in size co-migrate as a single band."))),
           h("div", { class: "sv-clone-result-head" }, h("strong", null, `Lane ${current + 1}: ${lane.title}`), h("span", { class: "sv-dim sv-small" }, summary)),
+          methylationWarning(),
           table()
         )
       )

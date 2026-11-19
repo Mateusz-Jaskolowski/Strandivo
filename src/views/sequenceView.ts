@@ -9,6 +9,7 @@ import { h, toast } from "../ui/dom.ts";
 import { fontStack, textWidth } from "../ui/svg.ts";
 import { checkIcon } from "../ui/icons.ts";
 import { codons, cutSites, featureStyles, gcValues, isCds, orfs, orfTitle, primerAlignment, primerColors, primerTitle } from "../doc/analysis.ts";
+import { methylationNote } from "../lib/methylation.ts";
 import { GC_WINDOW, overviewWindow } from "../lib/gc.ts";
 import { drawGcStrip, GC_CHIP_LABEL, GC_STRIP_HEIGHT, gcChipTitle, gcWindowText } from "./gcStrip.ts";
 import { primerPiece, type PrimerPiece } from "../lib/primerAlign.ts";
@@ -563,7 +564,7 @@ export class SequenceView {
       const label = abs(`left:${ch(m.labelX)};top:${ly}px;margin-left:-2px`, span("sv-cut-label", m.site.enzyme));
       label.dataset.kind = "cutsite";
       label.dataset.id = m.site.id;
-      label.title = `${m.site.enzyme} · ${m.site.site.toUpperCase()} · cuts after ${fmt(m.site.cut)}`;
+      label.title = `${m.site.enzyme} · ${m.site.site.toUpperCase()} · cuts after ${fmt(m.site.cut)}${m.site.methylation ? `\n${methylationNote(m.site.methylation, m.site.enzyme)}` : ""}`;
       label.classList.add("sv-hit");
       track.appendChild(label);
       const stemTop = ly + 12;

@@ -3,6 +3,8 @@
 
 // Shared map checks: real pointers in both WebKitGTK (desktop) and Chrome (web).
 
+import { readFileSync } from "node:fs";
+
 /** Overlapping proteins, a reverse CDS across the origin, an intron and nested regions. */
 export function mapRegionFixture(n) {
   const region = (name, kind, start, end, extra) =>
@@ -250,8 +252,13 @@ export async function checkMapRegionDisplay(s, check, { smoke = false } = {}) {
 async function checkCrowdedLinearMap(s, check, control, move) {
   const source = '[aria-label="Which map enzymes to show"] [data-value]';
   const filter = "Map cut-site filter";
+  // The desktop suite has edited the document by now. Use the fixture's own bases
+  // here so the cut-site IDs and cut positions below refer to the original pUC19.
+  const gb = readFileSync(new URL("../testdata/e2e/pUC19-annotated.gb", import.meta.url), "utf8");
+  const sequence = gb.match(/^ORIGIN\s*\n([\s\S]*?)^\/\//m)[1].replace(/[\d\s]/g, "").toUpperCase();
   const saved = await s.exec(`
     const store = window.__strandivo.store;
+    const seq = arguments[1];
     const buttons = Array.from(document.querySelectorAll('.sv-map .sv-chip'));
     const toggled = buttons.filter(b => ['Features', 'Primers', 'Cut sites'].includes(b.textContent.trim()) &&
       b.getAttribute('aria-pressed') === 'false').map(b => b.textContent.trim());
@@ -267,7 +274,6 @@ async function checkCrowdedLinearMap(s, check, control, move) {
     const cds = { id: 'crowded-cds', name: 'Example CDS', type: 'CDS', start: 32, end: 600, strand: 1, raw: {},
       notes: { strandivo_regions: ['First region|Domain|12-19', 'Second region|Domain|21-26', 'Third region|Domain|28-37'] } };
     const primer = (id, name, start, end, strand) => {
-      const seq = store.data.sequence;
       const site = start <= end ? seq.slice(start, end + 1) : seq.slice(start) + seq.slice(0, end + 1);
       const bases = strand === 1 ? site : [...site].reverse().map(b => ({ A: 'T', T: 'A', C: 'G', G: 'C' })[b] || b).join('');
       return { id, name, start, end, strand, bases, notes: {}, raw: {} };
@@ -276,14 +282,14 @@ async function checkCrowdedLinearMap(s, check, control, move) {
       primer('crowded-f', 'Forward primer with a long name', 18, 40, 1),
       primer('crowded-r', 'Reverse primer with a long name', 53, 76, -1),
       primer('overlap', 'Overlapping primer', 25, 45, -1),
-      primer('wrap-primer', 'Primer across the origin', store.length - 24, 3, 1)
+      primer('wrap-primer', 'Primer across the origin', seq.length - 24, 3, 1)
     ];
-    store.apply({ ...store.data, features: [...annotations, cds], primers }, 'Crowded linear map fixture');
+    store.apply({ ...store.data, sequence: seq, features: [...annotations, cds], primers }, 'Crowded linear map fixture');
     store.select({ range: null }, 'e2e');
     for (const name of toggled) buttons.find(b => b.textContent.trim() === name).click();
     document.querySelector(arguments[0] + '[data-value="common"]').click();
     return options;
-  `, source);
+  `, source, sequence);
   try {
     await control(filter, "unique6");
     await control("Zoom", "0");

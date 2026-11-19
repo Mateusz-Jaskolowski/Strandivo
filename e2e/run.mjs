@@ -1562,7 +1562,7 @@ async function main() {
     const digestGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG", "Save as PNG"]);
     check(
       "The Digest dialog's Save as SVG… saves the gel with its ladder, lanes and a key, nothing picked",
-      standaloneSvg(digestGel.svg) && digestGel.svg.includes(">Simulated agarose gel<") && digestGel.svg.includes(" · EcoRI, HindIII · 2,635 + 51 bp<") && digestGel.svg.includes(">10 kb<") && !digestGel.svg.includes("#ffd166") && digestGel.svgName.endsWith(" digest gel.svg"),
+      standaloneSvg(digestGel.svg) && digestGel.svg.includes(">Simulated agarose gel<") && digestGel.svg.includes(` · EcoRI, HindIII · ${sizes[0].toLocaleString("en")} + ${sizes[1]} bp<`) && digestGel.svg.includes(">10 kb<") && !digestGel.svg.includes("#ffd166") && digestGel.svgName.endsWith(" digest gel.svg"),
       `${digestGel.svgName}: ${digestGel.svg.slice(0, 300)}`
     );
     check("Its Save as PNG… saves a sharp PNG that says its resolution", digestGel.png.png && Math.max(digestGel.png.width, digestGel.png.height) >= 2000 && digestGel.png.dpi, JSON.stringify(digestGel.png));

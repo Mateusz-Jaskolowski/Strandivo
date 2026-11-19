@@ -16,6 +16,12 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
+Primers have a new inspector and one dialog for adding or editing them, with the
+double-stranded sequence around the primer and draggable ends. The PCR product dialog now
+shows your product on a gel and works out the cycling program and reaction mix from NEB's
+protocols. Edits to bases show a card first, and Strandivo warns when Dam or Dcm
+methylation blocks a cut.
+
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"
@@ -31,6 +37,17 @@ with Unreleased's notes and leaves them where they are.
   deselect all eligible features at once.
 - **A clearer Export dialog**: pick the file format separately, with Cancel and Export
   together at the bottom.
+- **A new primer inspector and dialog**: select a primer to see a short summary with its
+  warnings on top, the pairs it makes and a note of your own, and change its colour from
+  the badge. Add Forward Primer… (⌘R on Mac, Ctrl+R elsewhere) and Add Reverse Primer…
+  (⇧⌘R or Ctrl+Shift+R) open the same dialog as Edit primer… or a double-click on a primer.
+  It draws the primer against both strands of your sequence, so you can drag its ends or
+  nudge them to tune the Tm, and Insert adds a restriction site, a codon or a short tag.
+  When a primer binds in more than one place, step through the sites to look at each. Its
+  checks now flag a partial site elsewhere, where the last 8 or more bases at its 3′ end
+  match exactly and could still prime. Primers you save to the library keep their colour.
+  Align Sequencing Reads… moved to ⇧⌘A (Ctrl+Shift+A). A browser keeps ⌘R to reload the
+  page, so there you add primers from the menu.
 - **Read crowded linear maps**: leaders connect displaced feature, protein region,
   primer and cut-site names to their marks, and primer arrows stay close to the
   backbone even when their names need more room.

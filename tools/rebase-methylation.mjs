@@ -144,14 +144,30 @@ export function overlaps(methylase, site) {
 }
 
 /**
- * Of an msget page's reports, those whose marks the methylase could make: its mark on every
- * marked base, each where its site could put it.
+ * Whether `k`'s partner on the other strand of the same methylase site also sits on a non-N
+ * base of `bases`, and if so is marked too. In E. coli, Dam and Dcm methylate both strands
+ * of every site they recognise, so a hemi-methylated report on an msget page (such as
+ * BclI's single-strand t2) isn't what the methylase makes.
+ */
+function pairedIn(methylase, bases, marks, k) {
+  const own = OWN_SITES[methylase];
+  const [, at] = own.marks.find(([s]) => s === k.strand);
+  const [other, otherAt] = own.marks.find(([s]) => s !== k.strand);
+  const partner = k.pos - at + otherAt;
+  if (partner < 0 || partner >= bases.length || bases[partner].toUpperCase() === "N") return true;
+  return marks.some(m => m.strand === other && m.pos === partner);
+}
+
+/**
+ * Of an msget page's reports, those whose marks the methylase could make on double-stranded
+ * E. coli DNA: its mark on every marked base, each where its site could put it, with both
+ * strands marked wherever both fall on concrete bases of the site.
  */
 export function reportsFor(methylase, reports) {
   const mark = METHYLASES.find(m => m.id === methylase).mark;
   // Not DNA as a plasmid has it: uracil in place of thymine (phage PBS1's).
   const dna = r => [...r.bases].every(c => c.toUpperCase() !== "U" && IUPAC[c.toUpperCase()]);
-  return reports.filter(r => dna(r) && r.marks.length && r.marks.every(k => k.type === mark && couldMethylate(methylase, r.bases, k.strand, k.pos)));
+  return reports.filter(r => dna(r) && r.marks.length && r.marks.every(k => k.type === mark && couldMethylate(methylase, r.bases, k.strand, k.pos) && pairedIn(methylase, r.bases, r.marks, k)));
 }
 
 /** Entries from reports: one per drawing (bases and marks), with every report on it. */

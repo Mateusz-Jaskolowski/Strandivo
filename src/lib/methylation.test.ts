@@ -148,7 +148,7 @@ test("each enzyme's effects are summed up for its details", () => {
   assert.deepEqual(enzymeMethylation("XbaI", always), { dam: "blocked", dcm: "not tested", cpg: "not tested" });
   assert.equal(enzymeMethylation("BspHI", always).dam, "varies");
   assert.equal(enzymeMethylation("BamHI", always).dam, "cuts");
-  assert.equal(enzymeMethylation("BclI", always).dam, "varies");
+  assert.equal(enzymeMethylation("BclI", always).dam, "blocked");
   assert.equal(enzymeMethylation("ApaI", always).dcm, "varies");
   assert.equal(enzymeMethylation("DpnI", always).dam, "needs");
   assert.equal(enzymeMethylation("EcoRI", m => m === "cpg").dam, "no overlap");

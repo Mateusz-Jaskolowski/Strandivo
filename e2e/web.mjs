@@ -218,12 +218,65 @@ class Session {
   }
 }
 
+/**
+ * Run in the page on a saved PNG's bytes: the resolution its pHYs chunk gives (dots per inch)
+ * and, from its decoded pixels, the corner's alpha, whether the last column and the last row
+ * are opaque, and how many pixels are neither clear nor the white paper. Decoded as the page's
+ * own code can, with no <img> or blob: URL (the Content Security Policy loads no image that
+ * isn't the app's); only this summary goes back over WebDriver. e2e/run.mjs has the same text.
+ */
+const PNG_PIXELS = `async bytes => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let dotsPerInch = null;
+  for (let at = 8; at + 8 <= bytes.length; at += 12 + view.getUint32(at)) {
+    const type = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+    if (type === 'pHYs') { dotsPerInch = bytes[at + 16] === 1 ? view.getUint32(at + 8) * 0.0254 : null; break; }
+    if (type === 'IDAT') break;
+  }
+  const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const g = canvas.getContext('2d');
+  g.drawImage(image, 0, 0);
+  image.close();
+  const { data, width, height } = g.getImageData(0, 0, canvas.width, canvas.height);
+  let lastColumnOpaque = true, lastRowOpaque = true, ink = 0;
+  for (let y = 0; y < height; y++) if (data[((y + 1) * width - 1) * 4 + 3] !== 255) lastColumnOpaque = false;
+  for (let x = 0; x < width; x++) if (data[((height - 1) * width + x) * 4 + 3] !== 255) lastRowOpaque = false;
+  for (let i = 0; i < data.length; i += 4) if (data[i + 3] && (data[i + 3] < 255 || data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255)) ink++;
+  return { dotsPerInch, cornerAlpha: data[3], lastColumnOpaque, lastRowOpaque, ink };
+}`;
+
+/** A saved PNG with at least a twentieth of its pixels inked: a blank one of the right size has none. */
+const inked = png => !!png && png.ink >= 0.05 * png.width * png.height;
+
+/** Opaque to its last pixel: a figure drawn on paper has no clear corner, last column or last row. */
+const opaqueToEdge = png => !!png && png.cornerAlpha === 255 && png.lastColumnOpaque === true && png.lastRowOpaque === true;
+
+/**
+ * Whether a PNG's resolution fits the SVG saved with it, which is the same figure: 96 dpi for
+ * each pixel the SVG is wide, so 96 times the PNG's width over the SVG's. The PNG's width is
+ * the figure's rounded to whole pixels, up to half a pixel off (48 / the SVG's width, in dpi),
+ * and the file keeps whole pixels per metre (0.02 dpi covers that).
+ */
+function resolutionFits(png, svg) {
+  const svgWidth = Number(/<svg\b[^>]*\swidth="([\d.]+)"/.exec(svg)?.[1]);
+  const wanted = (96 * png?.width) / svgWidth;
+  const within = 48 / svgWidth + 0.02;
+  return {
+    ok: typeof png?.dotsPerInch === "number" && Math.abs(png.dotsPerInch - wanted) <= within,
+    detail: `${png?.dotsPerInch?.toFixed(2)} dpi in the file, ${wanted.toFixed(2)} from ${png?.width} px over the SVG's ${svgWidth}, within ${within.toFixed(2)}`
+  };
+}
+
 // ---------- the checks ----------
 
 /**
  * Clicks Save as SVG… and Save as PNG… inside `scope` (a class), each answered by a file of
  * the page's private file system named `name`, and gives back what was written: the SVG's
  * text, and the PNG's size in pixels and whether it says its resolution.
+ * The PNG is decoded in the page too, for the rest of its summary (`PNG_PIXELS`).
  */
 async function savedImages(s, scope, name) {
   const out = {};
@@ -241,7 +294,7 @@ async function savedImages(s, scope, name) {
           if ('${kind}' === 'svg') return file.text();
           const bytes = new Uint8Array(await file.arrayBuffer());
           const v = new DataView(bytes.buffer);
-          return { png: String.fromCharCode(...bytes.subarray(1, 4)) === 'PNG', width: v.getUint32(16), height: v.getUint32(20), dpi: String.fromCharCode(...bytes.subarray(0, 100)).includes('pHYs') };
+          return { png: String.fromCharCode(...bytes.subarray(1, 4)) === 'PNG', width: v.getUint32(16), height: v.getUint32(20), dpi: String.fromCharCode(...bytes.subarray(0, 100)).includes('pHYs'), ...(await (${PNG_PIXELS})(bytes).catch(e => ({ error: String(e) }))) };
         }
         return null;
       })().then(done, e => done(String(e)));`);
@@ -499,6 +552,11 @@ async function main(outDir) {
       gelSaved.svg.slice(0, 200)
     );
     check("And as a sharp PNG that says its resolution", gelSaved.png?.png && Math.max(gelSaved.png.width, gelSaved.png.height) >= 2000 && gelSaved.png.dpi, JSON.stringify(gelSaved.png));
+    // Its pixels, decoded in the page: the gel is painted, the paper reaches the last pixel, and the resolution is the SVG's size.
+    check("The Digest gel's PNG has the gel drawn on it, not only the paper", inked(gelSaved.png), JSON.stringify(gelSaved.png));
+    check("The Digest gel's PNG is opaque to its last column and row, as a gel has no transparent background", opaqueToEdge(gelSaved.png), JSON.stringify(gelSaved.png));
+    const gelFit = resolutionFits(gelSaved.png, gelSaved.svg);
+    check("The Digest gel's PNG says the resolution that sets it at the SVG's size", gelFit.ok, gelFit.detail);
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']");
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     check(

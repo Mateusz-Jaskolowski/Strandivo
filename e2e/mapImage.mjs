@@ -45,6 +45,73 @@ export function resolutionFits(png, svg) {
 }
 
 /**
+ * A forward gene of `n` bases in three parts with two introns of about a tenth of it, over
+ * the large features of pUC19 (its origin and AmpR), where no small feature's leader crosses
+ * its band. Run in the page too, so it uses nothing outside itself.
+ */
+export function splitFeature(n) {
+  const at = fraction => Math.floor(fraction * n);
+  const locations = [
+    { start: at(0.28), end: at(0.4) - 1 },
+    { start: at(0.5), end: at(0.62) - 1 },
+    { start: at(0.7), end: at(0.84) - 1 }
+  ];
+  return { id: "e2e-split-gene", name: "Split gene", type: "gene", start: locations[0].start, end: locations[2].end, strand: 1, locations, color: "#7a2bd6", notes: {}, raw: {} };
+}
+
+/**
+ * Where to look in a circular map's image for a feature in parts: three points along each
+ * intron, which the clip path cuts out, and along each part, which stays, in the SVG's own
+ * units. They lie 1.5 units inside the band's outer edge, clear of the name along its middle,
+ * the thin line across an intron and the backbone. The clip path's holes fix them: the first
+ * says where the map is turned, and `off` lists any hole that isn't where its intron is, or
+ * a turn other than `rotation`, the one the map was set to. `d` is the clip path's data, as
+ * the map draws it: two circles, then a hole for each intron.
+ */
+export function splitProbes({ d, feature, n, rotation: wanted }) {
+  const shapes = String(d).split(/z/i).map(p => (p.match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi) ?? []).map(Number)).filter(p => p.length);
+  const parts = feature.locations;
+  const gaps = parts.slice(0, -1).map((p, i) => ({ start: p.end + 1, end: parts[i + 1].start - 1 }));
+  const holes = shapes.slice(2);
+  if (holes.length !== gaps.length || holes.some(h => h.length !== 18)) return { why: `a clip path of ${shapes.length} shapes, its holes of ${holes.map(h => h.length).join("+") || "no"} numbers, for ${gaps.length} introns (two circles and a hole of 18 numbers each expected)` };
+  const degrees = base => (base / n) * 360;
+  const angle = (x, y) => ((((Math.atan2(x, -y) * 180) / Math.PI) % 360) + 360) % 360;
+  const turn = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+  const rotation = angle(holes[0][0], holes[0][1]) - degrees(gaps[0].start);
+  const off = [];
+  if (wanted !== undefined && Math.abs(turn(rotation, wanted)) > 0.15) off.push(`the first hole puts the map's turn at ${(((rotation % 360) + 360) % 360).toFixed(2)}°, not ${wanted}°`);
+  holes.forEach((h, i) => {
+    const start = angle(h[0], h[1]);
+    const span = (((angle(h[7], h[8]) - start) % 360) + 360) % 360;
+    const wantStart = rotation + degrees(gaps[i].start);
+    const wantSpan = degrees(gaps[i].end + 1 - gaps[i].start);
+    if (Math.abs(turn(start, wantStart)) > 0.15 || Math.abs(span - wantSpan) > 0.3) off.push(`hole ${i + 1} starts at ${start.toFixed(2)}° and spans ${span.toFixed(2)}°, its intron at ${(((wantStart % 360) + 360) % 360).toFixed(2)}° and ${wantSpan.toFixed(2)}°`);
+  });
+  const radius = holes[0][2] - 2;
+  const point = base => {
+    const a = ((rotation + degrees(base)) * Math.PI) / 180;
+    return [radius * Math.sin(a), -radius * Math.cos(a)];
+  };
+  const along = ({ start, end }) => [0.3, 0.5, 0.7].map(f => point(start + (end + 1 - start) * f));
+  return { rotation, radius, off, gaps: gaps.map(along), exons: parts.map(along) };
+}
+
+/**
+ * Whether the pixels sampled at `probe`'s points (`sampled.at`, in the probe's order) show
+ * its introns clear and its parts painted. Two of three at each is enough: a leader or a
+ * name can cross one point.
+ */
+export function splitVerdict(probe, sampled) {
+  const at = sampled?.at ?? [];
+  let next = 0;
+  const count = (groups, wanted) => groups.map(g => at.slice(next, (next += g.length)).filter(wanted).length);
+  const clear = count(probe.gaps, m => m.max === 0);
+  const painted = count(probe.exons, m => m.min >= 128);
+  const enough = counts => counts.length > 0 && counts.every(c => c >= 2);
+  return { clear, painted, ok: at.length === probe.gaps.flat().length + probe.exons.flat().length && enough(clear) && enough(painted) };
+}
+
+/**
  * Runs on an open circular document showing its map, and leaves the map as it found it.
  * `save(label)` clicks the open menu's button `label` and gives back what it saved: the
  * SVG's text, or the PNG as `{ png, width, height, dpi }` with what its pixels say
@@ -66,6 +133,14 @@ export async function checkMapImage(s, check, save) {
   const saveWith = async label => {
     await openMapImageMenu(s);
     return save(label);
+  };
+  // Each block below puts back what it changed; one that throws fails by name and lets the rest run.
+  const attempt = async (name, run) => {
+    try {
+      await run();
+    } catch (e) {
+      check(name, false, `threw: ${String(e?.message ?? e).slice(0, 300)}`);
+    }
   };
   // Every text and line of the saved SVG measured where another program draws it.
   const outside = svg => s.exec(`
@@ -129,6 +204,88 @@ export async function checkMapImage(s, check, save) {
     await transparent(true);
     const clear = await saveWith("Save as SVG");
     check("With Transparent background ticked, the image has none", standaloneSvg(clear) && !/<\/title><rect [^>]*fill="#ffffff"/.test(clear));
+
+    // A feature in parts has its introns cut out of its band, as a transparent image shows.
+    // Copy image gives the pixels: what it puts on the clipboard is read back in the page.
+    await attempt("Checking the map's image of a feature in parts finished without errors", async () => {
+      const LABEL = "Gene in parts for the map image";
+      const added = await s.exec(`
+        const store = window.__strandivo.store;
+        const n = store.data.sequence.length;
+        const feature = (${splitFeature.toString()})(n);
+        store.apply({ ...store.data, features: [...store.data.features, feature] }, '${LABEL}');
+        return { n, feature, rotation: Number(document.querySelector('[aria-label="Rotate"]').value) };
+      `);
+      try {
+        const found = await s.exec(`
+          const doc = new DOMParser().parseFromString(arguments[0], 'image/svg+xml').documentElement;
+          const box = (doc.getAttribute('viewBox') || '').split(/[ ,]+/).map(Number);
+          const clips = Array.from(doc.querySelectorAll('clipPath'))
+            .filter(c => Array.from(c.children).some(p => p.getAttribute('clip-rule') === 'evenodd'))
+            .map(c => ({ id: c.getAttribute('id'), d: Array.from(c.children).map(p => p.getAttribute('d') || '').join(' ') }));
+          const users = Array.from(doc.querySelectorAll('[clip-path]'))
+            .map(e => ({ clip: e.getAttribute('clip-path').replace(/^url\\(#(.*)\\)$/, '$1'), tag: e.localName, fill: e.getAttribute('fill') }))
+            .filter(u => clips.some(c => c.id === u.clip));
+          return { box, clips, users };
+        `, await saveWith("Save as SVG"));
+        const user = found.users.find(u => u.fill === added.feature.color) ?? found.users[0];
+        const clip = user && found.clips.find(c => c.id === user.clip);
+        const probe = clip ? splitProbes({ d: clip.d, feature: added.feature, n: added.n, rotation: added.rotation }) : { why: `${found.clips.length} clip paths with clip-rule evenodd, ${found.users.length} shapes using them` };
+        check(
+          "A feature in parts is saved with its introns cut out by a clip path, where they are",
+          !!clip && !probe.why && !probe.off.length,
+          probe.why ?? (probe.off.length ? probe.off.join(" | ") : `${found.clips.length} clip path with clip-rule evenodd, used by a ${user.tag}; the map is turned ${(((probe.rotation % 360) + 360) % 360).toFixed(1)}°`)
+        );
+        if (!clip || probe.why) return;
+
+        // Copy image, put on the clipboard within the click, as a browser lets a page copy only then.
+        // The real clipboard is a getter on Navigator.prototype, so a property of our own shadows it until it is deleted.
+        await openMapImageMenu(s);
+        const copied = await s.exec(`window.__e2eMapCopied = null;
+          Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: items => { window.__e2eMapCopied = Array.from(items); return Promise.resolve(); } } });
+          const button = Array.from(document.querySelectorAll('.sv-map-image button')).find(b => b.textContent.includes('Copy image'));
+          button?.click();
+          const items = window.__e2eMapCopied;
+          return { found: !!button, inClick: !!items, items: items ? items.length : 0, types: items ? items.map(i => Array.from(i.types)) : [] };`);
+        check("Copy image puts the map on the clipboard as one PNG, within the click that asked", copied.found && copied.inClick && copied.items === 1 && copied.types[0].includes("image/png"), JSON.stringify(copied));
+        const sampled = await s.execAsync(`
+          const finish = arguments[arguments.length - 1];
+          const box = arguments[0], points = arguments[1];
+          const item = window.__e2eMapCopied && window.__e2eMapCopied[0];
+          if (!item) return finish({ error: 'nothing was copied' });
+          (async () => {
+            const bytes = new Uint8Array(await (await item.getType('image/png')).arrayBuffer());
+            const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const g = canvas.getContext('2d');
+            g.drawImage(image, 0, 0);
+            image.close();
+            const out = { width: canvas.width, height: canvas.height, corner: g.getImageData(0, 0, 1, 1).data[3], signature: Array.from(bytes.slice(0, 8)), at: [] };
+            for (const [x, y] of points) {
+              const px = Math.round((x - box[0]) * canvas.width / box[2]);
+              const py = Math.round((y - box[1]) * canvas.height / box[3]);
+              const data = g.getImageData(px - 2, py - 2, 5, 5).data;
+              let min = 255, max = 0;
+              for (let i = 3; i < data.length; i += 4) { min = Math.min(min, data[i]); max = Math.max(max, data[i]); }
+              out.at.push({ px, py, min, max });
+            }
+            return out;
+          })().then(finish, e => finish({ error: String(e) }));
+        `, found.box, [...probe.gaps.flat(), ...probe.exons.flat()]);
+        const verdict = splitVerdict(probe, sampled);
+        check(
+          "In a transparent PNG of the map, the introns of a feature in parts are clear and its parts painted",
+          !sampled.error && JSON.stringify(sampled.signature) === "[137,80,78,71,13,10,26,10]" && sampled.corner === 0 && verdict.ok,
+          sampled.error ?? `introns clear at ${verdict.clear.join("/")} of 3 points each, parts painted at ${verdict.painted.join("/")}, corner alpha ${sampled.corner}, ${sampled.width}×${sampled.height} px`
+        );
+      } finally {
+        await s.exec(`delete navigator.clipboard; delete window.__e2eMapCopied;
+          const store = window.__strandivo.store;
+          if (store.undoLabel === arguments[0]) store.undo();`, LABEL);
+      }
+    });
     await transparent(false);
 
     // The linear map is drawn at a width of its own: the same image at any zoom.

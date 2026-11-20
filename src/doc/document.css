@@ -1603,6 +1603,18 @@
   right: 0;
   width: 220px;
 }
+/*
+ * The map header's right end: Circular/Linear and Export image. They wrap to the next row
+ * together and stay at the right, as an Export image alone at the left of a row would open
+ * its menu leftwards out of the pane. The gap is the header's.
+ */
+.sv-map-head-end {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
 .sv-map-image {
   gap: 6px;
 }

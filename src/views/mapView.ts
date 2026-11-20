@@ -501,8 +501,13 @@ export class MapView {
       chip("mapGc", GC_CHIP_LABEL),
       h("div", { class: "sv-chip-group sv-chip-joined" }, chip("cutsites", "Cut sites"), cutsMenu.button, cutsMenu.menu),
       chip("ruler", "Ruler"),
-      h("div", { class: "sv-segmented sv-push" }, this.modeButtons.circular, this.modeButtons.linear),
-      h("div", { class: "sv-chip-group" }, imageMenu.button, imageMenu.menu)
+      // One group at the row's right end, so they wrap together and Export image's menu opens inside the pane.
+      h(
+        "div",
+        { class: "sv-map-head-end sv-push" },
+        h("div", { class: "sv-segmented" }, this.modeButtons.circular, this.modeButtons.linear),
+        h("div", { class: "sv-chip-group" }, imageMenu.button, imageMenu.menu)
+      )
     );
     this.svgHost = h("div", { class: "sv-map-svg" });
     this.area = h("div", { class: "sv-map-area" }, this.svgHost);

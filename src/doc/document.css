@@ -5934,16 +5934,24 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   font-weight: 600;
   letter-spacing: 0;
 }
-.sv-sheet-table tfoot td {
+/* The mix total is the table's last row, not a tfoot, which a browser repeats on every page. */
+.sv-sheet-table .sv-sheet-total td {
   font-weight: 700;
   border-top: 1px solid #64748b;
   border-bottom: 1px solid #64748b;
   background: #f8fafc;
 }
+.sv-sheet-total {
+  break-before: avoid;
+  page-break-before: avoid;
+}
 .sv-sheet-num {
-  text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+/* Qualified, as the table's own cell rule would otherwise win. */
+.sv-sheet-table .sv-sheet-num {
+  text-align: right;
 }
 .sv-sheet-mono {
   font-family: var(--mono);
@@ -5988,7 +5996,7 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   padding-top: 2.5px;
   padding-bottom: 2.5px;
 }
-.sv-sheet-step-indent {
+.sv-sheet-table .sv-sheet-step-indent {
   padding-left: 14px;
 }
 .sv-sheet-overview-grid,
@@ -6139,6 +6147,7 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   display: inline-block;
   width: 8px;
   height: 6px;
+  border: 0.5px solid #475569;
   border-radius: 1px;
   vertical-align: middle;
   margin-right: 3px;
@@ -6148,6 +6157,8 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   grid-template-columns: minmax(0, 46fr) minmax(0, 54fr);
   gap: 12px;
   align-items: start;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .sv-sheet-unavailable {
   padding: 6px 8px;
@@ -6200,7 +6211,9 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   page-break-inside: avoid;
 }
 
-@media (max-width: 720px) {
+/* Screen only: a printed page is narrower than 720 px on A4 in some engines, and the sheet
+   keeps its columns on paper, as the saved HTML does. */
+@media screen and (max-width: 720px) {
   .sv-print-controls-row,
   .sv-print-controls-row-pdf {
     grid-template-columns: 1fr;
@@ -6216,10 +6229,12 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   @page {
     margin: 9.5mm;
   }
+  /* Light whatever the theme, or a dark theme's canvas shows in the page margins. */
   html.sv-printing,
   body.sv-printing {
     height: auto !important;
     overflow: visible !important;
+    color-scheme: light !important;
     background: #ffffff !important;
     color: #0f172a !important;
   }

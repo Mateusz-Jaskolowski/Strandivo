@@ -1,9 +1,9 @@
 // Copyright (C) 2026 Mateusz Jaskolowski and Strandivo contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Immutable snapshot and self-contained printable HTML/SVG builder for a PCR bench sheet.
-// Pure functions with no DOM access so preview, native print and offline HTML export all
-// render from one snapshot and are directly unit-tested.
+// Immutable snapshot of a PCR bench sheet, and its saved HTML and Markdown. Pure functions
+// with no DOM access, unit-tested. The preview and the page that prints are built from the
+// same snapshot as DOM in `src/views/pcrPrintDialog.ts`; layouts and texts both use live here.
 
 import { gcRuns, type GcLevel } from "./gc.ts";
 import { bands, gelLayout, laneSizesText, type Ladder } from "./gel.ts";
@@ -575,14 +575,27 @@ export function pcrPlanOverviewLayout(product: PcrPlanSnapshot["product"], width
   return { width, height, lineY, gcY, gcHeight, labels, crowds, gcRects };
 }
 
-/** Grayscale-distinguishable GC colours matching Strandivo's AT (teal), mid (grey), GC (amber/dark) palette. */
+/**
+ * GC strip colours on paper: teal for AT, orange-brown for GC, as on screen, but each level
+ * a different lightness (in grey about 133, 190, 250, 98 and 33 of 255), so AT- and GC-rich
+ * runs still read apart printed in black and white.
+ */
 export const PRINT_GC_FILL: Record<GcLevel, string> = {
-  at: "#0f766e",
+  at: "#14b8a6",
   "at-light": "#5eead4",
-  mid: "#cbd5e1",
-  "gc-light": "#fdba74",
-  gc: "#c2410c"
+  mid: "#f8fafc",
+  "gc-light": "#c2410c",
+  gc: "#431407"
 };
+
+/** The strip's key, one entry a level, with `gcLevel`'s thresholds. */
+export const PRINT_GC_KEY: { level: GcLevel; label: string }[] = [
+  { level: "at", label: "AT-rich (<35%)" },
+  { level: "at-light", label: "35–40%" },
+  { level: "mid", label: "40–60%" },
+  { level: "gc-light", label: "60–65%" },
+  { level: "gc", label: "GC-rich (>65%)" }
+];
 
 /** Self-contained SVG for the product overview map + GC strip. */
 export function pcrPlanOverviewSvg(product: PcrPlanSnapshot["product"], width = 440): string {
@@ -624,6 +637,9 @@ export const PCR_PLAN_SHEET_CSS = `
 }
 * {
   box-sizing: border-box;
+}
+:root {
+  color-scheme: light;
 }
 html, body {
   margin: 0;
@@ -834,16 +850,22 @@ html, body {
   font-weight: 600;
   letter-spacing: 0;
 }
-.sv-sheet-table tfoot td {
+.sv-sheet-table .sv-sheet-total td {
   font-weight: 700;
   border-top: 1px solid #64748b;
   border-bottom: 1px solid #64748b;
   background: #f8fafc;
 }
+.sv-sheet-total {
+  break-before: avoid;
+  page-break-before: avoid;
+}
 .sv-sheet-num {
-  text-align: right !important;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.sv-sheet-table .sv-sheet-num {
+  text-align: right;
 }
 .sv-sheet-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -888,8 +910,8 @@ html, body {
   padding-top: 2.5px;
   padding-bottom: 2.5px;
 }
-.sv-sheet-step-indent {
-  padding-left: 14px !important;
+.sv-sheet-table .sv-sheet-step-indent {
+  padding-left: 14px;
 }
 .sv-sheet-overview-grid,
 .sv-sheet-gel-only-grid {
@@ -955,6 +977,7 @@ html, body {
   display: inline-block;
   width: 8px;
   height: 6px;
+  border: 0.5px solid #475569;
   border-radius: 1px;
   vertical-align: middle;
   margin-right: 3px;
@@ -964,6 +987,8 @@ html, body {
   grid-template-columns: minmax(0, 46fr) minmax(0, 54fr);
   gap: 12px;
   align-items: start;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .sv-sheet-unavailable {
   padding: 6px 8px;
@@ -995,7 +1020,6 @@ html, body {
 .sv-sheet-notes-lines {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 .sv-sheet-notes-line {
   height: 18px;
@@ -1138,7 +1162,7 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
           .join("");
         const sourceLine = p.edited ? `Based on ${p.source} (edited locally)` : p.source;
         const staleHtml = p.stale ? `<p class="sv-sheet-note"><strong>Note:</strong> Program edits were kept from an earlier setup (${escapeHtml(p.context)}).</p>` : "";
-        return `<section class="sv-sheet-sec">
+        return `<section class="sv-sheet-sec sv-sheet-avoid">
           <div class="sv-sheet-sec-head">
             <h2 class="sv-sheet-sec-title">Cycling program</h2>
             ${p.edited ? '<span class="sv-sheet-badge">Edited</span>' : ""}
@@ -1152,7 +1176,7 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
           <p class="sv-sheet-note">Baseline context: ${escapeHtml(p.context)}${p.edited ? ". Underlined values were edited from the generated protocol." : "."}</p>
         </section>`;
       })()
-    : `<section class="sv-sheet-sec">
+    : `<section class="sv-sheet-sec sv-sheet-avoid">
         <div class="sv-sheet-sec-head"><h2 class="sv-sheet-sec-title">Cycling program</h2></div>
         <div class="sv-sheet-unavailable">${escapeHtml(snapshot.programUnavailableReason ?? "No cycling program available.")}</div>
       </section>`;
@@ -1171,8 +1195,8 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
             </tr>`
           )
           .join("");
-        const footHtml = master
-          ? `<tfoot><tr><td>Master mix</td><td class="sv-sheet-num sv-sheet-mono">${escapeHtml(fmtVolume(m.perTube))}</td><td class="sv-sheet-num sv-sheet-mono">${escapeHtml(fmtVolume(m.mixTotal))}</td><td></td></tr></tfoot>`
+        const totalHtml = master
+          ? `<tr class="sv-sheet-total"><td>Master mix</td><td class="sv-sheet-num sv-sheet-mono">${escapeHtml(fmtVolume(m.perTube))}</td><td class="sv-sheet-num sv-sheet-mono">${escapeHtml(fmtVolume(m.mixTotal))}</td><td></td></tr>`
           : "";
         const mixNotes: string[] = [
           master
@@ -1183,7 +1207,7 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
         const mixWarnHtml = m.warnings.length
           ? m.warnings.map(w => `<p class="sv-sheet-note"><strong>Mix note:</strong> ${escapeHtml(w)}</p>`).join("")
           : "";
-        return `<section class="sv-sheet-sec">
+        return `<section class="sv-sheet-sec sv-sheet-avoid">
           <div class="sv-sheet-sec-head">
             <h2 class="sv-sheet-sec-title">Reaction mix</h2>
             <span class="sv-sheet-sec-meta">${escapeHtml(m.source)}</span>
@@ -1196,14 +1220,13 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
               ${master ? `<th class="sv-sheet-num">Mix <span class="sv-sheet-unit">(${escapeHtml(fmtVolume(m.mixReactions))}×, µl)</span></th>` : ""}
               <th>Final</th>
             </tr></thead>
-            <tbody>${rowsHtml}</tbody>
-            ${footHtml}
+            <tbody>${rowsHtml}${totalHtml}</tbody>
           </table>
           ${mixWarnHtml}
           ${mixNotes.map(n => `<p class="sv-sheet-note">${escapeHtml(n)}</p>`).join("")}
         </section>`;
       })()
-    : `<section class="sv-sheet-sec">
+    : `<section class="sv-sheet-sec sv-sheet-avoid">
         <div class="sv-sheet-sec-head"><h2 class="sv-sheet-sec-title">Reaction mix</h2></div>
         <div class="sv-sheet-unavailable">${escapeHtml(snapshot.mixUnavailableReason ?? "No reaction mix available.")}</div>
       </section>`;
@@ -1234,7 +1257,7 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
     : `<div class="sv-sheet-notes-lines" aria-label="Blank writing space for bench notes">${'<div class="sv-sheet-notes-line"></div>'.repeat(4)}</div>`;
 
   const primersHtml = sections.primers
-    ? `<section class="sv-sheet-sec">
+    ? `<section class="sv-sheet-sec sv-sheet-avoid">
     <div class="sv-sheet-sec-head">
       <h2 class="sv-sheet-sec-title">Primers (5′→3′)</h2>
       <span class="sv-sheet-sec-meta">${escapeHtml(snapshot.polymerase.name)} Tm rule</span>
@@ -1258,10 +1281,7 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
 
   const gcLegendHtml = `<div class="sv-sheet-gc-legend">
           <span>GC (${fmtInt(snapshot.product.gcWindow)} bp window):</span>
-          <span><span class="sv-sheet-gc-swatch" style="background:${PRINT_GC_FILL.at}"></span>AT-rich (&lt;35%)</span>
-          <span><span class="sv-sheet-gc-swatch" style="background:${PRINT_GC_FILL.mid}"></span>40–60%</span>
-          <span><span class="sv-sheet-gc-swatch" style="background:${PRINT_GC_FILL.gc}"></span>GC-rich (&gt;65%)</span>
-          <span>· ${escapeHtml(snapshot.product.enzymeFilterNote)}</span>
+          ${PRINT_GC_KEY.map(k => `<span><span class="sv-sheet-gc-swatch" style="background:${PRINT_GC_FILL[k.level]}"></span>${escapeHtml(k.label)}</span>`).join("")}
         </div>`;
 
   const gelDetailsHtml = `<p class="sv-sheet-note"><strong>Digest:</strong> ${snapshot.digest ? `${escapeHtml(snapshot.digest.name)} — ` : ""}${escapeHtml(snapshot.digestNote)}</p>
@@ -1278,7 +1298,7 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
     overviewHtml = `<section class="sv-sheet-sec sv-sheet-avoid">
     <div class="sv-sheet-sec-head">
       <h2 class="sv-sheet-sec-title">Product map &amp; simulated gel</h2>
-      <span class="sv-sheet-sec-meta">${snapshot.digest ? `Digest: ${escapeHtml(snapshot.digest.name)}` : "Uncut product"} · Ladder: ${escapeHtml(snapshot.gel.ladder.name)}</span>
+      <span class="sv-sheet-sec-meta">Sites: ${escapeHtml(snapshot.product.enzymeFilterNote)} · ${snapshot.digest ? `Digest: ${escapeHtml(snapshot.digest.name)}` : "Uncut product"} · Ladder: ${escapeHtml(snapshot.gel.ladder.name)}</span>
     </div>
     <div class="sv-sheet-overview-grid">
       <div>
@@ -1294,7 +1314,7 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
     overviewHtml = `<section class="sv-sheet-sec sv-sheet-avoid">
     <div class="sv-sheet-sec-head">
       <h2 class="sv-sheet-sec-title">Product map</h2>
-      <span class="sv-sheet-sec-meta">${escapeHtml(snapshot.product.enzymeFilterNote)}</span>
+      <span class="sv-sheet-sec-meta">Sites: ${escapeHtml(snapshot.product.enzymeFilterNote)}</span>
     </div>
     ${pcrPlanOverviewSvg(snapshot.product, 640)}
     ${gcLegendHtml}
@@ -1325,8 +1345,9 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
     protocolHtml = mixSection;
   }
 
+  // Blank writing lines stay together; written notes may run onto the next page.
   const benchNotesSectionHtml = sections.notes
-    ? `<section class="sv-sheet-sec">
+    ? `<section class="sv-sheet-sec${hasNotes ? "" : " sv-sheet-avoid"}">
     <div class="sv-sheet-sec-head">
       <h2 class="sv-sheet-sec-title">Bench notes &amp; observations</h2>
     </div>

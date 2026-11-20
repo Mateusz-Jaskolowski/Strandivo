@@ -213,6 +213,24 @@ class Session {
     const b64 = await wd("GET", `/session/${this.id}/screenshot`);
     writeFileSync(path.join(this.outDir, `${name}.png`), Buffer.from(b64, "base64"));
   }
+  /** Prints the page as Chrome would to PDF, on paper `width` × `height` cm, and gives its number of pages. */
+  async printedPages(width, height) {
+    const b64 = await wd("POST", `/session/${this.id}/print`, { page: { width, height }, background: true, shrinkToFit: false });
+    const counts = [...Buffer.from(b64, "base64").toString("latin1").matchAll(/\/Count (\d+)/g)].map(m => Number(m[1]));
+    return counts.length ? Math.max(...counts) : 0;
+  }
+  window() {
+    return wd("GET", `/session/${this.id}/window`);
+  }
+  async newTab() {
+    const { handle } = await wd("POST", `/session/${this.id}/window/new`, { type: "tab" });
+    await wd("POST", `/session/${this.id}/window`, { handle });
+    return handle;
+  }
+  async closeTab(back) {
+    await wd("DELETE", `/session/${this.id}/window`);
+    await wd("POST", `/session/${this.id}/window`, { handle: back });
+  }
   end() {
     return wd("DELETE", `/session/${this.id}`).catch(() => {});
   }
@@ -709,6 +727,49 @@ async function main(outDir) {
         !savedHtml.includes(fullSeq) &&
         savedBody.includes('class="sv-sheet-date-blank"'),
       savedHtml.slice(0, 260)
+    );
+    // The page that prints and the saved file are built apart (DOM and a string), so their words are compared:
+    // every text, in order, skipping what is hidden.
+    const parity = await s.exec(
+      `const words = root => {
+        const out = [];
+        const walk = n => {
+          if (n.nodeType === 3) {
+            const t = n.textContent.replace(/\\s+/g, ' ').trim();
+            if (t) out.push(t);
+          } else if (n.nodeType === 1 && !n.hidden && n.tagName !== 'STYLE') n.childNodes.forEach(walk);
+        };
+        walk(root);
+        return out.join(' ');
+      };
+      const saved = new DOMParser().parseFromString(arguments[0], 'text/html').querySelector('.sv-sheet');
+      return { live: words(document.querySelector('.sv-print-sheet .sv-sheet')), saved: saved ? words(saved) : '' };`,
+      savedHtml
+    );
+    const firstDiff = [...parity.live].findIndex((c, i) => c !== parity.saved[i]);
+    check(
+      "The page printed and the saved HTML say the same, word for word",
+      parity.live.length > 500 && parity.live === parity.saved,
+      `${parity.live.length} vs ${parity.saved.length} characters; live …${parity.live.slice(Math.max(0, firstDiff - 60), firstDiff + 60)}… saved …${parity.saved.slice(Math.max(0, firstDiff - 60), firstDiff + 60)}…`
+    );
+    // Printed from the preview and from the saved file, on A4 and on US Letter, the plan takes as many pages:
+    // the preview's narrow-window layout once stacked the columns on A4 paper only.
+    const papers = { a4: [21, 29.7], letter: [21.59, 27.94] };
+    const livePages = {};
+    for (const [name, [w, h]] of Object.entries(papers)) livePages[name] = await s.printedPages(w, h);
+    const appTab = await s.window();
+    const blobUrl = await s.exec("return URL.createObjectURL(new Blob([arguments[0]], { type: 'text/html' }));", savedHtml);
+    await s.newTab();
+    await s.go(blobUrl);
+    await s.waitFor("document.querySelector('.sv-sheet')", 5000);
+    const savedPages = {};
+    for (const [name, [w, h]] of Object.entries(papers)) savedPages[name] = await s.printedPages(w, h);
+    await s.closeTab(appTab);
+    await s.exec("URL.revokeObjectURL(arguments[0]);", blobUrl);
+    check(
+      "The plan prints on as many A4 and US Letter pages from the preview as from the saved file",
+      livePages.a4 >= 1 && livePages.letter >= 1 && livePages.a4 === savedPages.a4 && livePages.letter === savedPages.letter,
+      JSON.stringify({ livePages, savedPages })
     );
     await s.shot("10-pcr-print-preview");
     await s.click("//button[@data-focus='plan-cancel']");

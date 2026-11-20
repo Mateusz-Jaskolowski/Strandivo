@@ -4,6 +4,9 @@
 // Preview dialog and native print mirror for a printable PCR bench sheet.
 // Consumes one immutable PcrPlanSnapshot so preview, print, PDF, offline HTML and Markdown
 // all stay identical while local metadata (title, date, notes) and section toggles update live.
+// The sheet is built here as DOM for the preview and the print mirror, and as a string by
+// `pcrPlanHtml` for the saved file: a change to one goes into the other, and their styles
+// (`src/doc/document.css`, `PCR_PLAN_SHEET_CSS`) are held together by `pcrPrint.test.ts`.
 
 import type { DocContext } from "../doc/context.ts";
 import { fmtVolume } from "../lib/pcrMix.ts";
@@ -18,6 +21,7 @@ import {
   planFileName,
   planPdfFileName,
   PRINT_GC_FILL,
+  PRINT_GC_KEY,
   readPlanPaper,
   readPlanSections,
   type PcrPlanMeta,
@@ -189,7 +193,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
 
   const primersSection = h(
     "section",
-    { class: "sv-sheet-sec", "data-sheet-sec": "primers" },
+    { class: "sv-sheet-sec sv-sheet-avoid", "data-sheet-sec": "primers" },
     h(
       "div",
       { class: "sv-sheet-sec-head" },
@@ -229,10 +233,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       "div",
       { class: "sv-sheet-gc-legend" },
       h("span", null, `GC (${fmt(snapshot.product.gcWindow)} bp window):`),
-      h("span", null, h("span", { class: "sv-sheet-gc-swatch", style: { background: PRINT_GC_FILL.at } }), "AT-rich (<35%)"),
-      h("span", null, h("span", { class: "sv-sheet-gc-swatch", style: { background: PRINT_GC_FILL.mid } }), "40–60%"),
-      h("span", null, h("span", { class: "sv-sheet-gc-swatch", style: { background: PRINT_GC_FILL.gc } }), "GC-rich (>65%)"),
-      h("span", null, `· ${snapshot.product.enzymeFilterNote}`)
+      ...PRINT_GC_KEY.map(k => h("span", null, h("span", { class: "sv-sheet-gc-swatch", style: { background: PRINT_GC_FILL[k.level] } }), k.label))
     );
 
   const buildGelDetails = (): Node[] => [
@@ -291,7 +292,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
         }
         return h(
           "section",
-          { class: "sv-sheet-sec", "data-sheet-sec": "program" },
+          { class: "sv-sheet-sec sv-sheet-avoid", "data-sheet-sec": "program" },
           h(
             "div",
             { class: "sv-sheet-sec-head" },
@@ -311,7 +312,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       })()
     : h(
         "section",
-        { class: "sv-sheet-sec", "data-sheet-sec": "program" },
+        { class: "sv-sheet-sec sv-sheet-avoid", "data-sheet-sec": "program" },
         h("div", { class: "sv-sheet-sec-head" }, h("h2", { class: "sv-sheet-sec-title" }, "Cycling program")),
         h("div", { class: "sv-sheet-unavailable" }, snapshot.programUnavailableReason ?? "No cycling program available.")
       );
@@ -322,7 +323,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
         const master = m.mixReactions > 1;
         return h(
           "section",
-          { class: "sv-sheet-sec", "data-sheet-sec": "mix" },
+          { class: "sv-sheet-sec sv-sheet-avoid", "data-sheet-sec": "mix" },
           h(
             "div",
             { class: "sv-sheet-sec-head" },
@@ -357,15 +358,19 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
                   master ? h("td", { class: "sv-sheet-num sv-sheet-mono" }, r.mix === null ? "—" : fmtVolume(r.mix)) : null,
                   h("td", { class: "sv-sheet-dim" }, r.final)
                 )
-              )
-            ),
-            master
-              ? h(
-                  "tfoot",
-                  null,
-                  h("tr", null, h("td", null, "Master mix"), h("td", { class: "sv-sheet-num sv-sheet-mono" }, fmtVolume(m.perTube)), h("td", { class: "sv-sheet-num sv-sheet-mono" }, fmtVolume(m.mixTotal)), h("td", null, ""))
-                )
-              : null
+              ),
+              // A last row rather than a tfoot, which a browser repeats on each page the table spans.
+              master
+                ? h(
+                    "tr",
+                    { class: "sv-sheet-total" },
+                    h("td", null, "Master mix"),
+                    h("td", { class: "sv-sheet-num sv-sheet-mono" }, fmtVolume(m.perTube)),
+                    h("td", { class: "sv-sheet-num sv-sheet-mono" }, fmtVolume(m.mixTotal)),
+                    h("td", null, "")
+                  )
+                : null
+            )
           ),
           ...m.warnings.map(w => h("p", { class: "sv-sheet-note" }, h("strong", null, "Mix note: "), w)),
           h(
@@ -380,7 +385,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       })()
     : h(
         "section",
-        { class: "sv-sheet-sec", "data-sheet-sec": "mix" },
+        { class: "sv-sheet-sec sv-sheet-avoid", "data-sheet-sec": "mix" },
         h("div", { class: "sv-sheet-sec-head" }, h("h2", { class: "sv-sheet-sec-title" }, "Reaction mix")),
         h("div", { class: "sv-sheet-unavailable" }, snapshot.mixUnavailableReason ?? "No reaction mix available.")
       );
@@ -451,7 +456,10 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       dateSlot.replaceChildren(h("span", { class: "sv-sheet-date-blank", "aria-label": "Unset" }));
     }
     const notes = meta.notes.replace(/\r\n/g, "\n");
-    if (notes.trim().length > 0) {
+    const hasNotes = notes.trim().length > 0;
+    // Blank writing lines stay together; written notes may run onto the next page.
+    notesSection.classList.toggle("sv-sheet-avoid", !hasNotes);
+    if (hasNotes) {
       notesSlot.replaceChildren(h("div", { class: "sv-sheet-notes-text" }, notes));
     } else {
       notesSlot.replaceChildren(
@@ -481,7 +489,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
               "div",
               { class: "sv-sheet-sec-head" },
               h("h2", { class: "sv-sheet-sec-title" }, "Product map & simulated gel"),
-              h("span", { class: "sv-sheet-sec-meta" }, `${snapshot.digest ? `Digest: ${snapshot.digest.name}` : "Uncut product"} · Ladder: ${snapshot.gel.ladder.name}`)
+              h("span", { class: "sv-sheet-sec-meta" }, `Sites: ${snapshot.product.enzymeFilterNote} · ${snapshot.digest ? `Digest: ${snapshot.digest.name}` : "Uncut product"} · Ladder: ${snapshot.gel.ladder.name}`)
             ),
             h(
               "div",
@@ -500,7 +508,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
               "div",
               { class: "sv-sheet-sec-head" },
               h("h2", { class: "sv-sheet-sec-title" }, "Product map"),
-              h("span", { class: "sv-sheet-sec-meta" }, snapshot.product.enzymeFilterNote)
+              h("span", { class: "sv-sheet-sec-meta" }, `Sites: ${snapshot.product.enzymeFilterNote}`)
             ),
             buildOverviewSvgDom(snapshot.product, 640),
             buildGcLegend(),

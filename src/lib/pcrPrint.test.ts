@@ -15,15 +15,20 @@ import {
   buildPcrPlanSnapshot,
   DEFAULT_PLAN_SECTIONS,
   paperForLocale,
+  PCR_PLAN_SHEET_CSS,
+  pcrPlanGelLayout,
   pcrPlanGelSvg,
   pcrPlanHtml,
   pcrPlanMarkdown,
   pcrPlanOverviewSvg,
   planFileName,
   planPdfFileName,
+  PRINT_GC_FILL,
+  PRINT_GC_KEY,
   readPlanPaper,
   readPlanSections,
-  suggestedPlanTitle
+  suggestedPlanTitle,
+  type PcrPlanSections
 } from "./pcrPrint.ts";
 import { pcrProgram, programSource, programTitle } from "./pcrProgram.ts";
 import { programDraft, programInputKey, programKey } from "./pcrProgramEdit.ts";
@@ -80,9 +85,13 @@ function buildScenario(opts: {
   templateName?: string;
   warnings?: string[];
   unknownTm?: boolean;
+  linear?: boolean;
+  /** Overrides the chosen digest's score, to stand for one whose bands are hard to tell apart. */
+  digestScore?: number;
 } = {}) {
   const d = puc19();
   if (opts.templateName !== undefined) d.name = opts.templateName;
+  if (opts.linear) d.circular = false;
   const { f, r } = makePair(d, opts);
   const product = pcrProduct(d.sequence, d.circular, f, r)!;
   assert.ok(product, "fixture primers must yield a product");
@@ -124,7 +133,8 @@ function buildScenario(opts: {
     labEnzymes: [],
     personalEnzymes: []
   });
-  const digest = overview.digests[opts.digestIndex ?? 0] ?? null;
+  const offered = overview.digests[opts.digestIndex ?? 0] ?? null;
+  const digest = offered && opts.digestScore !== undefined ? { ...offered, score: opts.digestScore } : offered;
   const ladder = LADDERS.find(l => l.id === opts.ladderId) ?? LADDERS[0];
   const prefs: MixPrefs = {
     ...MIX_DEFAULTS,
@@ -133,7 +143,7 @@ function buildScenario(opts: {
   };
   const mix = effectivePcrMix(polymerase, product.length, { reactions: opts.reactions ?? 1, optional: opts.optional ?? [] }, prefs);
 
-  const snapshot = buildPcrPlanSnapshot({
+  const snapshotInput: Parameters<typeof buildPcrPlanSnapshot>[0] = {
     template: d,
     templateKind: "plasmid",
     product,
@@ -162,8 +172,9 @@ function buildScenario(opts: {
     mixUnavailableReason: `There is no reaction setup for ${poly.name} yet.`,
     warnings: opts.warnings ?? [],
     exportedAt: "2026-11-19"
-  });
-  return { d, f, r, product, overview, digest, ladder, mix, snapshot };
+  };
+  const snapshot = buildPcrPlanSnapshot(snapshotInput);
+  return { d, f, r, product, overview, digest, ladder, mix, snapshot, input: snapshotInput };
 }
 
 test("edited cycling step, changed digest, ladder, and collapsed mix settings all flow into the snapshot and HTML", () => {
@@ -402,4 +413,224 @@ test("Markdown export reflects edited program, collapsed mix, section toggles, u
   assert.ok(ventMd.includes("There is no reaction setup for Vent or Deep Vent yet."));
   assert.equal(ventMd.includes("| Step | Temp | Time |"), false);
   assert.equal(ventMd.includes("| Component |"), false);
+});
+// ---------- exact values, sections, warnings and escaping ----------
+
+const SECTION_KEYS = Object.keys(DEFAULT_PLAN_SECTIONS) as (keyof PcrPlanSections)[];
+
+test("the snapshot holds the fixture's exact product, primers, program and mix", () => {
+  const { snapshot } = buildScenario({ editAnnealTemp: "61.5", editCycles: "28", reactions: 5, extra: 10 });
+  // Primers at 101–122 and 1,401–1,422: 1,322 bp, as the positions say.
+  assert.equal(snapshot.product.length, 1322);
+  assert.equal(snapshot.template.spanText, "101–1,422 of 2,686 bp");
+  assert.deepEqual(
+    snapshot.primers.map(p => [p.role, p.length, p.binds]),
+    [
+      ["Forward", 22, "101–122 →"],
+      ["Reverse", 22, "← 1,401–1,422"]
+    ]
+  );
+  // NEB's Q5 plasmid program, with the anneal and cycles edited and the generated values kept.
+  assert.deepEqual(
+    snapshot.program?.stages.map(st => [st.cycles, st.originalCycles, st.steps.map(s => [s.name, s.temp, s.originalTemp, s.seconds, s.originalSeconds])]),
+    [
+      [null, null, [["Initial denaturation", 98, 98, 30, 30]]],
+      [28, 25, [["Denature", 98, 98, 10, 10], ["Anneal", 61.5, 65, 20, 20], ["Extend", 72, 72, 20, 20]]],
+      [null, null, [["Final extension", 72, 72, 120, 120], ["Hold", 4, 4, null, null]]]
+    ]
+  );
+  // NEB's Q5 table for 25 µl, five reactions and 10% more (5.5×).
+  assert.equal(snapshot.mix?.mixReactions, 5.5);
+  assert.equal(snapshot.mix?.perTube, 24);
+  assert.equal(snapshot.mix?.mixTotal, 132);
+  assert.deepEqual(
+    snapshot.mix?.rows.map(r => [r.name, r.each, r.mix]),
+    [
+      ["5X Q5 Reaction Buffer", 5, 27.5],
+      ["10 mM dNTPs", 0.5, 2.75],
+      ["10 µM forward primer", 1.25, 6.875],
+      ["10 µM reverse primer", 1.25, 6.875],
+      ["Q5 High-Fidelity DNA Polymerase", 0.25, 1.375],
+      ["Nuclease-free water", 15.75, 86.625],
+      ["Template DNA", 1, null]
+    ]
+  );
+
+  const html = pcrPlanHtml(snapshot, { title: "Exact", experimentDate: "", notes: "" });
+  assert.match(html, /<td class="sv-sheet-name">pUC19-F<\/td>/);
+  assert.match(html, /1,322 bp · 55\.2% GC/);
+  assert.match(html, /<span class="sv-sheet-edited">61\.5 °C<\/span><span class="sv-sheet-orig">\(gen\. 65 °C\)<\/span>/);
+  assert.match(html, /<span class="sv-sheet-edited">28 cycles<\/span><span class="sv-sheet-orig">\(gen\. 25\)<\/span>/);
+  for (const v of ["27.5", "2.75", "6.88", "1.38", "86.6", ">24<", ">132<"]) assert.ok(html.includes(v), v);
+  const md = pcrPlanMarkdown(snapshot, { title: "Exact", experimentDate: "", notes: "" });
+  assert.ok(md.includes("| &nbsp;&nbsp;Anneal | **61.5 °C** (gen. 65 °C) | 20 s |"));
+  assert.ok(md.includes("| 10 µM forward primer | 1.25 | 6.88 | 0.5 µM |"));
+  assert.ok(md.includes("| **Master mix** | **24** | **132** | |"));
+});
+
+test("the gel lanes and their bands sit where their sizes run against the ladder", () => {
+  const { snapshot } = buildScenario();
+  assert.equal(snapshot.gel.ladder.id, "1kb");
+  assert.deepEqual(
+    snapshot.gel.lanes.map(l => [l.number, l.what, l.sizesText]),
+    [
+      [1, "Template, supercoiled", "2,686 bp"],
+      [2, "Template, BtsI", "1,507 + 1,159 + 20 bp"],
+      [3, "Product, uncut", "1,322 bp"],
+      [4, "Product, BtsI", "830 + 492 bp"]
+    ]
+  );
+  const layout = pcrPlanGelLayout(snapshot.gel);
+  const ladderY = (size: number) => layout.ladderBands.find(b => b.size === size)!.y;
+  const band = (size: number) => layout.sampleBands.find(b => b.size === size)!;
+  // Bigger fragments run less far: each band lies between the ladder bands around it.
+  assert.ok(ladderY(1500) < band(1322).y && band(1322).y < ladderY(1000));
+  assert.ok(ladderY(1000) < band(830).y && band(830).y < ladderY(500));
+  // The supercoiled plasmid runs as about 1,880 bp, not at its 2,686 bp, and is drawn dashed.
+  assert.equal(band(2686).uncut, true);
+  assert.ok(ladderY(2000) < band(2686).y && band(2686).y < ladderY(1500));
+  assert.ok(band(830).x > band(1322).x, "the digest lane is right of the uncut product");
+});
+
+test("every section can be left out on its own, in the HTML and the Markdown, and the choice is stored", () => {
+  const { snapshot } = buildScenario({ reactions: 4 });
+  const meta = { title: "Sections", experimentDate: "", notes: "" };
+  const htmlMarks: Record<keyof PcrPlanSections, string> = {
+    primers: '<h2 class="sv-sheet-sec-title">Primers (5′→3′)</h2>',
+    productMap: 'class="sv-sheet-map-svg',
+    gel: 'class="sv-sheet-gel-svg"',
+    program: '<h2 class="sv-sheet-sec-title">Cycling program</h2>',
+    mix: '<h2 class="sv-sheet-sec-title">Reaction mix</h2>',
+    notes: '<h2 class="sv-sheet-sec-title">Bench notes &amp; observations</h2>'
+  };
+  const mdMarks: Record<keyof PcrPlanSections, string> = {
+    primers: "## Primers (5′→3′)",
+    productMap: "## Product map",
+    gel: "## Simulated gel",
+    program: "## Cycling program",
+    mix: "## Reaction mix",
+    notes: "## Bench notes & observations"
+  };
+  for (const key of SECTION_KEYS) {
+    const sections = { ...DEFAULT_PLAN_SECTIONS, [key]: false };
+    const html = pcrPlanHtml(snapshot, meta, sections).split("<body>")[1];
+    const md = pcrPlanMarkdown(snapshot, meta, sections);
+    for (const other of SECTION_KEYS) {
+      assert.equal(html.includes(htmlMarks[other]), other !== key, `HTML without ${key}: ${other}`);
+      assert.equal(md.includes(mdMarks[other]), other !== key, `Markdown without ${key}: ${other}`);
+    }
+    assert.deepEqual(readPlanSections(JSON.parse(JSON.stringify(sections))), sections, `stored without ${key}`);
+  }
+  const none = Object.fromEntries(SECTION_KEYS.map(k => [k, false])) as unknown as PcrPlanSections;
+  const bare = pcrPlanMarkdown(snapshot, meta, none);
+  for (const key of SECTION_KEYS) assert.equal(bare.includes(mdMarks[key]), false, key);
+  assert.ok(bare.includes("- **Predicted product:** 1,322 bp"));
+});
+
+test("names and sequences from the file are escaped in the saved HTML, which stays offline", () => {
+  const { snapshot } = buildScenario({ fwdName: '<img src=x onerror=alert(1)>"F"', templateName: "pUC19 <script>x</script>" });
+  const html = pcrPlanHtml(snapshot, { title: "Escapes", experimentDate: "", notes: "" });
+  assert.ok(html.includes("&lt;img src=x onerror=alert(1)&gt;&quot;F&quot;"));
+  assert.ok(html.includes("pUC19 &lt;script&gt;x&lt;/script&gt;"));
+  assert.equal(/<img\b|<script\b|<link\b|\s(?:src|href)=["']|url\(|@import/i.test(html), false);
+});
+
+test("the master mix total is printed once, as the table's last row", () => {
+  const { snapshot } = buildScenario({ reactions: 5 });
+  const html = pcrPlanHtml(snapshot, { title: "Total", experimentDate: "", notes: "" });
+  assert.equal((html.match(/<td>Master mix<\/td>/g) ?? []).length, 1);
+  assert.equal(html.includes("<tfoot"), false);
+  assert.match(html, /<tr class="sv-sheet-total"><td>Master mix<\/td>[^]*?<\/tr><\/tbody>/);
+  // One reaction needs no total.
+  const single = pcrPlanHtml(buildScenario({ reactions: 1 }).snapshot, { title: "One", experimentDate: "", notes: "" });
+  assert.equal(single.includes("Master mix</td>"), false);
+});
+
+test("short sections and blank writing lines are kept on one page; written notes may run on", () => {
+  const { snapshot } = buildScenario({ reactions: 5 });
+  const blank = pcrPlanHtml(snapshot, { title: "Breaks", experimentDate: "", notes: "" });
+  for (const title of ["Primers (5′→3′)", "Cycling program", "Reaction mix", "Bench notes &amp; observations"]) {
+    assert.match(blank, new RegExp(`<section class="sv-sheet-sec sv-sheet-avoid">\\s*<div class="sv-sheet-sec-head">\\s*<h2 class="sv-sheet-sec-title">${title.replace(/[()]/g, "\\$&")}`), title);
+  }
+  const written = pcrPlanHtml(snapshot, { title: "Breaks", experimentDate: "", notes: "Fourteen lines…" });
+  assert.match(written, /<section class="sv-sheet-sec">\s*<div class="sv-sheet-sec-head">\s*<h2 class="sv-sheet-sec-title">Bench notes/);
+});
+
+test("the GC strip's five levels read apart in grey and each has a key", () => {
+  // Grey as a printer driver or Ghostscript makes it (0.30 R + 0.59 G + 0.11 B).
+  const grey = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    return 0.3 * r + 0.59 * g + 0.11 * b;
+  };
+  const levels = PRINT_GC_KEY.map(k => grey(PRINT_GC_FILL[k.level]));
+  for (let i = 0; i < levels.length; i++) for (let j = i + 1; j < levels.length; j++) assert.ok(Math.abs(levels[i] - levels[j]) >= 30, `${PRINT_GC_KEY[i].level} vs ${PRINT_GC_KEY[j].level}`);
+  assert.deepEqual(
+    PRINT_GC_KEY.map(k => k.label),
+    ["AT-rich (<35%)", "35–40%", "40–60%", "60–65%", "GC-rich (>65%)"]
+  );
+  const html = pcrPlanHtml(buildScenario().snapshot, { title: "GC", experimentDate: "", notes: "" });
+  for (const k of PRINT_GC_KEY) assert.ok(html.includes(`background:${PRINT_GC_FILL[k.level]}"></span>${k.label.replace("<", "&lt;").replace(">", "&gt;")}`), k.label);
+});
+
+// ---------- the two stylesheets ----------
+
+/** `selector → declarations` for each rule, with the @media it sits in, comments dropped. */
+function cssRules(css: string): Map<string, string> {
+  const rules = new Map<string, string>();
+  const text = css.replace(/\/\*[^]*?\*\//g, "");
+  const walk = (block: string, media: string) => {
+    let i = 0;
+    for (let open = block.indexOf("{", i); open >= 0; open = block.indexOf("{", i)) {
+      const head = block.slice(i, open).trim();
+      let depth = 1;
+      let j = open + 1;
+      for (; j < block.length && depth > 0; j++) depth += block[j] === "{" ? 1 : block[j] === "}" ? -1 : 0;
+      const inner = block.slice(open + 1, j - 1);
+      if (head.startsWith("@media")) walk(inner, head.replace(/\s+/g, " "));
+      else
+        for (const sel of head.split(",").map(x => x.trim().replace(/\s+/g, " ")))
+          rules.set(`${media}|${sel}`, inner.split(";").map(d => d.trim().replace(/\s+/g, " ")).filter(Boolean).join("; "));
+      i = j;
+    }
+  };
+  walk(text, "");
+  return rules;
+}
+
+const documentCss = readFileSync(new URL("../doc/document.css", import.meta.url), "utf8");
+const liveSheetCss = documentCss.slice(documentCss.indexOf("/* ---------- printable PCR plan preview & bench sheet ---------- */"));
+
+test("the in-app sheet and the saved file share their sheet styles", () => {
+  const live = cssRules(liveSheetCss);
+  const saved = cssRules(PCR_PLAN_SHEET_CSS);
+  // The in-app sheet uses the app's monospace token; the page and paper around it differ by design.
+  const mono = (decls: string) => decls.replace("font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", "font-family: var(--mono)");
+  const own = new Set(["|.sv-sheet", "@media print|.sv-sheet"]);
+  let compared = 0;
+  for (const [key, decls] of saved) {
+    const selector = key.split("|")[1];
+    if (!selector.startsWith(".sv-sheet") || own.has(key)) continue;
+    assert.equal(live.get(key), mono(decls), key);
+    compared++;
+  }
+  assert.ok(compared > 50, String(compared));
+});
+
+test("the sheet keeps its columns on paper, prints light, and breaks only where it should", () => {
+  const live = cssRules(liveSheetCss);
+  const saved = cssRules(PCR_PLAN_SHEET_CSS);
+  // The narrow-window layout is for screens only: A4's printable width is about 720 px in some engines.
+  for (const media of new Set([...live.keys()].map(k => k.split("|")[0]))) {
+    if (/max-width/.test(media)) assert.match(media, /^@media screen and/, media);
+  }
+  assert.match(live.get("@media print|html.sv-printing") ?? "", /color-scheme: light !important/);
+  assert.match(saved.get("|:root") ?? "", /color-scheme: light/);
+  for (const rules of [live, saved]) {
+    assert.match(rules.get("|.sv-sheet-avoid") ?? "", /break-inside: avoid/);
+    assert.match(rules.get("|.sv-sheet-two-col") ?? "", /break-inside: avoid/);
+    assert.match(rules.get("|.sv-sheet-total") ?? "", /break-before: avoid/);
+    assert.match(rules.get("|.sv-sheet-table .sv-sheet-num") ?? "", /text-align: right/);
+    assert.match(rules.get("|.sv-sheet-table .sv-sheet-step-indent") ?? "", /padding-left: 14px/);
+    assert.equal([...rules.values()].some(d => d.includes("!important") && /text-align|padding-left/.test(d)), false);
+  }
 });

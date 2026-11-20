@@ -236,19 +236,23 @@ export async function checkMapImage(s, check, save) {
             .filter(c => Array.from(c.children).some(p => p.getAttribute('clip-rule') === 'evenodd'))
             .map(c => ({ id: c.getAttribute('id'), d: Array.from(c.children).map(p => p.getAttribute('d') || '').join(' ') }));
           const users = Array.from(doc.querySelectorAll('[clip-path]'))
-            .map(e => ({ clip: e.getAttribute('clip-path').replace(/^url\\(#(.*)\\)$/, '$1'), tag: e.localName, fill: e.getAttribute('fill') }))
+            .map(e => ({ clip: e.getAttribute('clip-path').replace(/^url\\(#(.*)\\)$/, '$1'), tag: e.localName }))
             .filter(u => clips.some(c => c.id === u.clip));
           return { box, clips, users };
         `, await saveWith("Save as SVG"));
-        const user = found.users.find(u => u.fill === added.feature.color) ?? found.users[0];
-        const clip = user && found.clips.find(c => c.id === user.clip);
-        const probe = clip ? splitProbes({ d: clip.d, feature: added.feature, n: added.n, rotation: added.rotation }) : { why: `${found.clips.length} clip paths with clip-rule evenodd, ${found.users.length} shapes using them` };
+        // The clip path whose holes are this gene's introns: another feature in parts would have its own.
+        const tried = found.clips.map(c => ({ clip: c, probe: splitProbes({ d: c.d, feature: added.feature, n: added.n, rotation: added.rotation }) }));
+        const chosen = tried.find(t => !t.probe.why && !t.probe.off.length) ?? tried.find(t => !t.probe.why) ?? tried[0];
+        const clip = chosen?.clip;
+        const probe = chosen?.probe ?? { why: "no clip path with clip-rule evenodd in the SVG" };
+        const user = clip && found.users.find(u => u.clip === clip.id);
+        const plural = found.clips.length === 1 ? "clip path" : "clip paths";
         check(
           "A feature in parts is saved with its introns cut out by a clip path, where they are",
-          !!clip && !probe.why && !probe.off.length,
-          probe.why ?? (probe.off.length ? probe.off.join(" | ") : `${found.clips.length} clip path with clip-rule evenodd, used by a ${user.tag}; the map is turned ${(((probe.rotation % 360) + 360) % 360).toFixed(1)}°`)
+          !!clip && !!user && !probe.why && !probe.off.length,
+          probe.why ?? (probe.off.length ? probe.off.join(" | ") : user ? `${found.clips.length} ${plural} with clip-rule evenodd, the gene's used by a ${user.tag}; the map is turned ${(((probe.rotation % 360) + 360) % 360).toFixed(1)}°` : `${found.clips.length} ${plural} with clip-rule evenodd, but no shape uses the gene's`)
         );
-        if (!clip || probe.why) return;
+        if (!clip || !user || probe.why) return;
 
         // Copy image, put on the clipboard within the click, as a browser lets a page copy only then.
         // The real clipboard is a getter on Navigator.prototype, so a property of our own shadows it until it is deleted.

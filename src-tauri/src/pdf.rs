@@ -9,6 +9,10 @@
 use std::path::Path;
 use std::sync::mpsc;
 
+#[cfg(windows)]
+#[path = "pdf_windows.rs"]
+mod pdf_windows;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct PaperSpec {
     width_pt: f64,
@@ -139,50 +143,11 @@ fn dispatch_pdf(
     spec: PaperSpec,
     tx: mpsc::Sender<Result<(), String>>,
 ) -> Result<(), String> {
-    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment6, ICoreWebView2_7};
-    use webview2_com::PrintToPdfCompletedHandler;
-    use windows_core::{BOOL, HSTRING, Interface};
-
     window
         .with_webview(move |wv| {
-            let tx_err = tx.clone();
-            let start: Result<(), String> = unsafe {
-                let core = wv.controller().CoreWebView2().map_err(|e| e.to_string())?;
-                let core7: ICoreWebView2_7 = core
-                    .cast()
-                    .map_err(|_| "This WebView2 runtime does not support PDF export.".to_string())?;
-                let env6: ICoreWebView2Environment6 = wv
-                    .environment()
-                    .cast()
-                    .map_err(|_| "This WebView2 runtime does not support PDF print settings.".to_string())?;
-                let settings = env6.CreatePrintSettings().map_err(|e| e.to_string())?;
-                settings.SetPageWidth(spec.width_in).map_err(|e| e.to_string())?;
-                settings.SetPageHeight(spec.height_in).map_err(|e| e.to_string())?;
-                // Let the bench sheet's `@page { margin: 9.5mm }` control page margins.
-                settings.SetMarginTop(0.0).map_err(|e| e.to_string())?;
-                settings.SetMarginBottom(0.0).map_err(|e| e.to_string())?;
-                settings.SetMarginLeft(0.0).map_err(|e| e.to_string())?;
-                settings.SetMarginRight(0.0).map_err(|e| e.to_string())?;
-                settings.SetShouldPrintBackgrounds(BOOL::from(true)).map_err(|e| e.to_string())?;
-                settings.SetShouldPrintHeaderAndFooter(BOOL::from(false)).map_err(|e| e.to_string())?;
-
-                let handler = PrintToPdfCompletedHandler::create(Box::new(move |hr, ok| {
-                    let result = match hr {
-                        Ok(()) if ok => Ok(()),
-                        Ok(()) => Err("WebView2 could not save the PDF file.".into()),
-                        Err(e) => Err(e.to_string()),
-                    };
-                    let _ = tx.send(result);
-                    Ok(())
-                }));
-                let out_path = HSTRING::from(&path);
-                core7
-                    .PrintToPdf(&out_path, &settings, &handler)
-                    .map_err(|e| e.to_string())?;
-                Ok(())
-            };
-            if let Err(e) = start {
-                let _ = tx_err.send(Err(e));
+            // The completion handler gets one sender; an error before the job starts uses the other.
+            if let Err(e) = pdf_windows::start(&wv.controller(), &wv.environment(), &path, spec.width_in, spec.height_in, tx.clone()) {
+                let _ = tx.send(Err(e));
             }
         })
         .map_err(|e| format!("Could not access the webview for PDF export: {e}"))

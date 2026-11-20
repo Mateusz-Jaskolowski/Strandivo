@@ -361,7 +361,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   right-click menu is drawn in the page there, or handed to `window.__strandivoMenu` if
   defined, which is how e2e tests pick items (WebDriver can't click native menus).
 - **Checks** (`.github/workflows/checks.yml`) runs on every pull request and push to
-  `main`, on Linux only, except one that changes only docs, Markdown, the website or
+  `main`, on Linux, with clippy on Windows beside it, as the shell has code only Windows
+  compiles (WebView2's PDF export); macOS's own code compiles only on a Mac, so build there
+  after changing it. It skips a change to only docs, Markdown, the website or
   `CITATION.cff` (its `paths-ignore`; keep the two lists, and the rule above, the same).
   The guide and header checks run apart, on every change
   (`.github/workflows/quick-checks.yml`), as a docs change is what breaks the guide's

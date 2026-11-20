@@ -80,7 +80,8 @@ methylation blocks a cut.
   copies the whole map or saves it as PNG or SVG, at its rotation and label size and with
   what you chose to show, however far you have zoomed in, and without the selection. Tick
   Transparent background to put it on a coloured slide. The PNG is about 3,000 pixels
-  across, and the SVG opens with its colours and fonts in other programs.
+  across, and the SVG keeps its text as text, in whatever fonts are installed where you
+  open it.
 - **Save a simulated gel as an image**: copy the gel in the Digest dialog or under a PCR
   product, or save it as PNG or SVG for a slide or your notebook. The image says it is
   simulated and has a key under the gel naming the ladder and what each lane holds: its

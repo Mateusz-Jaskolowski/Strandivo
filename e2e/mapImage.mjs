@@ -19,9 +19,36 @@ export function openMapImageMenu(s) {
 export const standaloneSvg = svg => typeof svg === "string" && /^<\?xml/.test(svg) && /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
 
 /**
+ * A saved PNG with at least a hundredth of its pixels inked. A map is thin lines (about 6% of
+ * pUC19's), so this is far below what is drawn, and a blank PNG of the right size has none.
+ */
+export const inked = png => !!png && png.ink >= 0.01 * png.width * png.height;
+
+/** Opaque to its last pixel: a map on paper has no clear corner, last column or last row. */
+export const opaqueToEdge = png => !!png && png.cornerAlpha === 255 && png.lastColumnOpaque === true && png.lastRowOpaque === true;
+
+/**
+ * Whether a PNG's resolution fits the SVG saved with it, which is the same figure: 96 dpi for
+ * each pixel the SVG is wide, so 96 times the PNG's width over the SVG's. The PNG's width is
+ * the figure's rounded to whole pixels, up to half a pixel off (48 / the SVG's width, in dpi),
+ * and the file keeps whole pixels per metre (0.02 dpi covers that). run.mjs and web.mjs say
+ * the same of the gel.
+ */
+export function resolutionFits(png, svg) {
+  const svgWidth = Number(/<svg\b[^>]*\swidth="([\d.]+)"/.exec(svg)?.[1]);
+  const wanted = (96 * png?.width) / svgWidth;
+  const within = 48 / svgWidth + 0.02;
+  return {
+    ok: typeof png?.dotsPerInch === "number" && Math.abs(png.dotsPerInch - wanted) <= within,
+    detail: `${png?.dotsPerInch?.toFixed(2)} dpi in the file, ${wanted.toFixed(2)} from ${png?.width} px over the SVG's ${svgWidth}, within ${within.toFixed(2)}`
+  };
+}
+
+/**
  * Runs on an open circular document showing its map, and leaves the map as it found it.
  * `save(label)` clicks the open menu's button `label` and gives back what it saved: the
- * SVG's text, or the PNG as `{ png, width, height, dpi }`.
+ * SVG's text, or the PNG as `{ png, width, height, dpi }` with what its pixels say
+ * (`dotsPerInch`, `cornerAlpha`, `lastColumnOpaque`, `lastRowOpaque`, `ink`).
  */
 export async function checkMapImage(s, check, save) {
   const control = (name, value) => s.exec(`
@@ -58,7 +85,8 @@ export async function checkMapImage(s, check, save) {
   `, svg);
   const saved = await s.exec(`
     return { zoom: document.querySelector('[aria-label="Zoom"]').value, rotate: document.querySelector('[aria-label="Rotate"]').value,
-      linear: document.querySelector('.sv-map .sv-segmented button[aria-pressed="true"]').textContent === 'Linear' };
+      linear: document.querySelector('.sv-map .sv-segmented button[aria-pressed="true"]').textContent === 'Linear',
+      transparent: document.querySelector('.sv-map-image input[type="checkbox"]').checked };
   `);
   try {
     await mode(false);
@@ -94,6 +122,10 @@ export async function checkMapImage(s, check, save) {
     check("Its background is white unless asked otherwise", /<\/title><rect [^>]*fill="#ffffff"/.test(svg));
     const png = await saveWith("Save as PNG");
     check("Save as PNG… saves the map about 3,000 pixels across, with its resolution", png?.png && Math.max(png.width, png.height) >= 2500 && png.dpi, JSON.stringify(png));
+    check("The map's PNG has the map drawn on it, not only the paper", inked(png), JSON.stringify(png));
+    check("The map's PNG is opaque to its last column and row, as its paper covers all of it", opaqueToEdge(png), JSON.stringify(png));
+    const fit = resolutionFits(png, svg);
+    check("The map's PNG says the resolution that sets it at the SVG's size", fit.ok, fit.detail);
     await transparent(true);
     const clear = await saveWith("Save as SVG");
     check("With Transparent background ticked, the image has none", standaloneSvg(clear) && !/<\/title><rect [^>]*fill="#ffffff"/.test(clear));
@@ -108,8 +140,18 @@ export async function checkMapImage(s, check, save) {
     check("Save as SVG… saves the whole linear map, the same at any zoom", standaloneSvg(fitted) && /<title>Linear map of /.test(fitted) && same(wide) === same(fitted), (/viewBox="[^"]*"/.exec(wide) ?? [""])[0] + " vs " + (/viewBox="[^"]*"/.exec(fitted) ?? [""])[0]);
     const outLinear = await outside(fitted);
     check("No label or leader of the linear map falls outside the image", !outLinear.length, outLinear.slice(0, 5).join(" | "));
+    const pngLinear = await saveWith("Save as PNG");
+    check("The linear map's PNG has the map drawn on it, not only the paper", inked(pngLinear), JSON.stringify(pngLinear));
+    check("The linear map's PNG is opaque to its last column and row, as its paper covers all of it", opaqueToEdge(pngLinear), JSON.stringify(pngLinear));
+    const fitLinear = resolutionFits(pngLinear, fitted);
+    check("The linear map's PNG says the resolution that sets it at the SVG's size", fitLinear.ok, fitLinear.detail);
+    await transparent(true);
+    const clearLinear = await saveWith("Save as PNG");
+    await transparent(false);
+    check("With Transparent background ticked, the linear map's PNG has a clear corner and the map drawn on it", !!clearLinear && clearLinear.cornerAlpha === 0 && inked(clearLinear), JSON.stringify(clearLinear));
   } finally {
     await s.exec("window.__strandivo.store.select({ range: null, caret: 0 }, 'e2e');");
+    await transparent(saved.transparent);
     await mode(saved.linear);
     await control("Zoom", saved.zoom);
     if (!saved.linear) await control("Rotate", saved.rotate);

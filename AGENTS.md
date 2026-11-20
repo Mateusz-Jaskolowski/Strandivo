@@ -325,7 +325,7 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - `cd crates/seqcore && cargo test --release` for the alignment core, and the same in
   `crates/seqcore-json/` for the JSON it answers with and `crates/seqcore-wasm/` for its
   buffers; `cargo test --lib` in `src-tauri/` for the shell's own (the crash hook, usage
-  events, app data).
+  events, app data, the files PDF export writes).
 - `npm run build:web` builds the browser version into `dist-web`, and `npm run dev:web`
   serves it with live reload; both need `rustup target add wasm32-unknown-unknown` once.
   They build the core first (`tools/build-wasm.mjs`), which fails above 512 KB and runs the
@@ -493,6 +493,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Bases in upper case** by default; Settings can show them as in the file.
 
 ## Traps
+
+- **Printing from WKWebView** (macOS) must run modally for its window
+  (`runOperationModalForWindow`, as wry's Print… and `src-tauri/src/pdf_macos.rs` do): the
+  blocking `runOperation` writes blank pages without end, as the web process draws them
+  while the main thread waits.
 
 - **Content Security Policy** (`csp` and `devCsp` in `src-tauri/tauri.conf.json`): scripts
   only from the app's own files, so no inline `<script>`, `on…` attributes, `javascript:`

@@ -297,6 +297,29 @@ export async function checkMapImage(s, check, save) {
     check("Save as SVG… saves the whole linear map, the same at any zoom", standaloneSvg(fitted) && /<title>Linear map of /.test(fitted) && same(wide) === same(fitted), (/viewBox="[^"]*"/.exec(wide) ?? [""])[0] + " vs " + (/viewBox="[^"]*"/.exec(fitted) ?? [""])[0]);
     const outLinear = await outside(fitted);
     check("No label or leader of the linear map falls outside the image", !outLinear.length, outLinear.slice(0, 5).join(" | "));
+
+    // Crowded cut sites share a count, drawn as a pill. A text takes its group's baseline in
+    // Chrome but not in WebKit, so each pill's text has to say it in the saved SVG.
+    await attempt("Checking the linear map's cut-count pills finished without errors", async () => {
+      const pills = await s.exec(`
+        const doc = new DOMParser().parseFromString(arguments[0], 'image/svg+xml').documentElement;
+        return Array.from(doc.querySelectorAll('text'))
+          .filter(t => /^[\\d,]+ sites$/.test(t.textContent.trim()))
+          .map(t => ({
+            text: t.textContent.trim(),
+            pill: !!t.parentElement && t.parentElement.localName === 'g' && Array.from(t.parentElement.children).some(c => c.localName === 'rect'),
+            baseline: t.getAttribute('dominant-baseline')
+          }));
+      `, fitted);
+      const wrong = pills.filter(p => !p.pill || p.baseline !== "central");
+      check(
+        "A cut-count pill of the linear map is saved with its text centred on its box",
+        pills.length > 0 && !wrong.length,
+        pills.length
+          ? `${pills.length} pills (${pills.slice(0, 4).map(p => p.text).join(", ")}), ${wrong.length} without dominant-baseline="central" on its text${wrong.length ? `: ${wrong.slice(0, 3).map(p => `${p.text} ${p.pill ? `has ${p.baseline ?? "none"}` : "is not in a group with a box"}`).join(" | ")}` : ""}`
+          : "no cut-count pill in the linear SVG, so no two cut ticks fell within a pixel of each other and its baseline wasn't tested"
+      );
+    });
     const pngLinear = await saveWith("Save as PNG");
     check("The linear map's PNG has the map drawn on it, not only the paper", inked(pngLinear), JSON.stringify(pngLinear));
     check("The linear map's PNG is opaque to its last column and row, as its paper covers all of it", opaqueToEdge(pngLinear), JSON.stringify(pngLinear));

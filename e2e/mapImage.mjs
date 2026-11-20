@@ -427,6 +427,57 @@ export async function checkMapImage(s, check, save) {
         await closeMenu();
       }
     });
+
+    // Export image's menu opens leftwards from its button's right edge, so wherever the header
+    // wraps, the button has to stay at the right end of its row for the menu to stay in the pane.
+    // The header's width is set from 300 px to the one it has with no row to wrap, and the menu
+    // is shown (not clicked: opening it moves focus, and focus can scroll its surroundings)
+    // and measured at each, all in one script, so nothing is painted or redrawn in between.
+    await attempt("Checking Export image's menu at every header width finished without errors", async () => {
+      await closeMenu();
+      const headState = () => s.exec("return { style: document.querySelector('.sv-map .sv-pane-head').getAttribute('style'), menuHidden: document.querySelector('.sv-map-image').closest('.sv-chip-menu').hidden };");
+      const headBefore = await headState();
+      const sweep = await s.exec(`
+        const head = document.querySelector('.sv-map .sv-pane-head');
+        const menu = document.querySelector('.sv-map-image').closest('.sv-chip-menu');
+        const style = head.getAttribute('style');
+        const hidden = menu.hidden;
+        const rows = [];
+        let natural = 0;
+        const put = () => { if (style === null) head.removeAttribute('style'); else head.setAttribute('style', style); };
+        const at = () => {
+          const h = head.getBoundingClientRect(), m = menu.getBoundingClientRect();
+          rows.push({ width: Math.round(h.width), left: Math.round((m.left - h.left) * 10) / 10, right: Math.round((h.right - m.right) * 10) / 10 });
+        };
+        try {
+          head.style.width = 'max-content';
+          natural = Math.ceil(head.getBoundingClientRect().width);
+          menu.hidden = false;
+          for (let w = 300; w < natural; w += 10) { head.style.width = w + 'px'; at(); }
+          head.style.width = natural + 'px';
+          at();
+          put();
+          at();
+        } finally {
+          menu.hidden = hidden;
+          put();
+        }
+        return { natural, rows };
+      `);
+      const room = r => Math.min(r.left, r.right);
+      const bad = sweep.rows.filter(r => room(r) < -0.5);
+      check(
+        "Export image's menu stays inside the map's header at every width it can have",
+        sweep.rows.length >= 3 && !bad.length,
+        bad.length
+          ? `at ${bad[0].width} px the menu is ${bad[0].left < -0.5 ? `${-bad[0].left} px left of the header` : `${-bad[0].right} px past its right edge`}; ${bad.length} of ${sweep.rows.length} widths fail`
+          : sweep.rows.length < 3
+            ? `only ${sweep.rows.length} widths measured: the header needs ${sweep.natural} px to hold its row`
+            : `${sweep.rows.length} widths from ${sweep.rows[0].width} to ${sweep.natural} px and the pane's own, the menu at least ${Math.min(...sweep.rows.map(room))} px inside`
+      );
+      const headAfter = await headState();
+      check("The header's width and the menu are put back after the sweep", JSON.stringify(headAfter) === JSON.stringify(headBefore), `${JSON.stringify(headBefore)} before, ${JSON.stringify(headAfter)} after`);
+    });
   } finally {
     await closeMenu();
     await s.exec("window.__strandivo.store.select({ range: null, caret: 0 }, 'e2e');");

@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Shared checks of the map as an image, in WebKitGTK (desktop) and Chrome (web): the whole
-// map whatever the view's zoom, at its rotation, with nothing selected, every label inside
-// the picture, and a transparent background when asked.
+// map whatever the view's zoom, at its rotation, with nothing selected, in any theme, every
+// label inside the picture, and a transparent background when asked; the PNG's pixels and
+// resolution; a feature in parts with its introns cut out; and the Export image menu itself
+// (its place in a narrow header, Escape, a choice shared by open tabs).
 
 /** Opens the map's Export image menu, if it isn't open, and says whether it shows. */
 export function openMapImageMenu(s) {

@@ -78,8 +78,8 @@ methylation blocks a cut.
   region again to select the whole CDS.
 - **Save a simulated gel as an image**: copy the gel in the Digest dialog or under a PCR
   product, or save it as PNG or SVG for a slide or your notebook. The image says it is
-  simulated and has a key under the gel naming the ladder and what each lane holds, with
-  its band sizes.
+  simulated and has a key under the gel naming the ladder and what each lane holds: its
+  fragment sizes, or for five or more fragments how many there are and their total length.
 - **Enzyme details**: double-click a cut site, or choose Enzyme details… from its
   right-click menu or the inspector, to see the enzyme's cut drawn on both strands, who
   sells it, its isoschizomers and neoschizomers (Acc65I for KpnI), where it cuts your

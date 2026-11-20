@@ -250,8 +250,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   schematic is: Copy image, Save as PNG… and Save as SVG…. The view draws its figure anew
   for it, never from the one on screen, so nothing picked, hovered or faded comes along;
   it is drawn off screen in the light theme, fitted to what it covers, and each shape is
-  given its computed style as attributes of its own, so the SVG opens as it looks in any
-  program. The PNG is painted from that SVG shape by shape on a canvas (about 3,000 pixels
+  given its computed style as attributes of its own, so the SVG keeps its text as text, in
+  whatever fonts are installed where it is opened. It was checked in browsers and macOS
+  Quick Look only: editors such as Illustrator, Inkscape and PowerPoint substitute fonts
+  and differ in `dominant-baseline` and `textPath`, so don't promise more until one is tried.
+  The PNG is painted from that SVG shape by shape on a canvas (about 3,000 pixels
   across, marked with its resolution), as the Content Security Policy loads no image that
   isn't one of the app's files, and copying has to happen within the click. A view that
   draws something it can't paint yet (a gradient, a mask, a filter, a nested `<svg>`)

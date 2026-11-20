@@ -4,12 +4,14 @@
 // Gels and maps as images, to copy or save as PNG or SVG. A view hands over its figure
 // drawn as on screen, with its classes. Here it is drawn off screen in the light theme, as
 // an image keeps its own colours whatever the window shows, measured whole, and each shape
-// given its style as attributes of its own, so the SVG file opens as it looks in any
-// program, with nothing left that only the page understood (classes, CSS variables,
-// `color-mix()`, tooltips). The PNG is painted from that same SVG on a canvas, shape by
-// shape, rather than loaded as an image: the Content Security Policy allows no image that
-// isn't one of the app's files, and loading one would make copying wait past the click
-// that asked, which is the only time a browser lets a page copy.
+// given its style as attributes of its own, so the SVG file has nothing left that only the
+// page understood (classes, CSS variables, `color-mix()`, tooltips) and its text stays
+// text, in the fonts installed where it is opened. Browsers and macOS Quick Look draw it as
+// it looks; editors that substitute fonts were not tried. The PNG is painted from that
+// same SVG on a canvas, shape by shape, rather than loaded as an image: the Content
+// Security Policy allows no image that isn't one of the app's files, and loading one would
+// make copying wait past the click that asked, which is the only time a browser lets a
+// page copy.
 
 import { h, toast } from "../ui/dom.ts";
 import { s } from "../ui/svg.ts";
@@ -484,7 +486,10 @@ function pngOf(canvas: HTMLCanvasElement, dpi: number): Uint8Array {
 
 // ---------- what the views use ----------
 
-/** The figure as an SVG file that opens as it looks, in any program. */
+/**
+ * The figure as an SVG file, with its text as text (in the fonts installed where it is
+ * opened). Checked in browsers and macOS Quick Look, not in editors that substitute fonts.
+ */
 export function exportSvg(figure: SVGSVGElement, o: FigureOptions): string {
   return offscreen(figure, svg => {
     standalone(svg, o);

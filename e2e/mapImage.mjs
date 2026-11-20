@@ -514,6 +514,52 @@ export async function checkMapImage(s, check, save) {
       );
       await closeMenu();
     });
+
+    // What is saved doesn't depend on the window's theme: the figure is drawn anew in the light
+    // theme. Two saves of the circular map, one in each theme, once the page has been seen to
+    // change (a setting of another name is ignored without a word).
+    await attempt("Checking the map's SVG in two themes finished without errors", async () => {
+      await mode(false);
+      const read = () => s.exec(`
+        let appearance = null;
+        try {
+          appearance = JSON.parse(localStorage.getItem('strandivo.settings') || '{}').appearance ?? null;
+        } catch (e) {
+          appearance = undefined;
+        }
+        return { theme: document.documentElement.dataset.theme, appearance };
+      `);
+      const appearance = value => s.exec("window.__strandivo.saveSettings({ appearance: arguments[0] });", value);
+      const before = await read();
+      const other = before.theme === "dark" ? "light" : "dark";
+      const same = a => a.replace(/sv-export-\d+-/g, "");
+      const named = r => `${r.theme} (appearance ${r.appearance ?? "not set"})`;
+      try {
+        const first = await saveWith("Save as SVG");
+        await appearance(other);
+        const switched = await s.waitFor(`document.documentElement.dataset.theme === '${other}'`, 5000);
+        const during = await read();
+        const second = await saveWith("Save as SVG");
+        const a = same(String(first)), b = same(String(second));
+        let at = 0;
+        while (at < a.length && at < b.length && a[at] === b[at]) at++;
+        check(
+          "The circular map's SVG is the same in the light and in the dark theme",
+          switched && during.theme === other && during.appearance === other && standaloneSvg(first) && standaloneSvg(second) && a === b,
+          `${named(before)} → ${named(during)}; ${a === b ? `${a.length} characters in both` : `the first difference is at character ${at}: ${JSON.stringify(a.slice(Math.max(0, at - 30), at + 40))} against ${JSON.stringify(b.slice(Math.max(0, at - 30), at + 40))}`}`
+        );
+      } finally {
+        // As Settings had it; if that couldn't be read, light.
+        await appearance(before.appearance === undefined ? "light" : before.appearance ?? "system");
+        const back = await s.waitFor(`document.documentElement.dataset.theme === '${before.theme}'`, 5000);
+        const now = await read();
+        check(
+          "The theme is put back after the map's SVG was saved in both",
+          back && now.theme === before.theme && (before.appearance === undefined || (now.appearance ?? "system") === (before.appearance ?? "system")),
+          `${named(before)} before, ${named(now)} after${before.appearance === undefined ? " (its setting couldn't be read, so light was put back)" : ""}`
+        );
+      }
+    });
   } finally {
     await closeMenu();
     await s.exec("window.__strandivo.store.select({ range: null, caret: 0 }, 'e2e');");

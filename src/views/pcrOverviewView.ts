@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { h } from "../ui/dom.ts";
+import { iconSvg } from "../ui/icons.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, NO_DIGEST, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
 import { methylationNote } from "../lib/methylation.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
-import { bands, ladderReaching } from "../lib/gel.ts";
+import { bands, ladderReaching, laneSizesText } from "../lib/gel.ts";
 import type { TemplateKind } from "../lib/pcrProtocols.ts";
 import type { SeqData } from "../lib/seqdata.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelBand, type GelLane } from "./gelDraw.ts";
+import { pcrSectionFolded, setPcrSectionFolded } from "../pcrDialogFolds.ts";
 
 /** What the user chose here, kept while the dialog is open, as it is drawn anew on every change. */
 export interface ProductViewChoice {
@@ -21,12 +23,10 @@ export interface ProductViewChoice {
   digest: string;
   flanks: boolean;
 }
-/** Up to this many fragments the key names one by one; more are counted instead. */
-const KEY_SIZES = 4;
 
 export function pcrOverviewView(product: PcrProduct, template: SeqData, templateKind: TemplateKind, data: ReturnType<typeof productOverview>, choice: ProductViewChoice, source: HTMLElement, filter: HTMLElement) {
   const digest = pickDigest(data.digests, choice.digest);
-  choice.digest = digest ? digestName(digest) : "";
+  if (choice.digest !== NO_DIGEST) choice.digest = digest ? digestName(digest) : "";
   const detail = h("p", { class: "sv-small sv-dim sv-pcr-site-detail", "aria-live": "polite" });
   const map = h("div", { class: "sv-pcr-product-map", "aria-label": "Cut sites in the final linear product" });
   // Only a click is kept here: without one, the site described follows the digest chosen at the time.
@@ -57,7 +57,6 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
       mass: b.mass,
       title: b.fragments.length > 1 ? `${b.fragments.length} fragments of about ${fmt(Math.round(b.size))} bp` : `${fmt(b.size)} bp`
     }));
-  const sizeText = (sizes: number[]) => (sizes.length <= KEY_SIZES ? `${sizes.map(size => fmt(Math.round(size))).join(" + ")} bp` : `${sizes.length} fragments, ${fmt(sizes.reduce((a, b) => a + b, 0))} bp in all`);
   /** A lane's bands. Fragments within the gel's resolution run as one band. */
   const laneBands = (lane: PcrGelLane): GelBand[] =>
     lane.runsAs === undefined
@@ -73,6 +72,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
         ];
   /** Hovering a lane in the key picks it out of the gel; the ladder stays as it is. */
   const fade = (lane: number | null) => gelFigure.querySelectorAll<SVGElement>("[data-lane]").forEach(el => el.classList.toggle("sv-gel-fade", lane !== null && el.dataset.lane !== String(lane)));
+  const gelSummary = h("span", { class: "sv-small sv-dim" });
   const drawGel = () => {
     const d = pickDigest(data.digests, choice.digest);
     const rows = pcrGelLanes(template, templateKind, product.length, d, data.templateMethylation);
@@ -81,6 +81,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.
     const ladder = currentLadder(ladderReaching(smallestGelBand(rows)));
     ladderMenu.value = ladder.id;
+    gelSummary.textContent = `${d ? digestName(d) : "Uncut only"} · ${ladder.name}`;
     gelFigure.replaceChildren(
       gelSvg(
         rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })),
@@ -100,7 +101,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
           { onmouseenter: () => fade(i + 1), onmouseleave: () => fade(null) },
           h("span", { class: "sv-pcr-lane-no" }, String(i + 1)),
           h("span", { class: "sv-pcr-lane-what" }, r.what),
-          h("span", { class: "sv-mono" }, sizeText(r.sizes))
+          h("span", { class: "sv-mono" }, laneSizesText(r.sizes))
         )
       )
     );
@@ -121,7 +122,9 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
       ? d.score >= DISTINCT_DIGEST
         ? "Its fragments are far enough apart to tell on a gel; check the enzymes’ buffer and temperature."
         : "Some fragments are small or close in size, so they may be hard to tell apart."
-      : "No digest from this list gives fragments worth running.";
+      : choice.digest === NO_DIGEST
+        ? "No digest selected — showing uncut DNA only."
+        : "No digest from this list gives fragments worth running.";
   };
   const digestSelect = h(
     "select",
@@ -134,9 +137,76 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
         updateDetail();
       }
     },
-    data.digests.map(d => h("option", { value: digestName(d), selected: digestName(d) === choice.digest }, digestName(d)))
+    ...data.digests.map(d => h("option", { value: digestName(d), selected: digestName(d) === choice.digest }, digestName(d))),
+    h("option", { value: NO_DIGEST, selected: choice.digest === NO_DIGEST }, "No digest (uncut only)")
   );
   const flanks = tailSiteFlanks(product.length, data.tailSites);
+  const flanksEl = flanks.length
+    ? h(
+        "details",
+        {
+          class: "sv-small sv-pcr-flanks",
+          // Opened by hand, it stays open while the dialog is drawn again around it.
+          open: choice.flanks,
+          ontoggle: (e: Event) => {
+            choice.flanks = (e.target as HTMLDetailsElement).open;
+          }
+        },
+        h("summary", { "data-focus": "tail-flanks" }, "Bases beyond the sites in the tails"),
+        ...flanks.map(({ site, left, right }) => h("p", null, `${site.enzyme}: ${fmt(Math.min(left, right))} bp between its site and the nearest end of the product.`)),
+        h("p", { class: "sv-dim" }, `Check how much each enzyme needs; NEB asks for ${CHECK_FLANKS} bases where it lists none.`)
+      )
+    : null;
+
+  let mapFolded = pcrSectionFolded("map");
+  let gelFolded = pcrSectionFolded("gel");
+  const mapSummary = h("span", { class: "sv-small sv-dim" }, `${data.sites.length} ${data.sites.length === 1 ? "cut site" : "cut sites"} · GC strip`);
+  const mapSection = h("div", { class: "sv-pcr-subsec", "data-pcr-section": "map" });
+  const gelSection = h("div", { class: "sv-pcr-subsec", "data-pcr-section": "gel" });
+  const digestBody = h(
+    "div",
+    { class: "sv-pcr-digest" },
+    h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Suggested digest"), data.digests.length ? digestSelect : null), digestNote, lanes),
+    h("div", { class: "sv-pcr-gel" }, gelFigure)
+  );
+
+  const foldButton = (focusKey: string, open: boolean, toggle: () => void) =>
+    h(
+      "button",
+      {
+        type: "button",
+        class: "sv-fold-link",
+        "data-focus": focusKey,
+        "aria-expanded": String(open),
+        onclick: toggle
+      },
+      iconSvg("chevronDown", 12),
+      open ? "Hide" : "Show"
+    );
+
+  const renderMapSection = () => {
+    const fold = foldButton("pcr-fold-map", !mapFolded, () => {
+      mapFolded = !mapFolded;
+      setPcrSectionFolded("map", mapFolded);
+      renderMapSection();
+      if (!mapFolded) measure();
+      mapSection.querySelector<HTMLElement>(".sv-fold-link")?.focus();
+    });
+    const head = h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Product map"), fold, ...(mapFolded ? [mapSummary] : [source, filter]));
+    mapSection.replaceChildren(head, ...(mapFolded ? [] : [map, detail, ...(flanksEl ? [flanksEl] : [])]));
+  };
+
+  const renderGelSection = () => {
+    const fold = foldButton("pcr-fold-gel", !gelFolded, () => {
+      gelFolded = !gelFolded;
+      setPcrSectionFolded("gel", gelFolded);
+      renderGelSection();
+      gelSection.querySelector<HTMLElement>(".sv-fold-link")?.focus();
+    });
+    const head = h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Simulated gel"), fold, ...(gelFolded ? [gelSummary] : []));
+    gelSection.replaceChildren(head, ...(gelFolded ? [] : [digestBody]));
+  };
+
   const el = h(
     "section",
     { class: "sv-pcr-overview", "aria-label": "Product overview", "data-product-length": product.length },
@@ -147,31 +217,8 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
       h("strong", null, `${fmt(product.length)} bp`),
       h("span", { class: "sv-small sv-dim" }, `${data.gcPercent.toFixed(1)}% GC${data.tails.left || data.tails.right ? " · 5′ tails included" : ""}`)
     ),
-    h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Cut sites"), source, filter),
-    map,
-    detail,
-    h(
-      "div",
-      { class: "sv-pcr-digest" },
-      h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Suggested digest"), digest ? digestSelect : null), digestNote, lanes),
-      h("div", { class: "sv-pcr-gel" }, gelFigure)
-    ),
-    flanks.length
-      ? h(
-          "details",
-          {
-            class: "sv-small sv-pcr-flanks",
-            // Opened by hand, it stays open while the dialog is drawn again around it.
-            open: choice.flanks,
-            ontoggle: (e: Event) => {
-              choice.flanks = (e.target as HTMLDetailsElement).open;
-            }
-          },
-          h("summary", { "data-focus": "tail-flanks" }, "Bases beyond the sites in the tails"),
-          ...flanks.map(({ site, left, right }) => h("p", null, `${site.enzyme}: ${fmt(Math.min(left, right))} bp between its site and the nearest end of the product.`)),
-          h("p", { class: "sv-dim" }, `Check how much each enzyme needs; NEB asks for ${CHECK_FLANKS} bases where it lists none.`)
-        )
-      : null
+    mapSection,
+    gelSection
   );
   const draw = () => {
     const kept = document.activeElement instanceof HTMLElement && map.contains(document.activeElement) ? document.activeElement.dataset : null;
@@ -272,6 +319,8 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   };
   const observer = new ResizeObserver(measure);
   observer.observe(map);
+  renderMapSection();
+  renderGelSection();
   draw();
   updateDigest();
   return { el, measure, dispose: () => observer.disconnect() };

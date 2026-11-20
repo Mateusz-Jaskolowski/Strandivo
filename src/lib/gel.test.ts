@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { bandY, bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, ladderReaching, LADDERS } from "./gel.ts";
+import { bandY, bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, gelLayout, ladderReaching, LADDERS, laneSizesText } from "./gel.ts";
 import type { SeqData } from "./seqdata.ts";
 
 const puc19 = (): SeqData => {
@@ -86,3 +86,27 @@ test("gel: it opens on the first ladder that reaches the smallest band, else the
   // Wherever one reaches, the smallest band is drawn clear of the bottom edge.
   for (let size = 100; size <= 20000; size += 7) assert.ok(bandY(size, ladderReaching(size)) < 0.99, `${size} bp`);
 });
+
+test("gel: laneSizesText formats sizes cleanly and summarizes long lists", () => {
+  assert.equal(laneSizesText([1200]), "1,200 bp");
+  assert.equal(laneSizesText([2635, 51]), "2,635 + 51 bp");
+  assert.equal(laneSizesText([3000, 1500, 800, 400, 200]), "5 fragments, 5,900 bp in all");
+});
+
+test("gel: gelLayout produces deterministic coordinates for ladder and sample lanes", () => {
+  const layout = gelLayout(
+    [
+      { label: "1", bands: [{ size: 2686, runsAs: 1880, mass: 2686, uncut: true }] },
+      { label: "2", bands: [{ size: 1000, mass: 1000 }, { size: 500, mass: 500 }] }
+    ],
+    LADDERS[0],
+    { height: 160, laneWidth: 40, labelWidth: 46 }
+  );
+  assert.equal(layout.wells.length, 3);
+  assert.deepEqual(layout.laneLabels.map(l => l.label), ["M", "1", "2"]);
+  assert.equal(layout.sampleBands.length, 3);
+  assert.equal(layout.sampleBands[0].uncut, true);
+  // Larger fragment runs higher (smaller y) than smaller fragment in the same lane.
+  assert.ok(layout.sampleBands[1].y < layout.sampleBands[2].y);
+});
+

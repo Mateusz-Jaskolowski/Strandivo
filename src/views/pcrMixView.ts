@@ -7,7 +7,7 @@
 // only the table and the warnings are drawn again, so a field keeps its focus as it is used.
 import { h } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
-import { fmtVolume, MAX_STOCK, MAX_TEMPLATE, MIX_EXTRAS, MIX_VOLUMES, mixRecipe, mixSource, mixText, pcrMix, type MixRow, type PcrMix } from "../lib/pcrMix.ts";
+import { effectivePcrMix, fmtVolume, MAX_STOCK, MAX_TEMPLATE, MIX_EXTRAS, MIX_VOLUMES, mixRecipe, mixSource, mixText, type MixRow, type PcrMix } from "../lib/pcrMix.ts";
 import { mixPrefs, saveMixPrefs } from "../pcrMixPrefs.ts";
 
 /** Kept while the window stays open: how many tubes, what else goes in, and whether it is open. */
@@ -28,8 +28,7 @@ export function pcrMixView(polymerase: string, polyName: string, productLength: 
 
   /** The volume kept app-wide, or the one NEB's own table starts this polymerase at. */
   const volume = () => mixPrefs().volume ?? recipe!.volumes[0];
-  const current = (): PcrMix =>
-    pcrMix({ polymerase, volume: volume(), reactions: choice.reactions, extra: mixPrefs().extra, primerStock: mixPrefs().primerStock, templateVolume: mixPrefs().templateVolume, optional: choice.optional, productLength })!;
+  const current = (): PcrMix => effectivePcrMix(polymerase, productLength, choice, mixPrefs())!;
 
   const cell = (row: MixRow, master: boolean) => [
     h("td", null, row.name),

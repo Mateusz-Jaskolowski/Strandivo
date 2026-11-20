@@ -1211,7 +1211,8 @@ export class MapView {
           const height = step - 4;
           // An image has nothing to press: the count is drawn as the button looks.
           if (out.image) {
-            names.appendChild(s("g", { class: "sv-map-cut-count", "font-size": f1(labelPx * CUT_SCALE) }, s("rect", { x: f1(left + 0.5), y: f1(y - height / 2 + 0.5), width: f1(width - 1), height: f1(height - 1), rx: 4 }), s("text", { x: f1(left + width / 2), y: f1(y), "text-anchor": "middle" }, text)));
+            // A text takes its parent's baseline (document.css) and WebKit doesn't pass it down through a group, so this one says it.
+            names.appendChild(s("g", { class: "sv-map-cut-count", "font-size": f1(labelPx * CUT_SCALE), "dominant-baseline": "central" }, s("rect", { x: f1(left + 0.5), y: f1(y - height / 2 + 0.5), width: f1(width - 1), height: f1(height - 1), rx: 4 }), s("text", { x: f1(left + width / 2), y: f1(y), "text-anchor": "middle" }, text)));
             continue;
           }
           const button = h("button", {

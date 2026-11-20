@@ -486,7 +486,8 @@ export class MapView {
     const cutsMenu = this.chipMenu("Cut site options", h("div", { class: "sv-chip-menu-body" }, this.enzymeControls.el, this.enzymeControls.edit));
     const regionsMenu = this.chipMenu("Region options", h("label", { class: "sv-enzyme-filter" }, h("span", null, "Show"), this.proteinSelect));
     this.menuButtons = { cutsites: cutsMenu.button, regions: regionsMenu.button };
-    const imageMenu = this.chipMenu("Export image", this.imageMenuBody());
+    const imageBody = this.imageMenuBody();
+    const imageMenu = this.chipMenu("Export image", imageBody.body, imageBody.sync);
     imageMenu.menu.classList.add("sv-chip-menu-end");
     imageMenu.button.replaceChildren(iconSvg("download", 14), "Export image", iconSvg("chevronDown", 12));
     this.imageButton = imageMenu.button;
@@ -546,8 +547,11 @@ export class MapView {
     if (v && this.stale) this.render();
   }
 
-  /** A button opening `body` under it; one menu is open at a time, and it closes on Escape or a click outside. */
-  private chipMenu(label: string, body: HTMLElement) {
+  /**
+   * A button opening `body` under it; one menu is open at a time, and it closes on Escape or a click outside.
+   * `onOpen` runs as the menu opens, for a menu whose controls show something other tabs can change.
+   */
+  private chipMenu(label: string, body: HTMLElement, onOpen?: () => void) {
     const menu = h("div", { class: "sv-chip-menu", role: "dialog", "aria-label": label, hidden: true }, body);
     const button = h("button", { type: "button", class: "sv-chip sv-chip-more", "aria-label": label, "aria-haspopup": "dialog", "aria-expanded": "false" }) as HTMLButtonElement;
     const outside = (e: PointerEvent) => {
@@ -569,6 +573,7 @@ export class MapView {
     button.addEventListener("click", () => {
       if (!menu.hidden) return close();
       this.closeMenu?.();
+      onOpen?.();
       menu.hidden = false;
       button.setAttribute("aria-expanded", "true");
       document.addEventListener("pointerdown", outside, true);
@@ -579,8 +584,11 @@ export class MapView {
     return { button, menu };
   }
 
-  /** Under Export image: whether the background is transparent, then Copy image and the saves. */
-  private imageMenuBody(): HTMLElement {
+  /**
+   * Under Export image: whether the background is transparent, then Copy image and the saves.
+   * The choice is shared by every open file, so `sync` shows it again whenever the menu opens.
+   */
+  private imageMenuBody(): { body: HTMLElement; sync: () => void } {
     const transparent = h("input", { type: "checkbox", checked: mapImage.transparent, onchange: (e: Event) => { mapImage.transparent = (e.target as HTMLInputElement).checked; } });
     const buttons = imageButtons({
       what: "the map",
@@ -595,7 +603,10 @@ export class MapView {
         this.closeMenu?.();
         this.imageButton.focus();
       });
-    return h("div", { class: "sv-chip-menu-body sv-map-image" }, h("label", { class: "sv-check-row" }, transparent, "Transparent background"), ...buttons);
+    return {
+      body: h("div", { class: "sv-chip-menu-body sv-map-image" }, h("label", { class: "sv-check-row" }, transparent, "Transparent background"), ...buttons),
+      sync: () => { transparent.checked = mapImage.transparent; }
+    };
   }
 
   /**

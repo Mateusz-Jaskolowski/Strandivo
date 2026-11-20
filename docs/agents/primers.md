@@ -238,6 +238,12 @@ and CI checks that they exist.
 
 - **Primer positions** cover the bases the primer pairs with, changes included; a 5′ tail
   hangs off beyond them and is not part of the range.
+- **A primer's site across the origin** (`start > end` on a circle) is saved as an ordered
+  join, as a feature's is (`partsOut` in `src/doc/convert.ts`); the primer's own bases are
+  saved with it, not read from the template. Make linear (`withTopology`, which runs
+  `linearize` in `src/lib/seqdata.ts`) leaves out a primer whose site crosses the origin, as
+  it always did. What should become of it is undecided; the tests record what the code
+  does, not that it is right.
 - **Designed primers are named by the region's direction**, as labs do: on a feature that
   runs right to left, `-F` is the primer at its start codon, which binds the top strand (a
   "reverse" primer for the plasmid) and gets the start site (NdeI). The PCR product picker

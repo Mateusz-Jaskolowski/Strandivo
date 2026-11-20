@@ -187,23 +187,49 @@ export function fixQualifiers(lists: unknown[][], table: FileFeature[], linear =
 }
 
 /**
+ * A value that has no spaces to wrap at, cut into lines of `room` characters. Each line is
+ * trimmed when read, and a quote that ends a line closes the value, so a cut never falls
+ * beside a space or between the two quotes of an escaped one, as a space there, which a
+ * region's name or kind has, would vanish: it moves back to the nearest place that can be
+ * cut, which leaves that line a little short. Where there is none within the width (a run
+ * of spaces as long as a line) the line runs on to the next one that can, rather than lose
+ * any. Every other cut falls where it always did, so older versions read these lines too.
+ */
+function cutToWidth(text: string, room: number): string[] {
+  const blank = (c: string | undefined) => c !== undefined && /\s/.test(c);
+  const cuttable = (at: number) => !blank(text[at - 1]) && !blank(text[at]) && !(text[at - 1] === '"' && text[at] === '"');
+  const lines: string[] = [];
+  let from = 0;
+  while (text.length - from > room) {
+    let cut = from + room;
+    while (cut > from && !cuttable(cut)) cut--;
+    if (cut === from) {
+      cut = from + room + 1;
+      while (cut < text.length && !cuttable(cut)) cut++;
+      if (cut >= text.length) break;
+    }
+    lines.push(text.slice(from, cut));
+    from = cut;
+  }
+  lines.push(text.slice(from));
+  return lines;
+}
+
+/**
  * A qualifier as GenBank lines: quotes doubled, wrapped at spaces to 79 columns. A word too
  * long for a line keeps to one line rather than be split, and one starting with "/" stays
  * on the line before, so neither reads back as something else. A wrapped line stops short
  * of the 79th column, so the value can't be taken for one the old writer cut
- * (`readFeatureTables`). Translations and the app's own values have no spaces and are cut
- * to the width.
+ * (`readFeatureTables`). Translations and the app's own values have no spaces to wrap at
+ * and are cut to the width (`cutToWidth`), joined with nothing between their lines.
  */
 export function formatQualifier(name: string, value: string): string[] {
   const pad = " ".repeat(INDENT);
   const text = `/${name}="${value.replace(/[\r\n]+/g, " ").replace(/"/g, '""')}"`;
   const room = WIDTH - INDENT;
   if (text.length <= room) return [pad + text];
+  if (unspaced(name)) return cutToWidth(text, room).map(line => pad + line);
   const lines: string[] = [];
-  if (unspaced(name)) {
-    for (let i = 0; i < text.length; i += room) lines.push(pad + text.slice(i, i + room));
-    return lines;
-  }
   const words = text.split(" ");
   let line = words[0];
   for (const w of words.slice(1)) {

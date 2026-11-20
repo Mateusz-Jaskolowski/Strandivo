@@ -36,6 +36,11 @@ methylation blocks a cut.
   PCR applies a change shared by both primers once, keeps annotations across the
   former origin, and reopens from GenBank as unmethylated. Mutagenesis primers stay
   within the bases left after a deletion.
+- **Features across the origin save and reopen exactly.** A feature, primer or source that
+  crosses the origin of a circular sequence is now saved the standard GenBank way, as two
+  ranges joined in order, and reopens on the same bases. Make linear in the Info tab keeps
+  such a feature whole, in two ordered parts, where it used to come back shortened, and a
+  region named with a space, like "Signal peptide", keeps its space after saving.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"

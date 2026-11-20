@@ -46,7 +46,7 @@ import { designOf } from "../lib/variable.ts";
 import { loadSettings, onSettingsChanged, saveSettings, type Settings } from "../settings.ts";
 import { invertedRanges, selectedBases, selectedRanges } from "../lib/selection.ts";
 import { parseSequenceFile, serialize } from "./fileio.ts";
-import { fromParsed, toParsed, type LoadedDocument } from "./convert.ts";
+import { fromParsed, toParsed, withTopology, type LoadedDocument } from "./convert.ts";
 import { DocStore } from "./store.ts";
 import { openContextMenu } from "./contextMenu.ts";
 import { optionsStore, type DocContext, type OpenSequence, type Tab, type ViewOptions } from "./context.ts";
@@ -492,7 +492,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     openSettings: () => void openSettings(),
     sequencing: () => reads.summary(),
     methylation: value => documentMethylation(value, store.data.methylation),
-    setCircular: circular => store.apply({ ...store.data, circular, ...(circular && store.data.ends ? { ends: undefined } : {}) }, circular ? "Make circular" : "Make linear"),
+    setCircular: circular => store.apply(withTopology(store.data, circular), circular ? "Make circular" : "Make linear"),
     openReads: () => (reads.count ? setTab("reads") : void addReads()),
     readsOverview: () => {
       if (!reads.count) return null;

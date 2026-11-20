@@ -1412,6 +1412,90 @@ async function main() {
     await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
     await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
 
+    // --- A circle's annotations across the origin: saved as joins, kept whole by Linear ---
+    // Invented bases with a feature on each strand, a primer and a source across the origin,
+    // and a CDS with a region named with a space where its qualifier's line is cut.
+    {
+      let seed = 20260;
+      let ringBases = "";
+      for (let i = 0; i < 366; i++) {
+        seed = (seed * 48271) % 2147483647;
+        ringBases += "ACGT"[(seed >>> 12) & 3];
+      }
+      const acrossBases = ringBases.slice(300) + ringBases.slice(0, 4);
+      const annotation = (id, name, type, start, end, strand, notes = {}) => ({ id, name, type, start, end, strand, notes, raw: {} });
+      const regionNote = `${"A".repeat(28)} B|Signal peptide|1-5|:1-5`;
+      const ring = {
+        name: "origin-test",
+        description: "",
+        circular: true,
+        sequence: ringBases,
+        features: [
+          annotation("f-forward", "across", "misc_feature", 300, 3, 1),
+          annotation("f-reverse", "across-reverse", "misc_feature", 300, 3, -1),
+          annotation("f-cds", "regions", "CDS", 10, 60, 1, { strandivo_regions: [regionNote] })
+        ],
+        primers: [{ id: "p-forward", name: "across-F", start: 300, end: 3, strand: 1, bases: acrossBases, notes: {}, raw: {} }],
+        sources: [annotation("s-across", "across", "source", 300, 3, 1)]
+      };
+      // Where the current tab has each annotation, in which parts, and the bases it covers.
+      const summary = `${doc}
+        const covers = f => (f.locations ?? [f]).map(l => l.start <= l.end ? s.data.sequence.slice(l.start, l.end + 1) : s.data.sequence.slice(l.start) + s.data.sequence.slice(0, l.end + 1)).join("");
+        const where = f => ({ name: f.name, start: f.start, end: f.end, strand: f.strand, locations: f.locations ?? null, bases: covers(f) });
+        return { circular: s.data.circular, length: s.data.sequence.length, features: s.data.features.map(where), sources: s.data.sources.map(where),
+          primers: s.data.primers.map(p => ({ name: p.name, start: p.start, end: p.end, bases: p.bases })), regions: s.data.features.find(f => f.name === "regions")?.notes.strandivo_regions ?? null };`;
+      const saveAs = target => s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.saveAs(arguments[0]).then(() => done(true), e => done(String(e)));", target);
+      // The saved file is this tab's file, so a copy is opened to read it back.
+      const openCopy = async (from, tabs) => {
+        const copy = from.replace(/\.gb$/, "-copy.gb");
+        copyFileSync(from, copy);
+        await s.execAsync("const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('open_files', { paths: arguments[0] }).then(() => done(true), e => done(String(e)));", [copy]);
+        return s.waitFor(`window.__strandivo.tabs().length === ${tabs} && window.__strandivo.activeTab() === ${tabs - 1}`, 20000);
+      };
+      const joined = text => (text.match(/join\(301\.\.366,1\.\.4\)/g) ?? []).length;
+      await s.exec("window.__strandivo.openNew(arguments[0]);", ring);
+      const ringMade = await s.waitFor("window.__strandivo.activeTab() === 1 && window.__strandivo.store?.data.name === 'origin-test'", 5000);
+      const ringBefore = ringMade ? await s.exec(summary) : null;
+      const ringPath = path.join(path.dirname(savedPath), "origin.gb");
+      const ringSaved = await saveAs(ringPath);
+      const ringText = ringSaved === true ? readFileSync(ringPath, "utf8") : "";
+      check(
+        "A feature on each strand, a primer and a source across the origin are saved as joins in order",
+        ringSaved === true && joined(ringText) === 4 && ringText.includes("complement(join(301..366,1..4))") && !/\b301\.\.4\b/.test(ringText),
+        String(ringSaved)
+      );
+      const ringReopened = (await openCopy(ringPath, 3)) ? await s.exec(summary) : null;
+      check(
+        "The file reopens with each on the same bases, and the region's name with its space",
+        JSON.stringify(ringReopened) === JSON.stringify(ringBefore) && ringReopened?.regions?.[0] === regionNote && ringReopened.features[0].bases === acrossBases,
+        JSON.stringify(ringReopened).slice(0, 300)
+      );
+      await s.exec("window.__strandivo.showTab(2); window.__strandivo.closeTab();");
+      await s.waitFor("window.__strandivo.tabs().length === 2", 5000);
+      // Linear, in the Info tab, opens the circle at its origin: what crossed it is in two parts.
+      await s.exec("window.__strandivo.showTab(1); window.__strandivo.setView('info');");
+      await s.waitFor("document.querySelector('[aria-label=\"Topology\"]')", 5000);
+      await s.click("//div[@aria-label='Topology']//button[normalize-space()='Linear']", "xpath");
+      const madeLinear = await s.waitFor("window.__strandivo.store.data.circular === false", 5000);
+      const ringLinear = madeLinear ? await s.exec(summary) : null;
+      const halves = JSON.stringify([{ start: 300, end: 365 }, { start: 0, end: 3 }]);
+      check(
+        "Linear keeps a feature or source across the origin as ordered parts, with all its bases",
+        ringLinear?.length === 366 && [...ringLinear.features.slice(0, 2), ringLinear.sources[0]].every(f => JSON.stringify(f.locations) === halves && f.bases === acrossBases) && ringLinear.regions?.[0] === regionNote,
+        JSON.stringify(ringLinear).slice(0, 300)
+      );
+      const linearPath = path.join(path.dirname(savedPath), "origin-linear.gb");
+      const linearSaved = await saveAs(linearPath);
+      const linearText = linearSaved === true ? readFileSync(linearPath, "utf8") : "";
+      check("Saved linear, they are still joins in order", linearSaved === true && joined(linearText) >= 3 && !/\b301\.\.4\b/.test(linearText), String(linearSaved));
+      const linearReopened = (await openCopy(linearPath, 3)) ? await s.exec(summary) : null;
+      check("The linear file reopens with the same parts and bases", JSON.stringify(linearReopened) === JSON.stringify(ringLinear), JSON.stringify(linearReopened).slice(0, 300));
+      await s.exec("window.__strandivo.showTab(2); window.__strandivo.closeTab();");
+      await s.waitFor("window.__strandivo.tabs().length === 2", 5000);
+      await s.exec("window.__strandivo.showTab(1); window.__strandivo.closeTab();");
+      await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+    }
+
     // --- Dam methylation: two XbaI sites, one running on into a GATC ---
     // With no strain given, Dam⁺ is assumed: the first site is drawn with an "m" and doesn't
     // cut, so XbaI counts as cutting once and the digest gives one linear band. Choosing a

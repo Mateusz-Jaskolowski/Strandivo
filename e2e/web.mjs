@@ -618,6 +618,88 @@ async function main(outDir) {
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
 
+    // --- a circle's annotations across the origin: saved as joins, kept whole by Linear ---
+    // Invented bases with a feature on each strand, a primer and a source across the origin,
+    // and a CDS with a region named with a space where its qualifier's line is cut. Each save
+    // is a download here, and a file is opened again by dropping its text.
+    {
+      let seed = 20260;
+      let ringBases = "";
+      for (let i = 0; i < 366; i++) {
+        seed = (seed * 48271) % 2147483647;
+        ringBases += "ACGT"[(seed >>> 12) & 3];
+      }
+      const acrossBases = ringBases.slice(300) + ringBases.slice(0, 4);
+      const annotation = (id, name, type, start, end, strand, notes = {}) => ({ id, name, type, start, end, strand, notes, raw: {} });
+      const regionNote = `${"A".repeat(28)} B|Signal peptide|1-5|:1-5`;
+      const ring = {
+        name: "origin-test",
+        description: "",
+        circular: true,
+        sequence: ringBases,
+        features: [
+          annotation("f-forward", "across", "misc_feature", 300, 3, 1),
+          annotation("f-reverse", "across-reverse", "misc_feature", 300, 3, -1),
+          annotation("f-cds", "regions", "CDS", 10, 60, 1, { strandivo_regions: [regionNote] })
+        ],
+        primers: [{ id: "p-forward", name: "across-F", start: 300, end: 3, strand: 1, bases: acrossBases, notes: {}, raw: {} }],
+        sources: [annotation("s-across", "across", "source", 300, 3, 1)]
+      };
+      // Where the current tab has each annotation, in which parts, and the bases it covers.
+      const summary = `
+        const s = window.__strandivo.store;
+        const covers = f => (f.locations ?? [f]).map(l => l.start <= l.end ? s.data.sequence.slice(l.start, l.end + 1) : s.data.sequence.slice(l.start) + s.data.sequence.slice(0, l.end + 1)).join("");
+        const where = f => ({ name: f.name, start: f.start, end: f.end, strand: f.strand, locations: f.locations ?? null, bases: covers(f) });
+        return { circular: s.data.circular, length: s.data.sequence.length, features: s.data.features.map(where), sources: s.data.sources.map(where),
+          primers: s.data.primers.map(p => ({ name: p.name, start: p.start, end: p.end, bases: p.bases })), regions: s.data.features.find(f => f.name === "regions")?.notes.strandivo_regions ?? null };`;
+      const saved = async count => ((await s.waitFor(`window.__e2eDownloads.length === ${count}`, 5000)) ? s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));") : "");
+      const joined = text => (text.match(/join\(301\.\.366,1\.\.4\)/g) ?? []).length;
+      const first = await s.exec("return window.__strandivo.tabs().length");
+      const downloads = await s.exec("return window.__e2eDownloads.length");
+      await s.exec("window.__strandivo.openNew(arguments[0]);", ring);
+      const ringMade = await s.waitFor("window.__strandivo.store?.data.name === 'origin-test'", 5000);
+      const ringBefore = ringMade ? await s.exec(summary) : null;
+      await s.exec("window.__strandivo.command('save')");
+      const ringText = await saved(downloads + 1);
+      check(
+        "A feature on each strand, a primer and a source across the origin are saved as joins in order",
+        joined(ringText) === 4 && ringText.includes("complement(join(301..366,1..4))") && !/\b301\.\.4\b/.test(ringText),
+        ringText.slice(0, 120)
+      );
+      // Linear, in the Info tab, opens the circle at its origin: what crossed it is in two parts.
+      await s.exec("window.__strandivo.setView('info')");
+      await s.waitFor("document.querySelector('[aria-label=\"Topology\"]')", 5000);
+      await s.click("//div[@aria-label='Topology']//button[normalize-space()='Linear']");
+      const madeLinear = await s.waitFor("window.__strandivo.store.data.circular === false", 5000);
+      const ringLinear = madeLinear ? await s.exec(summary) : null;
+      const halves = JSON.stringify([{ start: 300, end: 365 }, { start: 0, end: 3 }]);
+      check(
+        "Linear keeps a feature or source across the origin as ordered parts, with all its bases",
+        ringLinear?.length === 366 && [...ringLinear.features.slice(0, 2), ringLinear.sources[0]].every(f => JSON.stringify(f.locations) === halves && f.bases === acrossBases) && ringLinear.regions?.[0] === regionNote,
+        JSON.stringify(ringLinear).slice(0, 300)
+      );
+      await s.exec("window.__strandivo.command('save')");
+      const linearText = await saved(downloads + 2);
+      check("Saved linear, they are still joins in order", joined(linearText) >= 3 && !/\b301\.\.4\b/.test(linearText), linearText.slice(0, 120));
+      // Both files, dropped on Home, open as they were saved.
+      await s.exec("window.__strandivo.showHome()");
+      await s.execAsync(drop("origin-ring.gb"), ringText);
+      const ringReopened = (await s.waitFor("window.__strandivo.tabs().includes('origin-ring.gb') && window.__strandivo.store", 15000)) ? await s.exec(summary) : null;
+      check(
+        "The file reopens with each on the same bases, and the region's name with its space",
+        JSON.stringify(ringReopened) === JSON.stringify(ringBefore) && ringReopened?.regions?.[0] === regionNote && ringReopened.features[0].bases === acrossBases,
+        JSON.stringify(ringReopened).slice(0, 300)
+      );
+      await s.exec("window.__strandivo.showHome()");
+      await s.execAsync(drop("origin-ring-linear.gb"), linearText);
+      const linearReopened = (await s.waitFor("window.__strandivo.tabs().includes('origin-ring-linear.gb') && window.__strandivo.store", 15000)) ? await s.exec(summary) : null;
+      check("The linear file reopens with the same parts and bases", JSON.stringify(linearReopened) === JSON.stringify(ringLinear), JSON.stringify(linearReopened).slice(0, 300));
+      for (const tab of [first + 2, first + 1, first]) {
+        await s.exec(`window.__strandivo.showTab(${tab}); window.__strandivo.closeTab();`);
+        await s.waitFor(`window.__strandivo.tabs().length === ${tab}`, 5000);
+      }
+    }
+
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");
     await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));

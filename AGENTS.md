@@ -95,7 +95,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 
 - **Coordinates** are 0-based and inclusive. On a circular sequence a range with
   `start > end` crosses the origin; every function on ranges must handle that. The
-  interface shows positions 1-based.
+  interface shows positions 1-based. A feature in parts on a linear sequence is the
+  exception: its `start` is its first part's and its `end` its last part's, so one that
+  crossed the origin before Make linear, or a file's `join(301..366,1..4)`, has
+  `start > end` while its `locations` are ordered and in range. Its parts are what it
+  covers: don't put its coordinates in order, which would make it a different feature, and
+  write one, in a file or in code, as ordered parts in the order it reads.
 - **Edits** go through `store.apply(next, label, selection?, key?)` with a new `SeqData`;
   never change `store.data` or arrays it holds in place. Steps with the same `key` within
   1.5 s merge into one undo step (typing a note, dragging a primer's or region's end).
@@ -127,9 +132,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   purpose stays at once: Delete bases from a right-click or the inspector (which says when
   it shifts a CDS's frame, `deleteAtOnce` in `src/lib/deletion.ts`), picked codons and
   Use read base.
-- **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
-  `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
-  `SeqData.sources`: never shown, but edited along with the sequence and saved.
+- **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, in the
+  order they read, with `start`/`end` the first part's start and the last part's end (which
+  spans them unless they run backwards, see Coordinates); every edit maps each part.
+  GenBank "source" features live in `SeqData.sources`: never shown, but edited along with
+  the sequence and saved.
 - **Reading a CDS** starts at its first whole codon, not its first base: a partial one from a
   database says so with GenBank's `/codon_start`, kept in the feature's notes. Anything that
   translates, numbers residues or maps them back to bases walks `codingPositions`
@@ -268,6 +275,19 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   in GenBank COMMENT lines (`src/lib/labinfo.ts`). So does a sequence's name with spaces,
   as the LOCUS line holds them as underscores; it is read back only while that line still
   matches it, so a rename made in another program wins (`src/lib/sequenceName.ts`).
+- **Annotations across the origin** are saved as ordered joins (`partsOut` in
+  `src/doc/convert.ts`): a feature, source or primer with `start > end` is written as
+  `join(301..366,1..4)`, and `complement(join(…))` on the other strand, whether or not its
+  sequence is circular, as `301..4` is no range in GenBank. Parts a file gave are written as
+  they were, in order. Reading is unchanged, so files saved before this with `301..4` still
+  open, and are saved as joins from then on. Make linear in the Info tab is `withTopology`
+  in the same file: it opens the circle with `linearize`, so what crossed the origin becomes
+  ordered parts with all its bases, and a primer whose site crosses it is left out, as
+  `linearize` always did (what should become of it is undecided; tests record it, not
+  that it is right). Make circular only closes the line, dropping a fragment's ends, which
+  a circle has none of. The inspector's own Topology buttons, shown with nothing selected
+  (`src/views/inspector.ts`), still flip the flag alone; files stay right because saving
+  expands every range across the origin, but they should call `withTopology` too.
 - **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
   working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in
   IndexedDB, so it lasts between visits), `web:<id>/<folder>/<path>` for one in a folder
@@ -564,7 +584,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   first quote, joined wrapped lines with no space, and wrote values wrapped mid-word with
   quotes not doubled. Features are matched to the file's table by their first and last
   base. Lines join with a space, as GenBank's do, except in `/translation` and the app's
-  own `/strandivo_…` values, which have no spaces and are cut to the width, and in files
+  own `/strandivo_…` values, which have no spaces of their own and are cut to the width,
+  but never beside a space of the value or between the two quotes of a doubled one (a
+  region's name or kind such as "Signal peptide" must come back whole, and reading trims
+  every line and takes a quote ending a line as the value's end), and in files
   the generic writer saved (Strandivo up to 0.4.0-rc.1), whose values it cut mid-word:
   each feature starts with a quoted `/label` and every wrapped line is 79 columns. So our
   writer never fills a wrapped line to the 79th column; keep it that way.

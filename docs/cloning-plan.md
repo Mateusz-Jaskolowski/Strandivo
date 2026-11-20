@@ -476,6 +476,14 @@ Corrected and extended after review.
   of them. Close the dialog and the warning that an overlap was reused, or melts below the
   guideline, is gone — which is the same loss of the plan described in item 4, and another
   reason the record there should exist.
+- **Opening a circle and closing a fragment are not designed as cloning steps.** Make
+  linear opens a circle at its origin with `linearize` and keeps each feature and source
+  that crossed it whole, as ordered parts, but leaves out a primer whose site crosses it;
+  whether that is right is undecided, and `src/lib/saving.test.ts` records what happens,
+  not that it is settled. Make circular only closes the line: a fragment with sticky ends
+  loses its ends but keeps every base stored, the overhangs' included, where ligating its
+  own two ends would write the shared bases once. Whether a topology button should
+  ligate them is undecided.
 - **The defaults rest on nothing recorded.** "The common case", the warning thresholds and
   any automatic distribution need to be checked against representative designs and bench
   outcomes before they are presented to users as recommendations. Note that all 416 unit

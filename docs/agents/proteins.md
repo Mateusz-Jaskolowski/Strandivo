@@ -44,7 +44,11 @@ and CI checks that they exist.
   Kind is descriptive, except signal/transit peptides keep their GenBank types on export;
   it never changes translation or marks a region as varying. Its native dropdown offers
   common categories and a custom value; preserve kinds imported from older files.
-  Region names and custom kinds turn off spelling correction and capitalisation.
+  Region names and custom kinds turn off spelling correction and capitalisation. A name or
+  kind with spaces, such as "Signal peptide", comes back whole from a saved file wherever
+  the qualifier's line is cut: the writer never cuts beside a space or between a doubled
+  quote's two (`AGENTS.md`, GenBank qualifier values), which `src/lib/genbankQualifiers.test.ts`
+  and `src/lib/saving.test.ts` hold.
 - **New region colours** follow a coordinated palette within each CDS, starting with the
   colour nearest its displayed feature colour (`nextRegionColor`). Assign and save the
   colour when a region is added, including a UniProt batch; editing or renaming must not

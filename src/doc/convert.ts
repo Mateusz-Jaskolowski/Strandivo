@@ -4,7 +4,7 @@
 // Converting between the file parser's sequence JSON (TeselaGen bio-parsers) and the
 // document model. Fields the model doesn't use are kept and written back unchanged.
 
-import { newId, reverseComplement, validFragmentEnds, type FragmentEnd, type FragmentEnds, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
+import { linearize, newId, pieces, reverseComplement, validFragmentEnds, type FragmentEnd, type FragmentEnds, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
 import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
 import { hostMethylation, PCR_DNA, type DnaMethylation } from "../lib/methylation.ts";
 import { nameFromFile, nameToKeep } from "../lib/sequenceName.ts";
@@ -122,7 +122,37 @@ function notesOut(notes: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-const partsOut = (locations: Range[] | undefined) => (locations && locations.length > 1 ? locations.map(l => ({ start: l.start, end: l.end })) : undefined);
+/**
+ * The parts a file gets for an annotation: its own when it is in several, else its range. A
+ * part across the origin (`start` after `end`, as the model holds one) is written as the two
+ * it is made of, in order, 301..366 then 1..4, which the writer joins as `join(301..366,1..4)`:
+ * how GenBank and the parser take it, where 301..4 is no range. Parts a file gave are
+ * written as they are, in their order, and an annotation in one piece has none.
+ */
+function partsOut(whole: Range, parts: Range[] | undefined, length: number): Range[] | undefined {
+  const own = parts && parts.length > 1 ? parts : [whole];
+  const written = own.flatMap(r => (r.start > r.end ? pieces(r, length) : [r]));
+  return written.length > 1 ? written.map(r => ({ start: r.start, end: r.end })) : undefined;
+}
+
+/** The parts a primer's file gave it, while its ends are still the file's. */
+function primerParts(p: SeqPrimer): Range[] | undefined {
+  const given = p.raw.locations;
+  if (!Array.isArray(given) || given.length < 2 || !given.every(r => typeof r?.start === "number" && typeof r?.end === "number")) return undefined;
+  return given[0].start === p.start && given[given.length - 1].end === p.end ? given.map(r => ({ start: r.start, end: r.end })) : undefined;
+}
+
+/**
+ * The document with its topology changed. Opening a circle at its origin is `linearize`: what
+ * crossed the origin becomes ordered parts, so every feature still has all its bases, and a
+ * primer across it is left out. Closing a line only closes it: its sequence and annotations
+ * stay as they are, and the ends of a fragment, which a circle has none of, go.
+ */
+export function withTopology(data: SeqData, circular: boolean): SeqData {
+  if (data.circular === circular) return data;
+  if (!circular) return linearize(data);
+  return { ...data, circular, ...(data.ends ? { ends: undefined } : {}) };
+}
 
 function readEnds(data: Pick<SeqData, "sequence" | "circular">, text: string): SeqData["ends"] {
   const read = (value: unknown): FragmentEnd | undefined => {
@@ -170,7 +200,7 @@ export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields)
     else delete out.color;
     if (f.strand === 0) out.arrowheadType = "NONE";
     else if (out.arrowheadType === "NONE") delete out.arrowheadType;
-    const parts = partsOut(f.locations);
+    const parts = partsOut(f, f.locations, n);
     if (parts) out.locations = parts;
     else delete out.locations;
     return out;
@@ -179,7 +209,7 @@ export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields)
     const whole = doc.wholeSources.includes(f.id);
     const out: Record<string, unknown> = { ...f.raw, id: f.id, name: f.name, type: "source", strand: f.strand === -1 ? -1 : 1, forward: f.strand !== -1, start: whole ? 0 : f.start, end: whole ? Math.max(0, n - 1) : f.end };
     if (f.raw.notes && typeof f.raw.notes === "object") out.notes = notesOut(f.raw.notes as Record<string, unknown>);
-    const parts = whole ? undefined : partsOut(f.locations);
+    const parts = whole ? undefined : partsOut(f, f.locations, n);
     if (parts) out.locations = parts;
     else delete out.locations;
     return out;
@@ -201,6 +231,9 @@ export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields)
     // No colour means the default one, also when the file had another.
     if (p.color) out.color = p.color;
     else delete out.color;
+    const parts = partsOut(p, primerParts(p), n);
+    if (parts) out.locations = parts;
+    else delete out.locations;
     return out;
   });
   const description = oneLine(data.description);

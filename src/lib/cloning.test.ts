@@ -640,6 +640,38 @@ test("opening a circle inside a CDS renumbers the regions of the piece it keeps"
   assert.deepEqual(regionsOf(kept).map(r => [r.name, r.start, r.end]), [["TM2", 5, 7]]);
 });
 
+test("Golden Gate finds the complete product whichever way the parts were listed", () => {
+  const donor = (name: string, body: string, end: string) =>
+    ({ name, data: doc(name, "CT".repeat(16) + "GGTCTCAAATG" + body + end + "TGAGACC" + "AC".repeat(16), true) });
+  const vector = { name: "vector", data: doc("vector", "AC".repeat(40) + "AATGTGAGACC" + "CT".repeat(16) + "GGTCTCAGCTT" + "CT".repeat(40), true) };
+  const a = donor("A", "CA".repeat(16), "GCTT");
+  const b = donor("B", "TC".repeat(11), "AATG");
+  for (const inserts of [[a, b], [b, a]]) {
+    const r = goldenGate([vector, ...inserts], "BsaI");
+    assert.deepEqual(r.order.map(f => f.source.name), ["vector", "B", "A"]);
+    assert.equal(r.product?.circular, true);
+    assert.equal(r.product.sequence, "GCTT" + "CT".repeat(40) + "AC".repeat(40) + "AATG" + "TC".repeat(11) + "AATG" + "CA".repeat(16));
+    assert.match(r.problems.join(" "), /without all the selected parts/);
+  }
+  const c = donor("C", "AT".repeat(10), "AATG");
+  const ambiguous = goldenGate([vector, a, b, c], "BsaI");
+  assert.equal(ambiguous.product, null);
+  assert.match(ambiguous.problems.join(" "), /More than one circular assembly/);
+});
+
+test("Golden Gate rejects a site recreated across the product's origin", () => {
+  const bb = "AC".repeat(40) + "AATGTGAGACC" + "CT".repeat(16) + "GGTCTCAGTCT" + "CT".repeat(40);
+  const part = "CT".repeat(16) + "GGTCTCAAATG" + "TC".repeat(14) + "GGTCTTGAGACC" + "AC".repeat(16);
+  assert.equal(cutsFor(bb, true, ["BsaI"]).length, 2);
+  assert.equal(cutsFor(part, true, ["BsaI"]).length, 2);
+  const expected = "GTCT" + "CT".repeat(40) + "AC".repeat(40) + "AATG" + "TC".repeat(14) + "G";
+  assert.equal(cutsFor(expected, false, ["BsaI"]).length, 0);
+  assert.equal(cutsFor(expected, true, ["BsaI"]).length, 1);
+  const r = goldenGate([{ name: "vector", data: doc("vector", bb, true) }, { name: "part", data: doc("part", part, true) }], "BsaI");
+  assert.equal(r.product, null);
+  assert.match(r.problems.join(" "), /recreates a BsaI site/);
+});
+
 test("restriction cloning: Dam methylation blocks a site until the DNA is grown in a dam- strain", () => {
   const clean = (n: number, seed: number) => filler(n, seed).replace(/TCTAGA|GATC/g, "ACGT");
   // Vector has an EcoRI site and a Dam-overlapping XbaI site (TCTAGATC).
@@ -681,7 +713,7 @@ test("Golden Gate: per-part methylation blocks sites in a dcm+ strain and cuts i
     "BsmFI"
   );
   assert.equal(blocked.product, null);
-  assert.match(blocked.problems.join(" "), /Every piece of part keeps a BsmFI site/);
+  assert.match(blocked.problems.join(" "), /No fragment of part has two BsmFI ends and no remaining BsmFI site/);
 
   const assembled = goldenGate(
     [

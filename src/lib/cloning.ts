@@ -624,70 +624,103 @@ export interface GoldenGateResult {
   problems: string[];
 }
 
-/** Does the sequence still hold the enzyme's site (either strand)? */
-function hasSite(sequence: string, site: string): boolean {
-  const s = sequence.toUpperCase();
-  return !!site && (s.includes(site) || s.includes(reverseComplement(site)));
-}
-
 /**
  * A one-pot Golden Gate reaction: every part is cut, pieces that keep a site are cut
  * again, and the rest join by their overhangs. The first part (the vector) starts the
  * chain; the overhangs decide the order and orientation of the others.
  */
 export function goldenGate(parts: { name: string; data: SeqData; methylation?: DnaMethylation }[], enzyme: string): GoldenGateResult {
+  enzyme = enzymeName(enzyme) ?? enzyme;
   const problems: string[] = [];
-  const site = enzymeSite(enzyme);
-  const pool: { part: number; f: Fragment }[] = [];
-  parts.forEach((p, i) => {
-    const cuts = cutsFor(p.data.sequence, p.data.circular, [enzyme], p.methylation);
-    if (!cuts.length) {
+  const failed = (order: Fragment[] = []): GoldenGateResult => ({ order, product: null, layout: null, problems: [...new Set(problems)] });
+  const pool = parts.map(p => {
+    const digested = fragmentDigest(p.data, [enzyme], p.methylation);
+    if (digested.problem) {
+      problems.push(`${p.name}: ${digested.problem}`);
+      return [];
+    }
+    if (!digested.cut) {
       problems.push(`${enzyme} doesn't cut ${p.name}.`);
-      return;
+      return [];
     }
-    const kept = digest(p.data, [enzyme], p.methylation).filter(f => f.left.kind !== "blunt" && f.right.kind !== "blunt" && !hasSite(f.data.sequence, site));
-    if (!kept.length) problems.push(`Every piece of ${p.name} keeps a ${enzyme} site, so nothing from it stays cut.`);
-    if (kept.length > 1) problems.push(`${enzyme} cuts inside ${p.name} (${cuts.length} sites); its parts may join in other ways.`);
-    for (const f of kept) pool.push({ part: i, f: { ...f, source: { ...f.source, name: p.name } } });
+    const kept = digested.fragments.filter(f => f.left.enzyme === enzyme && f.right.enzyme === enzyme && f.left.kind !== "blunt" && f.right.kind !== "blunt" && !digestSites(f.data.sequence, false, [enzyme]).length);
+    if (!kept.length) problems.push(`No fragment of ${p.name} has two ${enzyme} ends and no remaining ${enzyme} site.`);
+    if (kept.length > 1) problems.push(`${enzyme} cuts inside ${p.name}. More than one fragment from it could join.`);
+    return kept.map(f => ({ ...f, source: { ...f.source, name: p.name } }));
   });
-  for (const x of pool) {
-    for (const e of [x.f.left, x.f.right]) {
-      if (e.bases === reverseComplement(e.bases)) problems.push(`${x.f.source.name}'s overhang ${e.bases} pairs with itself, so pieces can join either way round.`);
+  if (pool.length < 2 || pool.some(fs => !fs.length)) return failed();
+  if (pool.some(fs => fs.some(f => [f.left, f.right].some(e => /[^ACGT]/.test(e.bases))))) {
+    problems.push("An overhang contains unknown bases, so its joins can’t be determined.");
+    return failed();
+  }
+  for (const fs of pool) for (const f of fs) {
+    for (const e of [f.left, f.right]) {
+      if (e.bases === reverseComplement(e.bases)) problems.push(`${f.source.name}'s overhang ${e.bases} pairs with itself, so pieces can join either way round.`);
     }
   }
-  const startAt = pool.findIndex(x => x.part === 0);
-  if (startAt < 0) return { order: [], product: null, layout: null, problems: [...new Set(problems)] };
-  // The first part's largest kept piece is the backbone.
-  let first = pool[startAt];
-  for (const x of pool) if (x.part === 0 && fragmentLength(x.f) > fragmentLength(first.f)) first = x;
-  const used = new Set([first]);
-  const order: Fragment[] = [first.f];
-  for (;;) {
+  const options = new Map<string, { part: number; fragment: Fragment }[]>();
+  pool.slice(1).forEach((fs, i) => {
+    for (const f of fs) for (const fragment of [f, flip(f)]) {
+      const key = endKey(fragment.left);
+      const choices = options.get(key) ?? [];
+      choices.push({ part: i + 1, fragment });
+      options.set(key, choices);
+    }
+  });
+  let solution: { order: Fragment[]; data: SeqData; layout: Layout } | undefined;
+  let multiple = false;
+  let recut = false;
+  let partial = false;
+  let longest: Fragment[] = [];
+  // Repeated overhangs can make the number of paths grow exponentially.
+  const limit = 10_000;
+  let checked = 0;
+  const used = new Set<number>([0]);
+  const search = (order: Fragment[]) => {
+    if (++checked > limit || multiple) return;
+    if (order.length > longest.length) longest = [...order];
     const end = order[order.length - 1].right;
-    const next = pool
-      .filter(x => !used.has(x))
-      .flatMap(x => [{ x, f: x.f }, { x, f: flip(x.f) }])
-      .filter(c => compatible(end, c.f.left));
-    const nextParts = new Set(next.map(c => c.x.part));
-    if (nextParts.size > 1) problems.push(`More than one piece has the overhang ${end.bases}: ${[...nextParts].map(i => parts[i].name).join(", ")}.`);
-    if (next.length) {
-      used.add(next[0].x);
-      order.push(next[0].f);
-      continue;
+    if (compatible(end, order[0].left)) {
+      if (used.size < parts.length) partial = true;
+      else {
+        const joined = joinFragments(order, order.map(f => overhangLength(f.right)), true);
+        if (!joined) return;
+        if (digestSites(joined.data.sequence, true, [enzyme]).length) recut = true;
+        else if (!solution) solution = { order: [...order], ...joined };
+        else if (!sameCircularSequence(solution.data.sequence, joined.data.sequence)) multiple = true;
+      }
     }
-    if (order.length > 1 && compatible(end, first.f.left)) break;
-    problems.push(`Nothing joins the ${end.bases} end of ${order[order.length - 1].source.name}.`);
-    return { order, product: null, layout: null, problems: [...new Set(problems)] };
+    for (const { part, fragment } of options.get(endKey(end)) ?? []) {
+      if (multiple || checked > limit) break;
+      if (used.has(part)) continue;
+      used.add(part);
+      order.push(fragment);
+      search(order);
+      order.pop();
+      used.delete(part);
+    }
+  };
+  for (const backbone of pool[0]) {
+    search([backbone]);
+    if (multiple || checked > limit) break;
   }
-  const usedParts = new Set([...used].map(x => x.part));
-  parts.forEach((p, i) => {
-    if (!usedParts.has(i) && pool.some(x => x.part === i)) problems.push(`${p.name} isn't used: its overhangs don't match the others.`);
-  });
-  const { data, layout } = joinFragments(
-    order,
-    order.map(f => overhangLength(f.right)),
-    true
-  );
-  if (hasSite(data.sequence, site)) problems.push(`The product still has a ${enzyme} site, so the enzyme would open it again.`);
-  return { order, product: data, layout, problems: [...new Set(problems)] };
+  if (partial) problems.push("A circle can also form without all the selected parts.");
+  if (recut) problems.push(`An assembly recreates a ${enzyme} site and would be cut again.`);
+  if (checked > limit) problems.push("Too many ways to join the parts to identify one product.");
+  if (multiple) problems.push("More than one circular assembly uses all the selected parts.");
+  if (multiple || checked > limit) return failed();
+  if (solution) return { order: solution.order, product: solution.data, layout: solution.layout, problems: [...new Set(problems)] };
+  if (!partial && !recut && longest.length) {
+    const last = longest[longest.length - 1];
+    problems.push(`Nothing joins the ${last.right.bases} end of ${last.source.name} into a complete circle.`);
+  }
+  return failed(longest);
+}
+
+const endKey = (e: FragmentEnd) => `${e.kind}:${e.bases}`;
+
+function sameCircularSequence(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  const doubled = a.toUpperCase().repeat(2);
+  return doubled.includes(b.toUpperCase()) || doubled.includes(reverseComplement(b).toUpperCase());
 }

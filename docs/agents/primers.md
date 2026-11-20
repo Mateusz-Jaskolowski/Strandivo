@@ -170,6 +170,26 @@ and CI checks that they exist.
   being looked over. Only the table and the notes are drawn again when a field changes, so a
   field keeps its focus; each mix control also carries a `data-focus` key for full-dialog
   redraws, and the fold is the one thing that builds the section anew.
+  **Printable PCR plan** (`src/lib/pcrPrint.ts`, `src/views/pcrPrintDialog.ts`): clicking
+  **Print PCR plan…** in `openPcrDialog` captures one immutable `PcrPlanSnapshot` from the
+  current effective dialog state (edited program draft, selected digest or explicit
+  `NO_DIGEST`, `currentLadder`, and `effectivePcrMix` even while the mix section is folded).
+  Preview, native print, native desktop PDF, offline HTML (`pcrPlanHtml`), and Markdown
+  (`pcrPlanMarkdown`) all render from that same snapshot and share `gelLayout`
+  (`src/lib/gel.ts`) for the gel; local title, experiment date (blank unless set, never
+  filled from `exportedAt`), bench notes, and independent section toggles (Primers, Product
+  map, Simulated gel, Cycling program, Reaction mix, Bench notes) update live without
+  regenerating calculations. Desktop printing goes through `printWindow()` (`src/platform.ts`)
+  to Rust `print_window` (`src-tauri/src/lib.rs`, calling `WebviewWindow::print()`), and
+  desktop **Save as PDF…** goes through `saveWindowPdf()` to `src-tauri/src/pdf.rs`
+  (NSPrintOperation on macOS, WebView2 `PrintToPdf` on Windows, WebKitGTK `PrintOperation`
+  on Linux); in the browser version, **Print / Save as PDF…** uses `window.print()`. A
+  print-only `.sv-print-sheet` mirror lives on `document.body` while the preview is open so
+  `@media print` renders a theme-independent light bench sheet without app chrome, and **Save
+  HTML…** and **Copy Markdown** provide offline/ELN exports. In `openPcrDialog`, Product map,
+  Simulated gel, and Cycling program each fold cleanly (`src/pcrDialogFolds.ts`,
+  `src/lib/pcrDialogFolds.ts`) alongside Reaction mix, and the digest menu offers **No digest
+  (uncut only)** (`NO_DIGEST` in `src/lib/pcrOverview.ts`).
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

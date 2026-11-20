@@ -22,6 +22,18 @@ shows your product on a gel and works out the cycling program and reaction mix f
 protocols. Edits to bases show a card first, and Strandivo warns when Dam or Dcm
 methylation blocks a cut.
 
+- **Printable PCR plan & collapsible PCR sections**: click **Print PCR plan…** in the PCR
+  product dialog to preview a clean, light-paper bench sheet with the template, full 5′→3′
+  primer sequences, product map and simulated gel (using your selected digest or uncut-only
+  view and ladder), cycling program (with any local edits clearly marked alongside the
+  protocol source), effective reaction mix even when collapsed, and optional experiment name,
+  experiment date, and multiline bench notes. Choose which sections to include (Primers,
+  Product map, Simulated gel, Cycling program, Reaction mix, Bench notes), then print, use
+  **Save as PDF…** (desktop, A4 or US Letter; **Print / Save as PDF…** in the browser),
+  **Copy Markdown** for electronic lab notebooks, or **Save HTML…** for a self-contained
+  offline file. Inside the PCR product dialog, Product map, Simulated gel, and Cycling
+  program can now be folded alongside Reaction mix, and the digest menu includes **No digest
+  (uncut only)**.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"

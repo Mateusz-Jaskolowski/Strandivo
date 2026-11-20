@@ -618,6 +618,104 @@ async function main(outDir) {
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
 
+    // --- printable PCR plan: preview, collapsed mix, edited cycling step, and offline HTML export ---
+    await s.exec(`
+      const store = window.__strandivo.store;
+      const d = store.data;
+      const seq = d.sequence.toUpperCase();
+      const rc = s => [...s.toUpperCase()].reverse().map(c => ({ A:'T', T:'A', C:'G', G:'C' }[c] || c)).join('');
+      const primers = [
+        ...d.primers,
+        { id: 'web-pcr-f', name: 'WebPCR-F', start: 100, end: 121, strand: 1, bases: 'gcgcgaattc' + seq.slice(100, 122), notes: {}, raw: {} },
+        { id: 'web-pcr-r', name: 'WebPCR-R', start: 1400, end: 1421, strand: -1, bases: rc(seq.slice(1400, 1422)), notes: {}, raw: {} }
+      ];
+      store.apply({ ...d, primers }, 'Add web PCR primers');
+    `);
+    await s.click("//button[@data-tab='primers']");
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]");
+    await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Forward primer']\")", 5000);
+    await s.exec(`
+      const pick = (label, name) => {
+        const sel = document.querySelector(".sv-dialog select[aria-label='" + label + "']");
+        const opt = Array.from(sel.options).find(o => o.textContent.includes(name));
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      pick('Forward primer', 'WebPCR-F');
+      pick('Reverse primer', 'WebPCR-R');
+    `);
+    await s.waitFor("document.querySelector('[data-focus=\"print-pcr-plan\"]:not(:disabled)')", 5000);
+    // Change mix reactions while open, then collapse; edit cycling step and ladder.
+    await s.click("//section[contains(@class,'sv-pcr-mix')]//button[contains(@class,'sv-fold-link')]");
+    await s.waitFor("document.querySelector('[data-focus=\"mix-reactions\"]')", 3000);
+    await s.exec(`
+      const n = document.querySelector('[data-focus="mix-reactions"]');
+      n.value = '4';
+      n.dispatchEvent(new Event('change', { bubbles: true }));
+    `);
+    await s.click("//section[contains(@class,'sv-pcr-mix')]//button[contains(@class,'sv-fold-link')]");
+    await s.waitFor("!document.querySelector('.sv-mix-table')", 3000);
+    await s.exec(`
+      const t = document.querySelector('[data-focus="program-1:1:temp"]');
+      t.value = '62.5';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      const lad = document.querySelector(".sv-dialog select[aria-label='Ladder']");
+      lad.value = '100bp';
+      lad.dispatchEvent(new Event('change', { bubbles: true }));
+    `);
+    await s.click("//button[@data-focus='print-pcr-plan']");
+    check("Print PCR plan… opens a preview over the PCR dialog", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000));
+    const webPrintUi = await s.exec(`
+      const printLabel = document.querySelector('[data-focus="plan-print"]')?.textContent?.trim() ?? '';
+      const hasDesktopPdf = !!document.querySelector('[data-focus="plan-save-pdf"]');
+      const mapBox = document.querySelector('[data-focus="plan-sec-map"]');
+      mapBox.checked = false;
+      mapBox.dispatchEvent(new Event('change', { bubbles: true }));
+      const gelOnlyOk = !document.querySelector('.sv-print-stage .sv-sheet-map-svg') && !!document.querySelector('.sv-print-stage .sv-sheet-gel-svg');
+      return { printLabel, hasDesktopPdf, gelOnlyOk };
+    `);
+    check(
+      "Browser preview labels Print / Save as PDF… and lets Product map be omitted while keeping Simulated gel",
+      webPrintUi.printLabel === "Print / Save as PDF…" && !webPrintUi.hasDesktopPdf && webPrintUi.gelOnlyOk,
+      JSON.stringify(webPrintUi)
+    );
+    const webBeforeDl = await s.exec("return window.__e2eDownloads.length");
+    await s.exec(`
+      const title = document.querySelector('[data-focus="plan-title"]');
+      title.value = 'Web bench sheet <v1>';
+      title.dispatchEvent(new Event('input', { bubbles: true }));
+      const notes = document.querySelector('[data-focus="plan-notes"]');
+      notes.value = 'First line\\nSecond line with <script>x</script>';
+      notes.dispatchEvent(new Event('input', { bubbles: true }));
+    `);
+    await s.click("//button[@data-focus='plan-save-html']");
+    const htmlSaved = await s.waitFor(`window.__e2eDownloads.length === ${webBeforeDl + 1}`, 5000);
+    const savedHtml = htmlSaved ? await s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));") : "";
+    const savedBody = savedHtml.split("<body>")[1] ?? "";
+    const fullSeq = await s.exec("return window.__strandivo.store.data.sequence;");
+    check(
+      "Save HTML… downloads a self-contained bench sheet honoring section toggles, edited program, collapsed mix, escaped multiline notes, and no full template sequence",
+      htmlSaved &&
+        savedBody.includes("Web bench sheet &lt;v1&gt;") &&
+        savedBody.includes("62.5 °C") &&
+        savedBody.includes("Edited") &&
+        savedBody.includes("4 reactions") &&
+        savedBody.includes("100 bp") &&
+        savedBody.includes("gcgcgaattc") &&
+        !savedBody.includes("sv-sheet-map-svg") &&
+        savedBody.includes("sv-sheet-gel-svg") &&
+        savedBody.includes("First line\nSecond line with &lt;script&gt;x&lt;/script&gt;") &&
+        !savedHtml.includes("<script>x</script>") &&
+        !savedHtml.includes(fullSeq) &&
+        savedBody.includes('class="sv-sheet-date-blank"'),
+      savedHtml.slice(0, 260)
+    );
+    await s.shot("10-pcr-print-preview");
+    await s.click("//button[@data-focus='plan-cancel']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
+    await s.click("//button[@data-focus='show-on-map']");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");
     await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));

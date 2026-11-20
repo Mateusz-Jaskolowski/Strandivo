@@ -141,7 +141,8 @@ const ALLOWED: { selector: RegExp; reason: string }[] = [
   { selector: /^\.ps-toast/, reason: "Toasts are dark slate in every theme, with white text." },
   { selector: /^\.ps-context-swatch$/, reason: "The edge of a colour swatch, drawn on the colour itself." },
   { selector: /^\.sv-protein-region$/, reason: "White text on the region's own colour, which no theme changes." },
-  { selector: /^\.sv-figure-paper$/, reason: "The protein figure is shown on white, as it is saved and copied." }
+  { selector: /^\.sv-figure-paper$/, reason: "The protein figure is shown on white, as it is saved and copied." },
+  { selector: /^(?:\.sv-sheet\b|\.sv-sheet-|\.sv-print-sheet\b|(?:html|body)\.sv-printing\b)/, reason: "The printable PCR bench sheet renders on white paper with dark ink in every theme." }
 ];
 
 test("outside the token blocks the stylesheets name no colours, but a few listed ones", () => {

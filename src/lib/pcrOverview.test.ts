@@ -34,6 +34,15 @@ const opts: EnzymeOptions = { enzymeSource: "common", enzymeFilter: "unique6", l
 const doc = (sequence: string): SeqData => ({ name: "PCR", sequence, circular: false, features: [], primers: [], sources: [], description: "" });
 const hit = (enzyme: string, cut: number, bottomCut = cut): SiteHit => ({ enzyme, cut, bottomCut, site: "AAAAAA", start: cut - 3, end: cut + 2, forward: true, overhang: "" });
 
+test("the uncut PCR template lane uses the gel size of an opened digest fragment", () => {
+  const template: SeqData = {
+    ...doc("A".repeat(65) + "GAATT"),
+    ends: { left: { kind: "blunt", bases: "" }, right: { kind: "5'", bases: "AATT", enzyme: "EcoRI" } }
+  };
+  assert.deepEqual(pcrGelLanes(template, "plasmid", 40, null)[0].sizes, [66]);
+  assert.deepEqual(pcrGelLanes(template, "plasmid", 66, null).map(lane => lane.of), ["product"]);
+});
+
 test("final-product sites include both tails and differ from the template's counts", () => {
   const template = "ACGT".repeat(20);
   const f = { name: "F", start: 4, end: 23, strand: 1 as const, bases: "AAAAGAATTC" + template.slice(4, 24) };
@@ -225,25 +234,26 @@ test("an enzyme that cuts on both sides of its site is never suggested, as only 
   assert.equal(cutsBothSides("BcgI"), true);
   assert.equal(cutsBothSides("EcoRI"), false);
   assert.equal(cutsBothSides("NoSuchI"), false);
-  // One BcgI site (CGANNNNNNTGC) in 612 bp: REBASE's cuts make 290 + 34 + 288, the scan alone 324 + 288.
+  // One BcgI site (CGANNNNNNTGC) in 612 bp: makes 290 + 34 + 288.
   const bcgI = "CGA" + "AAAAAA" + "TGC";
   const seq = "AT".repeat(150) + bcgI + "AT".repeat(150);
   assert.equal(seq.length, 612);
   const hits = scanSites(seq, false, ["BcgI"]).filter(h => h.enzyme === "BcgI");
   assert.equal(hits.length, 1);
   assert.equal(hits[0].cut, 324);
-  assert.deepEqual(suggestedDigests(seq.length, hits, ["BcgI"]), []);
-  // In a Lab list with an ordinary enzyme beside it, only the ordinary one is offered, alone or in a pair.
+  assert.deepEqual(suggestedDigests(seq.length, hits, ["BcgI"])[0].sizes, [290, 288, 34]);
+  // In a Lab list with an ordinary enzyme beside it, both single digests are valid.
   const mixed = "AT".repeat(100) + "GAATTC" + "AT".repeat(100) + bcgI + "AT".repeat(100);
   const found = scanSites(mixed, false, ["BcgI", "EcoRI"]).filter(h => h.enzyme === "BcgI" || h.enzyme === "EcoRI");
   assert.deepEqual(new Set(found.map(h => h.enzyme)), new Set(["BcgI", "EcoRI"]));
   const offered = suggestedDigests(mixed.length, found, ["BcgI", "EcoRI"]);
-  assert.deepEqual(offered.map(digestName), ["EcoRI"]);
+  assert.ok(offered.some(d => digestName(d) === "EcoRI"));
+  assert.ok(offered.some(d => digestName(d) === "BcgI" && d.sizes.includes(34)));
   // The overview offers the same through its own list.
   const product = pcrProduct(seq, false, { name: "F", start: 0, end: 19, strand: 1, bases: seq.slice(0, 20) }, { name: "R", start: 592, end: 611, strand: -1, bases: reverseComplement(seq.slice(592)) })!;
   const overview = productOverview(product, seq, false, { ...opts, enzymeSource: "lab", enzymeFilter: "all", labEnzymes: ["BcgI"] });
   assert.equal(overview.sites.length, 1);
-  assert.deepEqual(overview.digests, []);
+  assert.deepEqual(overview.digests[0].sizes, [290, 288, 34]);
 });
 
 test("a lab list's names are matched as the drawn sites match them, whatever their case", () => {

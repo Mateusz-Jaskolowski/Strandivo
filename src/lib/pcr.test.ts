@@ -213,6 +213,21 @@ test("an ambiguous base in a primer leaves the product as it is", () => {
   assert.equal(productDocument({ ...doc, sequence: t }, both).sequence, both.sequence);
 });
 
+test("two primers that write the same insertion add it only once", () => {
+  const seq = "TGTTACCGTCTCGATCAGGTCGTTGAATAGCCTATCCGTTACTGTTTTGATGAACCATGTGATCTTGGTTTAGCGGTACAA";
+  const template: SeqData = { name: "template", description: "", circular: false, sequence: seq, features: [], primers: [], sources: [] };
+  // A can be aligned on either side of the A already present. C has one placement.
+  for (const base of ["A", "C"]) {
+    const edited = seq.slice(0, 17) + base + seq.slice(17);
+    const f = { name: "F", start: 0, end: 32, strand: 1 as const, bases: edited.slice(0, 34) };
+    const r = { name: "R", start: 2, end: seq.length - 1, strand: -1 as const, bases: reverseComplement(edited.slice(2)) };
+    const product = pcrProduct(seq, false, f, r)!;
+    assert.equal(product.length, seq.length + 1);
+    assert.equal(product.sequence, edited);
+    assert.equal(productDocument(template, product).sequence, edited);
+  }
+});
+
 test("design avoids a primer that binds twice, and reports one when it can't", () => {
   // A deterministic sequence with a 24 bp stretch repeated: a primer of up to 24 bases
   // starting at the second copy binds both, a longer one reaches unique bases.

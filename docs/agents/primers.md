@@ -81,9 +81,8 @@ and CI checks that they exist.
   where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
   bar, which no digest with a fragment below the smallest band of the gel's ladders,
   100 bp today, reaches). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
-  complete on both strands or whose overhangs overlap another's makes no suggestion rather
-  than a band that wouldn't be there, and neither does an enzyme that cuts on both sides
-  of its site (BcgI, `cutsBothSides`), as only its cut after the site is found. Beside the
+  complete on both strands is left out, and overlapping cuts make no suggestion. An
+  enzyme that cuts on both sides of its site (BcgI) contributes both complete cuts. Beside the
   suggestion a gel runs up to four lanes in the order they would be loaded: the template
   uncut and cut by that digest, then the product uncut and cut, drawn by the renderer the
   Digest dialog uses (`src/views/gelDraw.ts`). The template is there because carry-over

@@ -114,6 +114,13 @@ test("overlapping: complementary primers with the change in the middle", () => {
   assert.equal(alignPrimer(del.reverse, seq).deletions, 6);
 });
 
+test("back-to-back primer arms fit in the bases remaining after a large deletion", () => {
+  const sequence = made(150, 7);
+  const design = designMutagenesis(sequence, true, { start: 15, length: 117, bases: "" }, "back-to-back")!;
+  assert.ok(design.forward.bases.length + design.reverse.bases.length <= 33);
+  assert.equal(product(design, sequence)?.sequence, sequence.slice(132) + sequence.slice(0, 15));
+});
+
 test("designed primers pass the primer checks, the change well away from the 3′ end", () => {
   for (const layout of ["back-to-back", "overlapping"] as const) {
     for (const c of [

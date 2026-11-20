@@ -123,12 +123,14 @@ export function designMutagenesis(seq: string, circular: boolean, change: SdmCha
   const after = s + c.length;
   // Arms as the primers read them: rightwards from the change on the top strand, leftwards
   // from it on the bottom strand.
-  const right = sizeArm(len => stretch(seq, circular, after, len), o);
+  const available = n - c.length;
+  const right = sizeArm(len => stretch(seq, circular, after, len), { ...o, maxArm: Math.min(o.maxArm, available - o.minArm) });
+  if (!right) return null;
   const left = sizeArm(len => {
     const b = stretch(seq, circular, s - len, len);
     return b && reverseComplement(b);
-  }, o);
-  if (!right || !left) return null;
+  }, { ...o, maxArm: Math.min(o.maxArm, available - right.bases.length) });
+  if (!left) return null;
   const r = right.bases.length;
   const l = left.bases.length;
   const at = (i: number) => (circular ? mod(i, n) : i);

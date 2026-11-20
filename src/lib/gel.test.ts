@@ -98,3 +98,19 @@ test("a gel image's key names each lane's sizes, and counts them past four", () 
   assert.equal(digestLaneText("pUC19", [], digestSequence(d, []), n), "pUC19 · no enzyme · uncut plasmid, 2,686 bp");
   assert.equal(digestLaneText("pUC19", ["NotI"], digestSequence(d, ["NotI"]), n), "pUC19 · NotI · uncut plasmid, 2,686 bp");
 });
+
+test("a gel image's key still names all four sizes of a lane, the most it names", () => {
+  assert.equal(laneSizesText([500, 400, 300, 200]), "500 + 400 + 300 + 200 bp");
+  const d = puc19();
+  const four = digestSequence(d, ["PvuI", "PvuII"]);
+  assert.equal(four.fragments.length, 4);
+  assert.equal(digestLaneText("pUC19", ["PvuI", "PvuII"], four, d.sequence.length), "pUC19 · PvuI, PvuII · 1,439 + 896 + 322 + 29 bp");
+});
+
+test("a plasmid cut once runs as one linear fragment, which its key doesn't call uncut", () => {
+  const d = puc19();
+  const once = digestSequence(d, ["EcoRI"]);
+  assert.equal(once.uncut, false);
+  assert.deepEqual(once.fragments.map(fragmentSize), [d.sequence.length]);
+  assert.equal(digestLaneText("pUC19", ["EcoRI"], once, d.sequence.length), "pUC19 · EcoRI · 2,686 bp");
+});

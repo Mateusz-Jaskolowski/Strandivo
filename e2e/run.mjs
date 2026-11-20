@@ -1389,6 +1389,29 @@ async function main() {
     await s.exec(`${doc} s.select(arguments[0], 'e2e'); window.__strandivo.showTab(1); window.__strandivo.closeTab();`, vectorSelection);
     check("Closing the product asks to save it", await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000));
 
+    // A digest fragment keeps its sticky end on opening and when saved as GenBank.
+    const stickySequence = "A".repeat(65) + "GAATTC" + "C".repeat(50);
+    await s.exec("window.__strandivo.openNew({ name: 'sticky-test', description: '', circular: false, sequence: arguments[0], features: [], primers: [], sources: [] });", stickySequence);
+    await s.waitFor("window.__strandivo.activeTab() === 1 && window.__strandivo.store?.data.name === 'sticky-test'", 5000);
+    await s.exec("window.__strandivo.command('digest');");
+    await s.waitFor("document.querySelector('input[data-enzyme=\"EcoRI\"]')", 5000);
+    await s.click("//input[@data-enzyme='EcoRI']", "xpath");
+    await s.waitFor("document.querySelector('tr[data-size=\"66\"] button')", 5000);
+    await s.click("//tr[@data-size='66']//button[normalize-space()='Open']", "xpath");
+    const stickyReady = await s.waitFor("window.__strandivo.activeTab() === 2 && window.__strandivo.store?.data.ends?.right.bases === 'AATT'", 5000);
+    check("Opening the 66 bp band preserves its EcoRI end and gel size", stickyReady && await s.exec("return ['.sv-status-right', '.sv-doc-meta'].every(selector => document.querySelector(selector)?.textContent.includes('66 bp · linear'))"), JSON.stringify(await s.exec(`${doc} return s.data.ends;`)));
+    const stickyPath = path.join(path.dirname(savedPath), "sticky.gb");
+    const stickySaved = await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.saveAs(arguments[0]).then(() => done(true), e => done(String(e)));", stickyPath);
+    check("Saving the band writes its ends to GenBank", stickySaved === true && readFileSync(stickyPath, "utf8").includes('["5\'","AATT","EcoRI"]'), String(stickySaved));
+    const stickyFastaPath = path.join(path.dirname(savedPath), "sticky.fasta");
+    const fastaSaved = await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.saveAs(arguments[0]).then(() => done(true), e => done(String(e)));", stickyFastaPath);
+    check("Saving the band as FASTA writes only its top strand", fastaSaved === true && readFileSync(stickyFastaPath, "utf8").split(/\r?\n/).slice(1).join("").toUpperCase() === "A".repeat(65) + "G", String(fastaSaved));
+    await s.exec("window.__strandivo.closeTab();");
+    await s.waitFor("window.__strandivo.tabs().length === 2", 5000);
+    await s.exec("window.__strandivo.showTab(1); window.__strandivo.closeTab();");
+    await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
+    await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+
     // --- Dam methylation: two XbaI sites, one running on into a GATC ---
     // With no strain given, Dam⁺ is assumed: the first site is drawn with an "m" and doesn't
     // cut, so XbaI counts as cutting once and the digest gives one linear band. Choosing a

@@ -22,6 +22,20 @@ shows your product on a gel and works out the cycling program and reaction mix f
 protocols. Edits to bases show a card first, and Strandivo warns when Dam or Dcm
 methylation blocks a cut.
 
+- **Cloning simulations check that the pieces form a product.** Golden Gate looks for a
+  complete circular assembly, checks for sites recreated at the joins, and reports when
+  the parts could make different products. Gibson and In-Fusion check the selected
+  fragments against their PCR primers and flag joins with unknown bases. Added insert
+  rows wait for a source, and replacing bases in the vector requires one continuous
+  selection. Restriction cloning asks you to pick a fragment if the insert selection
+  spans a cut or fits more than one fragment.
+- **More reliable digests and PCR products.** Digests include both cuts of enzymes such
+  as BcgI, report overlapping cuts, and keep fragment ends in GenBank. Fragment sizes
+  agree with the top strand in FASTA and the PCR gel, and cloning requires every chosen
+  enzyme to cut.
+  PCR applies a change shared by both primers once, keeps annotations across the
+  former origin, and reopens from GenBank as unmethylated. Mutagenesis primers stay
+  within the bases left after a deletion.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"

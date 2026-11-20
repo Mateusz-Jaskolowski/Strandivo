@@ -478,6 +478,42 @@ export async function checkMapImage(s, check, save) {
       const headAfter = await headState();
       check("The header's width and the menu are put back after the sweep", JSON.stringify(headAfter) === JSON.stringify(headBefore), `${JSON.stringify(headBefore)} before, ${JSON.stringify(headAfter)} after`);
     });
+
+    // Opening the menu takes the keyboard into it, so Escape, which the menu hears, closes it and
+    // is not passed on: at the window it would also drop enzymes picked on the map. Done in one
+    // script, with a listener on the window to see what gets that far, and taken off after.
+    await attempt("Checking Escape in the Export image menu finished without errors", async () => {
+      await closeMenu();
+      const r = await s.exec(`
+        const button = Array.from(document.querySelectorAll('.sv-map .sv-pane-head button')).find(b => b.textContent.includes('Export image'));
+        const menu = document.querySelector('.sv-map-image').closest('.sv-chip-menu');
+        const box = document.querySelector('.sv-map-image input[type="checkbox"]');
+        const reached = [];
+        const spy = e => reached.push(e.key);
+        window.addEventListener('keydown', spy);
+        try {
+          button.focus();
+          const focusedButton = document.activeElement === button;
+          button.click();
+          const opened = { shown: !menu.hidden, expanded: button.getAttribute('aria-expanded'), inside: menu.contains(document.activeElement), onBox: document.activeElement === box };
+          document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
+          return { focusedButton, opened, closed: { hidden: menu.hidden, expanded: button.getAttribute('aria-expanded'), onButton: document.activeElement === button }, reached };
+        } finally {
+          window.removeEventListener('keydown', spy);
+        }
+      `);
+      check(
+        "Opening Export image's menu from its button takes the keyboard onto its Transparent background box",
+        r.focusedButton && r.opened.shown && r.opened.expanded === "true" && r.opened.inside && r.opened.onBox,
+        JSON.stringify({ focusedButton: r.focusedButton, ...r.opened })
+      );
+      check(
+        "Escape in Export image's menu closes it, gives the keyboard back to its button and goes no further",
+        r.closed.hidden === true && r.closed.expanded === "false" && r.closed.onButton && r.reached.length === 0,
+        JSON.stringify({ ...r.closed, reachedTheWindow: r.reached })
+      );
+      await closeMenu();
+    });
   } finally {
     await closeMenu();
     await s.exec("window.__strandivo.store.select({ range: null, caret: 0 }, 'e2e');");

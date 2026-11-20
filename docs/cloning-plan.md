@@ -386,14 +386,9 @@ silence. Whether an overlap *can be judged* and whether it *meets a minimum* are
 questions, and only the second belongs to a threshold. They are now asked separately, and
 both Gibson and In-Fusion are covered, linear and circular.
 
-**Assessed, and not changed: should unknown-to-unknown homology produce a product at all?**
-It should not, strictly — the sequence we would be predicting is one we cannot read. But
-refusing outright would turn a note into a block for a case that is sometimes a user's own
-degenerate design, and the reviewer's point against converting warnings into blocking
-errors applies. The conservative half is done: the plan says there is no telling whether
-the overlap will anneal. The other half is `findOverlap`, which compares strings and so
-counts N against N as homology in the first place; that is the right place to fix it, and
-it is listed under the gaps rather than slipped in here.
+The planner can describe a possible join with ambiguous bases, but withholds its product
+until every overlap is made of known bases. Ambiguous bases elsewhere in a piece are
+carried through the assembly.
 
 **Not a gap, contrary to an earlier draft:** primer design already declines candidates it
 cannot measure — `candidates` in `src/lib/design.ts` keeps a candidate only `if (tm !== null)`,
@@ -401,10 +396,6 @@ so ambiguous bases in an annealing segment already stop that candidate being cho
 silent bypass was specific to the overlap check. Claiming otherwise here was the same
 mistake as the ones this document was revised to correct: asserted from a search, not from
 reading the function.
-
-**Still open:** `findOverlap` compares strings, so Ns against Ns are still counted as an
-overlap and the join is made on them. That is the case worth fixing next, and it needs
-`findOverlap` to know about ambiguity rather than the Tm check to catch it afterwards.
 
 ### D. Overlap distribution fixed by the method, or chosen per junction
 
@@ -485,9 +476,6 @@ Corrected and extended after review.
   of them. Close the dialog and the warning that an overlap was reused, or melts below the
   guideline, is gone — which is the same loss of the plan described in item 4, and another
   reason the record there should exist.
-- **`findOverlap` counts ambiguous bases as matching.** It compares strings, so a run of Ns
-  against a run of Ns is homology as far as the planner is concerned, and the join is made
-  on it. Reporting it afterwards, which is what happens now, treats a symptom.
 - **The defaults rest on nothing recorded.** "The common case", the warning thresholds and
   any automatic distribution need to be checked against representative designs and bench
   outcomes before they are presented to users as recommendations. Note that all 416 unit

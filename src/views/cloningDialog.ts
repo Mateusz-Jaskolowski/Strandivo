@@ -15,13 +15,14 @@ import { parseSequenceFile } from "../doc/fileio.ts";
 import { fromParsed } from "../doc/convert.ts";
 import { pickFiles } from "../platform.ts";
 import { SEQUENCE_EXTENSIONS } from "../lib/files.ts";
-import { extraKey, reactionEnzymes, scanSites, siteCounts, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
+import { reactionCounts, reactionEnzymes, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
 import { parseComments } from "../lib/labinfo.ts";
-import { cutCountText, hostMethylation, methylationKey, type DnaMethylation } from "../lib/methylation.ts";
+import { cutCountText, documentMethylation, type DnaMethylation } from "../lib/methylation.ts";
 import { HOST_FIELD } from "../lib/strains.ts";
 import {
-  digest,
+  cloningDigest,
   endLabel,
+  existingFragment,
   fragmentLength,
   fragmentWith,
   GIBSON,
@@ -32,14 +33,16 @@ import {
   ligateInsert,
   planAssembly,
   selfLigates,
+  vectorPcrRange,
   wholeFragment,
   type AssemblyInput,
   type AssemblyPrimer,
   type Fragment,
+  type FragmentDigest,
   type Layout
 } from "../lib/cloning.ts";
 import { TM_METHODS } from "../lib/primers.ts";
-import { rangeLength, type Range, type SeqData } from "../lib/seqdata.ts";
+import { rangeLength, topStrandLength, type Range, type SeqData } from "../lib/seqdata.ts";
 import { copyText } from "./inspector.ts";
 import { methylationWarning, type MethylationTarget } from "./methylationWarning.ts";
 import { field, plural, rerender } from "./primerDialogs.ts";
@@ -55,6 +58,7 @@ const METHODS: { id: Method; label: string; note: string }[] = [
 
 interface Source extends MethylationTarget {
   selection: Range | null;
+  separateSelection?: boolean;
 }
 
 interface InsertRow {
@@ -71,26 +75,6 @@ interface InsertRow {
 
 /** Kept between openings in this window. */
 const memory = { method: "restriction" as Method, goldenGate: "BsaI" };
-
-interface Counts {
-  /** Predicted cuts, once methylation has blocked what it blocks. */
-  cuts: Map<string, number>;
-  sites: Map<string, number>;
-}
-const counts = new WeakMap<SeqData, { key: string; m: Counts }>();
-/** Sites of each enzyme in the list, or in the lab's stock (`extra`), and how many are predicted to cut. */
-function cutCountsOf(d: SeqData, extra: readonly string[], dna: DnaMethylation): Counts {
-  const key = `${extraKey(extra)}|${methylationKey(dna)}`;
-  const known = counts.get(d);
-  if (known?.key === key) return known.m;
-  const m: Counts = { cuts: new Map(), sites: new Map() };
-  for (const [name, c] of siteCounts(scanSites(d.sequence, d.circular, extra), d.sequence, d.circular, dna)) {
-    m.cuts.set(name, c.cuts);
-    m.sites.set(name, c.sites);
-  }
-  counts.set(d, { key, m });
-  return m;
-}
 
 const countText = (n: number, k: number) => (n === k ? (k ? plural(k, "cut") : "doesn't cut") : cutCountText(n, k));
 
@@ -131,7 +115,7 @@ export function openCloningDialog(ctx: DocContext) {
   const vectorSel = ctx.store.selection;
   const nV = vector.sequence.length;
   const vectorFile: MethylationTarget = { title: vector.name || "This vector", data: vector, methylation: ctx.options.methylation, setHost: text => ctx.setHost(text) };
-  const sources: Source[] = ctx.otherSequences().map(s => ({ title: s.data.name || s.title, data: s.data, methylation: s.methylation, setHost: text => s.setHost(text), selection: s.selection }));
+  const sources: Source[] = ctx.otherSequences().map(s => ({ title: s.data.name || s.title, data: s.data, methylation: s.methylation, setHost: text => s.setHost(text), selection: s.selection, separateSelection: s.separateSelection }));
   let enzymeSource: EnzymeSource = ctx.options.enzymeSource;
   let offOptions = () => {};
   const dlg = ctx.openDialog({ onClose: () => offOptions(), title: "Simulate cloning", note: `Assemble inserts into ${vector.name || "this vector"}.`, width: 820 });
@@ -141,7 +125,8 @@ export function openCloningDialog(ctx: DocContext) {
   let keep: number | null = null;
   let openByPcr = false;
   let direction = 0;
-  const newRow = (): InsertRow => ({ source: sources.length ? 0 : -1, region: "all", pcr: true, enzymes: null, fragment: null });
+  const selectedRegion = (source?: Source) => source?.selection || source?.separateSelection ? "sel" : "all";
+  const newRow = (source = -1): InsertRow => ({ source, region: selectedRegion(sources[source]), pcr: true, enzymes: null, fragment: null });
   const enzymesOf = (row: InsertRow) => row.enzymes ?? vectorEnzymes;
   const setEnzyme = (row: InsertRow, i: 0 | 1, v: string) => {
     const next: [string, string] = [...enzymesOf(row)];
@@ -156,16 +141,14 @@ export function openCloningDialog(ctx: DocContext) {
     for (const r of rows) if (!r.enzymes) r.fragment = null;
     update();
   };
-  const rows: InsertRow[] = [newRow()];
-  // In the first row, start from the source's selection if it has one.
-  if (sources[0]?.selection) rows[0].region = "sel";
+  const rows: InsertRow[] = [newRow(sources.length ? 0 : -1)];
 
   const update = () => rerender(dlg, render);
   offOptions = ctx.onOptions(update);
 
   const enzymeSelect = (d: SeqData, dna: DnaMethylation, value: string, label: string, onChange: (v: string) => void, names?: string[]) => {
     const members = names ?? sourceEnzymes({ ...ctx.options, enzymeSource });
-    const { cuts, sites } = cutCountsOf(d, [...members, value].filter(Boolean), dna);
+    const { cuts, sites } = reactionCounts(d, [...members, value].filter(Boolean), dna);
     // Keep enzymes whose sites methylation blocks in the menu so they can be chosen and explained.
     const list = names ? [...names] : reactionEnzymes(sites, members, value ? [value] : []);
     if (value && !list.includes(value)) list.unshift(value);
@@ -200,7 +183,7 @@ export function openCloningDialog(ctx: DocContext) {
         const loaded = fromParsed(parsed.sequences[0]);
         const data = loaded.data;
         const host = parseComments(Array.isArray(loaded.extra.comments) ? loaded.extra.comments : undefined).fields.find(([k]) => k === HOST_FIELD)?.[1] ?? "";
-        sources.push({ title: data.name || p.name, data: { ...data, name: data.name || p.name }, methylation: hostMethylation(host), selection: null });
+        sources.push({ title: data.name || p.name, data: { ...data, name: data.name || p.name }, methylation: documentMethylation(host, data.methylation), selection: null });
         row.source = sources.length - 1;
         row.region = "all";
         row.fragment = null;
@@ -215,14 +198,14 @@ export function openCloningDialog(ctx: DocContext) {
     const el = choose(
       label,
       row.source < 0 ? "" : String(row.source),
-      [...(row.source < 0 ? [["", "Choose…"] as [string, string]] : []), ...sources.map((s, i): [string, string] => [String(i), `${s.title} · ${fmt(s.data.sequence.length)} bp`]), ["pick", "Choose a file…"]],
+      [["", "Choose…"], ...sources.map((s, i): [string, string] => [String(i), `${s.title} · ${fmt(topStrandLength(s.data.sequence, s.data.ends))} bp`]), ["pick", "Choose a file…"]],
       v => {
         if (v === "pick") {
           void addFiles(row);
           return;
         }
-        row.source = Number(v);
-        row.region = sources[row.source].selection ? "sel" : "all";
+        row.source = v === "" ? -1 : Number(v);
+        row.region = selectedRegion(sources[row.source]);
         row.fragment = null;
         update();
       }
@@ -234,7 +217,7 @@ export function openCloningDialog(ctx: DocContext) {
     const s = sources[row.source];
     if (!s) return null;
     const n = s.data.sequence.length;
-    if (row.region === "sel" && s.selection) return s.selection;
+    if (row.region === "sel") return s.selection;
     const f = row.region.startsWith("f:") ? s.data.features.find(x => `f:${x.id}` === row.region) : undefined;
     return f ? { start: f.start, end: f.end } : { start: 0, end: n - 1 };
   };
@@ -242,8 +225,9 @@ export function openCloningDialog(ctx: DocContext) {
   const regionSelect = (row: InsertRow) => {
     const s = sources[row.source];
     const n = s.data.sequence.length;
-    const options: [string, string][] = [["all", `Whole sequence · ${fmt(n)} bp`]];
+    const options: [string, string][] = [["all", `Whole sequence · ${fmt(topStrandLength(s.data.sequence, s.data.ends))} bp`]];
     if (s.selection) options.push(["sel", `Selection · ${fmt(s.selection.start + 1)}–${fmt(s.selection.end + 1)} · ${fmt(rangeLength(s.selection, n))} bp`]);
+    else if (s.separateSelection) options.push(["sel", "Separate selected regions"]);
     for (const f of [...s.data.features].sort((a, b) => a.start - b.start)) options.push([`f:${f.id}`, `${f.name} · ${fmt(rangeLength(f, n))} bp`]);
     return choose("Part of the insert", row.region, options, v => {
       row.region = v;
@@ -252,10 +236,7 @@ export function openCloningDialog(ctx: DocContext) {
   };
 
   /** The opened vector for restriction cloning and enzyme-opened assemblies. */
-  const vectorPieces = () => {
-    const enzymes = vectorEnzymes.filter(Boolean);
-    return enzymes.length ? digest(vector, enzymes, vectorFile.methylation) : [];
-  };
+  const vectorPieces = () => cloningDigest(vector, vectorEnzymes.filter(Boolean), vectorFile.methylation);
   const backboneOf = (pieces: Fragment[]) => (keep !== null && pieces[keep] ? pieces[keep] : largest(pieces));
 
   // ---------- sections ----------
@@ -263,7 +244,7 @@ export function openCloningDialog(ctx: DocContext) {
   function vectorSection(): Node {
     const parts: Node[] = [];
     const enzymeRow = () => {
-      const pieces = vectorPieces();
+      const { fragments: pieces } = vectorPieces();
       const row: Node[] = [
         field("Enzyme", enzymeSelect(vector, vectorFile.methylation, vectorEnzymes[0], "First vector enzyme", v => setVectorEnzyme(0, v))),
         field("Second enzyme", enzymeSelect(vector, vectorFile.methylation, vectorEnzymes[1], "Second vector enzyme", v => setVectorEnzyme(1, v)))
@@ -323,7 +304,7 @@ export function openCloningDialog(ctx: DocContext) {
       );
       if (openByPcr) {
         const r = vectorSel.range;
-        parts.push(
+        if (!vectorSel.ranges) parts.push(
           h(
             "p",
             { class: "sv-small sv-dim" },
@@ -340,7 +321,7 @@ export function openCloningDialog(ctx: DocContext) {
         });
       }
     }
-    return h("section", { class: "sv-clone-section" }, h("h3", { class: "sv-clone-head" }, "Vector", h("span", { class: "sv-pane-note" }, `${vector.name} · ${fmt(nV)} bp · ${vector.circular ? "circular" : "linear"}`)), ...parts);
+    return h("section", { class: "sv-clone-section" }, h("h3", { class: "sv-clone-head" }, "Vector", h("span", { class: "sv-pane-note" }, `${vector.name} · ${fmt(topStrandLength(vector.sequence, vector.ends))} bp · ${vector.circular ? "circular" : "linear"}`)), ...parts);
   }
 
   function insertsSection(): Node {
@@ -352,15 +333,16 @@ export function openCloningDialog(ctx: DocContext) {
       if (s && method === "restriction") {
         fields.push(field("Enzyme", enzymeSelect(s.data, s.methylation, enzymesOf(row)[0], "First insert enzyme", v => setEnzyme(row, 0, v))));
         fields.push(field("Second enzyme", enzymeSelect(s.data, s.methylation, enzymesOf(row)[1], "Second insert enzyme", v => setEnzyme(row, 1, v))));
-        const pieces = insertPieces(row);
-        if (pieces.length > 1) {
-          const chosen = insertFragment(row, pieces);
+        const { fragments: pieces } = insertPieces(row);
+        const chosen = insertFragment(row, pieces);
+        if (pieces.length > 1 || (pieces.length === 1 && !chosen)) {
           const options = pieces.map((f, k): [string, string] => [String(k), fragmentText(f, s.data.sequence.length)]);
+          if (!chosen) options.unshift(["", "Choose…"]);
           fields.push(
             field(
               "Fragment",
-              choose("Insert fragment", String(chosen ? pieces.indexOf(chosen) : 0), options, v => {
-                row.fragment = Number(v);
+              choose("Insert fragment", chosen ? String(pieces.indexOf(chosen)) : "", options, v => {
+                row.fragment = v === "" ? null : Number(v);
                 update();
               })
             )
@@ -401,17 +383,19 @@ export function openCloningDialog(ctx: DocContext) {
     return h("section", { class: "sv-clone-section" }, h("h3", { class: "sv-clone-head" }, method === "goldengate" ? "Parts" : many ? "Inserts" : "Insert", method === "goldengate" ? h("span", { class: "sv-pane-note" }, "Their overhangs decide the order") : ""), empty, ...list, add);
   }
 
-  const insertPieces = (row: InsertRow): Fragment[] => {
+  const insertPieces = (row: InsertRow): FragmentDigest => {
     const s = sources[row.source];
     const enzymes = enzymesOf(row).filter(Boolean);
-    return s && enzymes.length ? digest(s.data, enzymes, s.methylation) : [];
+    return s ? cloningDigest(s.data, enzymes, s.methylation) : { fragments: [], cut: false };
   };
   const insertFragment = (row: InsertRow, pieces: Fragment[]): Fragment | null => {
     if (row.fragment !== null && pieces[row.fragment]) return pieces[row.fragment];
+    if (!pieces.length) return null;
     const s = sources[row.source];
+    if (s?.separateSelection) return null;
     if (s?.selection) return fragmentWith(pieces, s.selection, s.data.sequence.length);
     // Otherwise the smallest piece that fits the vector (an insert cut out of its plasmid).
-    const bb = backboneOf(vectorPieces());
+    const bb = backboneOf(vectorPieces().fragments);
     const fits = bb ? pieces.filter(f => ligateInsert(bb, f).length) : [];
     const pool = fits.length ? fits : pieces;
     return pool.reduce<Fragment | null>((a, f) => (!a || fragmentLength(f) < fragmentLength(a) ? f : a), null);
@@ -433,14 +417,15 @@ export function openCloningDialog(ctx: DocContext) {
 
   function simulate(): Outcome {
     const out: Outcome = { product: null, layout: null, facts: [], problems: [], notes: [], primers: [] };
-    const chosen = (method === "restriction" ? rows.slice(0, 1) : rows).filter(r => sources[r.source]);
-    if (method === "restriction") return restriction(out, chosen[0]);
+    if (method === "restriction") return restriction(out, sources[rows[0].source] ? rows[0] : undefined);
+    if (rows.some(row => !sources[row.source])) {
+      return { ...out, waiting: method === "goldengate" ? "Choose a sequence for each part." : "Choose a sequence for each insert." };
+    }
     if (method === "goldengate") {
-      if (!chosen.length) return { ...out, waiting: "Choose the parts to assemble." };
       const r = goldenGate(
         [
           { name: vector.name, data: vector, methylation: vectorFile.methylation },
-          ...chosen.map(x => ({ name: sources[x.source].title, data: sources[x.source].data, methylation: sources[x.source].methylation }))
+          ...rows.map(x => ({ name: sources[x.source].title, data: sources[x.source].data, methylation: sources[x.source].methylation }))
         ],
         memory.goldenGate
       );
@@ -453,29 +438,33 @@ export function openCloningDialog(ctx: DocContext) {
       return out;
     }
     // Gibson and In-Fusion
-    if (!chosen.length) return { ...out, waiting: "Choose the inserts to assemble." };
     let first: AssemblyInput;
     let opened: string;
     if (openByPcr) {
-      const r = vectorSel.range;
-      const range = r ? { start: (r.end + 1) % nV, end: (r.start - 1 + nV) % nV } : { start: vectorSel.caret % nV, end: (vectorSel.caret - 1 + nV) % nV };
       if (!vector.circular) return { ...out, waiting: "Amplifying the vector by PCR needs a circular vector." };
+      if (vectorSel.ranges) return { ...out, problems: ["Select one continuous region of the vector to replace."] };
+      const range = vectorPcrRange(nV, vectorSel.range, vectorSel.caret);
+      if (!range) return { ...out, problems: ["The selection leaves no vector bases to amplify."] };
       first = { name: vector.name, fragment: wholeFragment(vector, range), pcr: { template: vector, range } };
       opened = "amplified by PCR";
     } else {
-      const pieces = vectorPieces();
-      const bb = backboneOf(pieces);
       if (!vectorEnzymes.some(Boolean)) return { ...out, waiting: "Choose the enzymes that open the vector, or amplify it by PCR." };
+      const digest = vectorPieces();
+      if (digest.problem) return { ...out, problems: [digest.problem] };
+      const bb = backboneOf(digest.fragments);
       if (!bb) return { ...out, waiting: `${vectorEnzymes.filter(Boolean).join(" and ")} ${vectorEnzymes.filter(Boolean).length > 1 ? "don't" : "doesn't"} cut ${vector.name}.` };
       first = { name: vector.name, fragment: bb };
       opened = `opened with ${vectorEnzymes.filter(Boolean).join(" and ")}`;
     }
     const inputs: AssemblyInput[] = [first];
-    for (const row of chosen) {
+    for (const row of rows) {
       const s = sources[row.source];
-      const range = regionOf(row)!;
+      const range = regionOf(row);
+      if (!range) return { ...out, problems: [`Choose one continuous region of ${s.title}.`] };
       const regionName = row.region.startsWith("f:") ? (s.data.features.find(x => `f:${x.id}` === row.region)?.name ?? s.title) : s.title;
-      inputs.push({ name: regionName, fragment: wholeFragment(s.data, range), pcr: row.pcr ? { template: s.data, range } : undefined });
+      const fragment = row.pcr ? wholeFragment(s.data, range) : existingFragment(s.data, range);
+      if (!fragment) return { ...out, problems: [`${regionName} needs to be a whole linear fragment. Choose PCR to amplify the selected region.`] };
+      inputs.push({ name: regionName, fragment, pcr: row.pcr ? { template: s.data, range } : undefined });
     }
     const plan = planAssembly(inputs, method === "gibson" ? GIBSON : IN_FUSION, true);
     out.problems = plan.problems;
@@ -506,15 +495,18 @@ export function openCloningDialog(ctx: DocContext) {
 
   function restriction(out: Outcome, row: InsertRow | undefined): Outcome {
     if (!vectorEnzymes.some(Boolean)) return { ...out, waiting: "Choose the enzymes that open the vector." };
-    const pieces = vectorPieces();
-    const bb = backboneOf(pieces);
+    const vectorDigest = vectorPieces();
+    if (vectorDigest.problem) return { ...out, problems: [vectorDigest.problem] };
+    const bb = backboneOf(vectorDigest.fragments);
     if (!bb) return { ...out, waiting: `${vectorEnzymes.filter(Boolean).join(" and ")} ${vectorEnzymes.filter(Boolean).length > 1 ? "don't" : "doesn't"} cut ${vector.name}.` };
     if (!row) return { ...out, waiting: "Choose the insert." };
     const s = sources[row.source];
     const enzymes = enzymesOf(row).filter(Boolean);
     if (!enzymes.length) return { ...out, waiting: "Choose the enzymes that cut the insert." };
-    const ip = insertPieces(row);
-    const insert = insertFragment(row, ip);
+    const insertDigest = insertPieces(row);
+    if (insertDigest.problem) return { ...out, problems: [insertDigest.problem] };
+    const insert = insertFragment(row, insertDigest.fragments);
+    if (!insert && insertDigest.fragments.length) return { ...out, waiting: "Choose which digest fragment to use as the insert." };
     if (!insert) return { ...out, waiting: `${enzymes.join(" and ")} ${enzymes.length > 1 ? "don't" : "doesn't"} cut ${s.title}.` };
     const named = { ...insert, source: { ...insert.source, name: s.title } };
     const results = ligateInsert({ ...bb, source: { ...bb.source, name: vector.name } }, named);

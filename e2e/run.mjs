@@ -1363,6 +1363,11 @@ async function main() {
     const gibsonReady = await s.waitFor("/mEGFP-R/.test(document.querySelector('.sv-dialog .sv-design-pair')?.textContent)", 5000);
     const primerTexts = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-design-pair .sv-design-bases')).map(e => e.textContent)");
     check("Gibson designs insert primers with 20-base overlap tails", gibsonReady && primerTexts.length === 2 && primerTexts.every(t => /^[acgt]{20}[ACGT]{15,}$/.test(t)), primerTexts.join(", "));
+    const productEnabled = "Array.from(document.querySelectorAll('.sv-dialog-foot button')).some(b => b.textContent === 'Open product' && !b.disabled)";
+    await s.click("//button[normalize-space()='Add insert']", "xpath");
+    check("New insert rows require a source before opening a product", await s.waitFor("document.querySelector('[aria-label=\"Insert 2\"]')?.value === '' && document.querySelector('.sv-pcr-result')?.textContent.includes('Choose a sequence for each insert.') && !(" + productEnabled + ")", 5000));
+    await s.click("[aria-label='Remove insert 2']");
+    await s.waitFor(productEnabled, 5000);
     const clone = await s.exec("const t = document.querySelector('.sv-dialog .sv-clone-result-head')?.textContent || ''; return { text: t, size: Number(t.match(/([\\d,]+) bp/)?.[1].replace(/,/g, '')) };");
     await s.shot("08-cloning");
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[contains(., 'Open product')]", "xpath");
@@ -1371,7 +1376,17 @@ async function main() {
     check("The product has the insert, the vector's features and the primers", made.len === clone.size && made.circular && made.features.includes("mEGFP") && made.features.includes("AmpR") && made.primers.includes("mEGFP-F"), JSON.stringify(made).slice(0, 240));
     await s.exec("window.__strandivo.closeTab()");
     await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
-    await s.exec("window.__strandivo.showTab(1); window.__strandivo.closeTab();");
+    await s.waitFor("window.__strandivo.tabs().length === 2", 5000);
+    const vectorSelection = await s.exec(`window.__strandivo.showTab(0); ${doc} return s.selection;`);
+    await s.exec(`window.__strandivo.showTab(0); ${doc} s.select({ range: { start: 0, end: s.length - 1 } }, 'e2e'); window.__strandivo.command('simulate-cloning');`);
+    await s.click("//div[@aria-label='How the vector is opened']//button[normalize-space()='Amplify by PCR']", "xpath");
+    check("Selecting the whole vector for replacement disables the cloning product", await s.waitFor("document.querySelector('.sv-dialog')?.textContent.includes('leaves no vector bases') && Array.from(document.querySelectorAll('.sv-dialog-foot button')).some(b => b.textContent === 'Open product' && b.disabled)", 5000));
+    await s.press(ESCAPE);
+    await s.exec(`${doc} s.select({ ranges: [{ start: 0, end: 9 }, { start: 30, end: 39 }] }, 'e2e'); window.__strandivo.command('simulate-cloning');`);
+    await s.click("//div[@aria-label='How the vector is opened']//button[normalize-space()='Amplify by PCR']", "xpath");
+    check("Cloning requires one continuous vector replacement region", await s.waitFor("document.querySelector('.sv-pcr-result')?.textContent.includes('Select one continuous region of the vector') && !(" + productEnabled + ")", 5000));
+    await s.press(ESCAPE);
+    await s.exec(`${doc} s.select(arguments[0], 'e2e'); window.__strandivo.showTab(1); window.__strandivo.closeTab();`, vectorSelection);
     check("Closing the product asks to save it", await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000));
 
     // --- Dam methylation: two XbaI sites, one running on into a GATC ---

@@ -513,6 +513,7 @@ test("overlap assembly: an overlap that can't be measured is reported whatever t
   for (const method of [GIBSON, IN_FUSION]) {
     const p = planAssembly(linear, method, false);
     assert.equal(p.joins[0].tm, null);
+    assert.equal(p.product, null);
     assert.match(p.problems.join(" "), /no telling whether it will anneal/, `${method.overlap} bp method missed an unmeasurable overlap`);
   }
   // Circular too, where the last piece joins the first.
@@ -525,6 +526,7 @@ test("overlap assembly: an overlap that can't be measured is reported whatever t
     true
   );
   assert.equal(ring.joins.length, 2);
+  assert.equal(ring.product, null);
   assert.match(ring.problems.join(" "), /no telling whether it will anneal/);
 });
 
@@ -629,6 +631,53 @@ test("Golden Gate: overhangs set the order and orientation of the parts", () => 
   const short = goldenGate([{ name: "vector", data: vector }, { name: "partA", data: partA }], "BsaI");
   assert.equal(short.product, null);
   assert.match(short.problems.join(" "), /Nothing joins the AGGT end of partA/);
+});
+
+test("overlap assembly cannot offer a product from an undersized PCR piece or coincident joins", () => {
+  const vector = wholeFragment(doc("vector", filler(250, 31), false));
+  const template = doc("donor", filler(140, 52), true);
+  const range = { start: 35, end: 46 };
+  const short = { name: template.name, fragment: wholeFragment(template, range), pcr: { template, range } };
+  const repeated = ["A", "B"].map(name => ({ name, fragment: wholeFragment(doc(name, "AC".repeat(40), false)) }));
+  for (const method of [GIBSON, IN_FUSION]) {
+    const proposed = planAssembly([{ name: "vector", fragment: vector }, short], method);
+    assert.equal(proposed.product, null);
+    assert.match(proposed.problems.join(" "), /No primers could be designed for donor/);
+    assert.equal(planAssembly(repeated, method).product, null);
+  }
+});
+
+test("vector PCR distinguishes an insertion point from replacing the whole circle", () => {
+  assert.deepEqual(vectorPcrRange(240, null, 0), { start: 0, end: 239 });
+  assert.deepEqual(vectorPcrRange(240, { start: 230, end: 9 }, 0), { start: 10, end: 229 });
+  assert.equal(vectorPcrRange(240, { start: 0, end: 239 }, 0), null);
+  assert.equal(vectorPcrRange(240, { start: 20, end: 19 }, 0), null);
+  assert.equal(vectorPcrRange(0, null, 0), null);
+});
+
+test("an as-is insert must already be a whole linear fragment", () => {
+  const circle = doc("donor", filler(140, 52), true);
+  const whole = { start: 0, end: 139 };
+  assert.equal(existingFragment(circle, whole), null);
+  const linear = { ...circle, circular: false };
+  assert.equal(existingFragment(linear, { start: 20, end: 119 }), null);
+  assert.equal(existingFragment(linear, whole)?.data.sequence, circle.sequence);
+});
+
+test("features and primers on both sides of shared bases keep their complete coordinates", () => {
+  const shared = "TTCGCCGAAGTGACATGATAC";
+  const closing = "GTCGTAGCGGTCGGAATCTG";
+  const left = doc("A", closing + filler(60, 31) + shared, false, [feature("at end", 68, 99)]);
+  const right = doc("B", shared + filler(60, 32) + closing, false, [feature("at start", 0, 29), feature("wraps", 70, 99, -1)]);
+  right.primers.push({ id: "p", name: "across closing join", bases: reverseComplement(right.sequence.slice(70, 100)), start: 70, end: 99, strand: -1, notes: {}, raw: {} });
+  const { data } = joinFragments([wholeFragment(left), wholeFragment(right)], [shared.length, closing.length], true)!;
+  assert.equal(data.circular, true);
+  assert.equal(data.sequence, left.sequence + right.sequence.slice(shared.length, -closing.length));
+  for (const [i, original] of [left.features[0], ...right.features].entries()) {
+    assert.equal(featureBases(data.sequence, data.features[i]), featureBases(i === 0 ? left.sequence : right.sequence, original));
+  }
+  assert.equal(reverseComplement(featureBases(data.sequence, data.primers[0])), right.primers[0].bases);
+  assert.ok(data.primers[0].start > data.primers[0].end);
 });
 
 test("opening a circle inside a CDS renumbers the regions of the piece it keeps", () => {

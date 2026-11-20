@@ -120,6 +120,19 @@ export function wholeFragment(d: SeqData, range: Range | null = null): Fragment 
   return { data: extract(d, r.start, length), left: BLUNT, right: BLUNT, source: { name: d.name, start: r.start, length, flipped: false } };
 }
 
+/** Assemble an existing molecule only when the chosen piece already has physical ends. */
+export function existingFragment(d: SeqData, range: Range): Fragment | null {
+  return !d.circular && range.start === 0 && range.end === d.sequence.length - 1 && d.sequence.length ? wholeFragment(d, range) : null;
+}
+
+/** The vector's remaining span after replacing a selection, or the whole circle from the cursor. */
+export function vectorPcrRange(length: number, selection: Range | null, caret: number): Range | null {
+  if (!length || (selection && rangeLength(selection, length) === length)) return null;
+  return selection
+    ? { start: mod(selection.end + 1, length), end: mod(selection.start - 1, length) }
+    : { start: mod(caret, length), end: mod(caret - 1, length) };
+}
+
 /**
  * The fragments the named enzymes cut a sequence into, in order along it. A circular
  * sequence cut once gives one fragment (it is opened up); one that isn't cut gives none.
@@ -178,52 +191,48 @@ export interface Layout {
   joins: { at: number; length: number }[];
 }
 
-type Positioned = { start: number; end: number; locations?: Range[] };
-const shifted = <T extends Positioned>(x: T, by: number): T => {
-  const out = { ...x, start: x.start + by, end: x.end + by };
-  if (x.locations) out.locations = x.locations.map(l => ({ start: l.start + by, end: l.end + by }));
-  return out;
-};
-
-/** Every annotation with a new id, so pieces from the same file don't collide. */
-function freshIds(d: SeqData): SeqData {
-  return {
-    ...d,
-    features: d.features.map(f => ({ ...f, id: newId("f") })),
-    primers: d.primers.map(p => ({ ...p, id: newId("p") })),
-    sources: []
-  };
-}
-
 /**
  * Joins fragments in order, each overlapping the next by `overlaps[i]` bases (an overhang
  * or an assembly overlap, written once in the product); when circular, the last joins the
  * first by `overlaps[last]`.
  */
-export function joinFragments(parts: Fragment[], overlaps: number[], circular: boolean): { data: SeqData; layout: Layout } {
+export function joinFragments(parts: Fragment[], overlaps: number[], circular: boolean): { data: SeqData; layout: Layout } | null {
+  const m = parts.length;
+  if (!m || overlaps.length !== (circular ? m : m - 1)) return null;
+  const incoming = (i: number) => i === 0 ? (circular ? overlaps[m - 1] : 0) : overlaps[i - 1];
+  for (let i = 0; i < m; i++) {
+    const seq = parts[i].data.sequence;
+    const k = overlaps[i] ?? 0;
+    if (!seq.length || !Number.isInteger(k) || k < 0 || incoming(i) + k > seq.length) return null;
+    if (k && seq.slice(-k).toUpperCase() !== parts[(i + 1) % m].data.sequence.slice(0, k).toUpperCase()) return null;
+  }
   const layout: Layout = { pieces: [], joins: [] };
-  let data: SeqData = { ...parts[0].data, features: [], primers: [], sources: [], sequence: "" };
+  let sequence = "";
+  const n = parts.reduce((sum, f) => sum + fragmentLength(f), 0) - overlaps.reduce((sum, k) => sum + k, 0);
+  if (!n) return null;
+  const data: SeqData = { ...parts[0].data, circular, features: [], primers: [], sources: [], sequence: "", ends: undefined, methylation: undefined };
   parts.forEach((f, i) => {
     const k = i === 0 ? 0 : overlaps[i - 1];
-    const piece = k ? deleteRange(f.data, { start: 0, end: k - 1 }) : f.data;
-    const at = data.sequence.length - k;
+    const offset = sequence.length - k;
+    const at = circular ? mod(offset, n) : offset;
     if (i > 0) layout.joins.push({ at, length: k });
     layout.pieces.push({ name: f.source.name, start: at, length: fragmentLength(f), flipped: f.source.flipped });
-    const by = data.sequence.length;
-    data = {
-      ...data,
-      sequence: data.sequence + piece.sequence,
-      features: [...data.features, ...piece.features.map(x => shifted(x, by))],
-      primers: [...data.primers, ...piece.primers.map(x => shifted(x, by))]
+    sequence += f.data.sequence.slice(k);
+    const position = (p: number) => circular ? mod(offset + p, n) : offset + p;
+    const range = (r: Range) => ({ start: position(r.start), end: position(r.end) });
+    const feature = (x: SeqData["features"][number]) => {
+      const locations = x.locations?.map(range);
+      return { ...x, ...range(x), locations, id: newId("f") };
     };
+    data.features.push(...f.data.features.map(feature));
+    data.sources.push(...f.data.sources.map(feature));
+    data.primers.push(...f.data.primers.map(p => ({ ...p, ...range(p), id: newId("p") })));
   });
   if (circular) {
-    const k = overlaps[parts.length - 1] ?? 0;
-    const n = data.sequence.length;
-    if (k) data = deleteRange(data, { start: n - k, end: n - 1 });
-    layout.joins.push({ at: 0, length: k });
+    layout.joins.push({ at: 0, length: overlaps[m - 1] });
   }
-  return { data: freshIds({ ...data, circular }), layout };
+  data.sequence = sequence.slice(0, n);
+  return { data, layout };
 }
 
 const overhangLength = (e: FragmentEnd) => (e.kind === "blunt" ? 0 : e.bases.length);
@@ -403,7 +412,7 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   const reused: ReusedOverlap[] = [];
   const m = inputs.length;
   const prepared = inputs.map(i => {
-    const f = assemblyBases(i.fragment);
+    const f = i.pcr ? i.fragment : assemblyBases(i.fragment);
     return { ...f, source: { ...f.source, name: i.name } };
   });
   const seqs = prepared.map(f => f.data.sequence.toUpperCase());
@@ -463,7 +472,11 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
       return;
     }
     const { template, range } = input.pcr;
-    const pair = designPair(template.sequence, template.circular, range.start, range.end, { ...design, forwardTail: tails[i].forward, reverseTail: tails[i].reverse, trimTails: false });
+    const length = rangeLength(range, template.sequence.length);
+    const pair = designPair(template.sequence, template.circular, range.start, range.end, {
+      ...design, maxLength: Math.min(design.maxLength, length), moveEnds: 0,
+      forwardTail: tails[i].forward, reverseTail: tails[i].reverse, trimTails: false
+    });
     if (!pair) {
       problems.push(`No primers could be designed for ${input.name}.`);
       pieces.push({ name: input.name, fragment: prepared[i], primers: [] });
@@ -471,8 +484,15 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     }
     const f = tails[i].forward.toUpperCase();
     const r = tails[i].reverse.toUpperCase();
-    let data = insertBases(prepared[i].data, 0, f);
-    data = insertBases(data, data.sequence.length, reverseComplement(r));
+    const forward = { ...pair.forward, name: `${input.name}-F` };
+    const reverse = { ...pair.reverse, name: `${input.name}-R` };
+    const product = pcrProduct(template.sequence, template.circular, forward, reverse);
+    if (!product || product.sequence.toUpperCase() !== f + seqs[i] + reverseComplement(r)) {
+      problems.push(`The primers for ${input.name} don't amplify the selected fragment with its overlaps.`);
+      pieces.push({ name: input.name, fragment: prepared[i], primers: [] });
+      return;
+    }
+    const data = productDocument(template, product);
     pieces.push({
       name: input.name,
       fragment: { ...prepared[i], data, left: BLUNT, right: BLUNT },
@@ -485,10 +505,14 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
 
   const joinInfo: AssemblyJoin[] = lengths.map((L, j) => {
     if (L === null) return { bases: "", tm: null, designed: designed[j] };
-    const bases = pieces[(j + 1) % m].fragment.data.sequence.slice(0, L).toUpperCase();
+    const next = (j + 1) % m;
+    const bases = designed[j]
+      ? (tails[next].forward + seqs[next] + reverseComplement(tails[next].reverse)).slice(0, L).toUpperCase()
+      : seqs[next].slice(0, L);
     return { bases, tm: overlapTm(bases, method), designed: designed[j] };
   });
   const tmName = TM_METHODS.find(x => x.id === method.tmMethod)?.short ?? method.tmMethod;
+  let unknownOverlap = false;
   joinInfo.forEach((x, j) => {
     const other = inputs[(j + 1) % m].name;
     if (!x.bases) return;
@@ -498,22 +522,31 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     // melting temperature can't be had, and saying the wrong one is worse than saying
     // neither, so they are told apart here rather than reported as one.
     if (x.tm === null) {
-      if (/[^ACGT]/.test(x.bases)) problems.push(`The overlap between ${inputs[j].name} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
+      if (/[^ACGT]/.test(x.bases)) {
+        unknownOverlap = true;
+        problems.push(`The overlap between ${inputs[j].name} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
+      }
       else problems.push(`The overlap between ${inputs[j].name} and ${other} is ${baseCount(x.bases.length)}, too short to work out a melting temperature for.`);
       return;
     }
     if (method.minTm && x.tm < method.minTm) problems.push(`The overlap between ${inputs[j].name} and ${other} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
   });
 
-  if (lengths.some(L => L === null) || pieces.some((p, i) => inputs[i].pcr && !p.primers.length)) {
+  const failed = () => ({ pieces, joins: joinInfo, product: null, layout: null, problems, notes: [...notes, ...reusedNotes(reused)], reused });
+  if (unknownOverlap || lengths.some(L => L === null) || pieces.some((p, i) => inputs[i].pcr && !p.primers.length)) {
     // No product, so no lengths to quote, but a reused overlap is still worth saying.
-    return { pieces, joins: joinInfo, product: null, layout: null, problems, notes: [...notes, ...reusedNotes(reused)], reused };
+    return failed();
   }
-  const { data, layout } = joinFragments(
+  const built = joinFragments(
     pieces.map(p => p.fragment),
     lengths as number[],
     circular
   );
+  if (!built) {
+    problems.push("The pieces and their overlaps don't form a valid product. Check for empty pieces or overlaps that share the same bases.");
+    return failed();
+  }
+  const { data, layout } = built;
   // Whether a join's overlap reads the same anywhere else in the product it builds. This
   // looks for repeated sequence, which is what makes a second pairing possible; it does not
   // work out which ends are free to react, so it reports competition as possible, not

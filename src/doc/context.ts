@@ -55,6 +55,8 @@ export interface OpenSequence {
   title: string;
   data: SeqData;
   selection: Range | null;
+  /** Selected bases in more than one stretch. */
+  separateSelection?: boolean;
   /** Where its DNA was grown, from its Info tab's Host / strain. */
   methylation: DnaMethylation;
   /** Sets its Info tab's Host / strain (so its methylation), which marks it edited. */

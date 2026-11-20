@@ -200,7 +200,12 @@ export interface PcrPlanSnapshot {
   programUnavailableReason: string | null;
   mix: PcrPlanMix | null;
   mixUnavailableReason: string | null;
+  /** Warnings shown whatever is included. */
   warnings: string[];
+  /** Shown with the cycling program, or among the warnings when it is left out. */
+  programWarning: string | null;
+  /** Shown with the simulated gel, or among the warnings when it is left out. */
+  digestWarning: string | null;
 }
 
 export interface PcrPlanSnapshotInput {
@@ -254,15 +259,42 @@ export function suggestedPlanTitle(templateName: string, forwardName: string, re
   return `${tpl} PCR (${fwd} / ${rev})`;
 }
 
+/** Longest stem, in UTF-8 bytes: room for an extension and the PDF writer's `.….saving`. */
+const STEM_BYTES = 150;
+/** Names Windows keeps for devices, whatever follows the first dot. */
+const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$/i;
+
+/** Cuts text to whole characters (grapheme clusters where the runtime can tell) within `max` UTF-8 bytes. */
+function cutToBytes(text: string, max: number): string {
+  const encoder = new TextEncoder();
+  if (encoder.encode(text).length <= max) return text;
+  const pieces: string[] =
+    typeof Intl !== "undefined" && "Segmenter" in Intl
+      ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text), g => g.segment)
+      : Array.from(text);
+  let out = "";
+  let used = 0;
+  for (const piece of pieces) {
+    const size = encoder.encode(piece).length;
+    if (used + size > max) break;
+    out += piece;
+    used += size;
+  }
+  return out;
+}
+
 function planStem(title: string): string {
-  return (
-    title
-      .trim()
-      .replace(/[\\/:*?"<>|]+/g, "-")
-      .replace(/\s+/g, " ")
-      .slice(0, 120)
-      .trim() || "PCR plan"
-  );
+  let stem = title
+    .normalize("NFC")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    // A leading dot hides a file on macOS and Linux; Windows drops trailing dots and spaces.
+    .replace(/^[.\s]+/, "");
+  stem = cutToBytes(stem, STEM_BYTES).replace(/[.\s]+$/, "");
+  if (!stem) return "PCR plan";
+  return WINDOWS_DEVICE.test(stem.split(".")[0].trim()) ? `PCR plan ${stem}` : stem;
 }
 
 /** Safe `.html` filename derived from the experiment title. */
@@ -397,15 +429,12 @@ export function buildPcrPlanSnapshot(input: PcrPlanSnapshotInput): PcrPlanSnapsh
   );
 
   const warnings: string[] = [...input.warnings];
-  if (staleWarning && !warnings.includes(staleWarning)) warnings.push(staleWarning);
   if (input.tmF === null || input.tmR === null) {
     const msg = "One or both primer Tms could not be calculated, so annealing and cycling predictions are incomplete.";
     if (!warnings.includes(msg)) warnings.push(msg);
   }
-  if (input.digest && input.digest.score < DISTINCT_DIGEST) {
-    const msg = `Selected digest (${digestName(input.digest)}) has small or closely spaced bands that may be hard to resolve.`;
-    if (!warnings.includes(msg)) warnings.push(msg);
-  }
+  const digestWarning =
+    input.digest && input.digest.score < DISTINCT_DIGEST ? `Selected digest (${digestName(input.digest)}) has small or closely spaced bands that may be hard to resolve.` : null;
 
   const runs = gcRuns(input.product.length, i => input.overview.gc[i]).map(r => ({ a: r.a, b: r.b, level: r.level }));
   const cutSites: PcrPlanCutSite[] = input.overview.sites.map(site => ({ enzyme: site.enzyme, cut: site.cut, unique: site.cuts === 1 }));
@@ -464,8 +493,35 @@ export function buildPcrPlanSnapshot(input: PcrPlanSnapshotInput): PcrPlanSnapsh
     programUnavailableReason: program ? null : (input.programUnavailableReason ?? `No cycling program is available for ${input.polymeraseName}.`),
     mix,
     mixUnavailableReason: mix ? null : (input.mixUnavailableReason ?? `No reaction mix recipe is available for ${input.polymeraseName}.`),
-    warnings
+    warnings,
+    programWarning: staleWarning,
+    digestWarning
   };
+}
+
+/**
+ * The sheet's warnings for the sections chosen: a stale program or a hard-to-read digest is
+ * said in its own section, so it is listed here only when that section is left out.
+ */
+export function planWarnings(snapshot: PcrPlanSnapshot, sections: PcrPlanSections): string[] {
+  return [
+    ...snapshot.warnings,
+    ...(snapshot.programWarning && !sections.program ? [snapshot.programWarning] : []),
+    ...(snapshot.digestWarning && !sections.gel ? [snapshot.digestWarning] : [])
+  ];
+}
+
+/** True when a lane draws plasmid that runs as something other than its size (the dashed band). */
+export function planHasSupercoiled(gel: PcrPlanSnapshot["gel"]): boolean {
+  return gel.lanes.some(l => l.runsAs !== undefined);
+}
+
+/** The note under the gel's lane key, or null when no template lane is run. */
+export function gelLaneNote(gel: PcrPlanSnapshot["gel"], drawn: boolean): string | null {
+  if (!gel.hasTemplateLanes) return null;
+  const carry = "Template carryover runs fainter than the product.";
+  if (!planHasSupercoiled(gel)) return carry;
+  return drawn ? `${carry.slice(0, -1)}; the dashed band is supercoiled plasmid.` : `${carry} Supercoiled plasmid runs faster than linear DNA.`;
 }
 
 /** Shared gel layout for both DOM preview/print and offline HTML export. */
@@ -1241,10 +1297,11 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
     )
     .join("");
 
-  const warningsHtml = snapshot.warnings.length
-    ? `<div class="sv-sheet-warnings">
+  const warnings = planWarnings(snapshot, sections);
+  const warningsHtml = warnings.length
+    ? `<div class="sv-sheet-warnings sv-sheet-avoid">
         <p class="sv-sheet-warnings-title">Warnings &amp; notes</p>
-        <ul>${snapshot.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul>
+        <ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join("")}</ul>
       </div>`
     : "";
 
@@ -1284,9 +1341,10 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
           ${PRINT_GC_KEY.map(k => `<span><span class="sv-sheet-gc-swatch" style="background:${PRINT_GC_FILL[k.level]}"></span>${escapeHtml(k.label)}</span>`).join("")}
         </div>`;
 
+  const laneNote = gelLaneNote(snapshot.gel, true);
   const gelDetailsHtml = `<p class="sv-sheet-note"><strong>Digest:</strong> ${snapshot.digest ? `${escapeHtml(snapshot.digest.name)} — ` : ""}${escapeHtml(snapshot.digestNote)}</p>
         <ul class="sv-sheet-lanes" aria-label="Expected gel bands">${laneKeyHtml}</ul>
-        ${snapshot.gel.hasTemplateLanes ? '<p class="sv-sheet-note">Template carryover runs fainter than the product; dashed band indicates supercoiled uncut plasmid.</p>' : ""}`;
+        ${laneNote ? `<p class="sv-sheet-note">${escapeHtml(laneNote)}</p>` : ""}`;
 
   const gelBoxHtml = `<div class="sv-sheet-gel-box">
         ${pcrPlanGelSvg(snapshot.gel)}
@@ -1431,11 +1489,12 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
   );
   out.push(`- **Features:** ${snapshot.product.featuresText}`);
 
-  if (snapshot.warnings.length) {
+  const warnings = planWarnings(snapshot, sections);
+  if (warnings.length) {
     out.push("");
     out.push("## Warnings & notes");
     out.push("");
-    for (const w of snapshot.warnings) out.push(`- ${w}`);
+    for (const w of warnings) out.push(`- ${w}`);
   }
 
   if (sections.primers) {
@@ -1487,9 +1546,10 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     for (const l of snapshot.gel.lanes) {
       out.push(`| ${l.number} | ${mdCell(l.what)} | ${mdCell(l.sizesText)} |`);
     }
-    if (snapshot.gel.hasTemplateLanes) {
+    const laneNote = gelLaneNote(snapshot.gel, false);
+    if (laneNote) {
       out.push("");
-      out.push("_Template carryover runs fainter than the product; supercoiled uncut plasmid runs faster than linear DNA._");
+      out.push(`_${laneNote}_`);
     }
   }
 

@@ -23,6 +23,7 @@ import {
   pcrPlanOverviewSvg,
   planFileName,
   planPdfFileName,
+  planWarnings,
   PRINT_GC_FILL,
   PRINT_GC_KEY,
   readPlanPaper,
@@ -293,12 +294,29 @@ test("long primer names, long tailed 5′→3′ sequences, multiline notes, and
   assert.ok(html.includes("Line 1: use &lt;b&gt;fresh&lt;/b&gt; dNTPs &amp; mix gently\nLine 2: run 2% agarose gel\nLine 3:"));
 });
 
-test("stale edited program carries its earlier-setup notice into both warnings and program section", () => {
+test("a stale edited program is noted once: in its section, or among the warnings when the section is left out", () => {
   const { snapshot } = buildScenario({ editAnnealTemp: "60", staleKey: true });
   assert.equal(snapshot.program?.stale, true);
-  assert.ok(snapshot.warnings.some(w => /earlier setup/i.test(w)));
-  const html = pcrPlanHtml(snapshot, { title: "Stale edit", experimentDate: "", notes: "" });
+  assert.match(snapshot.programWarning ?? "", /earlier setup/);
+  assert.equal(snapshot.warnings.some(w => /earlier setup/i.test(w)), false);
+  const meta = { title: "Stale edit", experimentDate: "", notes: "" };
+  const count = (text: string) => (text.match(/earlier setup/g) ?? []).length;
+
+  const html = pcrPlanHtml(snapshot, meta);
+  assert.equal(count(html), 1);
   assert.match(html, /Program edits were kept from an earlier setup/);
+  const md = pcrPlanMarkdown(snapshot, meta);
+  assert.equal(count(md), 1);
+  assert.match(md, /> Note: Program edits were kept from an earlier setup/);
+
+  const off = { ...DEFAULT_PLAN_SECTIONS, program: false };
+  assert.deepEqual(planWarnings(snapshot, off), [snapshot.programWarning]);
+  const htmlOff = pcrPlanHtml(snapshot, meta, off);
+  assert.equal(count(htmlOff), 1);
+  assert.match(htmlOff, /<li>Cycling program edits were kept from an earlier setup/);
+  const mdOff = pcrPlanMarkdown(snapshot, meta, off);
+  assert.equal(count(mdOff), 1);
+  assert.match(mdOff, /## Warnings & notes\n\n- Cycling program edits were kept from an earlier setup/);
 });
 
 test("editing preview metadata re-renders from the same snapshot without altering calculations", () => {
@@ -527,6 +545,50 @@ test("every section can be left out on its own, in the HTML and the Markdown, an
   assert.ok(bare.includes("- **Predicted product:** 1,322 bp"));
 });
 
+test("rendering never changes the snapshot or what it was built from", () => {
+  const { snapshot, input } = buildScenario({ editAnnealTemp: "61", staleKey: true, reactions: 3, digestScore: 0.01 });
+  const before = structuredClone(snapshot);
+  const inputBefore = structuredClone({ draft: input.programDraft, mix: input.mix, digest: input.digest, warnings: input.warnings, primers: [input.forward, input.reverse] });
+  const meta = { title: "Twice", experimentDate: "2026-11-30", notes: "a\nb" };
+  for (const key of [null, ...SECTION_KEYS]) {
+    const sections = key ? { ...DEFAULT_PLAN_SECTIONS, [key]: false } : DEFAULT_PLAN_SECTIONS;
+    pcrPlanHtml(snapshot, meta, sections);
+    pcrPlanMarkdown(snapshot, meta, sections);
+    planWarnings(snapshot, sections);
+  }
+  assert.deepEqual(snapshot, before);
+  buildPcrPlanSnapshot(input);
+  assert.deepEqual({ draft: input.programDraft, mix: input.mix, digest: input.digest, warnings: input.warnings, primers: [input.forward, input.reverse] }, inputBefore);
+});
+
+test("a hard-to-read digest is said once: with the gel, or among the warnings without it", () => {
+  const { snapshot } = buildScenario({ digestScore: 0.01 });
+  assert.match(snapshot.digestWarning ?? "", /^Selected digest \(BtsI\) has small or closely spaced bands/);
+  const meta = { title: "Close bands", experimentDate: "", notes: "" };
+  const said = (text: string) => (text.match(/hard to (?:resolve|tell apart)/g) ?? []).length;
+  assert.equal(said(pcrPlanHtml(snapshot, meta)), 1);
+  assert.equal(said(pcrPlanMarkdown(snapshot, meta)), 1);
+  const noGel = { ...DEFAULT_PLAN_SECTIONS, gel: false };
+  assert.equal(said(pcrPlanHtml(snapshot, meta, noGel)), 1);
+  assert.match(pcrPlanMarkdown(snapshot, meta, noGel), /- Selected digest \(BtsI\) has small/);
+});
+
+test("the supercoiled band is explained only when a lane draws one", () => {
+  const meta = { title: "Lanes", experimentDate: "", notes: "" };
+  const circular = buildScenario().snapshot;
+  assert.ok(circular.gel.lanes.some(l => l.runsAs !== undefined));
+  assert.match(pcrPlanHtml(circular, meta), /Template carryover runs fainter than the product; the dashed band is supercoiled plasmid\./);
+  assert.match(pcrPlanMarkdown(circular, meta), /Supercoiled plasmid runs faster than linear DNA/);
+
+  const linear = buildScenario({ linear: true }).snapshot;
+  assert.ok(linear.gel.hasTemplateLanes, "a linear template still has its own lane");
+  assert.equal(linear.gel.lanes.some(l => l.runsAs !== undefined), false);
+  for (const text of [pcrPlanHtml(linear, meta).split("<body>")[1], pcrPlanMarkdown(linear, meta)]) {
+    assert.match(text, /Template carryover runs fainter than the product\./);
+    assert.equal(/supercoiled|dashed/i.test(text), false);
+  }
+});
+
 test("names and sequences from the file are escaped in the saved HTML, which stays offline", () => {
   const { snapshot } = buildScenario({ fwdName: '<img src=x onerror=alert(1)>"F"', templateName: "pUC19 <script>x</script>" });
   const html = pcrPlanHtml(snapshot, { title: "Escapes", experimentDate: "", notes: "" });
@@ -570,6 +632,25 @@ test("the GC strip's five levels read apart in grey and each has a key", () => {
   );
   const html = pcrPlanHtml(buildScenario().snapshot, { title: "GC", experimentDate: "", notes: "" });
   for (const k of PRINT_GC_KEY) assert.ok(html.includes(`background:${PRINT_GC_FILL[k.level]}"></span>${k.label.replace("<", "&lt;").replace(">", "&gt;")}`), k.label);
+});
+
+test("suggested file names keep whole characters, fit in bytes and avoid names Windows keeps", () => {
+  const bytes = (s: string) => new TextEncoder().encode(s).length;
+  const emoji = planFileName("🧪".repeat(60));
+  assert.ok(bytes(emoji) <= 160 && emoji.endsWith(".html"));
+  assert.equal(emoji.replace(/\.html$/, ""), "🧪".repeat(emoji.replace(/\.html$/, "").length / 2), "no half emoji");
+  const family = "👩‍🔬".repeat(20);
+  const cut = planPdfFileName(family).replace(/\.pdf$/, "");
+  assert.ok(family.startsWith(cut) && cut.length % "👩‍🔬".length === 0, "a joined emoji is never split");
+  const cjk = planFileName("聚合酶链式反应".repeat(20));
+  assert.ok(bytes(cjk) <= 160, String(bytes(cjk)));
+  assert.equal(planFileName("CON"), "PCR plan CON.html");
+  assert.equal(planFileName("nul.backup"), "PCR plan nul.backup.html");
+  assert.equal(planFileName("Console run"), "Console run.html");
+  assert.equal(planFileName("..hidden.."), "hidden.html");
+  assert.equal(planFileName("a\tb\nc\u0007d"), "a b c d.html");
+  assert.equal(planFileName("Run: 1/2 <final>?"), "Run- 1-2 -final-.html");
+  assert.equal(planFileName("é"), "é.html", "NFC");
 });
 
 // ---------- the two stylesheets ----------

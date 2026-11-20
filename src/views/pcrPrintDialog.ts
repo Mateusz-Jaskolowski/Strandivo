@@ -12,6 +12,7 @@ import type { DocContext } from "../doc/context.ts";
 import { fmtVolume } from "../lib/pcrMix.ts";
 import {
   DEFAULT_PLAN_SECTIONS,
+  gelLaneNote,
   mixSummaryText,
   paperForLocale,
   pcrPlanGelLayout,
@@ -20,6 +21,7 @@ import {
   pcrPlanOverviewLayout,
   planFileName,
   planPdfFileName,
+  planWarnings,
   PRINT_GC_FILL,
   PRINT_GC_KEY,
   readPlanPaper,
@@ -236,6 +238,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       ...PRINT_GC_KEY.map(k => h("span", null, h("span", { class: "sv-sheet-gc-swatch", style: { background: PRINT_GC_FILL[k.level] } }), k.label))
     );
 
+  const laneNote = gelLaneNote(snapshot.gel, true);
   const buildGelDetails = (): Node[] => [
     h("p", { class: "sv-sheet-note" }, h("strong", null, "Digest: "), snapshot.digest ? `${snapshot.digest.name} — ${snapshot.digestNote}` : snapshot.digestNote),
     h(
@@ -245,7 +248,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
         h("li", null, h("span", { class: "sv-sheet-lane-no" }, String(l.number)), h("span", null, l.what), h("span", { class: "sv-sheet-mono" }, l.sizesText))
       )
     ),
-    ...(snapshot.gel.hasTemplateLanes ? [h("p", { class: "sv-sheet-note" }, "Template carryover runs fainter than the product; dashed band indicates supercoiled uncut plasmid.")] : [])
+    ...(laneNote ? [h("p", { class: "sv-sheet-note" }, laneNote)] : [])
   ];
 
   const buildFlanksNote = () =>
@@ -256,6 +259,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
   const buildGelBox = () => h("div", { class: "sv-sheet-gel-box" }, buildGelSvgDom(snapshot.gel), h("div", { class: "sv-sheet-gel-caption" }, `M: ${snapshot.gel.ladder.name}`));
 
   const overviewSlot = h("div", { class: "sv-sheet-slot" });
+  const warningsSlot = h("div", { class: "sv-sheet-slot" });
   const protocolSlot = h("div", { class: "sv-sheet-slot" });
 
   const programSection = snapshot.program
@@ -423,14 +427,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       { class: "sv-sheet-facts", "aria-label": "Plan summary" },
       ...facts.map(([k, v]) => h("div", { class: "sv-sheet-fact" }, h("div", { class: "sv-sheet-fact-k" }, k), h("div", { class: "sv-sheet-fact-v" }, v)))
     ),
-    snapshot.warnings.length
-      ? h(
-          "div",
-          { class: "sv-sheet-warnings" },
-          h("p", { class: "sv-sheet-warnings-title" }, "Warnings & notes"),
-          h("ul", null, ...snapshot.warnings.map(w => h("li", null, w)))
-        )
-      : null,
+    warningsSlot,
     primersSection,
     overviewSlot,
     protocolSlot,
@@ -445,6 +442,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
 
   let lastVisualMode = "";
   let lastProtocolMode = "";
+  let lastWarnings = "";
 
   const sync = (meta: PcrPlanMeta, sections: PcrPlanSections) => {
     const title = meta.title.trim() || snapshot.suggestedTitle;
@@ -476,6 +474,23 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
 
     primersSection.hidden = !sections.primers;
     notesSection.hidden = !sections.notes;
+
+    const warnings = planWarnings(snapshot, sections);
+    if (warnings.join("\n") !== lastWarnings) {
+      lastWarnings = warnings.join("\n");
+      warningsSlot.replaceChildren(
+        ...(warnings.length
+          ? [
+              h(
+                "div",
+                { class: "sv-sheet-warnings sv-sheet-avoid" },
+                h("p", { class: "sv-sheet-warnings-title" }, "Warnings & notes"),
+                h("ul", null, ...warnings.map(w => h("li", null, w)))
+              )
+            ]
+          : [])
+      );
+    }
 
     const visualMode = `${sections.productMap ? "M" : ""}${sections.gel ? "G" : ""}`;
     if (visualMode !== lastVisualMode) {

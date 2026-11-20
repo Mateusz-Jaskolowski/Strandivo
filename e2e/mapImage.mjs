@@ -134,6 +134,10 @@ export async function checkMapImage(s, check, save) {
     await openMapImageMenu(s);
     return save(label);
   };
+  const closeMenu = () => s.exec(`
+    const b = Array.from(document.querySelectorAll('.sv-map .sv-pane-head button')).find(b => b.textContent.includes('Export image'));
+    if (b && b.getAttribute('aria-expanded') === 'true') b.click();
+  `);
   // Each block below puts back what it changed; one that throws fails by name and lets the rest run.
   const attempt = async (name, run) => {
     try {
@@ -341,7 +345,90 @@ export async function checkMapImage(s, check, save) {
     const clearLinear = await saveWith("Save as PNG");
     await transparent(false);
     check("With Transparent background ticked, the linear map's PNG has a clear corner and the map drawn on it", !!clearLinear && clearLinear.cornerAlpha === 0 && inked(clearLinear), JSON.stringify(clearLinear));
+
+    // Whether the background is transparent is the app's choice, not a file's: whichever tab
+    // sets it, another tab's menu shows it as it stands when opened, and its SVG follows.
+    // Each tab is left unticked by a person's own click, so a menu that kept showing what it
+    // last had would answer the wrong way.
+    await attempt("Checking Transparent background across two tabs finished without errors", async () => {
+      const start = await s.exec("return { tab: window.__strandivo.activeTab(), count: window.__strandivo.tabs().length };");
+      const second = start.count;
+      const show = async tab => {
+        await s.exec("window.__strandivo.showTab(arguments[0]);", tab);
+        if (!(await s.waitFor(`window.__strandivo.activeTab() === ${tab} && !!document.querySelector('.sv-map .sv-pane-head')`, 10000))) throw new Error(`tab ${tab} didn't show its map`);
+      };
+      // Opens this tab's menu and says what its box shows; a click makes it `want` if it isn't.
+      const choose = async want => {
+        await openMapImageMenu(s);
+        return s.exec(`
+          const box = document.querySelector('.sv-map-image input[type="checkbox"]');
+          const shown = box.checked;
+          if (shown !== arguments[0]) box.click();
+          return { shown, now: box.checked };
+        `, want);
+      };
+      const shownNow = async () => {
+        await openMapImageMenu(s);
+        return s.exec("return document.querySelector('.sv-map-image input[type=\"checkbox\"]').checked;");
+      };
+      const white = svg => standaloneSvg(svg) && /<\/title><rect [^>]*fill="#ffffff"/.test(svg);
+      const word = on => (on ? "ticked" : "unticked");
+      const said = (tab, r) => `${tab} showed ${word(r.shown)}${r.shown === r.now ? "" : `, then ${word(r.now)}`}`;
+      try {
+        await s.exec("window.__strandivo.openNew({ ...window.__strandivo.store.data });");
+        const ready = await s.waitFor(`window.__strandivo.tabs().length === ${second + 1} && window.__strandivo.tabs()[${second}] !== null && window.__strandivo.activeTab() === ${second} && !!window.__strandivo.store`, 20000);
+        if (!ready) throw new Error("the copy of the file didn't open in a second tab");
+        await s.exec("window.__strandivo.setView('map');");
+
+        // One tab ticks it, the other unticks it; back in the first, the menu and the SVG say unticked.
+        await show(start.tab);
+        const a1 = await choose(true);
+        await show(second);
+        const b1 = await choose(false);
+        await show(start.tab);
+        const back1 = await shownNow();
+        const svg1 = await saveWith("Save as SVG");
+        check(
+          "Transparent background unticked in a second tab shows unticked in the first tab's menu, and its SVG has the white background",
+          a1.now === true && b1.shown === true && b1.now === false && back1 === false && white(svg1),
+          `${said("tab 1", a1)}; ${said("tab 2", b1)}; back in tab 1 it shows ${word(back1)} and its SVG ${white(svg1) ? "has" : "lacks"} the white background`
+        );
+
+        // And the other way: ticked in the second, unticked in the first.
+        await show(second);
+        const b2 = await choose(true);
+        await show(start.tab);
+        const a2 = await choose(false);
+        await show(second);
+        const b3 = await choose(true);
+        await show(start.tab);
+        const back2 = await shownNow();
+        const svg2 = await saveWith("Save as SVG");
+        check(
+          "Transparent background ticked in a second tab shows ticked in the first tab's menu, and its SVG has none",
+          b2.now === true && a2.shown === true && a2.now === false && b3.shown === false && b3.now === true && back2 === true && standaloneSvg(svg2) && !white(svg2),
+          `${said("tab 2", b2)}; ${said("tab 1", a2)}; ${said("tab 2", b3)}; back in tab 1 it shows ${word(back2)} and its SVG ${white(svg2) ? "has" : "lacks"} the white background`
+        );
+      } finally {
+        // The copy was never saved: close it without saving, and go back to the first tab's map.
+        await closeMenu();
+        if ((await s.exec("return window.__strandivo.tabs().length;")) > second) {
+          await s.exec(`window.__strandivo.showTab(${second}); window.__strandivo.closeTab();`);
+          await s.waitFor(`!!document.querySelector('.ps-modal') || window.__strandivo.tabs().length === ${second}`, 5000);
+          await s.exec("Array.from(document.querySelectorAll('.ps-modal button')).find(b => /Don.t Save/.test(b.textContent))?.click();");
+          await s.waitFor(`window.__strandivo.tabs().length === ${second}`, 5000);
+        }
+        await s.exec(`window.__strandivo.showTab(${start.tab});`);
+        await s.waitFor(`window.__strandivo.activeTab() === ${start.tab}`, 5000);
+        await s.exec("window.__strandivo.setView('map');");
+        await s.waitFor("!!document.querySelector('.sv-map .sv-pane-head')", 5000);
+        await openMapImageMenu(s);
+        await transparent(saved.transparent);
+        await closeMenu();
+      }
+    });
   } finally {
+    await closeMenu();
     await s.exec("window.__strandivo.store.select({ range: null, caret: 0 }, 'e2e');");
     await transparent(saved.transparent);
     await mode(saved.linear);

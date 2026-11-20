@@ -128,7 +128,7 @@ export function openEnzymeDialog(ctx: DocContext, written: string) {
       rows.push(["Predicted", cutCountText(sites.length, sites.length - notCut.length)]);
       rows.push(["Won't cut", h("span", { class: "sv-mono" }, ...marked)]);
     }
-    rows.push(digest?.uncut ? ["Fragments", "None: the plasmid stays uncut"] : [sizes.length === 1 ? "Fragment" : `${fmt(sizes.length)} fragments`, h("span", { class: "sv-mono" }, listed(sizes, " bp"))]);
+    rows.push(digest?.problem ? ["Fragments", digest.problem] : digest?.uncut ? ["Fragments", "The plasmid stays uncut"] : [sizes.length === 1 ? "Fragment" : `${fmt(sizes.length)} fragments`, h("span", { class: "sv-mono" }, listed(sizes, " bp"))]);
     return section("In this sequence", facts(rows), ...notes.map(n => h("p", { class: "sv-small sv-dim" }, n)));
   };
 

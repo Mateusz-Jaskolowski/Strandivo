@@ -10,13 +10,13 @@ import { fmt } from "../ui/format.ts";
 import { track } from "../usage.ts";
 import { enzymeSourceSelect } from "./enzymeControls.ts";
 import type { DocContext } from "../doc/context.ts";
-import { extraKey, reactionEnzymes, scanSites, siteCounts, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
-import { cutCountText, methylationKey, type DnaMethylation } from "../lib/methylation.ts";
+import { reactionCounts, reactionEnzymes, sourceEnzymes, type EnzymeSource } from "../lib/enzymes.ts";
+import { cutCountText, methylationKey } from "../lib/methylation.ts";
 import { endLabel } from "../lib/cloning.ts";
-import { bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, SUPERCOILED_RUNS_AS, type DigestResult } from "../lib/gel.ts";
+import { bands, digestSequence, fragmentDocument, fragmentSize, fragmentSpan, SUPERCOILED_RUNS_AS, type DigestResult } from "../lib/gel.ts";
 import { currentLadder, gelSvg, ladderSelect, type GelLane } from "./gelDraw.ts";
 import { methylationWarning, type MethylationTarget } from "./methylationWarning.ts";
-import type { SeqData } from "../lib/seqdata.ts";
+import { topStrandLength, type SeqData } from "../lib/seqdata.ts";
 import { plural, rerender } from "./primerDialogs.ts";
 
 interface Lane {
@@ -28,26 +28,6 @@ interface Lane {
 
 /** Kept between openings in this window. */
 const memory = { allEnzymes: false };
-
-interface Counts {
-  /** Predicted cuts, once methylation has blocked what it blocks. */
-  cuts: Map<string, number>;
-  sites: Map<string, number>;
-}
-const counts = new WeakMap<SeqData, { key: string; m: Counts }>();
-/** Sites of each enzyme in the list, or in the lab's stock (`extra`), and how many are predicted to cut. */
-function cutCountsOf(d: SeqData, extra: readonly string[], dna: DnaMethylation): Counts {
-  const key = `${extraKey(extra)}|${methylationKey(dna)}`;
-  const known = counts.get(d);
-  if (known?.key === key) return known.m;
-  const m: Counts = { cuts: new Map(), sites: new Map() };
-  for (const [name, c] of siteCounts(scanSites(d.sequence, d.circular, extra), d.sequence, d.circular, dna)) {
-    m.cuts.set(name, c.cuts);
-    m.sites.set(name, c.sites);
-  }
-  counts.set(d, { key, m });
-  return m;
-}
 
 export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
   const here = ctx.store.data;
@@ -80,7 +60,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
   function enzymeList(): HTMLElement {
     const lane = lanes[current];
     const members = sourceEnzymes({ ...ctx.options, enzymeSource });
-    const { cuts, sites } = cutCountsOf(lane.data, [...members, ...lane.enzymes], lane.file.methylation);
+    const { cuts, sites } = reactionCounts(lane.data, [...members, ...lane.enzymes], lane.file.methylation);
     const q = filter.trim().toLowerCase();
     // A search by name also finds an enzyme methylation stops cutting, to say so.
     const names = reactionEnzymes(cuts, members, lane.enzymes, memory.allEnzymes ? Infinity : 3, q, sites);
@@ -194,7 +174,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
       "select",
       { class: "sv-input", "aria-label": "Add lane" },
       h("option", { value: "" }, "Add lane…"),
-      ...files.map((f, i) => h("option", { value: String(i) }, `${f.title} · ${fmt(f.data.sequence.length)} bp`))
+      ...files.map((f, i) => h("option", { value: String(i) }, `${f.title} · ${fmt(topStrandLength(f.data.sequence, f.data.ends))} bp`))
     ) as HTMLSelectElement;
     add.addEventListener("change", () => {
       const f = files[Number(add.value)];
@@ -240,6 +220,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
     const lane = lanes[current];
     const r = resultOf(lane);
     const n = lane.data.sequence.length;
+    if (r.problem) return h("p", { class: "sv-small sv-digest-empty", role: "status" }, r.problem);
     if (r.uncut)
       return h("p", { class: "sv-dim sv-small sv-digest-empty" }, lane.enzymes.length ? `${lane.enzymes.join(" and ")} ${lane.enzymes.length > 1 ? "don't" : "doesn't"} cut ${lane.title}.` : "Choose enzymes on the left.");
     const rows = r.fragments.map((f, i) => {
@@ -270,7 +251,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
               onclick: (e: Event) => {
                 e.stopPropagation();
                 dlg.close();
-                ctx.openNew({ ...f.data, name: fragmentName(f, lane.title) });
+                ctx.openNew(fragmentDocument(f, lane.title, lane.file.methylation));
               }
             },
             "Open"
@@ -301,7 +282,7 @@ export function openDigestDialog(ctx: DocContext, enzymes: string[] = []) {
       counted = true;
       track("digest_simulated");
     }
-    const summary = r.uncut ? "Uncut" : plural(r.fragments.length, "fragment");
+    const summary = r.problem ? "No prediction" : r.uncut ? "Uncut" : plural(r.fragments.length, "fragment");
     const ladder = ladderSelect("sv-input", update);
     dlg.body.replaceChildren(
       h(

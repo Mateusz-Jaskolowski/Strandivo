@@ -7,10 +7,10 @@
 
 import { h } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
-import { enzymeSites } from "../lib/enzymes.ts";
-import { cutCountText, hostMethylation, methylationNote, siteMethylation, type DnaMethylation } from "../lib/methylation.ts";
+import { completeLinearCuts, digestSites, siteCuts } from "../lib/enzymes.ts";
+import { cutCountText, documentMethylation, methylationNote, methylationSummary, siteMethylation, type DnaMethylation } from "../lib/methylation.ts";
 import { STRAINS } from "../lib/strains.ts";
-import type { SeqData } from "../lib/seqdata.ts";
+import { validFragmentEnds, type SeqData } from "../lib/seqdata.ts";
 
 export interface MethylationTarget {
   title: string;
@@ -26,29 +26,36 @@ export interface MethylationTarget {
  */
 export function methylationWarning(file: MethylationTarget, enzymes: readonly string[], onChange: () => void): HTMLElement | null {
   const seq = file.data.sequence;
+  const circular = file.data.circular;
+  const ends = validFragmentEnds(file.data);
   const lines: string[] = [];
   for (const name of new Set(enzymes.filter(Boolean))) {
-    const found = enzymeSites(seq, file.data.circular, name).map(x => siteMethylation(seq, file.data.circular, x, file.methylation));
-    const stopping = found.filter(m => m?.effects.some(e => e.verdict === "blocked" || e.verdict === "needs"));
+    const found = digestSites(seq, circular, [name]).map(hit => ({
+      cuts: circular ? siteCuts(hit).length : completeLinearCuts(hit, seq.length, ends).length,
+      effect: siteMethylation(seq, circular, hit, file.methylation)
+    }));
+    const stopping = found.filter(({ cuts, effect }) => cuts && effect?.effects.some(e => e.verdict === "blocked" || e.verdict === "needs"));
     if (!stopping.length) continue;
-    const blocked = found.filter(m => m?.blocked).length;
-    const notes = [...new Set(stopping.map(m => methylationNote(m!, name)))];
-    lines.push(`${name}${blocked ? ` (${cutCountText(found.length, found.length - blocked)})` : ""}: ${notes.join(" ")}`);
+    const predicted = found.reduce((n, { cuts, effect }) => n + (effect?.blocked ? 0 : cuts), 0);
+    const blocked = stopping.some(({ effect }) => effect?.blocked);
+    const notes = [...new Set(stopping.map(({ effect }) => methylationNote(effect!, name)))];
+    lines.push(`${name}${blocked ? ` (${cutCountText(found.length, predicted)})` : ""}: ${notes.join(" ")}`);
   }
   if (!lines.length) return null;
-  const chosen = file.methylation.from === "assumed" ? "" : file.methylation.name;
+  const inherited = file.data.methylation;
+  const chosen = file.methylation === inherited || file.methylation.from === "assumed" ? "" : file.methylation.name;
   const known = STRAINS.map(s => s.name);
   const strain = h(
     "select",
     { class: "sv-input", "aria-label": `Strain ${file.title} was grown in` },
-    h("option", { value: "" }, "Not set (Dam⁺ Dcm⁺ assumed)"),
+    h("option", { value: "" }, inherited ? methylationSummary(inherited) : "Not set (Dam⁺ Dcm⁺ assumed)"),
     ...(chosen && !known.includes(chosen) ? [h("option", { value: chosen }, chosen)] : []),
     ...known.map(n => h("option", { value: n }, n))
   ) as HTMLSelectElement;
   strain.value = chosen;
   strain.addEventListener("change", () => {
     const value = strain.value;
-    file.methylation = hostMethylation(value);
+    file.methylation = documentMethylation(value, inherited);
     file.setHost?.(value);
     onChange();
   });

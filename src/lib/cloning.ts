@@ -7,22 +7,13 @@
 // features and primers. Pure functions.
 
 import { DEFAULT_DESIGN, designPair, type DesignOptions } from "./design.ts";
-import { blockedSite, enzymeSite, scanSites } from "./enzymes.ts";
+import { blockedSite, completeLinearCuts, digestSites, enzymeName, siteCuts } from "./enzymes.ts";
 import type { DnaMethylation } from "./methylation.ts";
+import { pcrProduct, productDocument } from "./pcr.ts";
 import { DEFAULT_TM, findBindingSites, meltingTemp, TM_METHODS, type TmMethod } from "./primers.ts";
-import { carryRegions } from "./regions.ts";
-import { basesIn, deleteRange, insertBases, newId, reverseComplement, reverseComplementRange, setOrigin, type Range, type SeqData } from "./seqdata.ts";
+import { BLUNT_END as BLUNT, basesIn, deleteRange, linearize, newId, rangeLength, reverseComplement, reverseComplementRange, reverseEnd, setOrigin, validFragmentEnds, type FragmentEnd, type Range, type SeqData } from "./seqdata.ts";
 
-export type EndKind = "blunt" | "5'" | "3'";
-
-/** One end of a double-stranded fragment. */
-export interface FragmentEnd {
-  kind: EndKind;
-  /** The single-stranded bases as top-strand letters, upper case; "" when blunt. */
-  bases: string;
-  /** The enzyme that made the end, if one did. */
-  enzyme?: string;
-}
+export type { FragmentEnd } from "./seqdata.ts";
 
 export interface Fragment {
   /** Every base on either strand, written as the top strand, with what lies on it. Linear. */
@@ -40,7 +31,6 @@ export interface Cut {
   bottom: number;
 }
 
-const BLUNT: FragmentEnd = { kind: "blunt", bases: "" };
 const mod = (x: number, n: number) => ((x % n) + n) % n;
 const lo = (c: Cut) => Math.min(c.top, c.bottom);
 const hi = (c: Cut) => Math.max(c.top, c.bottom);
@@ -51,30 +41,32 @@ const hi = (c: Cut) => Math.max(c.top, c.bottom);
  * a linear one, cuts whose overhang would reach past an end are left out. Given where the
  * DNA was grown, sites Dam or Dcm methylation blocks are left out too.
  */
-export function cutsFor(sequence: string, circular: boolean, enzymes: string[], methylation?: DnaMethylation): Cut[] {
-  const n = sequence.length;
-  if (!n || !enzymes.length) return [];
-  const names = new Set(enzymes);
-  const out: Cut[] = [];
+export function cutsFor(sequence: string, circular: boolean, enzymes: string[], methylation?: DnaMethylation, ends?: SeqData["ends"]): Cut[] {
+  return uniqueCuts(collectCuts(sequence, circular, enzymes, methylation, ends));
+}
+
+function uniqueCuts(cuts: Cut[]): Cut[] {
   const seen = new Set<string>();
-  // Named enzymes outside the curated list (a lab's stock) are searched for too.
-  for (const h of scanSites(sequence, circular, enzymes)) {
-    if (!names.has(h.enzyme) || blockedSite(sequence, circular, h, methylation)) continue;
-    let top = h.cut;
-    let bottom = h.bottomCut;
-    if (circular) {
-      let d = bottom - top;
-      if (d > n / 2) d -= n;
-      if (d < -n / 2) d += n;
-      top = mod(top, n);
-      bottom = top + d;
-    } else if (Math.min(top, bottom) <= 0 || Math.max(top, bottom) >= n) continue;
+  return cuts.filter(({ top, bottom }) => {
     const key = `${top}:${bottom}`;
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return false;
     seen.add(key);
-    out.push({ enzyme: h.enzyme, top, bottom });
+    return true;
+  }).sort((a, b) => lo(a) - lo(b) || a.enzyme.localeCompare(b.enzyme));
+}
+
+function collectCuts(sequence: string, circular: boolean, enzymes: string[], methylation?: DnaMethylation, ends?: SeqData["ends"]): Cut[] {
+  const n = sequence.length;
+  const out: Cut[] = [];
+  for (const h of digestSites(sequence, circular, enzymes)) {
+    if (blockedSite(sequence, circular, h, methylation)) continue;
+    for (const [top, bottom] of circular ? siteCuts(h) : completeLinearCuts(h, n, ends)) {
+      out.push(circular
+        ? { enzyme: h.enzyme, top: mod(top, n), bottom: mod(top, n) + bottom - top }
+        : { enzyme: h.enzyme, top, bottom });
+    }
   }
-  return out.sort((a, b) => lo(a) - lo(b) || a.enzyme.localeCompare(b.enzyme));
+  return out;
 }
 
 function endAt(c: Cut, sequence: string): FragmentEnd {
@@ -84,19 +76,6 @@ function endAt(c: Cut, sequence: string): FragmentEnd {
   return { kind: c.top < c.bottom ? "5'" : "3'", bases: basesIn(sequence, r).toUpperCase(), enzyme: c.enzyme };
 }
 
-/** Keeps the longer piece of anything that crosses the end of what is now a linear sequence. */
-function unwrap(d: SeqData): SeqData {
-  const n = d.sequence.length;
-  const fix = <T extends { start: number; end: number; locations?: Range[] }>(x: T): T => {
-    if (x.start <= x.end && !x.locations?.some(l => l.start > l.end)) return x;
-    const { locations: _parts, ...rest } = x;
-    return (x.start > x.end && n - x.start >= x.end + 1 ? { ...rest, end: n - 1 } : x.start > x.end ? { ...rest, start: 0 } : rest) as T;
-  };
-  // A CDS cut short at its start counts its residues from a new first base.
-  const features = d.features.map(f => carryRegions(f, fix(f), n, n, r => r));
-  return { ...d, features, primers: d.primers.map(fix), sources: d.sources.map(fix) };
-}
-
 /** `length` bases from `start` as a linear document (circular sources: past the origin, even round it again). */
 function extract(d: SeqData, start: number, length: number): SeqData {
   const n = d.sequence.length;
@@ -104,20 +83,27 @@ function extract(d: SeqData, start: number, length: number): SeqData {
   if (d.circular) {
     x = setOrigin(d, start);
     if (length < n) x = deleteRange(x, { start: length, end: n - 1 });
-    else if (length > n) x = { ...x, sequence: x.sequence + x.sequence.slice(0, length - n) };
+    x = linearize(x);
+    if (length > n) x = { ...x, sequence: x.sequence + x.sequence.slice(0, length - n) };
   } else {
     if (start + length < n) x = deleteRange(x, { start: start + length, end: n - 1 });
     if (start > 0) x = deleteRange(x, { start: 0, end: start - 1 });
   }
-  return unwrap({ ...x, circular: false });
+  return { ...x, ends: undefined };
 }
 
-/** A stretch of a sequence (or all of it) as a fragment with blunt ends, as PCR or synthesis makes it. */
+/** A stretch as a linear fragment, keeping any existing ends included in it. */
 export function wholeFragment(d: SeqData, range: Range | null = null): Fragment {
   const n = d.sequence.length;
   const r = range ?? { start: 0, end: n - 1 };
-  const length = r.start <= r.end ? r.end - r.start + 1 : n - r.start + r.end + 1;
-  return { data: extract(d, r.start, length), left: BLUNT, right: BLUNT, source: { name: d.name, start: r.start, length, flipped: false } };
+  const length = rangeLength(r, n);
+  const ends = validFragmentEnds(d);
+  return {
+    data: extract(d, r.start, length),
+    left: r.start === 0 ? ends?.left ?? BLUNT : BLUNT,
+    right: r.end === n - 1 ? ends?.right ?? BLUNT : BLUNT,
+    source: { name: d.name, start: r.start, length, flipped: false }
+  };
 }
 
 /** Assemble an existing molecule only when the chosen piece already has physical ends. */
@@ -133,17 +119,38 @@ export function vectorPcrRange(length: number, selection: Range | null, caret: n
     : { start: mod(caret, length), end: mod(caret - 1, length) };
 }
 
+export interface FragmentDigest {
+  fragments: Fragment[];
+  cut: boolean;
+  problem?: string;
+}
+
+/** Sorted staggered cuts must leave duplex DNA between their overhangs. */
+export function overlappingCuts(cuts: Cut[], circularLength?: number): boolean {
+  if (!cuts.length) return false;
+  const acrossOrigin = circularLength !== undefined && hi(cuts[cuts.length - 1]) >= lo(cuts[0]) + circularLength;
+  return acrossOrigin || cuts.some((cut, i) => i > 0 && lo(cut) <= hi(cuts[i - 1]));
+}
+
 /**
  * The fragments the named enzymes cut a sequence into, in order along it. A circular
  * sequence cut once gives one fragment (it is opened up); one that isn't cut gives none.
  */
-export function digest(d: SeqData, enzymes: string[], methylation?: DnaMethylation): Fragment[] {
+export function fragmentDigest(d: SeqData, enzymes: string[], methylation = d.methylation): FragmentDigest {
+  const ends = validFragmentEnds(d);
+  const cuts = cutsFor(d.sequence, d.circular, enzymes, methylation, ends);
+  return fragmentsFromCuts(d, cuts, ends);
+}
+
+function fragmentsFromCuts(d: SeqData, cuts: Cut[], ends: SeqData["ends"]): FragmentDigest {
   const seq = d.sequence;
   const n = seq.length;
-  const cuts = cutsFor(seq, d.circular, enzymes, methylation);
+  if (!n || !cuts.length) return { fragments: n && !d.circular ? [wholeFragment(d)] : [], cut: false };
+  if (overlappingCuts(cuts, d.circular ? n : undefined)) {
+    return { fragments: [], cut: true, problem: "The cuts overlap on the two strands, so their fragments can’t be simulated." };
+  }
   const out: Fragment[] = [];
   const add = (from: number, to: number, left: FragmentEnd, right: FragmentEnd) => {
-    if (to - from <= left.bases.length || to - from <= right.bases.length) return; // overhangs overlap: nothing left
     const start = d.circular ? mod(from, n) : from;
     out.push({ data: extract(d, start, to - from), left, right, source: { name: d.name, start, length: to - from, flipped: false } });
   };
@@ -156,21 +163,22 @@ export function digest(d: SeqData, enzymes: string[], methylation?: DnaMethylati
     for (let i = 0; i <= cuts.length; i++) {
       const prev = cuts[i - 1];
       const next = cuts[i];
-      add(prev ? lo(prev) : 0, next ? hi(next) : n, prev ? endAt(prev, seq) : BLUNT, next ? endAt(next, seq) : BLUNT);
+      add(prev ? lo(prev) : 0, next ? hi(next) : n, prev ? endAt(prev, seq) : ends?.left ?? BLUNT, next ? endAt(next, seq) : ends?.right ?? BLUNT);
     }
   }
-  return out;
+  return { fragments: out, cut: true };
 }
+
+export const digest = (d: SeqData, enzymes: string[], methylation?: DnaMethylation): Fragment[] => fragmentDigest(d, enzymes, methylation).fragments;
 
 /** The fragment turned round: its ends swap and read on the other strand. */
 export function flip(f: Fragment): Fragment {
-  const turn = (e: FragmentEnd): FragmentEnd => ({ ...e, bases: reverseComplement(e.bases) });
-  return { data: reverseComplementRange(f.data, null), left: turn(f.right), right: turn(f.left), source: { ...f.source, flipped: !f.source.flipped } };
+  return { data: reverseComplementRange(f.data, null), left: reverseEnd(f.right), right: reverseEnd(f.left), source: { ...f.source, flipped: !f.source.flipped } };
 }
 
 /** Can a fragment ending in `right` be ligated to one starting with `left`? */
 export function compatible(right: FragmentEnd, left: FragmentEnd): boolean {
-  return right.kind === left.kind && right.bases === left.bases;
+  return right.kind === left.kind && right.bases === left.bases && !/[^ACGT]/.test(right.bases);
 }
 
 /** "EcoRI (5′ AATT)", "blunt", "BsaI (5′ AATG)". */
@@ -249,27 +257,14 @@ export interface Ligation {
 /** The backbone (the largest fragment) and the rest, for a vector cut with one or two enzymes. */
 export const largest = (fs: Fragment[]): Fragment | null => fs.reduce<Fragment | null>((a, f) => (!a || fragmentLength(f) > fragmentLength(a) ? f : a), null);
 
-/** How many bases of `region` on the source a fragment carries. */
-export function sharedBases(f: Fragment, region: Range, n: number): number {
-  const parts = (r: Range) => (r.start <= r.end ? [[r.start, r.end]] : [[r.start, n - 1], [0, r.end]]);
-  const s = f.source.start;
-  const e = s + f.source.length - 1;
-  // A fragment from a circular source may run past the origin (even round it again).
-  const spans = [[s, e], [s - n, e - n], [s + n, e + n]];
-  let total = 0;
-  for (const [a, b] of parts(region)) for (const [x, y] of spans) total += Math.max(0, Math.min(b, y) - Math.max(a, x) + 1);
-  return Math.min(total, f.source.length);
-}
-
-/** The fragment that carries the most of a region (the one to use as the insert). */
+/** Choose an insert automatically only if one fragment carries the whole selected region. */
 export function fragmentWith(fs: Fragment[], region: Range, n: number): Fragment | null {
-  let best: Fragment | null = null;
-  let most = 0;
-  for (const f of fs) {
-    const k = sharedBases(f, region, n);
-    if (k > most) [best, most] = [f, k];
-  }
-  return best;
+  if (!n) return null;
+  const selected = rangeLength(region, n);
+  const matching = fs.filter(({ source: { start, length } }) =>
+    mod(region.start - start, n) + selected <= length
+  );
+  return matching.length === 1 ? matching[0] : null;
 }
 
 /** Every way an insert ligates into an opened vector (both orientations when the ends allow it). */
@@ -277,10 +272,25 @@ export function ligateInsert(backbone: Fragment, insert: Fragment): Ligation[] {
   const out: Ligation[] = [];
   for (const o of [insert, flip(insert)]) {
     if (!compatible(backbone.right, o.left) || !compatible(o.right, backbone.left)) continue;
-    const { data, layout } = joinFragments([backbone, o], [overhangLength(o.left), overhangLength(backbone.left)], true);
-    out.push({ product: data, flipped: o.source.flipped, layout });
+    const joined = joinFragments([backbone, o], [overhangLength(o.left), overhangLength(backbone.left)], true);
+    if (joined) out.push({ product: joined.data, flipped: o.source.flipped, layout: joined.layout });
   }
   return out;
+}
+
+/** Each enzyme selected to prepare a cloning input must make a complete cut. */
+export function cloningDigest(data: SeqData, enzymes: string[], methylation?: DnaMethylation): FragmentDigest {
+  if (!enzymes.length) return { fragments: [], cut: false };
+  const named = [...new Set(enzymes.map(name => enzymeName(name) ?? name))];
+  const ends = validFragmentEnds(data);
+  const cuts = collectCuts(data.sequence, data.circular, named, methylation ?? data.methylation, ends);
+  const cutBy = new Set(cuts.map(c => c.enzyme));
+  const missing = named.filter(name => !cutBy.has(name));
+  if (missing.length) {
+    const name = data.name || "this sequence";
+    return { fragments: [], cut: false, problem: `${missing.join(" and ")} ${missing.length === 1 ? "doesn't" : "don't"} cut ${name}.` };
+  }
+  return fragmentsFromCuts(data, uniqueCuts(cuts), ends);
 }
 
 /** Can the opened vector close on itself (same or blunt ends)? */

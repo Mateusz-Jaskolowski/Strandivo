@@ -54,8 +54,8 @@ See Methylation below.
   CNNG(9/13)-like site. These enzymes cut only methylated DNA, and on a plasmid map their
   sites would fall every few bases. The generator lists what it leaves out, and refuses
   a site it can't read rather than guess.
-- **Cuts on both sides** (BcgI's (10/12)CGANNNNNNTGC(12/10)): only the cut after the site
-  is searched for, as before; lists say "Cuts both sides".
+- **Cuts on both sides** (BcgI's (10/12)CGANNNNNNTGC(12/10)): the map labels the recognition
+  site once. Digests use both sets of cut coordinates from REBASE.
 - **A ^ at the cut, with Ns out to a cut past the site**, as it reads at a glance where
   REBASE's numbers have to be worked out: AciI is C^CGC (REBASE's CCGC(-3/-1)), BsaI
   GGTCTCN^NNNN (GGTCTC(1/5)), so the Ns after the ^ of a 5′ overhang are the overhang.

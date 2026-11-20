@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { compatible, cutsFor, digest, findOverlap, flip, fragmentWith, goldenGate, GIBSON, IN_FUSION, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, wholeFragment, type OverlapMethod } from "./cloning.ts";
+import { cloningDigest, compatible, cutsFor, digest, existingFragment, findOverlap, flip, fragmentDigest, fragmentWith, goldenGate, GIBSON, IN_FUSION, joinFragments, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, vectorPcrRange, wholeFragment, type OverlapMethod } from "./cloning.ts";
 import { hostMethylation } from "./methylation.ts";
 import { DEFAULT_TM, meltingTemp, type TmMethod } from "./primers.ts";
 import { regionsOf, withRegions } from "./regions.ts";
@@ -119,6 +119,17 @@ test("one enzyme or blunt ends ligate both ways round", () => {
   assert.equal(ligateInsert(smaVector, wholeFragment(doc("pcr", filler(200, 9), false))).length, 2);
   // Incompatible ends don't join.
   assert.ok(!compatible(backbone.right, flip(digest(doc("p", seq, true), ["PstI"])[0]).left));
+});
+
+test("automatic insert selection requires a unique fragment carrying the whole region in order", () => {
+  const sequence = "A".repeat(50) + "GAATTC" + "C".repeat(80) + "AAGCTT" + "G".repeat(60);
+  const vector = doc("donor", sequence, true);
+  const pieces = digest(vector, ["EcoRI", "HindIII"]);
+  assert.equal(fragmentWith(pieces, { start: 180, end: 30 }, sequence.length), pieces[1]);
+  assert.equal(fragmentWith(pieces, { start: 25, end: 90 }, sequence.length), null);
+  assert.equal(fragmentWith(pieces, { start: 51, end: 54 }, sequence.length), null);
+  const opened = digest(vector, ["EcoRI"]);
+  assert.equal(fragmentWith(opened, { start: 35, end: 80 }, sequence.length), null);
 });
 
 test("In-Fusion: 15 bases of each vector end go on the insert's primers", () => {
@@ -633,6 +644,18 @@ test("Golden Gate: overhangs set the order and orientation of the parts", () => 
   assert.match(short.problems.join(" "), /Nothing joins the AGGT end of partA/);
 });
 
+test("opening a circle inside a CDS preserves its bases and region numbering", () => {
+  const region = (name: string, start: number, end: number) => ({ name, kind: "Transmembrane", start, end, accession: "", sourceStart: start, sourceEnd: end, predicted: false });
+  const f: SeqFeature = { ...feature("cds", 51, 20), notes: withRegions({}, [region("TM1", 1, 3), region("TM2", 8, 10)]) };
+  const sequence = filler(60, 7);
+  const linear = wholeFragment(doc("p", sequence, true, [f])).data;
+  const kept = linear.features[0];
+  assert.equal(linear.circular, false);
+  assert.deepEqual(kept.locations, [{ start: 51, end: 59 }, { start: 0, end: 20 }]);
+  assert.equal(featureBases(linear.sequence, kept), featureBases(sequence, f));
+  assert.deepEqual(regionsOf(kept), regionsOf(f));
+});
+
 test("overlap assembly cannot offer a product from an undersized PCR piece or coincident joins", () => {
   const vector = wholeFragment(doc("vector", filler(250, 31), false));
   const template = doc("donor", filler(140, 52), true);
@@ -680,13 +703,28 @@ test("features and primers on both sides of shared bases keep their complete coo
   assert.ok(data.primers[0].start > data.primers[0].end);
 });
 
-test("opening a circle inside a CDS renumbers the regions of the piece it keeps", () => {
-  const region = (name: string, start: number, end: number) => ({ name, kind: "Transmembrane", start, end, accession: "", sourceStart: start, sourceEnd: end, predicted: false });
-  // 30 bases from 51 round to 20: 9 before the origin, 21 after it, which is the piece kept.
-  const f: SeqFeature = { ...feature("cds", 51, 20), notes: withRegions({}, [region("TM1", 1, 3), region("TM2", 8, 10)]) };
-  const kept = wholeFragment(doc("p", filler(60, 7), true, [f])).data.features[0];
-  assert.deepEqual([kept.start, kept.end], [0, 20]);
-  assert.deepEqual(regionsOf(kept).map(r => [r.name, r.start, r.end]), [["TM2", 5, 7]]);
+test("an uncut linear digest preserves the sample without claiming an enzyme cut", () => {
+  const vector = doc("uncut", "ACGT".repeat(10) + "TCTAGATC" + "ACGT".repeat(12), false);
+  const r = fragmentDigest(vector, ["XbaI"], hostMethylation(""));
+  assert.equal(r.cut, false);
+  assert.equal(r.problem, undefined);
+  assert.deepEqual(r.fragments.map(f => f.data.sequence), [vector.sequence]);
+  assert.deepEqual(cloningDigest(vector, ["XbaI"], hostMethylation("")).fragments, []);
+  assert.equal(fragmentDigest(vector, ["XbaI"], hostMethylation("JM110")).cut, true);
+});
+
+test("cloning requires every chosen enzyme to cut, even when another enzyme can open the vector", () => {
+  const vector = doc("vector", "A".repeat(60) + "GAATTC" + "C".repeat(59) + "TCTAGATC" + "G".repeat(60), true);
+  const enzymes = ["EcoRI", "XbaI"];
+  const damPlus = hostMethylation("");
+  assert.equal(fragmentDigest(vector, enzymes, damPlus).fragments.length, 1);
+  assert.deepEqual(cloningDigest(vector, enzymes, damPlus), {
+    fragments: [], cut: false, problem: "XbaI doesn't cut vector."
+  });
+  assert.equal(cloningDigest(vector, enzymes, hostMethylation("JM110")).fragments.length, 2);
+  // Isoschizomers each cut, but the two cuts in the same place give only one break.
+  const sameCut = doc("vector", "A".repeat(50) + "CCCGGG" + "T".repeat(50), true);
+  assert.equal(cloningDigest(sameCut, ["XmaI", "Cfr9I"]).fragments.length, 1);
 });
 
 test("Golden Gate finds the complete product whichever way the parts were listed", () => {

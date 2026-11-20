@@ -3,9 +3,9 @@
 
 // Virtual digests and how their fragments would run on an agarose gel.
 
-import { digest, fragmentLength, type Fragment } from "./cloning.ts";
+import { fragmentDigest, type Fragment } from "./cloning.ts";
 import type { DnaMethylation } from "./methylation.ts";
-import type { Range, SeqData } from "./seqdata.ts";
+import { topStrandLength, type Range, type SeqData } from "./seqdata.ts";
 
 export interface Ladder {
   id: string;
@@ -64,7 +64,7 @@ export function bandY(size: number, ladder: Ladder): number {
  * single-stranded ends.)
  */
 export function fragmentSize(f: Fragment): number {
-  return fragmentLength(f) - (f.left.kind === "3'" ? f.left.bases.length : 0) - (f.right.kind === "5'" ? f.right.bases.length : 0);
+  return topStrandLength(f.data.sequence, f);
 }
 
 /** Where a fragment's top strand lies on its source (0-based, inclusive; may cross the origin). */
@@ -78,6 +78,7 @@ export interface DigestResult {
   fragments: Fragment[];
   /** A circular sequence the enzymes don't cut: it runs as a plasmid, not as a fragment. */
   uncut: boolean;
+  problem?: string;
 }
 
 /**
@@ -85,8 +86,9 @@ export interface DigestResult {
  * whole. Given where the DNA was grown, sites methylation blocks don't cut.
  */
 export function digestSequence(d: SeqData, enzymes: string[], methylation?: DnaMethylation): DigestResult {
-  const fragments = digest(d, enzymes, methylation);
-  if (!fragments.length && d.circular) return { fragments: [], uncut: true };
+  const { fragments, cut, problem } = fragmentDigest(d, enzymes, methylation);
+  if (problem) return { fragments: [], uncut: false, problem };
+  if (!cut && d.circular) return { fragments: [], uncut: true };
   return { fragments: [...fragments].sort((a, b) => fragmentSize(b) - fragmentSize(a)), uncut: false };
 }
 
@@ -121,4 +123,9 @@ const INTEGER = new Intl.NumberFormat("en-US");
 export function fragmentName(f: Fragment, sourceName: string): string {
   const ends = `${f.left.enzyme ?? "end"}–${f.right.enzyme ?? "end"}`;
   return `${sourceName || "Fragment"} ${ends} ${INTEGER.format(fragmentSize(f))} bp`;
+}
+
+/** The opened fragment retains the end information used for its gel band and future joins. */
+export function fragmentDocument(f: Fragment, sourceName: string, methylation?: DnaMethylation): SeqData {
+  return { ...f.data, name: fragmentName(f, sourceName), ends: { left: f.left, right: f.right }, methylation: methylation ?? f.data.methylation };
 }

@@ -6,7 +6,8 @@
 
 import { getCutsitesFromSequence, type RestrictionEnzyme } from "@teselagen/sequence-utils";
 import { REBASE_ENZYMES, SUPPLIERS } from "./rebaseEnzymes.ts";
-import { siteMethylation, type DnaMethylation, type SiteMethylation } from "./methylation.ts";
+import { methylationKey, siteMethylation, type DnaMethylation, type SiteMethylation } from "./methylation.ts";
+import { validFragmentEnds, type FragmentEnds, type SeqData } from "./seqdata.ts";
 
 export type EnzymeSource = "common" | "lab" | "personal";
 export type EnzymeFilter = "unique6" | "unique" | "unique2" | "all";
@@ -80,7 +81,7 @@ export interface CutSite {
 interface Enzyme extends RestrictionEnzyme {
   /** Its cut as REBASE writes it: "G^AATTC", "GGTCTC(1/5)", "(10/12)CGANNNNNNTGC(12/10)". */
   notation: string;
-  /** Also cuts before its site (BcgI); only the cut after it is searched for. */
+  /** Also cuts before its site (BcgI); the map still shows one hit per recognition. */
   bothSides: boolean;
   /** REBASE's codes for the companies that sell it. */
   suppliers: string;
@@ -217,6 +218,22 @@ export function scanSites(sequence: string, circular: boolean, extra: readonly s
   return sequence.length ? search(sequence, circular, enzymeList(extra)) : [];
 }
 
+/** Recognitions for simulation, including sites with one or both cuts off a linear end. */
+export function digestSites(sequence: string, circular: boolean, names: readonly string[]): SiteHit[] {
+  if (!sequence.length) return [];
+  const enzymes = [...new Set(names.map(known))].flatMap(e =>
+    e && e.site.length <= sequence.length ? [{ ...e, topSnipOffset: 0, bottomSnipOffset: 0 }] : []
+  );
+  return search(sequence, circular, enzymes);
+}
+
+/** Cut pairs that leave room for both strands' ends on this linear molecule. */
+export function completeLinearCuts(hit: SiteHit, length: number, ends?: FragmentEnds): [number, number][] {
+  const lo = ends?.left.bases.length ?? 0;
+  const hi = length - (ends?.right.bases.length ?? 0);
+  return siteCuts(hit).filter(([top, bottom]) => Math.min(top, bottom) > lo && Math.max(top, bottom) < hi);
+}
+
 /** A site that crosses the origin, or cuts on the other side of it. */
 const wraps = (h: SiteHit) => h.start > h.end || Math.abs(h.cut - h.start) > MARGIN || Math.abs(h.bottomCut - h.start) > MARGIN;
 
@@ -342,8 +359,7 @@ export function enzymeSite(name: string): string {
 }
 
 /**
- * Whether an enzyme also cuts before its site (BcgI, BaeI, CspCI), where `scanSites` finds
- * only the cut after it, so what it gives for such an enzyme has a piece too few.
+ * Whether an enzyme also cuts before its site (BcgI, BaeI, CspCI).
  */
 export function cutsBothSides(name: string): boolean {
   return known(name)?.bothSides ?? false;
@@ -406,6 +422,15 @@ function cutsOf(e: Enzyme): [number, number][] {
   const before = e.bothSides ? /^\((-?\d+)\/(-?\d+)\)/.exec(e.notation) : null;
   const after: [number, number] = [e.topSnipOffset, e.bottomSnipOffset];
   return before ? [[-Number(before[1]), -Number(before[2])], after] : [after];
+}
+
+/** Both strands' cut boundaries, in the coordinates of the recognition site. */
+export function siteCuts(hit: SiteHit): [number, number][] {
+  const e = known(hit.enzyme);
+  if (!e) return [[hit.cut, hit.bottomCut]];
+  const start = hit.start;
+  const end = start + e.site.length;
+  return cutsOf(e).map(([top, bottom]) => hit.forward ? [start + top, start + bottom] : [end - bottom, end - top]);
 }
 
 const reverseComplement = (site: string) => [...site].reverse().map(c => COMPLEMENT[c]).join("");
@@ -510,6 +535,31 @@ export function siteCounts(hits: readonly SiteHit[], sequence: string, circular:
     if (!blockedSite(sequence, circular, h, methylation)) c.cuts++;
   }
   return out;
+}
+
+interface ReactionCounts {
+  cuts: Map<string, number>;
+  sites: Map<string, number>;
+}
+
+const countedReactions = new WeakMap<SeqData, { key: string; counts: ReactionCounts }>();
+
+/** Recognition sites and complete cuts for the same enzymes the simulation uses. */
+export function reactionCounts(data: SeqData, names: readonly string[], dna: DnaMethylation): ReactionCounts {
+  const key = `${[...new Set(names)].sort().join(",")}|${methylationKey(dna)}`;
+  const cached = countedReactions.get(data);
+  if (cached?.key === key) return cached.counts;
+  const { sequence, circular } = data;
+  const ends = validFragmentEnds(data);
+  const counts: ReactionCounts = { cuts: new Map(), sites: new Map() };
+  for (const hit of digestSites(sequence, circular, names)) {
+    counts.sites.set(hit.enzyme, (counts.sites.get(hit.enzyme) ?? 0) + 1);
+    if (blockedSite(sequence, circular, hit, dna)) continue;
+    const cuts = circular ? siteCuts(hit).length : completeLinearCuts(hit, sequence.length, ends).length;
+    counts.cuts.set(hit.enzyme, (counts.cuts.get(hit.enzyme) ?? 0) + cuts);
+  }
+  countedReactions.set(data, { key, counts });
+  return counts;
 }
 
 /** Cut sites of the chosen enzymes, sorted by position. */

@@ -7,7 +7,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { bandY, bands, digestSequence, fragmentName, fragmentSize, fragmentSpan, ladderReaching, LADDERS } from "./gel.ts";
-import type { SeqData } from "./seqdata.ts";
+import { reverseComplement, setOrigin, type SeqData } from "./seqdata.ts";
+import { reactionCounts } from "./enzymes.ts";
+import { PCR_DNA } from "./methylation.ts";
 
 const puc19 = (): SeqData => {
   const gb = readFileSync(new URL("../../testdata/e2e/pUC19-annotated.gb", import.meta.url), "utf8");
@@ -52,6 +54,32 @@ test("gel: bigger runs higher, within the gel", () => {
     for (let i = 1; i < ys.length; i++) assert.ok(ys[i] >= ys[i - 1], `${ladder.name}: ${ys}`);
     assert.ok(ys.every(y => y > 0 && y < 1));
   }
+});
+
+test("digest reports crossed cuts in linear sequences and across a circular origin", () => {
+  const sequence = "A".repeat(70) + "GGTCTCTGCAG" + "A".repeat(12);
+  for (const d of [{ ...puc19(), sequence, circular: false }, setOrigin({ ...puc19(), sequence }, 79)]) {
+    const result = digestSequence(d, ["PstI", "BsaI"]);
+    assert.deepEqual(result.fragments, []);
+    assert.equal(result.uncut, false);
+    assert.match(result.problem ?? "", /cuts overlap/);
+  }
+});
+
+test("digest includes both sets of cuts for BcgI on either strand", () => {
+  const sequence = "AT".repeat(41) + "CGAAAAAAATGC" + "AT".repeat(41);
+  for (const bases of [sequence, reverseComplement(sequence)]) {
+    const result = digestSequence({ ...puc19(), sequence: bases, circular: false }, ["BcgI"]);
+    assert.deepEqual(result.fragments.map(fragmentSize), [72, 70, 34]);
+    assert.equal(result.fragments.reduce((n, f) => n + fragmentSize(f), 0), 176);
+  }
+  const nearEnd = "AT".repeat(41) + "CGAAAAAAATGC";
+  const edgeSizes = (sequence: string) => digestSequence({ ...puc19(), sequence, circular: false }, ["BcgI"]).fragments.map(fragmentSize);
+  assert.deepEqual(edgeSizes(nearEnd), [72, 22]);
+  assert.deepEqual(edgeSizes(reverseComplement(nearEnd)), [70, 24]);
+  const count = reactionCounts({ ...puc19(), sequence: nearEnd, circular: false }, ["BcgI"], PCR_DNA);
+  assert.equal(count.sites.get("BcgI"), 1);
+  assert.equal(count.cuts.get("BcgI"), 1);
 });
 
 test("gel: fragments of nearly the same size run as one band", () => {

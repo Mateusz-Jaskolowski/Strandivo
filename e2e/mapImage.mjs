@@ -112,7 +112,9 @@ export function splitVerdict(probe, sampled) {
 }
 
 /**
- * Runs on an open circular document showing its map, and leaves the map as it found it.
+ * Runs on an open circular document showing its map, and leaves the map, its tabs, the theme
+ * and the file's data as it found them (the last check says so). It adds a feature and a second
+ * tab and changes the theme on the way, each put back by the block that made the change.
  * `save(label)` clicks the open menu's button `label` and gives back what it saved: the
  * SVG's text, or the PNG as `{ png, width, height, dpi }` with what its pixels say
  * (`dotsPerInch`, `cornerAlpha`, `lastColumnOpaque`, `lastRowOpaque`, `ink`).
@@ -162,11 +164,17 @@ export async function checkMapImage(s, check, save) {
     el.remove();
     return out;
   `, svg);
-  const saved = await s.exec(`
+  // What the checks change and put back, read now and again at the end.
+  const snapshot = () => s.exec(`
     return { zoom: document.querySelector('[aria-label="Zoom"]').value, rotate: document.querySelector('[aria-label="Rotate"]').value,
       linear: document.querySelector('.sv-map .sv-segmented button[aria-pressed="true"]').textContent === 'Linear',
-      transparent: document.querySelector('.sv-map-image input[type="checkbox"]').checked };
+      transparent: document.querySelector('.sv-map-image input[type="checkbox"]').checked,
+      tabs: window.__strandivo.tabs().length, tab: window.__strandivo.activeTab(),
+      features: window.__strandivo.store.data.features.length, theme: document.documentElement.dataset.theme };
   `);
+  const saved = await snapshot();
+  // The file's data, by identity: an edit made and undone leaves the very same object.
+  await s.exec("window.__e2eMapImageData = window.__strandivo.store.data;");
   try {
     await mode(false);
     check("The map's Export image opens a menu with a transparent background, Copy image and the saves", (await openMapImageMenu(s)) && (await s.exec(`
@@ -568,4 +576,14 @@ export async function checkMapImage(s, check, save) {
     await control("Zoom", saved.zoom);
     if (!saved.linear) await control("Rotate", saved.rotate);
   }
+
+  // Everything above put back what it changed.
+  const now = await snapshot();
+  const kept = await s.exec("const same = window.__strandivo.store.data === window.__e2eMapImageData; delete window.__e2eMapImageData; return same;");
+  const moved = ["zoom", "linear", "transparent", "tabs", "tab", "features", "theme", ...(saved.linear ? [] : ["rotate"])].filter(k => now[k] !== saved[k]);
+  check(
+    "The map image checks leave the tabs, the map, the theme and the file's data as they found them",
+    !moved.length && kept,
+    [...moved.map(k => `${k} was ${saved[k]}, is ${now[k]}`), ...(kept ? [] : ["the file's data is not the object it was"])].join("; ") || "nothing changed"
+  );
 }

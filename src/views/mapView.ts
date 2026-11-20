@@ -584,7 +584,9 @@ export class MapView {
       document.addEventListener("pointerdown", outside, true);
       menu.addEventListener("keydown", key);
       this.closeMenu = close;
-      menu.querySelector<HTMLElement>("[role=\"radio\"][aria-checked=\"true\"], select")?.focus();
+      // The keyboard goes into the menu, so Escape closes it: onto the chosen radio or the select, or
+      // in a menu with neither (Export image), its first control.
+      (menu.querySelector<HTMLElement>("[role=\"radio\"][aria-checked=\"true\"], select") ?? menu.querySelector<HTMLElement>("input, button"))?.focus();
     });
     return { button, menu };
   }

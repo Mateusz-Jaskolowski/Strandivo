@@ -502,6 +502,12 @@ export function exportPng(figure: SVGSVGElement, o: FigureOptions): Uint8Array {
     canvas.height = Math.max(1, Math.round(box.height * scale));
     const g = canvas.getContext("2d");
     if (!g) throw new Error("This window can't draw images.");
+    // The canvas has whole pixels, so the paper drawn to the box's size can leave a last
+    // column or row of it half covered, which a dark slide shows as a pale fringe.
+    if (!o.transparent) {
+      g.fillStyle = PAPER;
+      g.fillRect(0, 0, canvas.width, canvas.height);
+    }
     g.scale(scale, scale);
     g.translate(-box.x, -box.y);
     paintNode(g, svg, svg);

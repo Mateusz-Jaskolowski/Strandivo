@@ -16,7 +16,7 @@ export function openMapImageMenu(s) {
 }
 
 /** Whether a saved SVG stands alone: every style its own, nothing only the page understood. */
-export const standaloneSvg = svg => typeof svg === "string" && /^<\?xml/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
+export const standaloneSvg = svg => typeof svg === "string" && /^<\?xml/.test(svg) && /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
 
 /**
  * Runs on an open circular document showing its map, and leaves the map as it found it.

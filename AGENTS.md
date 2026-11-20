@@ -163,7 +163,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
   base on either strand, written as the top strand, plus each end (blunt, 5′ or 3′
   overhang). Two ends ligate when kind and bases match; joining writes the shared bases
-  once. The dialog (`src/views/cloningDialog.ts`) takes the open file as the vector and
+  once and maps both pieces' annotations onto them. A digest fragment opened as a
+  document keeps its ends in the sequence model. Lengths shown for the fragment use its
+  top strand, which is also the strand written to FASTA. GenBank keeps the bases of both
+  ends and stores end and methylation information in comments. The dialog
+  (`src/views/cloningDialog.ts`) takes the open file as the vector and
   other open files (`DocContext.otherSequences`) as inserts; products open as new unsaved
   tabs (`DocContext.openNew`), which count as edited until saved.
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that

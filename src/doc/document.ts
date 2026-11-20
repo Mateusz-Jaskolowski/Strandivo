@@ -33,8 +33,8 @@ import { basename, dirname, extension, formatForPath, isTraceFile, joinPath, str
 import { CHECK_EXTENSION, checkFileText, matchByName, type ReadCheck } from "../lib/readCheck.ts";
 import { rememberedReads, rememberReads } from "../readChecks.ts";
 import { rememberedRotation, rememberRotation } from "../mapRotations.ts";
-import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
-import { basesIn, newId, rangeLength, reverseComplementRange, setOrigin, type Range, type SeqData } from "../lib/seqdata.ts";
+import { parseComments, type LabFields } from "../lib/labinfo.ts";
+import { basesIn, newId, rangeLength, reverseComplementRange, setOrigin, topStrandLength, type Range, type SeqData } from "../lib/seqdata.ts";
 import { PRIMER_BASES } from "../lib/contextMenu.ts";
 import { gcPercent } from "../lib/labinfo.ts";
 import { enzymePreferences } from "../lib/enzymes.ts";
@@ -50,7 +50,7 @@ import { fromParsed, toParsed, type LoadedDocument } from "./convert.ts";
 import { DocStore } from "./store.ts";
 import { openContextMenu } from "./contextMenu.ts";
 import { optionsStore, type DocContext, type OpenSequence, type Tab, type ViewOptions } from "./context.ts";
-import { hostMethylation, methylationKey } from "../lib/methylation.ts";
+import { documentMethylation, hostMethylation, methylationKey } from "../lib/methylation.ts";
 import { HOST_FIELD } from "../lib/strains.ts";
 import { InfoPanel } from "./info.ts";
 import { READ_EXTENSIONS, ReadSet } from "../sanger/readSet.ts";
@@ -78,7 +78,7 @@ import { applyPanelWidths, panelSplitter } from "../panelWidths.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
 import { documentShortcut, shortcutHint } from "../lib/shortcuts.ts";
 import { keyLasts } from "../webFiles.ts";
-import { nameToKeep, tidyName } from "../lib/sequenceName.ts";
+import { tidyName } from "../lib/sequenceName.ts";
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const VIEW_KEY = "strandivo.view";
@@ -184,7 +184,6 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // ---------- load ----------
   let loaded: LoadedDocument = { data: { name: "Untitled", description: "", circular: true, sequence: "", features: [], primers: [], sources: [] }, extra: {}, wholeSources: [] };
   let labFields: LabFields = [];
-  let otherComments: string[] = [];
   let format = made ? "Not saved" : "New sequence";
   if (made) loaded = { data: made, extra: {}, wholeSources: [] };
   else if (path) {
@@ -194,7 +193,6 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       loaded = fromParsed(parsed.sequences[0]);
       const comments = parseComments(loaded.extra.comments as string[] | undefined);
       labFields = comments.fields;
-      otherComments = comments.otherComments;
       format = formatName(path);
       if (parsed.sequences.length > 1) toast(`${basename(path)} contains ${parsed.sequences.length} sequences — showing the first.`, "info", 6000);
       addRecentFile(path);
@@ -207,7 +205,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // ---------- shared context ----------
   // The map's rotation is the file's own (label size is a setting, and every map opens unzoomed).
   const hostField = labFields.find(([k]) => k === HOST_FIELD)?.[1] ?? "";
-  const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0, methylation: hostMethylation(hostField) }, o => {
+  const opts = optionsStore({ ...loadViewOptions(settings), mapRotation: path ? rememberedRotation(path) : 0, methylation: documentMethylation(hostField, loaded.data.methylation) }, o => {
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({ enzymeSource: o.enzymeSource, enzymeFilter: o.enzymeFilter, complement: o.complement, translations: o.translations, orfs: o.orfs, aaColors: o.aaColors, mapZoom: 1, linearMap: o.linearMap, mapRegions: o.mapRegions, proteinDetail: o.proteinDetail, sequenceRegions: o.sequenceRegions, sequenceGc: o.sequenceGc, primerGc: o.primerGc, mapGc: o.mapGc }));
     } catch {
@@ -480,7 +478,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   const infoPanel = new InfoPanel(infoHost, labFields, {
     facts: () => {
       const d = store.data;
-      return { name: d.name, description: d.description, sequence: d.sequence, circular: d.circular, features: legacyFeatures(d), primerCount: d.primers.length };
+      return { name: d.name, description: d.description, sequence: d.sequence, circular: d.circular, ends: d.ends, features: legacyFeatures(d), primerCount: d.primers.length };
     },
     rename: renameSequence,
     setDescription: description => store.apply({ ...store.data, description }, "Edit description"),
@@ -488,12 +486,13 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
       infoDirty = true;
       refreshTitle();
       // The strain decides which sites Dam and Dcm methylation block.
-      const methylation = hostMethylation(infoPanel.value(HOST_FIELD));
+      const methylation = documentMethylation(infoPanel.value(HOST_FIELD), store.data.methylation);
       if (methylationKey(methylation) !== methylationKey(opts.get().methylation)) opts.set({ methylation });
     },
     openSettings: () => void openSettings(),
     sequencing: () => reads.summary(),
-    setCircular: circular => store.apply({ ...store.data, circular }, circular ? "Make circular" : "Make linear"),
+    methylation: value => documentMethylation(value, store.data.methylation),
+    setCircular: circular => store.apply({ ...store.data, circular, ...(circular && store.data.ends ? { ends: undefined } : {}) }, circular ? "Make circular" : "Make linear"),
     openReads: () => (reads.count ? setTab("reads") : void addReads()),
     readsOverview: () => {
       if (!reads.count) return null;
@@ -600,7 +599,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     const dirty = isDirty();
     title = path ? basename(path) : d.name || "Untitled";
     nameEl.textContent = d.name || title;
-    metaEl.textContent = `${fmt(d.sequence.length)} bp · ${d.circular ? "circular" : "linear"} · ${format}${dirty ? " · edited" : ""}`;
+    metaEl.textContent = `${fmt(topStrandLength(d.sequence, d.ends))} bp · ${d.circular ? "circular" : "linear"} · ${format}${dirty ? " · edited" : ""}`;
     const shown = `${title}|${path}|${dirty}`;
     if (shown !== lastShown) {
       lastShown = shown;
@@ -648,7 +647,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     }
     statusLeft.replaceChildren(...left);
     statusRight.replaceChildren(
-      h("span", null, `${fmt(n)} bp · ${d.circular ? "circular" : "linear"}`),
+      h("span", null, `${fmt(topStrandLength(d.sequence, d.ends))} bp · ${d.circular ? "circular" : "linear"}`),
       h("span", null, `GC ${gcPercent(d.sequence).toFixed(1)}%`),
       h("span", null, `${fmt(d.features.length)} feature${d.features.length === 1 ? "" : "s"}`)
     );
@@ -713,9 +712,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
   // ---------- saving ----------
   function fileJson(includeRegions = false): Record<string, unknown> {
     const d = store.data;
-    const json = toParsed(loaded, includeRegions ? { ...d, features: [...d.features, ...d.features.flatMap(f => proteinRegionFeatures(f, d.sequence.length))] } : d);
-    json.comments = formatComments(infoPanel.getFields(), otherComments, nameToKeep(d.name));
-    return json;
+    return toParsed(loaded, includeRegions ? { ...d, features: [...d.features, ...d.features.flatMap(f => proteinRegionFeatures(f, d.sequence.length))] } : d, infoPanel.getFields());
   }
 
   async function save(saveAs: boolean): Promise<boolean> {
@@ -737,8 +734,12 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
         target = extension(chosen) ? chosen : chosen + ".gb";
         fmtOut = formatForPath(target) ?? "genbank";
       }
-      if (fmtOut === "fasta" && (store.data.features.length || store.data.primers.length)) {
-        const ok = await confirmDialog("FASTA files store only the sequence, so features and primers won't be saved. Save as FASTA anyway?", { okLabel: "Save as FASTA", cancelLabel: "Cancel" });
+      const data = store.data;
+      if (fmtOut === "fasta" && (data.features.length || data.primers.length || data.ends || data.methylation)) {
+        const message = data.ends || data.methylation
+          ? "FASTA saves the top-strand bases only. Use GenBank to keep annotations, fragment ends and methylation."
+          : "FASTA files store only the sequence, so features and primers won't be saved. Save as FASTA anyway?";
+        const ok = await confirmDialog(message, { okLabel: "Save as FASTA", cancelLabel: "Cancel" });
         if (!ok) return false;
       }
       await saveTo(target, fmtOut);
@@ -1219,7 +1220,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     keydown,
     drop,
     confirmClose,
-    sequence: () => ({ title, data: store.data, selection: store.selection.range, methylation: opts.get().methylation, setHost }),
+    sequence: () => ({ title, data: store.data, selection: store.selection.range, separateSelection: !!store.selection.ranges, methylation: opts.get().methylation, setHost }),
     feedbackContext: () => ({
       view: TABS.find(t => t.id === tab)?.label ?? "Map",
       file: { name: `${stripExtension(title) || "Untitled"}.gb`, contents: () => serialize(fileJson(), "genbank") }

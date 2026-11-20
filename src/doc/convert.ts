@@ -4,9 +4,10 @@
 // Converting between the file parser's sequence JSON (TeselaGen bio-parsers) and the
 // document model. Fields the model doesn't use are kept and written back unchanged.
 
-import { newId, reverseComplement, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
-import { parseComments } from "../lib/labinfo.ts";
-import { nameFromFile } from "../lib/sequenceName.ts";
+import { newId, reverseComplement, validFragmentEnds, type FragmentEnd, type FragmentEnds, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
+import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
+import { hostMethylation, PCR_DNA, type DnaMethylation } from "../lib/methylation.ts";
+import { nameFromFile, nameToKeep } from "../lib/sequenceName.ts";
 
 export interface LoadedDocument {
   data: SeqData;
@@ -27,10 +28,12 @@ function strandOf(raw: Record<string, unknown>): Strand {
   return 1;
 }
 
-const MODEL_KEYS = new Set(["name", "description", "circular", "sequence", "features", "primers"]);
+const MODEL_KEYS = new Set(["name", "description", "circular", "sequence", "features", "primers", "fragmentEnds"]);
 
 export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
   const sequence = String(seq.sequence ?? "");
+  const circular = !!seq.circular;
+  const comments = parseComments(Array.isArray(seq.comments) ? seq.comments : undefined);
   const n = sequence.length;
   const features: SeqFeature[] = [];
   const sources: SeqFeature[] = [];
@@ -83,13 +86,15 @@ export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
   return {
     data: {
       // A name with spaces is kept in the comments too, as the LOCUS line can't hold it.
-      name: nameFromFile(String(seq.name ?? "Untitled"), parseComments(Array.isArray(seq.comments) ? seq.comments : undefined).name),
+      name: nameFromFile(String(seq.name ?? "Untitled"), comments.name),
       description: typeof seq.description === "string" ? seq.description : "",
-      circular: !!seq.circular,
+      circular,
       sequence,
       features,
       primers,
-      sources
+      sources,
+      ...(comments.product?.ends ? { ends: readEnds({ sequence, circular }, comments.product.ends) } : {}),
+      ...(comments.product?.methylation ? { methylation: readMethylation(comments.product.methylation) } : {})
     },
     extra,
     wholeSources
@@ -119,8 +124,34 @@ function notesOut(notes: Record<string, unknown>): Record<string, unknown> {
 
 const partsOut = (locations: Range[] | undefined) => (locations && locations.length > 1 ? locations.map(l => ({ start: l.start, end: l.end })) : undefined);
 
+function readEnds(data: Pick<SeqData, "sequence" | "circular">, text: string): SeqData["ends"] {
+  const read = (value: unknown): FragmentEnd | undefined => {
+    if (!Array.isArray(value)) return undefined;
+    const [kind, bases, enzyme] = value;
+    if (kind !== "blunt" && kind !== "5'" && kind !== "3'") return undefined;
+    if (typeof bases !== "string" || (enzyme !== undefined && typeof enzyme !== "string")) return undefined;
+    if (kind === "blunt" ? bases !== "" : !/^[ACGTURYSWKMBDHVN]+$/.test(bases)) return undefined;
+    return { kind, bases, ...(enzyme ? { enzyme } : {}) };
+  };
+  try {
+    const value: unknown = JSON.parse(text);
+    if (!Array.isArray(value) || value.length !== 2) return undefined;
+    const left = read(value[0]);
+    const right = read(value[1]);
+    return left && right ? validFragmentEnds(data, { left, right }) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readMethylation(text: string): DnaMethylation | undefined {
+  if (text === "PCR") return PCR_DNA;
+  if (text.startsWith("Host ") && text.slice(5).trim()) return hostMethylation(text.slice(5));
+  return undefined;
+}
+
 /** Sequence JSON for the file writers. */
-export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unknown> {
+export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields): Record<string, unknown> & { sequence: string; fragmentEnds?: FragmentEnds } {
   const n = data.sequence.length;
   const features = data.features.map(f => {
     const out: Record<string, unknown> = {
@@ -146,7 +177,7 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
   });
   const sources = data.sources.map(f => {
     const whole = doc.wholeSources.includes(f.id);
-    const out: Record<string, unknown> = { ...f.raw, id: f.id, start: whole ? 0 : f.start, end: whole ? Math.max(0, n - 1) : f.end };
+    const out: Record<string, unknown> = { ...f.raw, id: f.id, name: f.name, type: "source", strand: f.strand === -1 ? -1 : 1, forward: f.strand !== -1, start: whole ? 0 : f.start, end: whole ? Math.max(0, n - 1) : f.end };
     if (f.raw.notes && typeof f.raw.notes === "object") out.notes = notesOut(f.raw.notes as Record<string, unknown>);
     const parts = whole ? undefined : partsOut(f.locations);
     if (parts) out.locations = parts;
@@ -173,14 +204,24 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
     return out;
   });
   const description = oneLine(data.description);
+  const comments = parseComments(Array.isArray(doc.extra.comments) ? doc.extra.comments : undefined);
+  const ends = validFragmentEnds(data);
+  const state = data.methylation;
+  const writeEnd = (e: FragmentEnd) => e.enzyme ? [e.kind, e.bases, e.enzyme] : [e.kind, e.bases];
+  const savedComments = formatComments(fields ?? comments.fields, comments.otherComments, nameToKeep(data.name), {
+    ends: ends ? JSON.stringify([writeEnd(ends.left), writeEnd(ends.right)]) : undefined,
+    methylation: state?.from === "pcr" ? "PCR" : state?.name ? `Host ${state.name}` : undefined
+  });
   return {
     ...doc.extra,
+    ...(savedComments.length || doc.extra.comments ? { comments: savedComments } : {}),
     name: data.name,
     // The GenBank writer prefers the file's own DEFINITION, so set both.
     description,
     definition: description,
     circular: data.circular,
     sequence: data.sequence,
+    ...(ends ? { fragmentEnds: ends } : {}),
     size: n,
     features: [...sources, ...features],
     primers

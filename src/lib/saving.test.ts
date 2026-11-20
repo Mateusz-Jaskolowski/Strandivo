@@ -14,7 +14,11 @@ import { nameToKeep } from "./sequenceName.ts";
 import { designOf, formatDesign, VARIABLE_QUALIFIER } from "./variable.ts";
 import { regionsOf, withRegions } from "./regions.ts";
 import { protein } from "../doc/analysis.ts";
-import { deleteRange, featureBases, insertBases, reverseComplement, reverseComplementRange, setOrigin, type SeqData, type SeqFeature } from "./seqdata.ts";
+import { deleteRange, featureBases, insertBases, reverseComplement, reverseComplementRange, setOrigin, topStrandLength, type SeqData, type SeqFeature } from "./seqdata.ts";
+import { cutsFor, wholeFragment } from "./cloning.ts";
+import { digestSequence, fragmentDocument, fragmentSize } from "./gel.ts";
+import { documentMethylation, hostMethylation, PCR_DNA } from "./methylation.ts";
+import { pcrProduct, productDocument } from "./pcr.ts";
 
 const root = new URL("../../", import.meta.url);
 const FILES = [
@@ -40,6 +44,53 @@ async function reopen(text: string, name = "saved.gb"): Promise<LoadedDocument> 
 }
 
 const save = (doc: LoadedDocument, data: SeqData = doc.data, extra: Record<string, unknown> = {}) => serialize({ ...toParsed(doc, data), ...extra }, "genbank");
+
+test("a whole-circle PCR product saves its full CDS and reopens unmethylated", async () => {
+  const sequence = "TGTTACCGTCTCGATCAGGTCGTTGAATAGCCTATCCGTTACTGTTTTGATGAACCATGTGATCTTGGTTTAGCGGTACAA";
+  const template = fromParsed({ name: "template", sequence, circular: true });
+  const cds: SeqFeature = { id: "cds", name: "wrapped CDS", type: "CDS", start: 61, end: 17, strand: -1, notes: { codon_start: ["2"] }, raw: {} };
+  const f = { name: "F", start: 0, end: 19, strand: 1 as const, bases: "ACG" + sequence.slice(0, 20) };
+  const r = { name: "R", start: 61, end: 80, strand: -1 as const, bases: reverseComplement(sequence.slice(61)) };
+  const product = pcrProduct(sequence, true, f, r)!;
+  const made = productDocument({ ...template.data, features: [cds] }, product);
+  const again = await reopen(save(fromParsed({}), made));
+  assert.equal(again.data.sequence, "ACG" + sequence);
+  assert.equal(again.data.circular, false);
+  assert.deepEqual(again.data.features[0].locations, [{ start: 64, end: 83 }, { start: 3, end: 20 }]);
+  assert.equal(featureBases(again.data.sequence, again.data.features[0]), featureBases(sequence, cds));
+  assert.deepEqual(again.data.features[0].notes.codon_start, ["2"]);
+  assert.deepEqual(documentMethylation("", again.data.methylation), PCR_DNA);
+  assert.equal(cutsFor(again.data.sequence, false, ["DpnI"], documentMethylation("", again.data.methylation)).length, 0);
+  assert.ok(cutsFor(again.data.sequence, false, ["DpnI"], documentMethylation("DH5a", again.data.methylation)).length > 0);
+});
+
+test("a saved digest fragment keeps its gel size, exact bases and ends", async () => {
+  const sequence = "A".repeat(65) + "GAATTC" + "C".repeat(50);
+  const template = fromParsed({ name: "template", sequence, circular: false });
+  const r = digestSequence(template.data, ["EcoRI"]);
+  const fragment = r.fragments.find(f => fragmentSize(f) === 66)!;
+  const made = fragmentDocument(fragment, template.data.name, hostMethylation("JM110"));
+  const again = await reopen(save(fromParsed({}), made));
+  assert.equal(again.data.sequence, "A".repeat(65) + "GAATT");
+  assert.equal(again.data.circular, false);
+  assert.equal(topStrandLength(again.data.sequence, again.data.ends), 66);
+  assert.deepEqual(again.data.ends, { left: fragment.left, right: fragment.right });
+  assert.equal(again.data.methylation?.name, "JM110");
+  assert.deepEqual(wholeFragment(again.data).right, fragment.right);
+  assert.equal(digestSequence(again.data, []).fragments.map(fragmentSize)[0], 66);
+  const fields: [string, string][] = [["Fragment ends", "Checked"], ["DNA methylation", "Measured"]];
+  const savedWithFields = await reopen(serialize(toParsed(again, again.data, fields), "genbank"));
+  assert.deepEqual(parseComments(savedWithFields.extra.comments as string[]).fields, fields);
+  assert.deepEqual(savedWithFields.data.ends, again.data.ends);
+  const flipped = reverseComplementRange(again.data, null);
+  assert.deepEqual(flipped.ends?.left, fragment.right);
+  assert.equal(insertBases(again.data, again.data.sequence.length, "A").ends?.right.kind, "blunt");
+  for (const data of [again.data, flipped]) {
+    const fasta = await reopen(serialize(toParsed(again, data), "fasta"), "digest.fa");
+    const expected = data === flipped ? reverseComplement(again.data.sequence) : "A".repeat(65) + "G";
+    assert.equal(fasta.data.sequence, expected);
+  }
+});
 
 /** What a user would notice about a feature: name, kind, where (all parts), direction. */
 const describe = (f: SeqFeature) => `${f.name}|${f.type}|${f.start}-${f.end}|${f.strand}|${(f.locations || []).map(l => `${l.start}-${l.end}`).join(",")}`;

@@ -138,19 +138,37 @@ function ends(location: string): [number, number] | null {
  * it took for its own use (a /label for the name) stays out; one it made up from a line
  * starting with "/" inside a value goes. Numbers it read (/codon_start=2) stay numbers.
  */
-export function fixQualifiers(lists: unknown[][], table: FileFeature[]) {
+export function fixQualifiers(lists: unknown[][], table: FileFeature[], linear = false) {
   for (const list of lists) {
     let at = 0;
-    for (const item of list as { start?: unknown; end?: unknown; notes?: Record<string, unknown> }[]) {
+    for (const item of list as { start?: number; end?: number; locations?: { start: number; end: number }[]; notes?: Record<string, unknown> }[]) {
       const notes = item?.notes;
       if (!notes || typeof notes !== "object" || typeof item.start !== "number" || typeof item.end !== "number") continue;
       let i = at;
+      let ordered: typeof item.locations;
       for (; i < table.length; i++) {
+        // The parser sorts parts of linear features. Restore an explicitly written order,
+        // including a feature that spanned the origin before the sequence was opened up.
+        if (linear && item.locations?.length && item.locations.length > 1 && /^((complement\()?join\()/.test(table[i].location)) {
+          const parts = [...table[i].location.matchAll(/(\d+)\.\.(\d+)|\b(\d+)\b/g)].map(m => ({
+            start: Number(m[1] ?? m[3]) - 1, end: Number(m[2] ?? m[3]) - 1
+          }));
+          const key = (ranges: typeof parts) => ranges.map(r => `${r.start}:${r.end}`).sort().join(",");
+          if (key(parts) === key(item.locations)) {
+            ordered = parts;
+            break;
+          }
+        }
         const e = ends(table[i].location);
         if (e && e[0] === item.start && e[1] === item.end) break;
       }
       if (i === table.length) continue;
       at = i + 1;
+      if (ordered) {
+        item.locations = ordered;
+        item.start = ordered[0].start;
+        item.end = ordered[ordered.length - 1].end;
+      }
       const file = table[i].qualifiers;
       for (const k of Object.keys(notes)) {
         if (!file.some(([n]) => n === k)) {

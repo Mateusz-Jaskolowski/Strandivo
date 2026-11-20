@@ -8,6 +8,7 @@
 // circular sequence a range may cross the origin, in which case start > end.
 
 import { carryRegions } from "./regions.ts";
+import type { DnaMethylation } from "./methylation.ts";
 
 export type Strand = 1 | -1 | 0;
 
@@ -50,6 +51,18 @@ export interface SeqPrimer {
   raw: Record<string, unknown>;
 }
 
+/** A linear DNA end, with any overhang written as top-strand letters. */
+export interface FragmentEnd {
+  kind: "blunt" | "5'" | "3'";
+  bases: string;
+  enzyme?: string;
+}
+
+export interface FragmentEnds {
+  left: FragmentEnd;
+  right: FragmentEnd;
+}
+
 export interface SeqData {
   name: string;
   description: string;
@@ -59,6 +72,48 @@ export interface SeqData {
   primers: SeqPrimer[];
   /** GenBank "source" features: not shown, but kept on their bases through edits and saved. */
   sources: SeqFeature[];
+  /** When present, the sequence includes the bases on both strands' overhangs. */
+  ends?: FragmentEnds;
+  /** How a product's DNA was made, used when no host is given. */
+  methylation?: DnaMethylation;
+}
+
+export const BLUNT_END: FragmentEnd = { kind: "blunt", bases: "" };
+
+const leftBottomOnly = (ends?: FragmentEnds) => ends?.left.kind === "3'" ? ends.left.bases.length : 0;
+const rightBottomOnly = (ends?: FragmentEnds) => ends?.right.kind === "5'" ? ends.right.bases.length : 0;
+
+/** Length of the top strand, excluding bases stored only for the other strand's ends. */
+export function topStrandLength(sequence: string, ends?: FragmentEnds): number {
+  return sequence.length - leftBottomOnly(ends) - rightBottomOnly(ends);
+}
+
+/** The strand used for a plain sequence export. */
+export function topStrandSequence(sequence: string, ends?: FragmentEnds): string {
+  return sequence.slice(leftBottomOnly(ends), sequence.length - rightBottomOnly(ends));
+}
+
+/** Keep the ends only where their overhangs still correspond to the sequence. */
+export function validFragmentEnds(d: Pick<SeqData, "circular" | "sequence" | "ends">, ends = d.ends): FragmentEnds | undefined {
+  if (!ends || d.circular || ends.left.bases.length + ends.right.bases.length >= d.sequence.length) return undefined;
+  const left = d.sequence.slice(0, ends.left.bases.length).toUpperCase() === ends.left.bases ? ends.left : BLUNT_END;
+  const right = d.sequence.slice(d.sequence.length - ends.right.bases.length).toUpperCase() === ends.right.bases ? ends.right : BLUNT_END;
+  return left === BLUNT_END && right === BLUNT_END ? undefined : { left, right };
+}
+
+/** The other strand's view of an end, as the top strand of the reversed fragment. */
+export const reverseEnd = (end: FragmentEnd): FragmentEnd => ({ ...end, bases: reverseComplement(end.bases) });
+
+/** Open at the origin, keeping features as ordered parts if they span both ends. */
+export function linearize(d: SeqData): SeqData {
+  if (!d.circular) return d;
+  const n = d.sequence.length;
+  const split = (f: SeqFeature): SeqFeature => {
+    if (!wraps(f) && !f.locations?.some(wraps)) return f;
+    const locations = (f.locations ?? [f]).flatMap(r => pieces(r, n));
+    return locations.length > 1 ? { ...f, locations } : f;
+  };
+  return { ...d, circular: false, features: d.features.map(split), primers: d.primers.filter(p => !wraps(p)), sources: d.sources.map(split) };
 }
 
 // ---------- ranges ----------
@@ -299,6 +354,7 @@ export function insertBases(d: SeqData, pos: number, bases: string, side: EdgeSi
   return {
     ...d,
     sequence: d.sequence.slice(0, p) + bases + d.sequence.slice(p),
+    ...(d.ends ? { ends: editedEnds(d, p, p) } : {}),
     ...mapAnnotations(d, x => shiftForInsert(x, p, len), n + len, x => insertAtEdge(x, p, len, n, d.circular, side))
   };
 }
@@ -317,6 +373,7 @@ export function deleteRange(d: SeqData, r: Range): SeqData {
   return {
     ...d,
     sequence: d.sequence.slice(0, a) + d.sequence.slice(b + 1),
+    ...(d.ends ? { ends: editedEnds(d, a, b + 1) } : {}),
     ...mapAnnotations(d, x => mapThroughDelete(x, a, b, n), n - (b - a + 1))
   };
 }
@@ -343,7 +400,7 @@ export function replaceRange(d: SeqData, r: Range, bases: string, side: EdgeSide
     const sequence = across
       ? bases.slice(tail) + d.sequence.slice(r.end + 1, r.start) + bases.slice(0, tail)
       : d.sequence.slice(0, r.start) + bases + d.sequence.slice(r.end + 1);
-    return { data: { ...d, sequence }, inserted: r, caret: r.end + 1 };
+    return { data: { ...d, sequence, ...(d.ends ? { ends: validFragmentEnds({ ...d, sequence }, d.ends) } : {}) }, inserted: r, caret: r.end + 1 };
   }
   if (across) {
     // Turn the sequence so the range starts it, then so the new bases end it, as they always have.
@@ -358,11 +415,23 @@ export function replaceRange(d: SeqData, r: Range, bases: string, side: EdgeSide
     data: {
       ...d,
       sequence: d.sequence.slice(0, a) + bases + d.sequence.slice(b + 1),
+      ...(d.ends ? { ends: editedEnds(d, a, b + 1) } : {}),
       ...mapAnnotations(d, x => mapThroughReplace(x, a, b, bases.length, n), n2, x => mapThroughReplace(x, a, b, bases.length, n, side))
     },
     inserted: { start: a, end: a + bases.length - 1 },
     caret: a + bases.length
   };
+}
+
+/** Only edits within an existing overhang or at its outer boundary replace that end. */
+function editedEnds(d: SeqData, start: number, end: number): FragmentEnds | undefined {
+  if (!d.ends) return undefined;
+  const { left, right } = d.ends;
+  const next = {
+    left: start < Math.max(1, left.bases.length) ? BLUNT_END : left,
+    right: end > d.sequence.length - Math.max(1, right.bases.length) ? BLUNT_END : right
+  };
+  return next.left === BLUNT_END && next.right === BLUNT_END ? undefined : next;
 }
 
 /** The bases a feature covers on the top strand, joining its parts and skipping gaps. */
@@ -440,6 +509,7 @@ export function reverseComplementRange(d: SeqData, r: Range | null): SeqData {
   return {
     ...d,
     sequence: d.sequence.slice(0, a) + reverseComplement(d.sequence.slice(a, b + 1)) + d.sequence.slice(b + 1),
+    ...(d.ends ? { ends: a === 0 && b === n - 1 ? { left: reverseEnd(d.ends.right), right: reverseEnd(d.ends.left) } : editedEnds(d, a, b + 1) } : {}),
     features: d.features.map(turn),
     primers: d.primers.map(turn),
     sources: d.sources.map(turn)

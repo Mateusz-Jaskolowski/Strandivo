@@ -1633,6 +1633,25 @@ async function main() {
     check("The Digest gel's PNG is opaque to its last column and row, as a gel has no transparent background", opaqueToEdge(digestGel.png), JSON.stringify(digestGel.png));
     const digestFit = resolutionFits(digestGel.png, digestGel.svg);
     check("The Digest gel's PNG says the resolution that sets it at the SVG's size", digestFit.ok, digestFit.detail);
+    // Copy image: one PNG on the clipboard, put there within the click, as a browser lets a page copy only then.
+    // The real clipboard is a getter on Navigator.prototype, so a property of our own shadows it until it is deleted.
+    const copied = await s.exec(`window.__e2eCopied = null;
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: items => { window.__e2eCopied = Array.from(items); return Promise.resolve(); } } });
+      const button = Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent.includes('Copy image'));
+      button?.click();
+      const items = window.__e2eCopied;
+      return { found: !!button, inClick: !!items, items: items ? items.length : 0, types: items ? items.map(i => Array.from(i.types)) : [], clipboardItem: typeof ClipboardItem };`);
+    check("Copy image puts one PNG on the clipboard within the click that asked", copied.found && copied.inClick && copied.items === 1 && copied.types[0].includes("image/png"), JSON.stringify(copied));
+    const copiedPng = await s.execAsync(`const done = arguments[arguments.length - 1];
+      const toasts = Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)'), t => t.textContent);
+      const item = window.__e2eCopied && window.__e2eCopied[0];
+      if (!item) return done({ toasts });
+      item.getType('image/png').then(blob => blob.arrayBuffer()).then(buffer => done({ toasts, size: buffer.byteLength, signature: Array.from(new Uint8Array(buffer).slice(0, 8)) }), e => done({ toasts, error: String(e) }));`);
+    check("What it copied starts as a PNG does, and a toast says the gel was copied", JSON.stringify(copiedPng.signature) === "[137,80,78,71,13,10,26,10]" && copiedPng.toasts.some(t => /Copied the gel/.test(t)), JSON.stringify(copiedPng));
+    const clipboard = await s.exec(`delete navigator.clipboard; delete window.__e2eCopied;
+      const real = Object.getOwnPropertyDescriptor(Navigator.prototype, 'clipboard');
+      return { own: Object.prototype.hasOwnProperty.call(navigator, 'clipboard'), real: navigator.clipboard === (real && real.get ? real.get.call(navigator) : undefined), type: typeof navigator.clipboard };`);
+    check("With the stand-in deleted, the page's own clipboard is back", !clipboard.own && clipboard.real, JSON.stringify(clipboard));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
     check("Done closes the Digest dialog", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
 

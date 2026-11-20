@@ -8,14 +8,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { parseSequenceFile, serialize } from "../doc/fileio.ts";
-import { fromParsed, toParsed, withTopology, type LoadedDocument } from "../doc/convert.ts";
+import { fromParsed, toParsed, type LoadedDocument } from "../doc/convert.ts";
 import { formatComments, NAME_KEY, parseComments } from "./labinfo.ts";
 import { nameToKeep } from "./sequenceName.ts";
 import { designOf, formatDesign, VARIABLE_QUALIFIER } from "./variable.ts";
 import { regionsOf, withRegions, type ProteinRegion } from "./regions.ts";
 import { readFeatureTables } from "./genbankQualifiers.ts";
 import { protein } from "../doc/analysis.ts";
-import { basesIn, deleteRange, featureBases, insertBases, linearize, reverseComplement, reverseComplementRange, setOrigin, topStrandLength, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "./seqdata.ts";
+import { basesIn, deleteRange, featureBases, insertBases, linearize, reverseComplement, reverseComplementRange, setOrigin, topStrandLength, withTopology, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "./seqdata.ts";
 import { cutsFor, wholeFragment, type Fragment } from "./cloning.ts";
 import { digestSequence, fragmentDocument, fragmentSize } from "./gel.ts";
 import { documentMethylation, hostMethylation, PCR_DNA } from "./methylation.ts";

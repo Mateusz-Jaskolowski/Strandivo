@@ -116,6 +116,12 @@ export function linearize(d: SeqData): SeqData {
   return { ...d, circular: false, features: d.features.map(split), primers: d.primers.filter(p => !wraps(p)), sources: d.sources.map(split) };
 }
 
+export function withTopology(data: SeqData, circular: boolean): SeqData {
+  if (data.circular === circular) return data;
+  if (!circular) return linearize(data);
+  return { ...data, circular, ...(data.ends ? { ends: undefined } : {}) };
+}
+
 // ---------- ranges ----------
 
 export const wraps = (r: Range) => r.start > r.end;

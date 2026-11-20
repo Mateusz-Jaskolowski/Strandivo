@@ -38,7 +38,7 @@ methylation blocks a cut.
   within the bases left after a deletion.
 - **Features across the origin save and reopen exactly.** A feature, primer or source that
   crosses the origin of a circular sequence is now saved the standard GenBank way, as two
-  ranges joined in order, and reopens on the same bases. Make linear in the Info tab keeps
+  ranges joined in order, and reopens on the same bases. Making the sequence linear keeps
   such a feature whole, in two ordered parts, where it used to come back shortened, and a
   region named with a space, like "Signal peptide", keeps its space after saving.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in

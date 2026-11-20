@@ -4,7 +4,7 @@
 // Converting between the file parser's sequence JSON (TeselaGen bio-parsers) and the
 // document model. Fields the model doesn't use are kept and written back unchanged.
 
-import { linearize, newId, pieces, reverseComplement, validFragmentEnds, type FragmentEnd, type FragmentEnds, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
+import { newId, pieces, reverseComplement, validFragmentEnds, type FragmentEnd, type FragmentEnds, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
 import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
 import { hostMethylation, PCR_DNA, type DnaMethylation } from "../lib/methylation.ts";
 import { nameFromFile, nameToKeep } from "../lib/sequenceName.ts";
@@ -140,18 +140,6 @@ function primerParts(p: SeqPrimer): Range[] | undefined {
   const given = p.raw.locations;
   if (!Array.isArray(given) || given.length < 2 || !given.every(r => typeof r?.start === "number" && typeof r?.end === "number")) return undefined;
   return given[0].start === p.start && given[given.length - 1].end === p.end ? given.map(r => ({ start: r.start, end: r.end })) : undefined;
-}
-
-/**
- * The document with its topology changed. Opening a circle at its origin is `linearize`: what
- * crossed the origin becomes ordered parts, so every feature still has all its bases, and a
- * primer across it is left out. Closing a line only closes it: its sequence and annotations
- * stay as they are, and the ends of a fragment, which a circle has none of, go.
- */
-export function withTopology(data: SeqData, circular: boolean): SeqData {
-  if (data.circular === circular) return data;
-  if (!circular) return linearize(data);
-  return { ...data, circular, ...(data.ends ? { ends: undefined } : {}) };
 }
 
 function readEnds(data: Pick<SeqData, "sequence" | "circular">, text: string): SeqData["ends"] {

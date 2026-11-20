@@ -38,6 +38,7 @@ import {
   reverseComplement,
   featureBases,
   withSpan,
+  withTopology,
   type Range,
   type SeqFeature,
   type SeqPrimer,
@@ -1368,7 +1369,7 @@ export class Inspector {
         {
           type: "button",
           "aria-pressed": String(d.circular === circular),
-          onclick: () => d.circular !== circular && this.ctx.store.apply({ ...d, circular }, circular ? "Make circular" : "Make linear")
+          onclick: () => d.circular !== circular && this.ctx.store.apply(withTopology(d, circular), circular ? "Make circular" : "Make linear")
         },
         label
       );

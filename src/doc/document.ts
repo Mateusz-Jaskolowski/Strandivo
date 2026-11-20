@@ -34,7 +34,7 @@ import { CHECK_EXTENSION, checkFileText, matchByName, type ReadCheck } from "../
 import { rememberedReads, rememberReads } from "../readChecks.ts";
 import { rememberedRotation, rememberRotation } from "../mapRotations.ts";
 import { parseComments, type LabFields } from "../lib/labinfo.ts";
-import { basesIn, newId, rangeLength, reverseComplementRange, setOrigin, topStrandLength, type Range, type SeqData } from "../lib/seqdata.ts";
+import { basesIn, newId, rangeLength, reverseComplementRange, setOrigin, topStrandLength, withTopology, type Range, type SeqData } from "../lib/seqdata.ts";
 import { PRIMER_BASES } from "../lib/contextMenu.ts";
 import { gcPercent } from "../lib/labinfo.ts";
 import { enzymePreferences } from "../lib/enzymes.ts";
@@ -46,7 +46,7 @@ import { designOf } from "../lib/variable.ts";
 import { loadSettings, onSettingsChanged, saveSettings, type Settings } from "../settings.ts";
 import { invertedRanges, selectedBases, selectedRanges } from "../lib/selection.ts";
 import { parseSequenceFile, serialize } from "./fileio.ts";
-import { fromParsed, toParsed, withTopology, type LoadedDocument } from "./convert.ts";
+import { fromParsed, toParsed, type LoadedDocument } from "./convert.ts";
 import { DocStore } from "./store.ts";
 import { openContextMenu } from "./contextMenu.ts";
 import { optionsStore, type DocContext, type OpenSequence, type Tab, type ViewOptions } from "./context.ts";

@@ -280,14 +280,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `join(301..366,1..4)`, and `complement(join(…))` on the other strand, whether or not its
   sequence is circular, as `301..4` is no range in GenBank. Parts a file gave are written as
   they were, in order. Reading is unchanged, so files saved before this with `301..4` still
-  open, and are saved as joins from then on. Make linear in the Info tab is `withTopology`
-  in the same file: it opens the circle with `linearize`, so what crossed the origin becomes
-  ordered parts with all its bases, and a primer whose site crosses it is left out, as
-  `linearize` always did (what should become of it is undecided; tests record it, not
-  that it is right). Make circular only closes the line, dropping a fragment's ends, which
-  a circle has none of. The inspector's own Topology buttons, shown with nothing selected
-  (`src/views/inspector.ts`), still flip the flag alone; files stay right because saving
-  expands every range across the origin, but they should call `withTopology` too.
+  open, and are saved as joins from then on. Both topology controls use `withTopology`
+  (`src/lib/seqdata.ts`). Make linear opens the circle with `linearize` so what crossed
+  the origin keeps all its bases as ordered parts. A primer whose site crosses the origin
+  is left out; what should become of it is undecided. Make circular changes only the
+  topology and drops the fragment's ends; it does not simulate ligation.
 - **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
   working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in
   IndexedDB, so it lasts between visits), `web:<id>/<folder>/<path>` for one in a folder

@@ -320,6 +320,18 @@ export async function checkMapImage(s, check, save) {
           : "no cut-count pill in the linear SVG, so no two cut ticks fell within a pixel of each other and its baseline wasn't tested"
       );
     });
+
+    // Selected on screen, a feature is still plain in the image, as in the circular map's.
+    await attempt("Checking that a selection stays out of the linear map's image finished without errors", async () => {
+      const focused = await s.exec(`
+        const store = window.__strandivo.store;
+        const f = store.data.features[0];
+        store.selectRange({ start: f.start, end: f.end }, { kind: 'feature', id: f.id }, 'e2e');
+        return document.querySelectorAll('.sv-map .sv-focused').length;
+      `);
+      const selectedSvg = await saveWith("Save as SVG");
+      check("Nothing selected on screen comes along in the linear map either", focused > 0 && standaloneSvg(selectedSvg) && !selectedSvg.includes("#3557d6"), `${focused} shapes selected on screen`);
+    });
     const pngLinear = await saveWith("Save as PNG");
     check("The linear map's PNG has the map drawn on it, not only the paper", inked(pngLinear), JSON.stringify(pngLinear));
     check("The linear map's PNG is opaque to its last column and row, as its paper covers all of it", opaqueToEdge(pngLinear), JSON.stringify(pngLinear));

@@ -11,9 +11,9 @@ test("an image's file name is the sequence's, made safe, and says what it shows"
   assert.equal(imageFileName("pUC19", "map"), "pUC19 map");
   assert.equal(imageFileName('a/b:c*?"<>|d', "gel"), "a-b-c-d gel");
   assert.equal(imageFileName("  two   spaces ", "map"), "two spaces map");
-  // A name of dots alone would hide the file, or name the folder above.
   // A backslash is a path separator on Windows, and a control character no name may hold.
   assert.equal(imageFileName("a\\b\x01", "map"), "a-b- map");
+  // A name of dots alone would hide the file, or name the folder above.
   assert.equal(imageFileName("..", "map"), "Sequence map");
   assert.equal(imageFileName("", "digest gel", "Digest"), "Digest digest gel");
 });

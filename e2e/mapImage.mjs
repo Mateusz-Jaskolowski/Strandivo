@@ -15,8 +15,12 @@ export function openMapImageMenu(s) {
   `);
 }
 
-/** Whether a saved SVG stands alone: every style its own, nothing only the page understood. */
-export const standaloneSvg = svg => typeof svg === "string" && /^<\?xml/.test(svg) && /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
+/**
+ * Whether a saved SVG stands alone: every style its own, nothing only the page understood, and
+ * its root declaring the SVG namespace, as another program needs to open it (in whatever order
+ * the browser writes the root's attributes).
+ */
+export const standaloneSvg = svg => typeof svg === "string" && /^<\?xml[^>]*\?>\s*<svg\b[^>]*\sxmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
 
 /**
  * A saved PNG with at least a hundredth of its pixels inked. A map is thin lines (about 6% of

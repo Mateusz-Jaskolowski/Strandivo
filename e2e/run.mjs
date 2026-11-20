@@ -3005,6 +3005,30 @@ async function main() {
         await s.click(".sv-dialog input[data-enzyme='EcoRI']");
         await sleep(600);
         await s.shot("13-dark-digest");
+        // An image is drawn from the light theme's colours, so the gel saves as the same SVG from either theme.
+        const themeRead = async want => {
+          await s.waitFor(`document.documentElement.dataset.theme === '${want}'`, 5000);
+          return s.exec("return document.documentElement.dataset.theme");
+        };
+        const inDark = await themeRead("dark");
+        const darkGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG"]);
+        await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");
+        const inLight = await themeRead("light");
+        const lightGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG"]);
+        await s.exec("window.__strandivo.saveSettings({ appearance: 'dark' })");
+        const backInDark = await themeRead("dark");
+        check("In dark, the Digest dialog's Save as SVG… still saves the whole gel", standaloneSvg(darkGel.svg) && darkGel.svg.includes(">Simulated agarose gel<"), `${darkGel.svgName}: ${darkGel.svg.slice(0, 300)}`);
+        const withoutIds = svg => svg.replace(/sv-export-\d+-/g, "");
+        const [darkText, lightText] = [withoutIds(darkGel.svg), withoutIds(lightGel.svg)];
+        let differAt = 0;
+        while (differAt < darkText.length && darkText[differAt] === lightText[differAt]) differAt++;
+        check(
+          "Saved in dark or in light, the gel is the same SVG, as an image is always drawn in the light theme",
+          inDark === "dark" && inLight === "light" && backInDark === "dark" && darkText.length > 0 && darkText === lightText,
+          `theme read: ${inDark}, then ${inLight}, then ${backInDark}; ${darkText.length} and ${lightText.length} characters${darkText === lightText ? "" : `, they differ at ${differAt}: …${darkText.slice(Math.max(0, differAt - 60), differAt + 60)}… and …${lightText.slice(Math.max(0, differAt - 60), differAt + 60)}…`}`
+        );
+        // The saves' toasts, gone before the next screenshots.
+        await s.waitFor("!Array.from(document.querySelectorAll('.ps-toast')).some(t => /^Saved /.test(t.textContent))", 8000);
         await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
       } else check("In dark, Digest opens its dialog", false);
     } else check("The library's parent opens again for the dark screenshots", false);

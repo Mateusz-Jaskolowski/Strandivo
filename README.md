@@ -12,13 +12,15 @@ primers and cloning, and sequence verification with Sanger and whole-plasmid rea
 - **Maps and editing**: circular and linear plasmid maps alongside an editable two-strand
   sequence view, feature/primer/cut-site outline and selection inspector. Colour translations
   by amino-acid chemistry (Clustal X), detect open reading frames on both strands, and
-  convert any ORF into a CDS feature in one click
+  convert any ORF into a CDS feature in one click. Copy a map or save it as PNG or SVG,
+  for slides and lab records
 - **Feature detection**: Tools → Detect Features… scans unannotated sequences against a
   built-in catalog of common plasmid parts (resistance markers, origins, promoters, tags,
   recombination sites, fluorescent proteins, Cas9 and more), including codon-optimized
   variants matched at the protein level
 - **Virtual digests**: simulate single or multi-enzyme digests across one or more constructs
-  on an agarose gel next to a molecular weight ladder, and open any fragment as a new tab
+  on an agarose gel next to a molecular weight ladder, open any fragment as a new tab, and
+  save the gel as an image
 - **Lab enzymes**: track your lab's restriction enzyme stock, suppliers and freezer locations
   (including specific isoschizomers such as Acc65I vs. KpnI or Esp3I vs. BsmBI), and filter
   maps to show only stocked enzymes
@@ -171,7 +173,7 @@ says how to take part.
 ## Roadmap
 
 - Golden Gate primer design (adding sites and overhangs to PCR inserts)
-- Export maps and sequences as PDF, SVG or PNG
+- Export maps as PDF, and the sequence view as an image
 - Signed and notarized installers
 - Write SnapGene `.dna` files
 

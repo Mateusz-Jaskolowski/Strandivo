@@ -259,6 +259,19 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     });
     editNote = { toast: note, after: store.data };
   };
+  const setCircular = (circular: boolean) => {
+    const before = store.data;
+    const after = withTopology(before, circular);
+    if (after === before) return;
+    store.apply(after, circular ? "Make circular" : "Make linear");
+    const count = before.primers.length - after.primers.length;
+    if (!count) return;
+    const kept = new Set(after.primers);
+    const removed = count === 1 ? before.primers.find(primer => !kept.has(primer))?.name.trim() : "";
+    noteEdit(count === 1
+      ? `${removed ? `Primer ${removed}` : "One primer"} was left out because its site crosses the origin.`
+      : `${fmt(count)} primers were left out because their sites cross the origin.`);
+  };
   store.subscribe(c => {
     if (!c.data) return;
     if (editNote && store.data !== editNote.after) {
@@ -326,6 +339,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     openNew: data => host.openNew(data),
     otherSequences: () => host.sequences(),
     setHost: text => setHost(text),
+    setCircular,
     noteEdit,
     renameSequence
   };
@@ -492,7 +506,7 @@ export async function openDocument(initialPath: string | null, host: DocHost, ma
     openSettings: () => void openSettings(),
     sequencing: () => reads.summary(),
     methylation: value => documentMethylation(value, store.data.methylation),
-    setCircular: circular => store.apply(withTopology(store.data, circular), circular ? "Make circular" : "Make linear"),
+    setCircular,
     openReads: () => (reads.count ? setTab("reads") : void addReads()),
     readsOverview: () => {
       if (!reads.count) return null;

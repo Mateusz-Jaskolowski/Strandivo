@@ -97,6 +97,7 @@ export interface DocContext {
   otherSequences(): OpenSequence[];
   /** Sets this file's Host / strain, as the Info tab does, which decides `options.methylation`. */
   setHost(text: string): void;
+  setCircular(circular: boolean): void;
   /**
    * Says what an edit just made did, such as deleting a feature, with an Undo button for as
    * long as it is the last edit and the file's tab is showing.

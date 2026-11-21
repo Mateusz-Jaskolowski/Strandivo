@@ -676,6 +676,7 @@ async function main(outDir) {
       await s.click("//div[@aria-label='Topology']//button[normalize-space()='Linear']");
       const madeLinear = await s.waitFor("window.__strandivo.store.data.circular === false", 5000);
       const ringLinear = madeLinear ? await s.exec(summary) : null;
+      check("Making the circle linear names the primer it left out and offers Undo", ringLinear?.primers.length === 0 && await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => t.textContent.includes('Primer across-F was left out because its site crosses the origin') && t.querySelector('.ps-toast-action')?.textContent === 'Undo')", 2000));
       const halves = JSON.stringify([{ start: 300, end: 365 }, { start: 0, end: 3 }]);
       check(
         "Linear keeps a feature or source across the origin as ordered parts, with all its bases",
@@ -684,7 +685,7 @@ async function main(outDir) {
       );
       await s.exec("window.__strandivo.command('save')");
       const linearText = await saved(downloads + 2);
-      check("Saved linear, they are still joins in order", joined(linearText) >= 3 && !/\b301\.\.4\b/.test(linearText), linearText.slice(0, 120));
+      check("Saved linear, they are still joins in order", joined(linearText) === 3 && !/\b301\.\.4\b/.test(linearText), linearText.slice(0, 120));
       // Both files, dropped on Home, open as they were saved.
       await s.exec("window.__strandivo.showHome()");
       await s.execAsync(drop("origin-ring.gb"), ringText);

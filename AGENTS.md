@@ -296,10 +296,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `join(301..366,1..4)`, and `complement(join(…))` on the other strand, whether or not its
   sequence is circular, as `301..4` is no range in GenBank. Parts a file gave are written as
   they were, in order. Reading is unchanged, so files saved before this with `301..4` still
-  open, and are saved as joins from then on. Both topology controls use `withTopology`
+  open, and are saved as joins from then on. Both topology controls use the same document action and `withTopology`
   (`src/lib/seqdata.ts`). Make linear opens the circle with `linearize` so what crossed
   the origin keeps all its bases as ordered parts. A primer whose site crosses the origin
-  is left out; what should become of it is undecided. Make circular changes only the
+  is left out, with a message and Undo; what should become of it is undecided. Make circular changes only the
   topology and drops the fragment's ends; it does not simulate ligation.
 - **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
   working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in

@@ -1540,6 +1540,14 @@ async function main() {
       await s.click("//div[@aria-label='Topology']//button[normalize-space()='Linear']", "xpath");
       const madeLinear = await s.waitFor("window.__strandivo.store.data.circular === false", 5000);
       const ringLinear = madeLinear ? await s.exec(summary) : null;
+      const primerNotice = await s.waitFor(toastWith("/Primer across-F was left out because its site crosses the origin/", ".ps-toast-action"), 2000);
+      check("Making the circle linear names the primer it left out and offers Undo", ringLinear?.primers.length === 0 && primerNotice);
+      if (primerNotice) {
+        await s.click("//*[contains(@class,'ps-toast')][not(contains(@class,'ps-toast-out'))][contains(.,'Primer across-F was left out')]//button[normalize-space()='Undo']", "xpath");
+        const restored = await s.waitFor("window.__strandivo.store.data.circular && window.__strandivo.store.data.primers.some(primer => primer.name === 'across-F')", 2000);
+        check("Undo restores the primer and its circular document", restored && JSON.stringify(await s.exec(summary)) === JSON.stringify(ringBefore));
+        if (restored) await s.click("//div[@aria-label='Topology']//button[normalize-space()='Linear']", "xpath");
+      }
       const halves = JSON.stringify([{ start: 300, end: 365 }, { start: 0, end: 3 }]);
       check(
         "Linear keeps a feature or source across the origin as ordered parts, with all its bases",
@@ -1549,7 +1557,7 @@ async function main() {
       const linearPath = path.join(path.dirname(savedPath), "origin-linear.gb");
       const linearSaved = await saveAs(linearPath);
       const linearText = linearSaved === true ? readFileSync(linearPath, "utf8") : "";
-      check("Saved linear, they are still joins in order", linearSaved === true && joined(linearText) >= 3 && !/\b301\.\.4\b/.test(linearText), String(linearSaved));
+      check("Saved linear, they are still joins in order", linearSaved === true && joined(linearText) === 3 && !/\b301\.\.4\b/.test(linearText), String(linearSaved));
       const linearReopened = (await openCopy(linearPath, 3)) ? await s.exec(summary) : null;
       check("The linear file reopens with the same parts and bases", JSON.stringify(linearReopened) === JSON.stringify(ringLinear), JSON.stringify(linearReopened).slice(0, 300));
       await s.exec("window.__strandivo.showTab(2); window.__strandivo.closeTab();");

@@ -59,8 +59,10 @@ methylation blocks a cut.
 - **Features across the origin save and reopen exactly.** A feature, primer or source that
   crosses the origin of a circular sequence is now saved the standard GenBank way, as two
   ranges joined in order, and reopens on the same bases. Making the sequence linear keeps
-  such a feature whole, in two ordered parts, where it used to come back shortened, and a
-  region named with a space, like "Signal peptide", keeps its space after saving.
+  such a feature whole, in two ordered parts, where it used to come back shortened. A
+  primer whose site crosses the origin is left out when you make the sequence linear;
+  the message offers Undo. A region named with a space, like "Signal peptide", keeps
+  its space after saving.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"

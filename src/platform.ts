@@ -706,6 +706,9 @@ export const pickFileKeys = (title: string, extensions: string[]) => pickToOpen(
  * where it has one, or else a download of the suggested name (src/webFiles.ts).
  */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
+  // End-to-end tests answer for the save dialog, which WebDriver can't reach.
+  const hook = (window as unknown as { __strandivoSavePath?: (defaultPath: string, filters: { name: string; extensions: string[] }[]) => string | null | Promise<string | null> }).__strandivoSavePath;
+  if (hook) return hook(defaultPath, filters);
   if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);
   const { save } = await import("@tauri-apps/plugin-dialog");
   const p = await save({ defaultPath, filters });

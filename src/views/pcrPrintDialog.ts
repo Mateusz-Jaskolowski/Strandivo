@@ -39,6 +39,7 @@ import { h, toast } from "../ui/dom.ts";
 import { fmt } from "../ui/format.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { s } from "../ui/svg.ts";
+import { copyText } from "./inspector.ts";
 
 const SECTIONS_KEY = "strandivo.pcrPrintSections";
 const PAPER_KEY = "strandivo.pcrPrintPaper";
@@ -69,18 +70,17 @@ function loadSavedPaper(): PlanPaper {
   }
 }
 
-async function copyMarkdownText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const ta = h("textarea", { style: { position: "fixed", opacity: "0" } }, text) as HTMLTextAreaElement;
-  document.body.appendChild(ta);
-  ta.select();
-  const ok = document.execCommand("copy");
-  ta.remove();
-  if (!ok) throw new Error("Clipboard access isn't available.");
+/** An error's message as a sentence, for after a colon in a toast. */
+function errorText(e: unknown): string {
+  const text = (e instanceof Error ? e.message : String(e)).trim();
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
 }
+
+/**
+ * The preview open now, if any. One at a time: both would print through the same page, and
+ * focus can leave a dialog for the PCR dialog's button behind it.
+ */
+let openPreview: { focus: () => void } | null = null;
 
 interface SheetHandles {
   el: HTMLElement;
@@ -570,9 +570,14 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
 
 /**
  * Opens the PCR bench-sheet preview dialog over the PCR product dialog.
- * Does not modify the construct, save settings, or close the PCR dialog.
+ * Does not modify the construct, save settings, or close the PCR dialog. A second call
+ * while one is open focuses that one.
  */
 export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
+  if (openPreview) {
+    openPreview.focus();
+    return;
+  }
   const meta: PcrPlanMeta = {
     title: snapshot.suggestedTitle,
     experimentDate: "",
@@ -589,24 +594,32 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
   document.documentElement.classList.add("sv-printing");
   document.body.classList.add("sv-printing");
 
-  const cleanup = () => {
+  /** True while printing or saving a PDF: the mirror they print stays as it was when they began. */
+  let busy = false;
+  let dialogOpen = true;
+  // The mirror goes once the dialog is closed and no job is printing it.
+  const release = () => {
     printHost.remove();
     if (!document.querySelector(".sv-print-sheet")) {
       document.documentElement.classList.remove("sv-printing");
       document.body.classList.remove("sv-printing");
     }
+    openPreview = null;
   };
 
   const dlg = ctx.openDialog({
     title: "Print PCR plan",
-    note: "Preview of this PCR bench sheet. Title, date and notes stay local to this printout.",
+    note: "Title, date and notes are for this printout only.",
     width: 900,
-    onClose: cleanup
+    onClose: () => {
+      dialogOpen = false;
+      if (!busy) release();
+    }
   });
 
   const syncAll = () => {
     previewSheet.sync(meta, sections);
-    printSheet.sync(meta, sections);
+    if (!busy) printSheet.sync(meta, sections);
   };
 
   const titleInput = h("input", {
@@ -620,6 +633,7 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
     meta.title = titleInput.value;
     syncAll();
   });
+  openPreview = { focus: () => (dialogOpen ? titleInput.focus() : toast("Wait for the PDF to finish saving.", "info")) };
 
   const dateInput = h("input", {
     type: "date",
@@ -708,68 +722,108 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
 
   dlg.body.replaceChildren(controls, stage);
 
-  const copyMarkdown = async () => {
-    savePrintPrefs(sections, paper);
+  const planTitle = () => meta.title.trim() || snapshot.suggestedTitle;
+
+  /** The buttons that print the page: disabled while one of them runs. */
+  const jobButtons: HTMLButtonElement[] = [];
+
+  /** Runs a print or PDF job alone, with the mirror held still until it ends. */
+  const runJob = async (work: () => Promise<void>) => {
+    if (busy) return;
+    busy = true;
+    jobButtons.forEach(b => (b.disabled = true));
     try {
-      await copyMarkdownText(pcrPlanMarkdown(snapshot, meta, sections));
-      toast("Copied PCR plan as Markdown.", "success");
-    } catch (e) {
-      toast(`Couldn't copy Markdown: ${e instanceof Error ? e.message : e}`, "error", 6000);
+      await work();
+    } finally {
+      busy = false;
+      if (!dialogOpen) {
+        release();
+      } else {
+        jobButtons.forEach(b => (b.disabled = false));
+        printSheet.sync(meta, sections);
+      }
     }
   };
 
+  /** The plan's name as the page title while it prints (the system may use it for the job or the PDF's title), put back once. */
+  const withPlanTitle = async (work: () => Promise<void>) => {
+    const previous = document.title;
+    const shown = `${planTitle()} — PCR Plan`;
+    document.title = shown;
+    try {
+      await work();
+    } finally {
+      // Something else may have named the window meanwhile; that name stays.
+      if (document.title === shown) document.title = previous;
+    }
+  };
+
+  /** Asks where to save; null when the user cancels, and says so when the picker itself fails. */
+  const pickPath = async (file: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> => {
+    try {
+      return await chooseSavePath(file, filters);
+    } catch (e) {
+      toast(`Couldn't choose where to save: ${errorText(e)}`, "error", 6000);
+      return null;
+    }
+  };
+
+  const copyMarkdown = async () => {
+    savePrintPrefs(sections, paper);
+    await copyText(pcrPlanMarkdown(snapshot, meta, sections), "the PCR plan as Markdown");
+  };
+
   const saveHtml = async () => {
-    const file = planFileName(meta.title.trim() || snapshot.suggestedTitle);
-    const path = await chooseSavePath(file, [{ name: "HTML", extensions: ["html", "htm"] }]);
+    const path = await pickPath(planFileName(planTitle()), [{ name: "HTML", extensions: ["html", "htm"] }]);
     if (!path) return;
     savePrintPrefs(sections, paper);
     try {
       await saveText(path, pcrPlanHtml(snapshot, meta, sections));
-      toast("Saved printable PCR plan.", "success");
+      toast("Saved the PCR plan.", "success");
     } catch (e) {
-      toast(`Couldn't save the printable HTML: ${e instanceof Error ? e.message : e}`, "error", 6000);
+      toast(`Couldn't save the plan: ${errorText(e)}`, "error", 6000);
     }
   };
 
-  const savePdf = async () => {
-    const file = planPdfFileName(meta.title.trim() || snapshot.suggestedTitle);
-    const path = await chooseSavePath(file, [{ name: "PDF", extensions: ["pdf"] }]);
-    if (!path) return;
-    savePrintPrefs(sections, paper);
-    try {
-      await saveWindowPdf(path, paper);
-      toast("Saved PCR plan as PDF.", "success");
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      toast(`Couldn't save PDF (${detail}). Try Print… or Save HTML… instead.`, "error", 7000);
-    }
-  };
+  const savePdf = () =>
+    runJob(async () => {
+      const path = await pickPath(planPdfFileName(planTitle()), [{ name: "PDF", extensions: ["pdf"] }]);
+      if (!path) return;
+      savePrintPrefs(sections, paper);
+      try {
+        await withPlanTitle(() => saveWindowPdf(path, paper));
+        toast("Saved the PCR plan as a PDF.", "success");
+      } catch (e) {
+        toast(`Couldn't save the PDF: ${errorText(e)}`, "error", 7000);
+      }
+    });
 
-  const runPrint = async () => {
-    savePrintPrefs(sections, paper);
-    const prevTitle = document.title;
-    const planTitle = meta.title.trim() || snapshot.suggestedTitle;
-    document.title = `${planTitle} — PCR Plan`;
-    try {
-      await printWindow();
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      toast(`Couldn't open the print dialog (${detail}). Use Save HTML… to print from a browser.`, "error", 7000);
-    } finally {
-      document.title = prevTitle;
-    }
-  };
+  const runPrint = () =>
+    runJob(async () => {
+      savePrintPrefs(sections, paper);
+      try {
+        await withPlanTitle(printWindow);
+      } catch (e) {
+        toast(`Couldn't open the print dialog: ${errorText(e)} Save HTML… makes a file to print from a browser.`, "error", 7000);
+      }
+    });
+
+  const pdfButton = pdfSupported
+    ? (h("button", { type: "button", class: "sv-btn", "data-focus": "plan-save-pdf", onclick: () => void savePdf() }, "Save as PDF…") as HTMLButtonElement)
+    : null;
+  const printButton = h(
+    "button",
+    { type: "button", class: "sv-btn sv-btn-primary", "data-focus": "plan-print", onclick: () => void runPrint() },
+    iconSvg("print", 14),
+    pdfSupported ? "Print…" : "Print / Save as PDF…"
+  ) as HTMLButtonElement;
+  jobButtons.push(printButton, ...(pdfButton ? [pdfButton] : []));
 
   dlg.footer.replaceChildren(
     h("button", { type: "button", class: "sv-btn sv-foot-start", "data-focus": "plan-cancel", onclick: () => dlg.close() }, "Cancel"),
     h("button", { type: "button", class: "sv-btn", "data-focus": "plan-copy-md", onclick: () => void copyMarkdown() }, iconSvg("copy", 14), "Copy Markdown"),
     h("button", { type: "button", class: "sv-btn", "data-focus": "plan-save-html", onclick: () => void saveHtml() }, "Save HTML…"),
-    ...(pdfSupported ? [h("button", { type: "button", class: "sv-btn", "data-focus": "plan-save-pdf", onclick: () => void savePdf() }, "Save as PDF…")] : []),
-    h(
-      "button",
-      { type: "button", class: "sv-btn sv-btn-primary", "data-focus": "plan-print", onclick: () => void runPrint() },
-      iconSvg("print", 14),
-      pdfSupported ? "Print…" : "Print / Save as PDF…"
-    )
+    ...(pdfButton ? [pdfButton] : []),
+    printButton
   );
 }

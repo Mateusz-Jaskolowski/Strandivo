@@ -633,7 +633,7 @@ fn cancel_quit(app: AppHandle, state: tauri::State<'_, Shared>) {
 
 #[tauri::command]
 fn print_window(window: tauri::WebviewWindow) -> Result<(), String> {
-    window.print().map_err(|e| format!("Could not open the print dialog: {e}"))
+    window.print().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

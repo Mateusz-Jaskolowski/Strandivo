@@ -376,7 +376,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   check when you add something users do. It drives the window through `window.__strandivo`:
   the main window's own actions (open, tabs, Home's folders, `saveSettings`) plus those of
   the file in the current tab (store, `command()`, adding reads, saving and `saveCheck`
-  without a file dialog). It runs a debug build, where Ctrl+Shift+I opens WebKitGTK's
+  without a file dialog). The save dialog, printing and PDF export are stood in for by
+  `window.__strandivoSavePath`, `__strandivoPrint` and `__strandivoSavePdf`
+  (`src/platform.ts`), which check what the page hands over, not the native engines. It runs a debug build, where Ctrl+Shift+I opens WebKitGTK's
   inspector over part of the window for the rest of the run, even sent from a script and
   cancelled by the page, so it never sends that key; `documentShortcut` in
   `src/lib/shortcuts.ts` is unit-tested instead. At its end it switches to Dark through

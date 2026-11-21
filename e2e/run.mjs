@@ -1062,6 +1062,48 @@ async function main() {
     // Printable PCR plan: captures edited program, chosen ladder, and collapsed mix without altering the document or PCR dialog.
     const ladderBeforePrint = await s.exec("const sel = document.querySelector(\".sv-dialog select[aria-label='Ladder']\"); const prev = sel.value; sel.value = '100bp'; sel.dispatchEvent(new Event('change', { bubbles: true })); return prev;");
     const beforePrintSnap = await s.exec(`${doc} return { seqLen: s.data.sequence.length, primers: s.data.primers.length, dirty: s.dirty, settings: localStorage.getItem('strandivo.settings') };`);
+    // The page's print state and the two kept choices, which only printing, copying or saving writes.
+    const printState = `return {
+      html: document.documentElement.classList.contains('sv-printing'),
+      body: document.body.classList.contains('sv-printing'),
+      mirrors: document.querySelectorAll('.sv-print-sheet').length,
+      dialogs: document.querySelectorAll('.sv-dialog').length,
+      sections: localStorage.getItem('strandivo.pcrPrintSections'),
+      paper: localStorage.getItem('strandivo.pcrPrintPaper'),
+      title: document.title
+    };`;
+    await s.exec("localStorage.removeItem('strandivo.pcrPrintSections'); localStorage.removeItem('strandivo.pcrPrintPaper');");
+    const appTitle = await s.exec("return document.title");
+    // A preview opened and cancelled: everything typed or ticked in it goes, and so do the mirror and both classes.
+    await s.click("button[data-focus='print-pcr-plan']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000);
+    const openedOnce = await s.exec(printState);
+    const second = await s.exec(`
+      const set = (key, value, event = 'input') => { const el = document.querySelector('[data-focus="' + key + '"]'); el.value = value; el.dispatchEvent(new Event(event, { bubbles: true })); };
+      set('plan-title', 'Cancelled plan');
+      set('plan-date', '2026-12-24');
+      set('plan-notes', 'Never kept');
+      set('plan-paper', 'letter', 'change');
+      document.querySelector('[data-focus="plan-sec-gel"]').click();
+      // Focus can leave the preview for the PCR dialog behind it; its button must not open a second preview.
+      document.querySelector('.sv-dialog [data-focus="print-pcr-plan"]').click();
+      return { dialogs: document.querySelectorAll('.sv-dialog').length, mirrors: document.querySelectorAll('.sv-print-sheet').length, focus: document.activeElement?.dataset.focus ?? '' };
+    `);
+    check(
+      "One print preview at a time: the PCR dialog's button focuses the open one",
+      second.dialogs === 2 && second.mirrors === 1 && second.focus === "plan-title",
+      JSON.stringify(second)
+    );
+    await s.click("button[data-focus='plan-cancel']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
+    const cancelledOnly = await s.exec(printState);
+    check(
+      "A preview only opened and cancelled marks the page for printing while open, then leaves no mirror, class, kept choice or title",
+      openedOnce.html && openedOnce.body && openedOnce.mirrors === 1 &&
+        !cancelledOnly.html && !cancelledOnly.body && cancelledOnly.mirrors === 0 &&
+        cancelledOnly.sections === null && cancelledOnly.paper === null && cancelledOnly.title === appTitle,
+      JSON.stringify({ openedOnce, cancelledOnly })
+    );
     await s.click("button[data-focus='print-pcr-plan']");
     check("Print PCR plan… opens a preview dialog without closing the PCR product dialog", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000));
     const printPreview = await s.exec(`
@@ -1128,17 +1170,136 @@ async function main() {
     `);
     await s.exec("delete navigator.clipboard; delete window.__pcrMd;");
     check("Copy Markdown copies a Markdown bench sheet with edited program and collapsed mix", /# Clone verification \\#7/.test(copiedMd) && /\*\*64 °C\*\*/.test(copiedMd) && /5 reactions/.test(copiedMd), copiedMd.slice(0, 220));
-    const printCalled = await s.exec(`window.__e2ePrintCalls = 0; window.__strandivoPrint = () => { window.__e2ePrintCalls++; }; document.querySelector('[data-focus="plan-print"]').click(); return window.__e2ePrintCalls;`);
-    await s.exec("delete window.__strandivoPrint; delete window.__e2ePrintCalls;");
-    check("Print… invokes the print path cleanly", printCalled === 1, String(printCalled));
+    // These stand in for the system's print and save dialogs and for the shell's PDF writer: they check what the
+    // page hands over and how it recovers, not that WebKitGTK prints (the shell's own tests cover its file handling).
+    // Toasts leave as they fade, so the ones already there are marked rather than counted.
+    const markToasts = () => s.exec("document.querySelectorAll('.ps-toast').forEach(t => { t.dataset.e2eSeen = '1'; });");
+    const newToasts = () => s.exec("return Array.from(document.querySelectorAll('.ps-toast:not([data-e2e-seen])')).map(t => t.querySelector('.ps-toast-text')?.textContent.trim() ?? '');");
+    const printed = await s.exec(`
+      window.__e2ePrints = [];
+      window.__strandivoPrint = () => {
+        window.__e2ePrints.push({
+          title: document.title,
+          html: document.documentElement.classList.contains('sv-printing'),
+          body: document.body.classList.contains('sv-printing'),
+          mirrorTitle: document.querySelector('.sv-print-sheet .sv-sheet-title')?.textContent ?? '',
+          disabled: document.querySelector('[data-focus="plan-print"]').disabled
+        });
+      };
+      document.querySelector('[data-focus="plan-print"]').click();
+      return window.__e2ePrints;
+    `);
+    const afterPrint = await s.exec(`${printState.replace("return {", "return { enabled: !document.querySelector('[data-focus=\"plan-print\"]').disabled,")}`);
+    await s.exec("delete window.__strandivoPrint; delete window.__e2ePrints;");
+    check(
+      "Print… (frontend hook) prints the mirror under the plan's title, alone, then puts the title back",
+      printed.length === 1 && printed[0].title === "Clone verification #7 — PCR Plan" && printed[0].html && printed[0].body &&
+        printed[0].mirrorTitle === "Clone verification #7" && printed[0].disabled &&
+        afterPrint.title === appTitle && afterPrint.enabled && afterPrint.mirrors === 1,
+      JSON.stringify({ printed, afterPrint })
+    );
+    // Save as PDF… through the save-dialog and PDF hooks: a cancelled dialog does nothing, a failing one says so.
+    await s.exec("localStorage.removeItem('strandivo.pcrPrintSections'); localStorage.removeItem('strandivo.pcrPrintPaper');");
+    await markToasts();
+    const pickerCancelled = await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      window.__e2ePdfCalls = [];
+      window.__strandivoSavePdf = (path, paper) => { window.__e2ePdfCalls.push({ path, paper }); };
+      window.__strandivoSavePath = (name, filters) => { window.__e2eAsked = { name, filters }; return null; };
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => done({ asked: window.__e2eAsked, calls: window.__e2ePdfCalls.length, sections: localStorage.getItem('strandivo.pcrPrintSections') }), 300);
+    `);
+    check(
+      "Save as PDF… (frontend hooks) suggests a name from the title, and a cancelled save dialog saves and keeps nothing",
+      pickerCancelled.asked?.name === "Clone verification #7.pdf" && JSON.stringify(pickerCancelled.asked?.filters) === JSON.stringify([{ name: "PDF", extensions: ["pdf"] }]) &&
+        pickerCancelled.calls === 0 && pickerCancelled.sections === null && (await newToasts()).length === 0,
+      JSON.stringify(pickerCancelled)
+    );
+    await markToasts();
+    await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      window.__strandivoSavePath = () => { throw new Error('Picker broke'); };
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => done(true), 300);
+    `);
+    const pickerFailed = await newToasts();
+    check("A save dialog that fails says so and writes nothing", pickerFailed.some(t => t.includes("Couldn't choose where to save: Picker broke.")) && (await s.exec("return window.__e2ePdfCalls.length")) === 0, JSON.stringify(pickerFailed));
+    await markToasts();
+    const pdfSaved = await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      const paper = document.querySelector('[data-focus="plan-paper"]');
+      paper.value = 'letter';
+      paper.dispatchEvent(new Event('change', { bubbles: true }));
+      let release;
+      window.__strandivoSavePath = () => '/tmp/e2e-plan.pdf';
+      window.__strandivoSavePdf = (path, size) => {
+        window.__e2ePdfCalls.push({
+          path, paper: size, title: document.title,
+          mirrorGel: !!document.querySelector('.sv-print-sheet .sv-sheet-gel-svg'),
+          disabled: [...document.querySelectorAll('[data-focus="plan-print"], [data-focus="plan-save-pdf"]')].every(b => b.disabled)
+        });
+        return new Promise(r => { release = r; });
+      };
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => {
+        // While the PDF is written, a change shows in the preview but not in the page being printed, and Print… waits.
+        const gel = document.querySelector('[data-focus="plan-sec-gel"]');
+        gel.click();
+        window.__strandivoPrint = () => { window.__e2eLatePrint = true; };
+        document.querySelector('[data-focus="plan-print"]').click();
+        const during = {
+          previewGel: !!document.querySelector('.sv-print-stage .sv-sheet-gel-svg'),
+          mirrorGel: !!document.querySelector('.sv-print-sheet .sv-sheet-gel-svg'),
+          latePrint: !!window.__e2eLatePrint
+        };
+        release();
+        setTimeout(() => {
+          const after = {
+            mirrorGel: !!document.querySelector('.sv-print-sheet .sv-sheet-gel-svg'),
+            title: document.title,
+            enabled: ![...document.querySelectorAll('[data-focus="plan-print"], [data-focus="plan-save-pdf"]')].some(b => b.disabled),
+            sections: JSON.parse(localStorage.getItem('strandivo.pcrPrintSections') || 'null'),
+            paper: localStorage.getItem('strandivo.pcrPrintPaper')
+          };
+          gel.click();
+          delete window.__strandivoPrint;
+          done({ calls: window.__e2ePdfCalls, during, after });
+        }, 200);
+      }, 200);
+    `);
+    const pdfCall = pdfSaved.calls[0] ?? {};
+    check(
+      "Save as PDF… (frontend hooks) hands over the path and paper, holds the printed page still and alone, then puts the title back",
+      pdfSaved.calls.length === 1 && pdfCall.path === "/tmp/e2e-plan.pdf" && pdfCall.paper === "letter" && pdfCall.title === "Clone verification #7 — PCR Plan" &&
+        pdfCall.mirrorGel && pdfCall.disabled && !pdfSaved.during.previewGel && pdfSaved.during.mirrorGel && !pdfSaved.during.latePrint &&
+        !pdfSaved.after.mirrorGel && pdfSaved.after.title === appTitle && pdfSaved.after.enabled &&
+        pdfSaved.after.sections?.gel === true && pdfSaved.after.paper === "letter" &&
+        (await newToasts()).includes("Saved the PCR plan as a PDF."),
+      JSON.stringify(pdfSaved)
+    );
+    await markToasts();
+    const pdfFailed = await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      window.__strandivoSavePdf = () => Promise.reject(new Error('Disk full'));
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => done({ title: document.title, enabled: !document.querySelector('[data-focus="plan-save-pdf"]').disabled, mirrors: document.querySelectorAll('.sv-print-sheet').length }), 300);
+    `);
+    const pdfFailedToasts = await newToasts();
+    check(
+      "A PDF that can't be written says why and leaves the preview ready to try again",
+      pdfFailedToasts.includes("Couldn't save the PDF: Disk full.") && pdfFailed.title === appTitle && pdfFailed.enabled && pdfFailed.mirrors === 1,
+      JSON.stringify({ pdfFailed, pdfFailedToasts })
+    );
+    await s.exec("delete window.__strandivoSavePdf; delete window.__strandivoSavePath; delete window.__e2ePdfCalls; delete window.__e2eAsked; delete window.__e2eLatePrint;");
     await s.shot("04-pcr-print-preview");
     await s.click("button[data-focus='plan-cancel']");
     await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
-    const afterCancelSnap = await s.exec(`${doc} return { seqLen: s.data.sequence.length, primers: s.data.primers.length, dirty: s.dirty, settings: localStorage.getItem('strandivo.settings'), mirror: !!document.querySelector('.sv-print-sheet'), printing: document.body.classList.contains('sv-printing'), editedTemp: document.querySelector('[data-focus="program-1:1:temp"]')?.value };`);
+    const afterCancelSnap = await s.exec(`${doc} return { seqLen: s.data.sequence.length, primers: s.data.primers.length, dirty: s.dirty, settings: localStorage.getItem('strandivo.settings'), mirror: !!document.querySelector('.sv-print-sheet'), printing: document.body.classList.contains('sv-printing') || document.documentElement.classList.contains('sv-printing'), title: document.title, editedTemp: document.querySelector('[data-focus="program-1:1:temp"]')?.value };`);
     check(
       "Cancelling the print preview cleans up and leaves the PCR dialog, document and settings unchanged",
       !afterCancelSnap.mirror &&
         !afterCancelSnap.printing &&
+        afterCancelSnap.title === appTitle &&
         afterCancelSnap.editedTemp === "64" &&
         afterCancelSnap.seqLen === beforePrintSnap.seqLen &&
         afterCancelSnap.primers === beforePrintSnap.primers &&

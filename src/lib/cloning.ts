@@ -11,7 +11,7 @@ import { blockedSite, completeLinearCuts, digestSites, enzymeName, siteCuts } fr
 import type { DnaMethylation } from "./methylation.ts";
 import { pcrProduct, productDocument } from "./pcr.ts";
 import { DEFAULT_TM, findBindingSites, meltingTemp, TM_METHODS, type TmMethod } from "./primers.ts";
-import { BLUNT_END as BLUNT, basesIn, clipRange, linearize, newId, rangeLength, reverseComplement, reverseComplementRange, reverseEnd, setOrigin, validFragmentEnds, withoutStaleTranslations, type FragmentEnd, type Range, type SeqData } from "./seqdata.ts";
+import { BLUNT_END as BLUNT, basesIn, clipRange, linearize, newId, rangeLength, reverseComplement, reverseComplementRange, reverseEnd, setOrigin, topStrandLength, validFragmentEnds, withoutStaleTranslations, type FragmentEnd, type Range, type SeqData } from "./seqdata.ts";
 
 export type { FragmentEnd } from "./seqdata.ts";
 
@@ -191,8 +191,44 @@ export function endLabel(e: FragmentEnd): string {
   return e.enzyme ? `${e.enzyme} (${what})` : what;
 }
 
-/** The fragment's length in bases. */
+/** The fragment's length in bases as stored: both strands' ends, which is more than its top strand where an end is staggered. */
 export const fragmentLength = (f: Fragment) => f.data.sequence.length;
+
+/**
+ * Where a fragment's top strand lies on the sequence it was cut from (0-based, inclusive, and
+ * across the origin when `end < start`) and how long it is: the numbers the Digest dialog gives
+ * (`fragmentSpan` and `fragmentSize` in `src/lib/gel.ts`, which this file can't import) and the
+ * ones to show for a fragment. `n` is the source's length.
+ */
+export function fragmentExtent(f: Fragment, n: number): { start: number; end: number; length: number } {
+  const length = topStrandLength(f.data.sequence, f);
+  const start = (f.source.start + (f.left.kind === "3'" ? f.left.bases.length : 0)) % n;
+  return { start, end: (start + length - 1) % n, length };
+}
+
+/**
+ * Names for pieces that no two share, so no two oligos do: the first keeps its name and a
+ * later one with the same name becomes "name 2", "name 3" (counting its own occurrence),
+ * skipping any name a piece already has. Names that already differ are left as they are.
+ */
+export function distinctNames(names: string[]): string[] {
+  const taken = new Set(names);
+  const seen = new Set<string>();
+  const counts = new Map<string, number>();
+  return names.map(name => {
+    const count = (counts.get(name) ?? 0) + 1;
+    counts.set(name, count);
+    if (!seen.has(name)) {
+      seen.add(name);
+      return name;
+    }
+    let k = count;
+    let next = `${name} ${k}`.trim();
+    while (taken.has(next)) next = `${name} ${++k}`.trim();
+    taken.add(next);
+    return next;
+  });
+}
 
 // ---------- joining ----------
 
@@ -322,8 +358,11 @@ export function assemblyBases(f: Fragment): Fragment {
   return data === f.data ? f : { ...f, data: withoutStaleTranslations(f.data, data), left, right };
 }
 
+/** The most bases of overlap an assembly looks for between neighbours (its own limit, not a method's). */
+export const OVERLAP_SEARCH_MAX = 200;
+
 /** The longest end of `a` (at least `min` bases, at most `max`) that `b` starts with, or 0. */
-export function findOverlap(a: string, b: string, min: number, max = 200): number {
+export function findOverlap(a: string, b: string, min: number, max = OVERLAP_SEARCH_MAX): number {
   const A = a.toUpperCase();
   const B = b.toUpperCase();
   for (let k = Math.min(max, A.length, B.length); k >= min; k--) if (A.endsWith(B.slice(0, k))) return k;
@@ -425,9 +464,11 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   const notes: string[] = [];
   const reused: ReusedOverlap[] = [];
   const m = inputs.length;
-  const prepared = inputs.map(i => {
+  // Pieces that share a name get distinct ones, for the report and for the primers named after them.
+  const names = distinctNames(inputs.map(i => i.name));
+  const prepared = inputs.map((i, k) => {
     const f = i.pcr ? i.fragment : assemblyBases(i.fragment);
-    return { ...f, source: { ...f.source, name: i.name } };
+    return { ...f, source: { ...f.source, name: names[k] } };
   });
   const seqs = prepared.map(f => f.data.sequence.toUpperCase());
   const tails = inputs.map(() => ({ forward: "", reverse: "" }));
@@ -441,7 +482,7 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     if (found) {
       lengths.push(found);
       designed.push(false);
-      reused.push({ index: a, left: inputs[a].name, right: inputs[b].name, bases: seqs[a].slice(-found), merged: null, kept: null });
+      reused.push({ index: a, left: names[a], right: names[b], bases: seqs[a].slice(-found), merged: null, kept: null });
       continue;
     }
     const L = method.overlap;
@@ -463,18 +504,18 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     } else if (ampA) {
       tails[a].reverse = reverseComplement(seqs[b].slice(0, L));
       added = tails[a].reverse.length;
-    } else problems.push(`${inputs[a].name} and ${inputs[b].name} don't overlap. Amplify one of them by PCR to add the overlap.`);
+    } else problems.push(`${names[a]} and ${names[b]} share no overlap of ${method.minOverlap}–${OVERLAP_SEARCH_MAX} bases at their join (longer ones aren't searched for). Amplify one of them by PCR to add the overlap.`);
     // Nothing to join on is not a short overlap, it is not an assembly: a piece with no
     // sequence in it leaves the two neighbours sharing nothing, and keeping every base of
     // nothing is not a product. Say so and build none.
     if (added === 0) {
-      problems.push(`There are no bases to join ${inputs[a].name} and ${inputs[b].name} on. Check that both pieces have sequence in them.`);
+      problems.push(`There are no bases to join ${names[a]} and ${names[b]} on. Check that both pieces have sequence in them.`);
       lengths.push(null);
     } else {
       lengths.push(added);
       if (added !== null && added < L) {
         const short = added < method.minOverlap ? `, shorter than the ${baseCount(method.minOverlap)} this method needs` : "";
-        problems.push(`${inputs[a].name} and ${inputs[b].name} are too short to carry the whole ${L} base overlap, so it can only be ${baseCount(added)}${short}. Lengthen the shorter piece, or join it some other way.`);
+        problems.push(`${names[a]} and ${names[b]} are too short to carry the whole ${L} base overlap, so it can only be ${baseCount(added)}${short}. Lengthen the shorter piece, or join it some other way.`);
       }
     }
   }
@@ -482,7 +523,7 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   const pieces: AssemblyPlan["pieces"] = [];
   inputs.forEach((input, i) => {
     if (!input.pcr) {
-      pieces.push({ name: input.name, fragment: prepared[i], primers: [] });
+      pieces.push({ name: names[i], fragment: prepared[i], primers: [] });
       return;
     }
     const { template, range } = input.pcr;
@@ -492,27 +533,27 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
       forwardTail: tails[i].forward, reverseTail: tails[i].reverse, trimTails: false
     });
     if (!pair) {
-      problems.push(`No primers could be designed for ${input.name}.`);
-      pieces.push({ name: input.name, fragment: prepared[i], primers: [] });
+      problems.push(`No primers could be designed for ${names[i]}.`);
+      pieces.push({ name: names[i], fragment: prepared[i], primers: [] });
       return;
     }
     const f = tails[i].forward.toUpperCase();
     const r = tails[i].reverse.toUpperCase();
-    const forward = { ...pair.forward, name: `${input.name}-F` };
-    const reverse = { ...pair.reverse, name: `${input.name}-R` };
+    const forward = { ...pair.forward, name: `${names[i]}-F` };
+    const reverse = { ...pair.reverse, name: `${names[i]}-R` };
     const product = pcrProduct(template.sequence, template.circular, forward, reverse);
     if (!product || product.sequence.toUpperCase() !== f + seqs[i] + reverseComplement(r)) {
-      problems.push(`The primers for ${input.name} don't amplify the selected fragment with its overlaps.`);
-      pieces.push({ name: input.name, fragment: prepared[i], primers: [] });
+      problems.push(`The primers for ${names[i]} don't amplify the selected fragment with its overlaps.`);
+      pieces.push({ name: names[i], fragment: prepared[i], primers: [] });
       return;
     }
     const data = productDocument(template, product);
     pieces.push({
-      name: input.name,
+      name: names[i],
       fragment: { ...prepared[i], data, left: BLUNT, right: BLUNT },
       primers: [
-        { name: `${input.name}-F`, bases: pair.forward.bases, tail: f.length, tm: pair.forward.tm, strand: 1 },
-        { name: `${input.name}-R`, bases: pair.reverse.bases, tail: r.length, tm: pair.reverse.tm, strand: -1 }
+        { name: `${names[i]}-F`, bases: pair.forward.bases, tail: f.length, tm: pair.forward.tm, strand: 1 },
+        { name: `${names[i]}-R`, bases: pair.reverse.bases, tail: r.length, tm: pair.reverse.tm, strand: -1 }
       ]
     });
   });
@@ -528,7 +569,7 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   const tmName = TM_METHODS.find(x => x.id === method.tmMethod)?.short ?? method.tmMethod;
   let unknownOverlap = false;
   joinInfo.forEach((x, j) => {
-    const other = inputs[(j + 1) % m].name;
+    const other = names[(j + 1) % m];
     if (!x.bases) return;
     // Whether an overlap can be assessed at all is a separate question from whether it
     // meets a minimum, and it is asked of every method: In-Fusion sets no minimum, which
@@ -538,12 +579,12 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     if (x.tm === null) {
       if (/[^ACGT]/.test(x.bases)) {
         unknownOverlap = true;
-        problems.push(`The overlap between ${inputs[j].name} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
+        problems.push(`The overlap between ${names[j]} and ${other} has bases that aren't A, C, G or T, so there is no telling whether it will anneal. An overlap needs known sequence.`);
       }
-      else problems.push(`The overlap between ${inputs[j].name} and ${other} is ${baseCount(x.bases.length)}, too short to work out a melting temperature for.`);
+      else problems.push(`The overlap between ${names[j]} and ${other} is ${baseCount(x.bases.length)}, too short to work out a melting temperature for.`);
       return;
     }
-    if (method.minTm && x.tm < method.minTm) problems.push(`The overlap between ${inputs[j].name} and ${other} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
+    if (method.minTm && x.tm < method.minTm) problems.push(`The overlap between ${names[j]} and ${other} melts at ${x.tm.toFixed(1)} °C (${tmName}); ${method.minTm} °C or more joins more reliably.`);
   });
 
   const failed = () => ({ pieces, joins: joinInfo, product: null, layout: null, problems, notes: [...notes, ...reusedNotes(reused)], reused });
@@ -568,11 +609,11 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
   joinInfo.forEach((x, j) => {
     if (!x.bases) return;
     const found = overlapMatches(data.sequence, circular, x.bases);
-    const other = inputs[(j + 1) % m].name;
+    const other = names[(j + 1) % m];
     // By construction the overlap is in the product it was cut from. If it is not, the plan
     // contradicts itself and must not be described as checked.
     if (!found.length) {
-      problems.push(`The ${baseCount(x.bases.length)} joining ${inputs[j].name} and ${other} ${x.bases.length === 1 ? "isn't" : "aren't"} in the product this plan builds, so the plan doesn't hold together and shouldn't be relied on.`);
+      problems.push(`The ${baseCount(x.bases.length)} joining ${names[j]} and ${other} ${x.bases.length === 1 ? "isn't" : "aren't"} in the product this plan builds, so the plan doesn't hold together and shouldn't be relied on.`);
       return;
     }
     if (found.length < 2) return;
@@ -581,7 +622,7 @@ export function planAssembly(inputs: AssemblyInput[], method: OverlapMethod, cir
     const shown = found.slice(0, 6).map(f => `${(f.start + 1).toLocaleString("en-GB")}${f.direct ? "" : " on the other strand"}`);
     const where = found.length > shown.length ? `${shown.join(", ")} and ${(found.length - shown.length).toLocaleString("en-GB")} more` : shown.join(", ");
     const reads = x.bases.length === 1 ? "reads" : "read";
-    problems.push(`The ${baseCount(x.bases.length)} joining ${inputs[j].name} and ${other} ${reads} the same in ${found.length.toLocaleString("en-GB")} places in the product, at ${where}, so more than one of them could pair with the join. An overlap is most dependable as the only match: move the join into sequence that isn't repeated.`);
+    problems.push(`The ${baseCount(x.bases.length)} joining ${names[j]} and ${other} ${reads} the same in ${found.length.toLocaleString("en-GB")} places in the product, at ${where}, so more than one of them could pair with the join. An overlap is most dependable as the only match: move the join into sequence that isn't repeated.`);
   });
   // The designed primers, where they bind in full on the product.
   const primers = pieces.flatMap(p => p.primers).flatMap(p => {
@@ -717,7 +758,8 @@ export function goldenGate(parts: { name: string; data: SeqData; methylation?: D
   let solution: { order: Fragment[]; data: SeqData; layout: Layout } | undefined;
   let multiple = false;
   let recut = false;
-  let partial = false;
+  // The parts left out of a circle the search found without them (the one leaving out fewest): a witness that such a circle forms, not a list of them.
+  let witness = null as string[] | null;
   let longest: Fragment[] = [];
   // Repeated overhangs can make the number of paths grow exponentially.
   const limit = 10_000;
@@ -728,8 +770,10 @@ export function goldenGate(parts: { name: string; data: SeqData; methylation?: D
     if (order.length > longest.length) longest = [...order];
     const end = order[order.length - 1].right;
     if (compatible(end, order[0].left)) {
-      if (used.size < parts.length) partial = true;
-      else {
+      if (used.size < parts.length) {
+        const omitted = parts.filter((_, i) => !used.has(i)).map(p => p.name);
+        if (!witness || omitted.length < witness.length) witness = omitted;
+      } else {
         const joined = joinFragments(order, order.map(f => overhangLength(f.right)), true);
         if (!joined) return;
         if (digestSites(joined.data.sequence, true, [enzyme]).length) recut = true;
@@ -751,13 +795,20 @@ export function goldenGate(parts: { name: string; data: SeqData; methylation?: D
     search([backbone]);
     if (multiple || checked > limit) break;
   }
-  if (partial) problems.push("A circle can also form without all the selected parts.");
+  if (witness) {
+    // Only what this search found. Beside a circle with every part (or a search cut short, which may have one) this is
+    // an extra one; with neither, every part is required, so there is no product and the report says why.
+    const without = nameList(witness);
+    problems.push(solution || recut || multiple || checked > limit
+      ? `A circle can also form without all the selected parts; the one found leaves out ${without}.`
+      : `A circle forms without ${without}, but not with all the selected parts, so no product is offered.`);
+  }
   if (recut) problems.push(`An assembly recreates a ${enzyme} site and would be cut again.`);
   if (checked > limit) problems.push("Too many ways to join the parts to identify one product.");
   if (multiple) problems.push("More than one circular assembly uses all the selected parts.");
   if (multiple || checked > limit) return failed();
   if (solution) return { order: solution.order, product: solution.data, layout: solution.layout, problems: [...new Set(problems)] };
-  if (!partial && !recut && longest.length) {
+  if (!witness && !recut && longest.length) {
     const last = longest[longest.length - 1];
     problems.push(`Nothing joins the ${last.right.bases} end of ${last.source.name} into a complete circle.`);
   }
@@ -765,6 +816,9 @@ export function goldenGate(parts: { name: string; data: SeqData; methylation?: D
 }
 
 const endKey = (e: FragmentEnd) => `${e.kind}:${e.bases}`;
+
+/** "U", "A and B", "A, B and C". */
+const nameList = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
 function sameCircularSequence(a: string, b: string): boolean {
   if (a.length !== b.length) return false;

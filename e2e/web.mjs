@@ -313,6 +313,10 @@ async function main(outDir) {
     await s.waitFor("document.querySelector('[aria-label=\"First vector enzyme\"]')?.value === 'Acc65I'", 5000);
     await enzymeChoice("Cloning enzyme list", "common");
     check("Restriction cloning keeps the selected enzyme through a source change", await s.waitFor("document.querySelector('[aria-label=\"Cloning enzyme list\"]')?.value === 'common' && document.querySelector('[aria-label=\"First vector enzyme\"]')?.value === 'Acc65I'", 5000));
+    await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'Gibson').click();");
+    check("Gibson's note says an added overlap is split only between two PCR pieces", await s.waitFor("document.querySelector('.sv-clone-method-note')?.textContent === \"Pieces join on overlaps they share, or on 20 bases added by PCR primers, split between neighbours when both are PCR pieces.\"", 5000));
+    await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'In-Fusion').click();");
+    check("In-Fusion's note says one PCR piece's primer adds the bases from its neighbour", await s.waitFor("document.querySelector('.sv-clone-method-note')?.textContent === \"Pieces join on overlaps they share, or on 15 bases one PCR piece's primer adds from its neighbour.\"", 5000));
     await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'Golden Gate').click();");
     check("Golden Gate retains its Type IIS choices", await s.waitFor("(values => values.includes('BsaI') && !values.includes('Acc65I'))(Array.from(document.querySelector('[aria-label=\"Golden Gate enzyme\"]')?.options ?? []).map(o => o.value))", 5000));
     await s.click("//button[contains(@class,'sv-dialog-close')]");

@@ -17,7 +17,8 @@ sections. Everything else here is still open.
 - **The overlap planner works.** `planAssembly` with `GIBSON` adds a 20 bp overlap and
   splits it half on each neighbour's primer; `IN_FUSION` puts all 15 on one side.
 - **Overlaps that are already there are found, not redesigned.** `findOverlap` checks each
-  pair of neighbours for 15 bases or more of shared sequence first.
+  pair of neighbours for 15 to 200 bases of shared sequence first (200 is the search's own
+  limit, `OVERLAP_SEARCH_MAX`, not a method's).
 - **Primer quality is already measured.** `designPairs` scores the distance from the Tm
   window, the match between the pair's Tms, the 3′ GC clamp (`hasGoodClamp`) and 3′ dimers
   (`threePrimeComplementarity`), the last computed over the whole oligo including its tail.
@@ -164,11 +165,19 @@ weaker than stated.
 
 ### A. An overlap found, or an overlap declared
 
-**Ours:** `findOverlap` checks whether neighbours already share 15 bases or more and joins
+**Ours:** `findOverlap` checks whether neighbours already share 15 to 200 bases and joins
 on that; only otherwise does it design one. **The alternative:** the user says how every
 fragment is produced — though not purely, since it will also use an existing overlap on a
 synthetic fragment and will try to use a custom primer's 5′ tail as part of an overlap. The
 first draft's "nothing is inferred" was wrong.
+
+**The search is bounded, and the report says so.** The 200 is how far `findOverlap` looks,
+as it always did; neighbours that share 201 or more bases exactly are not found to overlap.
+With neither of them amplified the report now says they share no overlap of 15–200 bases
+at their join and that longer ones aren't searched for, where it said they don't overlap,
+which a longer exact overlap makes untrue. With one amplified the planner designs its own
+overlap as before. Raising the limit, or taking a longer shared overlap as the join, is
+undecided: nothing here changed the search.
 
 **The real problem with ours is not silence, it is ambiguity.** When fragment A ends with
 sequence R and fragment B begins with R, two different molecules are consistent with that:
@@ -390,6 +399,12 @@ The planner can describe a possible join with ambiguous bases, but withholds its
 until every overlap is made of known bases. Ambiguous bases elsewhere in a piece are
 carried through the assembly.
 
+**Cohesive ends follow the same rule.** `compatible` never joins two ends with a base that
+isn't A, C, G or T, even when they read alike (NATG against NATG): such an end doesn't
+self-ligate and ligates to nothing. Golden Gate looks for them before it matches overhangs
+by name, and says an overhang contains unknown bases instead of reporting that nothing
+joins.
+
 **Not a gap, contrary to an earlier draft:** primer design already declines candidates it
 cannot measure — `candidates` in `src/lib/design.ts` keeps a candidate only `if (tm !== null)`,
 so ambiguous bases in an annealing segment already stop that candidate being chosen. The
@@ -424,6 +439,14 @@ it — expanding to show the alternatives and what they cost. Warnings can expan
 automatically. The first draft presented a false choice between a hidden control and an
 invisible one.
 
+**What the dialog says about it today.** The method notes describe what the planner does and
+nothing more: pieces that already share an overlap join on it; elsewhere Gibson adds 20
+bases through PCR primers, split between two neighbours only when both are PCR pieces
+(otherwise the one PCR piece's primer carries all of it), and In-Fusion puts its 15 on one
+PCR piece's primer. They say nothing of kits or presets. Pieces given the same name get
+" 2", " 3" and so on, the first keeping its name and a name already taken skipped, so two
+oligos never share one; the plan's pieces, joins, notes and primers all use those names.
+
 **And the automation behind it needs more care than the first draft gave it.** Choosing
 "whichever scores best" rests on a heuristic with no calibration: near-equal scores have no
 established meaning, and each PCR pair is shaped by the junctions at *both* ends of its
@@ -435,6 +458,34 @@ recommendation yet.
 
 Folded into item 4. Products stay as unsaved tabs; the record of how one was designed is
 the versioned assembly record described there, not a separate export.
+
+### F. Golden Gate: every selected part, or no product
+
+**Ours:** `goldenGate` offers a product only when one circle uses every selected part. A
+circle that leaves parts out is never offered, whether or not a full one exists: the parts
+are the user's choice, and a product without one would be a different construct from the
+one asked for. A circle that does use every part and recreates the enzyme's site is not
+offered either.
+
+What the report says about the circles it finds without some parts:
+
+- **With a full circle** (or a search cut short): "A circle can also form without all the
+  selected parts; the one found leaves out B."
+- **Without one:** "A circle forms without U, but not with all the selected parts, so no
+  product is offered."
+- **When no circle forms at all:** "Nothing joins the AATG end of A into a complete
+  circle."
+
+The names are those of one circle the search found without them, the one leaving out the
+fewest parts (the first found when tied): a witness that such a circle forms, not a list
+of every one and not a statement about all of them.
+
+The search is bounded at 10,000 steps. Parts that fit together in many orders, such as seven
+with the same overhangs, reach it, and then the report says there are too many ways to join
+the parts to identify one product and offers none. Two circles that are rotations or reverse
+complements of each other are one molecule, so a part whose overhangs read the same on both
+strands is not two assemblies. Undecided, and not changed here: offering a product from
+fewer parts, or searching past the limit.
 
 ## Gaps
 

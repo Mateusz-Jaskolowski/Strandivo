@@ -29,6 +29,12 @@ methylation blocks a cut.
   rows wait for a source, and replacing bases in the vector requires one continuous
   selection. Restriction cloning asks you to pick a fragment if the insert selection
   spans a cut or fits more than one fragment.
+- **Clearer cloning reports.** Golden Gate names the parts a circle forms without, and
+  says when only such a circle forms, so no product is offered. When two pieces share no
+  overlap, Gibson and In-Fusion say which sizes they look for (15–200 bases), and pieces
+  with the same name get primers with different names. The vector and insert fragment
+  lists show each fragment's top-strand range and size, so the pieces of a plasmid add up
+  to its length, and the Gibson and In-Fusion notes say what the primers add.
 - **More reliable digests and PCR products.** Digests include both cuts of enzymes such
   as BcgI, report overlapping cuts, and keep fragment ends in GenBank. Fragment sizes
   agree with the top strand in FASTA and the PCR gel, and cloning requires every chosen

@@ -176,14 +176,23 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   moves the drawing (rotate, zoom, label size).
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
   base on either strand, written as the top strand, plus each end (blunt, 5′ or 3′
-  overhang). Two ends ligate when kind and bases match; joining writes the shared bases
+  overhang). Two ends ligate when kind and bases match and every base is A, C, G or T (an
+  unknown base is never evidence of a join; Golden Gate refuses such an overhang before
+  matching any); joining writes the shared bases
   once and maps both pieces' annotations onto them. A digest fragment opened as a
   document keeps its ends in the sequence model. Lengths shown for the fragment use its
-  top strand, which is also the strand written to FASTA. GenBank keeps the bases of both
+  top strand, which is also the strand written to FASTA: the dialog's fragment pickers
+  give its range and size with `fragmentExtent`, never the stored length, which adds the
+  bases of a staggered end. GenBank keeps the bases of both
   ends and stores end and methylation information in comments. The dialog
   (`src/views/cloningDialog.ts`) takes the open file as the vector and
   other open files (`DocContext.otherSequences`) as inserts; products open as new unsaved
-  tabs (`DocContext.openNew`), which count as edited until saved.
+  tabs (`DocContext.openNew`), which count as edited until saved. Gibson and In-Fusion
+  find an overlap the neighbours already share only up to 200 bases (`OVERLAP_SEARCH_MAX`)
+  and say so when they report none. Golden Gate offers a product only if one circle uses
+  every selected part, and names the parts a circle forms without, one witness found by
+  its bounded search, not a claim about all circles. Pieces that share a name get
+  distinct primer names (`docs/agents/primers.md`).
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that
   made it, so that view can skip scrolling to itself.
   Separate codons can be picked with ⌘/Ctrl in either sequence panel. A selection has

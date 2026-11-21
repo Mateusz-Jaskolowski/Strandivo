@@ -266,3 +266,10 @@ and CI checks that they exist.
   runs right to left, `-F` is the primer at its start codon, which binds the top strand (a
   "reverse" primer for the plasmid) and gets the start site (NdeI). The PCR product picker
   and `src/lib/pcr.ts` speak of plasmid forward/reverse.
+- **Assembly primers are named after their piece**, `<piece>-F` and `<piece>-R`
+  (`planAssembly` in `src/lib/cloning.ts`), so pieces given the same name would have
+  oligos sharing one. `distinctNames` fixes that before anything is written: the first
+  keeps its name and a later one becomes "insert 2", "insert 3" (a name already taken is
+  skipped), and the plan's pieces, joins, notes, layout and primers all use those names.
+  Names that already differ are left alone, and no oligo's bases or place change. Golden
+  Gate has no primers and keeps the names it was given.

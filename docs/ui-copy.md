@@ -268,10 +268,11 @@ assembled, with the line of the first part.
 
 | Line | Where | Text |
 |------|-------|------|
-| 46 | method note (restriction) | "Cut the vector and the insert, then ligate the matching ends." |
-| 47 | method note (gibson) | "Fragments join across 20 bp overlaps; PCR primers add any missing overlap, half on each side." |
-| 48 | method note (infusion) | "The insert's primers carry 15 bases of each vector end." |
-| 49 | method note (golden gate) | "A Type IIS enzyme cuts every part; their overhangs set the order." |
+| 54 | method note (restriction) | "Cut the vector and the insert, then ligate the matching ends." |
+| 55 | method note (gibson) | "Pieces join on overlaps they share, or on 20 bases added by PCR primers, split between neighbours when both are PCR pieces." |
+| 56 | method note (infusion) | "Pieces join on overlaps they share, or on 15 bases one PCR piece's primer adds from its neighbour." |
+| 57 | method note (golden gate) | "A Type IIS enzyme cuts every part; their overhangs set the order." |
+| 83 | fragment pickers (vector "Keep", insert "Fragment") | "62–117 · 56 bp": the top strand's range and size, as the Digest dialog lists a fragment |
 | 89 | enzyme count (some sites blocked) | "… sites · … predicted cuts" (otherwise "… cuts" / "doesn't cut") |
 | 137 | dialog title | "Simulate cloning" |
 | 137 | dialog note | "Assemble inserts into …." |
@@ -280,6 +281,17 @@ assembled, with the line of the first part.
 | 531 | direction note | "The insert can ligate in either orientation — screen colonies by digest or sequencing." |
 | 533 | self-ligation note | "The vector ends are compatible and may self-ligate; consider dephosphorylating the vector." |
 | — | methylation warning | Shared with Digest (`src/views/methylationWarning.ts`). |
+
+### Cloning reports — `src/lib/cloning.ts`
+
+What the planner says in the dialog's result, where it changed in November 2026.
+
+| Line | Where | Text |
+|------|-------|------|
+| 507 | Gibson or In-Fusion, two neighbours with no overlap and neither amplified | "A and B share no overlap of 15–200 bases at their join (longer ones aren't searched for). Amplify one of them by PCR to add the overlap." (200 is `OVERLAP_SEARCH_MAX`) |
+| 803 | Golden Gate, a full circle exists (or the search stopped early) and another forms without some parts | "A circle can also form without all the selected parts; the one found leaves out B." |
+| 804 | Golden Gate, only a circle without some parts forms | "A circle forms without U, but not with all the selected parts, so no product is offered." |
+| 542 | Gibson or In-Fusion primer names, pieces with the same name | "insert-F", "insert-R" for the first, "insert 2-F", "insert 2-R" for the next (a name already taken is skipped) |
 
 ---
 

@@ -1353,8 +1353,12 @@ async function main() {
     await sleep(500);
     await s.click("button[aria-label='Simulate cloning…']");
     check("Simulate cloning opens a dialog", await s.waitFor("document.querySelector('.sv-dialog .sv-clone-methods')", 5000));
+    const methodNote = "document.querySelector('.sv-dialog .sv-clone-method-note')?.textContent";
+    await s.click("//*[contains(@class,'sv-clone-methods')]//button[normalize-space(.)='In-Fusion']", "xpath");
+    check("In-Fusion's note says one PCR piece's primer adds the bases from its neighbour", await s.waitFor(`${methodNote} === "Pieces join on overlaps they share, or on 15 bases one PCR piece's primer adds from its neighbour."`, 3000), String(await s.exec(`return ${methodNote}`)));
     await s.click("//*[contains(@class,'sv-clone-methods')]//button[normalize-space(.)='Gibson']", "xpath");
     await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Part of the insert']\")", 3000);
+    check("Gibson's note says an added overlap is split only between two PCR pieces", await s.waitFor(`${methodNote} === "Pieces join on overlaps they share, or on 20 bases added by PCR primers, split between neighbours when both are PCR pieces."`, 3000), String(await s.exec(`return ${methodNote}`)));
     await choose("First vector enzyme", "EcoRI");
     await sleep(200);
     await choose("Second vector enzyme", "HindIII");
@@ -1617,6 +1621,42 @@ async function main() {
     await s.exec("window.__strandivo.closeTab()");
     await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
     await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+
+    // --- the cloning dialog's fragment lists give each piece's top strand ---
+    // Two circles, each opened by EcoRI and HindIII. A piece is stored with the four bases of its
+    // right overhang, so the two of a 177 bp circle once added up to 185; the lists give top-strand
+    // sizes, as the Digest dialog does, so they add up to the circle.
+    {
+      const circle = (name, sequence) => s.exec("window.__strandivo.openNew({ name: arguments[0], description: '', circular: true, sequence: arguments[1], features: [], primers: [], sources: [] });", name, sequence);
+      await circle("pick-insert", "T".repeat(30) + "GAATTC" + "C".repeat(40) + "AAGCTT" + "G".repeat(50));
+      await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.store?.data.name === 'pick-insert'", 10000);
+      await circle("pick-test", "A".repeat(60) + "GAATTC" + "C".repeat(50) + "AAGCTT" + "G".repeat(55));
+      await s.waitFor("window.__strandivo.tabs().length === 3 && window.__strandivo.store?.data.name === 'pick-test'", 10000);
+      await s.exec("window.__strandivo.command('simulate-cloning')");
+      await s.waitFor("document.querySelector('.sv-dialog .sv-clone-methods')", 5000);
+      await s.click("//*[contains(@class,'sv-clone-methods')]//button[normalize-space(.)='Restriction & ligation']", "xpath");
+      await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='First vector enzyme']\")", 5000);
+      await choose("First vector enzyme", "EcoRI");
+      await sleep(200);
+      await choose("Second vector enzyme", "HindIII");
+      await sleep(200);
+      await choose("Insert 1", "pick-insert");
+      await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Insert fragment']\")", 5000);
+      const pieces = label => s.exec(`return Array.from(document.querySelectorAll(".sv-dialog select[aria-label='${label}'] option")).map(o => o.textContent).filter(t => t !== 'Choose…')`);
+      const total = texts => texts.reduce((sum, t) => sum + Number(t.match(/· ([\d,]+) bp/)?.[1].replace(/,/g, "")), 0);
+      const vectorPieces = await pieces("Vector fragment to keep");
+      check("The vector's fragment list gives top-strand sizes that add up to the 177 bp circle", JSON.stringify(vectorPieces) === JSON.stringify(["62–117 · 56 bp", "118–61 · 121 bp"]) && total(vectorPieces) === 177, JSON.stringify(vectorPieces));
+      const insertPieces = await pieces("Insert fragment");
+      check("The insert's fragment list gives top-strand sizes that add up to the 132 bp circle", JSON.stringify(insertPieces) === JSON.stringify(["32–77 · 46 bp", "78–31 · 86 bp"]) && total(insertPieces) === 132, JSON.stringify(insertPieces));
+      await s.press(ESCAPE);
+      await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+      await s.exec("window.__strandivo.closeTab()");
+      await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
+      await s.waitFor("window.__strandivo.tabs().length === 2", 5000);
+      await s.exec("window.__strandivo.showTab(1); window.__strandivo.closeTab()");
+      await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
+      await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+    }
 
     // --- a dialog belongs to its file's tab ---
     // One opened for a file closes, as Cancel does, when another tab or Home becomes the

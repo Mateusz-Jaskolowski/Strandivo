@@ -23,6 +23,7 @@ import {
   cloningDigest,
   endLabel,
   existingFragment,
+  fragmentExtent,
   fragmentLength,
   fragmentWith,
   GIBSON,
@@ -51,8 +52,8 @@ type Method = "restriction" | "gibson" | "infusion" | "goldengate";
 
 const METHODS: { id: Method; label: string; note: string }[] = [
   { id: "restriction", label: "Restriction & ligation", note: "Cut the vector and the insert, then ligate the matching ends." },
-  { id: "gibson", label: "Gibson", note: "Fragments join across 20 bp overlaps; PCR primers add any missing overlap, half on each side." },
-  { id: "infusion", label: "In-Fusion", note: "The insert's primers carry 15 bases of each vector end." },
+  { id: "gibson", label: "Gibson", note: "Pieces join on overlaps they share, or on 20 bases added by PCR primers, split between neighbours when both are PCR pieces." },
+  { id: "infusion", label: "In-Fusion", note: "Pieces join on overlaps they share, or on 15 bases one PCR piece's primer adds from its neighbour." },
   { id: "goldengate", label: "Golden Gate", note: "A Type IIS enzyme cuts every part; their overhangs set the order." }
 ];
 
@@ -78,11 +79,11 @@ const memory = { method: "restriction" as Method, goldenGate: "BsaI" };
 
 const countText = (n: number, k: number) => (n === k ? (k ? plural(k, "cut") : "doesn't cut") : cutCountText(n, k));
 
-/** A fragment as "1,201–2,686 · 2,617 bp · AmpR, ori". */
+/** A fragment as "1,201–2,686 · 1,486 bp · AmpR, ori": its top strand, as the Digest dialog lists it. */
 function fragmentText(f: Fragment, n: number): string {
-  const end = (f.source.start + f.source.length - 1) % n;
+  const { start, end, length } = fragmentExtent(f, n);
   const names = [...new Set(f.data.features.map(x => x.name))];
-  return `${fmt(f.source.start + 1)}–${fmt(end + 1)} · ${fmt(fragmentLength(f))} bp${names.length ? ` · ${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""}` : ""}`;
+  return `${fmt(start + 1)}–${fmt(end + 1)} · ${fmt(length)} bp${names.length ? ` · ${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""}` : ""}`;
 }
 
 const PIECE_COLORS = ["var(--backbone)", "var(--accent)", "var(--ok)", "var(--diff)", "var(--warn)"];
@@ -484,7 +485,7 @@ export function openCloningDialog(ctx: DocContext) {
           h(
             "span",
             null,
-            `${inputs[i].name} → ${inputs[(i + 1) % inputs.length].name}: `,
+            `${plan.pieces[i].name} → ${plan.pieces[(i + 1) % plan.pieces.length].name}: `,
             j.bases ? `${j.bases.length} bp${j.tm !== null ? `, Tm ${j.tm.toFixed(1)} °C` : ""}${j.designed ? ", from primer tails" : ", already there"}` : "none"
           )
         )

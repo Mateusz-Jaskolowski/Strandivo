@@ -6,8 +6,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { assemblyBases, cloningDigest, compatible, cutsFor, digest, existingFragment, findOverlap, flip, fragmentDigest, fragmentWith, goldenGate, GIBSON, IN_FUSION, joinFragments, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, vectorPcrRange, wholeFragment, type Fragment, type OverlapMethod } from "./cloning.ts";
+import { assemblyBases, cloningDigest, compatible, cutsFor, digest, existingFragment, findOverlap, flip, fragmentDigest, fragmentExtent, fragmentLength, fragmentWith, goldenGate, GIBSON, IN_FUSION, joinFragments, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, vectorPcrRange, wholeFragment, type Fragment, type OverlapMethod } from "./cloning.ts";
 import { codingPositions, useAmberSuppression } from "./genetics.ts";
+import { fragmentSize, fragmentSpan } from "./gel.ts";
 import { hostMethylation } from "./methylation.ts";
 import { DEFAULT_TM, meltingTemp, type TmMethod } from "./primers.ts";
 import { regionsOf, regionSpans, withRegions, type ProteinRegion } from "./regions.ts";
@@ -210,7 +211,7 @@ test("Gibson: two PCR pieces share the overlap's halves; existing overlaps are u
   // Without overlaps or PCR, nothing joins.
   const none = planAssembly([{ name: "x", fragment: wholeFragment(doc("x", x, false)) }, { name: "z", fragment: wholeFragment(doc("z", filler(300, 15), false)) }], GIBSON);
   assert.equal(none.product, null);
-  assert.match(none.problems[0], /don't overlap/);
+  assert.match(none.problems[0], /share no overlap of 15–200 bases/);
   assert.equal(findOverlap("AAAACCCCGGGG", "CCGGGGTTTT", 4), 6);
 });
 
@@ -1127,4 +1128,358 @@ test("a translation that is kept is the text it was imported with, whatever the 
       useAmberSuppression(false);
     }
   }
+});
+
+// ---------- what a plan reports, and the guards behind it ----------
+//
+// Every sequence here is made up. Where a test pins a refusal that the cloning plan lists as
+// undecided (a middle piece shorter than its two overlaps, how long an overlap may be), it
+// says so: it records what the code does now, not that it is settled.
+
+/** A linear piece taken as it is, with no ends of its own. */
+const asIs = (name: string, sequence: string) => wholeFragment(doc(name, sequence, false));
+
+/** A part for Golden Gate: BsaI sites that face in, with the overhangs and the bases between them as given. */
+const bsaiPart = (name: string, left: string, body: string, right: string, features: SeqFeature[] = []) =>
+  ({ name, data: doc(name, "CT".repeat(16) + "GGTCTCA" + left + body + right + "TGAGACC" + "AC".repeat(16), true, features) });
+
+/** A vector whose sites face out of a dropout: it opens into a backbone from `left` round to `right`. */
+const bsaiVector = (left: string, right: string, features: SeqFeature[] = []) =>
+  ({ name: "vector", data: doc("vector", "AC".repeat(40) + right + "TGAGACC" + "CT".repeat(16) + "GGTCTCA" + left + "CT".repeat(40), true, features) });
+
+test("an overlap beyond the 200 bases searched for is not found, and the message says what was searched", () => {
+  const message = "A and B share no overlap of 15–200 bases at their join (longer ones aren't searched for). Amplify one of them by PCR to add the overlap.";
+  for (const method of [GIBSON, IN_FUSION]) {
+    // An exact overlap of 200 bases, the most that is searched for, joins as it always did.
+    const shared = filler(200, 301);
+    const left = filler(400, 302) + shared;
+    const right = shared + filler(300, 303);
+    const joined = planAssembly([{ name: "A", fragment: asIs("A", left) }, { name: "B", fragment: asIs("B", right) }], method, false);
+    assert.equal(joined.product?.sequence, left + right.slice(200));
+    assert.equal(joined.product.circular, false);
+    assert.equal(joined.product.sequence.length, 900);
+    assert.deepEqual(joined.problems, []);
+    assert.deepEqual(joined.layout, { pieces: [{ name: "A", start: 0, length: 600, flipped: false }, { name: "B", start: 400, length: 500, flipped: false }], joins: [{ at: 400, length: 200 }] });
+    assert.deepEqual([joined.joins[0].bases, joined.joins[0].designed], [shared, false]);
+
+    // Exact overlaps of 201 and 250 bases are as real, but past the search: no product, and nothing claims the pieces don't overlap.
+    for (const length of [201, 250]) {
+      const more = filler(length, 310 + length);
+      const a = filler(400, 304) + more;
+      const b = more + filler(300, 305);
+      assert.equal(findOverlap(a, b, 15, 1000), length, `${length} bases do overlap`);
+      assert.equal(findOverlap(a, b, 15), 0, "the search itself still stops at 200");
+      const plan = planAssembly([{ name: "A", fragment: asIs("A", a) }, { name: "B", fragment: asIs("B", b) }], method, false);
+      assert.equal(plan.product, null, `${length} bases: no product is offered`);
+      assert.equal(plan.layout, null);
+      assert.deepEqual(plan.problems, [message], `${length} bases: the report says what was searched`);
+      assert.deepEqual(plan.joins, [{ bases: "", tm: null, designed: true }]);
+      assert.deepEqual([plan.notes, plan.reused], [[], []]);
+    }
+  }
+});
+
+test("ends with unknown bases never ligate, and Golden Gate refuses their overhangs before matching them", () => {
+  // N is not a base: two ends that spell NATG the same way are not two ends that pair.
+  const end = (bases: string) => ({ kind: "5'" as const, bases });
+  assert.equal(compatible(end("AATG"), end("AATG")), true);
+  assert.equal(compatible(end("NATG"), end("NATG")), false);
+
+  // The same through a digest: BsaI leaves the four bases after its spacer as the overhang.
+  const opened = (overhang: string, seed: number) => digest(doc(`donor ${seed}`, filler(120, seed) + "GGTCTCA" + overhang + filler(120, seed + 1), true), ["BsaI"])[0];
+  const [vector, insert] = [opened("AATG", 1), opened("AATG", 3)];
+  assert.deepEqual([vector.left.bases, vector.right.bases], ["AATG", "AATG"]);
+  assert.equal(selfLigates(vector), true);
+  assert.deepEqual(ligateInsert(vector, insert).map(r => r.flipped), [false], "a base that is known ligates, one way round");
+  const [unknown, other] = [opened("ANTG", 5), opened("ANTG", 7)];
+  assert.deepEqual([unknown.left.bases, unknown.right.bases], ["ANTG", "ANTG"]);
+  assert.equal(selfLigates(unknown), false);
+  assert.deepEqual(ligateInsert(unknown, other), [], "an unknown base is not evidence of a join");
+
+  // Golden Gate looks for unknown bases itself, before its search matches overhangs by name,
+  // so the report says why instead of saying nothing joins.
+  const body = "CA".repeat(16);
+  const withBase = (base: string) => goldenGate([bsaiVector("GCTT", `A${base}TG`), bsaiPart("part", `A${base}TG`, body, "GCTT")], "BsaI");
+  const refused = withBase("N");
+  assert.equal(refused.product, null);
+  assert.equal(refused.layout, null);
+  assert.deepEqual(refused.order, []);
+  assert.deepEqual(refused.problems, ["An overhang contains unknown bases, so its joins can’t be determined."]);
+  const known = withBase("A");
+  assert.deepEqual(known.problems, []);
+  assert.equal(known.product?.sequence, "GCTT" + "CT".repeat(40) + "AC".repeat(40) + "AATG" + body);
+});
+
+test("joining refuses a wrong number of overlaps, an overlap that is not a length, joins on the same bases and bases that differ", () => {
+  const [p, q, r] = [asIs("p", filler(30, 401)), asIs("q", filler(30, 402)), asIs("r", filler(30, 403))];
+  const whole = p.data.sequence + q.data.sequence + r.data.sequence;
+  // A line of three pieces has two joins, a circle three.
+  assert.equal(joinFragments([p, q, r], [0, 0], false)?.data.sequence, whole);
+  assert.equal(joinFragments([p, q, r], [0], false), null, "one join too few");
+  assert.equal(joinFragments([p, q, r], [0, 0, 0], false), null, "one join too many");
+  assert.equal(joinFragments([p, q, r], [0, 0, 0], true)?.data.sequence, whole);
+  assert.equal(joinFragments([p, q, r], [0, 0], true), null, "a circle has a join back to the first piece");
+
+  // Poly-A pieces read the same whatever a bad overlap is read as, so each of these is refused
+  // for its length alone.
+  const [x, y] = [asIs("x", "A".repeat(10)), asIs("y", "A".repeat(10))];
+  assert.equal(joinFragments([x, y], [4], false)?.data.sequence, "A".repeat(16));
+  for (const bad of [-1, 1.5, 12]) assert.equal(joinFragments([x, y], [bad], false), null, `an overlap of ${bad}`);
+
+  // Two joins that claim the same bases of a piece: 30 + 30 > 50. The pieces match at both
+  // joins (A = T M T, B = M[10:] T M[:20]), so nothing else refuses them, and 100 - 60 > 0 bases
+  // would be left. (A middle piece shorter than its two overlaps is the same refusal on a line,
+  // which the cloning plan lists as undecided.) The same two with overlaps of 20 are one circle.
+  const [t, m] = [filler(10, 411), filler(30, 412)];
+  const clash = [asIs("A", t + m + t), asIs("B", m.slice(10) + t + m.slice(0, 20))];
+  assert.equal(clash[0].data.sequence.slice(20), clash[1].data.sequence.slice(0, 30));
+  assert.equal(clash[1].data.sequence.slice(20), clash[0].data.sequence.slice(0, 30));
+  assert.equal(joinFragments(clash, [30, 30], true), null);
+  const [head, tail, middle] = [filler(20, 413), filler(20, 414), filler(10, 415)];
+  const fits = joinFragments([asIs("A", head + middle + tail), asIs("B", tail + middle + head)], [20, 20], true)!;
+  assert.equal(fits.data.sequence, head + middle + tail + middle);
+  assert.equal(fits.data.circular, true);
+  assert.deepEqual(fits.layout, { pieces: [{ name: "A", start: 0, length: 50, flipped: false }, { name: "B", start: 30, length: 50, flipped: false }], joins: [{ at: 30, length: 20 }, { at: 0, length: 20 }] });
+
+  // Bases that differ are not an overlap, whatever the count says; case is not a difference.
+  const shared = "ACGT";
+  const stem = filler(30, 421);
+  assert.equal(joinFragments([asIs("a", stem + shared), asIs("b", shared + stem)], [4], false)?.data.sequence, stem + shared + stem);
+  assert.equal(joinFragments([asIs("a", stem + shared.toLowerCase()), asIs("b", shared + stem)], [4], false)?.data.sequence, stem + shared.toLowerCase() + stem);
+  assert.equal(joinFragments([asIs("a", stem + shared), asIs("b", "ACGA" + stem)], [4], false), null);
+});
+
+test("a join carries the sources of every piece to the product, across the origin as well", () => {
+  // A = C + a + D and B = D + b + C, 12 bases each end, so two overlaps of 12 close one 86-base circle.
+  const [c, a, d, b] = [filler(12, 431), filler(36, 432), filler(12, 433), filler(26, 434)];
+  const source = (name: string, start: number, end: number, locations?: Range[]): SeqFeature => ({ ...feature(name, start, end), type: "source", ...(locations ? { locations } : {}) });
+  const left = wholeFragment(doc("A", c + a + d, false));
+  const right = wholeFragment(doc("B", d + b + c, false));
+  left.data.sources = [source("all of A", 0, 59)];
+  right.data.sources = [source("end of B", 30, 49), source("in two parts", 0, 33, [{ start: 0, end: 3 }, { start: 30, end: 33 }]), source("inside B", 5, 14)];
+  const { data } = joinFragments([left, right], [12, 12], true)!;
+  assert.equal(data.sequence, c + a + d + b);
+  assert.equal(data.circular, true);
+  // B starts at 48. Its last 12 bases are A's first, so a source at B's end runs on past 85 to 0.
+  assert.deepEqual(
+    data.sources.map(s => [s.name, s.start, s.end, s.locations]),
+    [["all of A", 0, 59, undefined], ["end of B", 78, 11, undefined], ["in two parts", 48, 81, [{ start: 48, end: 51 }, { start: 78, end: 81 }]], ["inside B", 53, 62, undefined]]
+  );
+  const originals = [...left.data.sources, ...right.data.sources];
+  data.sources.forEach((s, i) => {
+    const from = i === 0 ? left.data.sequence : right.data.sequence;
+    assert.equal(featureBases(data.sequence, s), featureBases(from, originals[i]), `${s.name}: its bases`);
+  });
+  assert.equal(new Set(data.sources.map(s => s.id)).size, 4);
+  assert.ok(data.sources.every((s, i) => s.id !== originals[i].id), "a source in the product is a new one");
+  assert.deepEqual(data.features, []);
+});
+
+test("the vector's PCR starts where the cursor is, and a selection overrides the cursor", () => {
+  assert.deepEqual(vectorPcrRange(240, null, 100), { start: 100, end: 99 });
+  assert.deepEqual(vectorPcrRange(240, null, 239), { start: 239, end: 238 });
+  assert.deepEqual(vectorPcrRange(240, null, 245), { start: 5, end: 4 }, "a cursor is a place on the circle");
+  assert.deepEqual(vectorPcrRange(240, { start: 230, end: 9 }, 100), { start: 10, end: 229 });
+  assert.equal(vectorPcrRange(240, { start: 0, end: 239 }, 100), null);
+  // The piece the planner amplifies reads from that cursor all the way round.
+  const vector = doc("vector", filler(240, 441), true);
+  const range = vectorPcrRange(240, null, 100)!;
+  assert.equal(wholeFragment(vector, range).data.sequence, vector.sequence.slice(100) + vector.sequence.slice(0, 100));
+});
+
+test("Gibson and In-Fusion refuse primers that do not amplify the piece they were given", () => {
+  const template = doc("donor", filler(600, 451), false);
+  const range = { start: 100, end: 499 };
+  const wanted = template.sequence.slice(100, 500);
+  const changed = (at: number) => wanted.slice(0, at) + (wanted[at] === "A" ? "C" : "A") + wanted.slice(at + 1);
+  const vector = asIs("vector", filler(300, 452));
+  const refusal = "The primers for insert don't amplify the selected fragment with its overlaps.";
+  for (const method of [GIBSON, IN_FUSION]) {
+    const plan = (piece: string) => planAssembly([{ name: "vector", fragment: vector }, { name: "insert", fragment: asIs("insert", piece), pcr: { template, range } }], method, true);
+    const good = plan(wanted);
+    assert.equal(good.product?.sequence.length, 700);
+    assert.equal(good.pieces[1].primers.length, 2);
+    assert.ok(!good.problems.includes(refusal));
+    // Another piece of the same length, and the same piece with one base changed.
+    for (const piece of [filler(400, 453), changed(200)]) {
+      const bad = plan(piece);
+      assert.equal(bad.product, null);
+      assert.deepEqual(bad.pieces[1].primers, [], "no primers are offered for it");
+      assert.ok(bad.problems.includes(refusal), bad.problems.join(" | "));
+    }
+  }
+});
+
+test("Golden Gate gives up on parts that can join in too many ways, instead of searching on", () => {
+  // Parts with the same overhang at both ends, and the same bases, join in every order into
+  // the same circle: n! orders, each a step of the search, which stops at 10,000.
+  const vector = bsaiVector("AAAA", "AAAA");
+  const body = "CA".repeat(16);
+  const parts = (n: number) => Array.from({ length: n }, (_, i) => bsaiPart(`part${i + 1}`, "AAAA", body, "AAAA"));
+  const circle = (n: number) => "AAAA" + "CT".repeat(40) + "AC".repeat(40) + ("AAAA" + body).repeat(n);
+  const few = goldenGate([vector, ...parts(6)], "BsaI");
+  assert.equal(few.product?.sequence, circle(6), "6 parts, 1,957 steps, are searched to the end");
+  assert.equal(few.order.length, 7);
+  assert.ok(!few.problems.some(p => /Too many ways/.test(p)));
+  const many = goldenGate([vector, ...parts(7)], "BsaI");
+  assert.equal(many.product, null, "7 parts, 13,700 steps, are more than the search takes on");
+  assert.equal(many.layout, null);
+  assert.ok(many.problems.includes("Too many ways to join the parts to identify one product."), many.problems.join(" | "));
+});
+
+test("Golden Gate counts a product and its reverse complement as one molecule", () => {
+  // A backbone that reads the same on both strands, and a part whose overhangs read the same
+  // too: the part fits both ways round, and the two circles are one molecule seen from either strand.
+  const half = filler(60, 461);
+  const vector = { name: "vector", data: doc("vector", reverseComplement(half) + "AATT" + "TGAGACC" + "CT".repeat(16) + "GGTCTCA" + "AATT" + half, true) };
+  const body = filler(40, 462);
+  const r = goldenGate([vector, bsaiPart("part", "AATT", body, "AATT")], "BsaI");
+  const forward = "AATT" + half + reverseComplement(half) + "AATT" + body;
+  const reversed = "AATT" + half + reverseComplement(half) + "AATT" + reverseComplement(body);
+  assert.equal(r.product?.sequence, forward);
+  assert.equal(r.product.circular, true);
+  assert.ok(sameCircle(forward, reversed), "the other way round is the reverse complement");
+  assert.ok(!(forward + forward).includes(reversed), "and is no rotation of it, so only the reverse complement says so");
+  assert.ok(!r.problems.some(p => /More than one circular assembly/.test(p)), r.problems.join(" | "));
+});
+
+test("Golden Gate names the parts a circle forms without, and offers only the circle that has every part", () => {
+  // Vector GCTT to AATG; A and B are parts whose overhangs close it: AATG to GCTT, and AATG to AATG.
+  // Together they make one circle of 226 bases. A alone closes the vector too, without B.
+  const vector = bsaiVector("GCTT", "AATG", [feature("ori", 10, 49)]);
+  const a = bsaiPart("A", "AATG", "CA".repeat(16), "GCTT", [feature("geneA", 43, 74)]);
+  const b = bsaiPart("B", "AATG", "TC".repeat(11), "AATG", [feature("geneB", 43, 64)]);
+  const complete = "GCTT" + "CT".repeat(40) + "AC".repeat(40) + "AATG" + "TC".repeat(11) + "AATG" + "CA".repeat(16);
+  for (const parts of [[a, b], [b, a]]) {
+    const r = goldenGate([vector, ...parts], "BsaI");
+    assert.deepEqual(r.order.map(f => f.source.name), ["vector", "B", "A"]);
+    assert.equal(r.product?.sequence, complete);
+    assert.equal(r.product.sequence.length, 226);
+    assert.equal(r.product.circular, true);
+    assert.deepEqual(r.layout, {
+      pieces: [{ name: "vector", start: 0, length: 168, flipped: false }, { name: "B", start: 164, length: 30, flipped: false }, { name: "A", start: 190, length: 40, flipped: false }],
+      joins: [{ at: 164, length: 4 }, { at: 190, length: 4 }, { at: 0, length: 4 }]
+    });
+    assert.deepEqual(r.product.features.map(f => [f.name, f.start, f.end]), [["ori", 94, 133], ["geneB", 168, 189], ["geneA", 194, 225]]);
+    for (const [name, from] of [["ori", vector.data], ["geneB", b.data], ["geneA", a.data]] as const) {
+      assert.equal(featureBases(r.product.sequence, r.product.features.find(f => f.name === name)!), featureBases(from.sequence, from.features[0]), name);
+    }
+    // The circle without B is a witness, not a verdict on B: the full one is still the product.
+    assert.deepEqual(r.problems, ["A circle can also form without all the selected parts; the one found leaves out B."]);
+  }
+
+  // A part that joins nothing: the circles that form leave it out, so no product is offered, and it is named.
+  const unrelated = bsaiPart("U", "CCAA", "AT".repeat(10), "GGTT");
+  for (const parts of [[a, b, unrelated], [unrelated, b, a]]) {
+    const r = goldenGate([vector, ...parts], "BsaI");
+    assert.equal(r.product, null);
+    assert.equal(r.layout, null);
+    assert.deepEqual(r.problems, ["A circle forms without U, but not with all the selected parts, so no product is offered."]);
+  }
+
+  // Two parts competing for the same overhangs: each circle leaves one out, and the report names the one the search found first.
+  const first = bsaiPart("X1", "AATG", "CA".repeat(16), "CCAA");
+  const second = bsaiPart("X2", "AATG", "TC".repeat(11), "CCAA");
+  const closing = bsaiPart("Y", "CCAA", "AT".repeat(10), "GCTT");
+  const competing = goldenGate([vector, first, second, closing], "BsaI");
+  assert.equal(competing.product, null);
+  assert.deepEqual(competing.problems, ["A circle forms without X2, but not with all the selected parts, so no product is offered."]);
+
+  // The neighbouring complete case has nothing to report.
+  const done = goldenGate([vector, first, closing], "BsaI");
+  assert.deepEqual(done.problems, []);
+  assert.equal(done.product?.sequence, "GCTT" + "CT".repeat(40) + "AC".repeat(40) + "AATG" + "CA".repeat(16) + "CCAA" + "AT".repeat(10));
+  assert.equal(done.product.circular, true);
+});
+
+test("pieces that share a name get distinct names, and every oligo, place and base of the product stays as it was", () => {
+  const vector = asIs("vector", filler(400, 501));
+  const donors = [501, 502, 503].map(seed => doc(`donor ${seed}`, filler(600, seed + 10), false));
+  const ranges = [{ start: 50, end: 449 }, { start: 80, end: 479 }, { start: 20, end: 419 }];
+  const pcr = (name: string, i: number) => ({ name, fragment: wholeFragment(donors[i], ranges[i]), pcr: { template: donors[i], range: ranges[i] } });
+  const place = (p: { start: number; end: number; strand: number; bases: string }) => [p.start, p.end, p.strand, p.bases];
+  for (const method of [GIBSON, IN_FUSION]) {
+    const same = planAssembly([{ name: "vector", fragment: vector }, pcr("insert", 0), pcr("insert", 1)], method);
+    const apart = planAssembly([{ name: "vector", fragment: vector }, pcr("insert1", 0), pcr("insert2", 1)], method);
+    const names = (plan: typeof same) => plan.pieces.flatMap(p => p.primers.map(x => x.name));
+    assert.deepEqual(names(same), ["insert-F", "insert-R", "insert 2-F", "insert 2-R"]);
+    assert.deepEqual(names(apart), ["insert1-F", "insert1-R", "insert2-F", "insert2-R"], "names that already differ are left alone");
+    assert.deepEqual(same.pieces.map(p => p.name), ["vector", "insert", "insert 2"]);
+    assert.deepEqual(same.layout?.pieces.map(p => p.name), ["vector", "insert", "insert 2"], "the pieces of the product too");
+    assert.equal(new Set(same.product!.primers.map(p => p.name)).size, 4, "the product's primers each have a name of their own");
+    assert.deepEqual(same.product!.primers.map(p => p.name), names(same));
+    // Nothing else moved: the same oligos, joins, layout and product, only named differently.
+    const bare = (plan: typeof same) => plan.pieces.flatMap(p => p.primers.map(({ name: _name, ...rest }) => rest));
+    assert.deepEqual(bare(same), bare(apart));
+    assert.equal(new Set(bare(same).map(p => p.bases)).size, 4, "four different oligos");
+    assert.deepEqual(same.joins, apart.joins);
+    assert.deepEqual(same.layout!.pieces.map(({ name: _name, ...rest }) => rest), apart.layout!.pieces.map(({ name: _name, ...rest }) => rest));
+    assert.deepEqual(same.layout!.joins, apart.layout!.joins);
+    assert.equal(same.product!.sequence, apart.product!.sequence);
+    assert.deepEqual(same.product!.primers.map(place), apart.product!.primers.map(place));
+    assert.deepEqual(same.problems, apart.problems);
+  }
+
+  // A name the suffix would land on is skipped: the second "insert" is not "insert 2" when a piece has that name.
+  const three = planAssembly([{ name: "vector", fragment: vector }, pcr("insert", 0), pcr("insert", 1), pcr("insert 2", 2)], GIBSON);
+  assert.deepEqual(three.pieces.map(p => p.name), ["vector", "insert", "insert 3", "insert 2"]);
+  const labels = three.pieces.flatMap(p => p.primers.map(x => x.name));
+  assert.deepEqual(labels, ["insert-F", "insert-R", "insert 3-F", "insert 3-R", "insert 2-F", "insert 2-R"]);
+  assert.equal(new Set(labels).size, 6);
+
+  // The names a plan's notes use are the same ones, so a note can't be about two pieces at once.
+  const linker = "GGTGGCGGTAGCGGTGGCGG";
+  const joined = planAssembly([{ name: "part", fragment: asIs("part", filler(300, 511) + linker) }, { name: "part", fragment: asIs("part", linker + filler(250, 512)) }], GIBSON, false);
+  assert.deepEqual(joined.reused.map(r => [r.left, r.right]), [["part", "part 2"]]);
+  assert.match(joined.notes[0], /^part already ends with the 20 bases part 2 starts with/);
+});
+
+test("overlap tails go where the dialog says: Gibson splits only between two PCR pieces, In-Fusion puts each join's overlap on one primer", () => {
+  const opened = asIs("vector", filler(400, 601));
+  const amplified = (name: string, seed: number) => {
+    const template = doc(`${name} donor`, filler(700, seed), false);
+    const range = { start: 50, end: 549 };
+    return { name, fragment: wholeFragment(template, range), pcr: { template, range } };
+  };
+  const [one, two] = [amplified("one", 602), amplified("two", 603)];
+  const tails = (inputs: Parameters<typeof planAssembly>[0], method: OverlapMethod) => planAssembly(inputs, method).pieces.map(p => p.primers.map(x => x.tail));
+  const vector = { name: "vector", fragment: opened };
+  // The vector is opened, not amplified: a PCR piece beside it carries the whole overlap, 20 for Gibson as for In-Fusion's 15.
+  assert.deepEqual(tails([vector, one], GIBSON), [[], [20, 20]]);
+  assert.deepEqual(tails([vector, one], IN_FUSION), [[], [15, 15]]);
+  // Between two PCR pieces Gibson halves it, and In-Fusion still gives it to one of them: the later piece.
+  assert.deepEqual(tails([vector, one, two], GIBSON), [[], [20, 10], [10, 20]]);
+  assert.deepEqual(tails([vector, one, two], IN_FUSION), [[], [15, 0], [15, 15]]);
+});
+
+test("a fragment's extent is its top strand's, as the Digest dialog gives it, not the bases stored for its overhangs", () => {
+  // A 606-base circle opened once by EcoRI is stored as 610 bases (AATT at both ends) but is 606 long.
+  const circle = doc("circle", filler(300, 701) + "GAATTC" + filler(300, 702), true);
+  const [opened] = digest(circle, ["EcoRI"]);
+  assert.equal(opened.data.sequence.length, 610);
+  assert.equal(fragmentLength(opened), 610, "what is stored is not what is shown");
+  assert.deepEqual(fragmentExtent(opened, 606), { start: 301, end: 300, length: 606 });
+
+  // Each of these: sticky and blunt ends, 5′ and 3′, on a circle and on a line, agree with the Digest dialog's own numbers.
+  const sequence = filler(200, 703) + "GAATTC" + filler(150, 704) + "AAGCTT" + filler(100, 705) + "CTGCAG" + filler(120, 706) + "CCCGGG" + filler(80, 707);
+  const n = sequence.length;
+  let checked = 0;
+  for (const circular of [true, false]) {
+    for (const enzymes of [["EcoRI", "HindIII"], ["PstI"], ["SmaI"], ["PstI", "SmaI", "EcoRI"]]) {
+      const fragments = digest(doc("sample", sequence, circular), enzymes);
+      assert.ok(fragments.length >= 2 || (circular && fragments.length === 1), enzymes.join());
+      for (const f of fragments) {
+        const span = fragmentSpan(f, n);
+        assert.deepEqual(fragmentExtent(f, n), { ...span, length: fragmentSize(f) }, `${circular ? "circle" : "line"} ${enzymes.join("+")}`);
+        checked++;
+      }
+      const lengths = fragments.map(f => fragmentExtent(f, n).length);
+      assert.equal(lengths.reduce((a, b) => a + b, 0), n, `${enzymes.join("+")}: the pieces add up to the molecule`);
+    }
+  }
+  assert.equal(checked, 18, "7 fragments of the circle, 11 of the line");
+  // A 3′ overhang on the left starts the top strand after the bases that only the bottom strand has.
+  const [, pst] = digest(doc("sample", sequence, false), ["PstI"]);
+  assert.deepEqual([pst.left.kind, pst.left.bases.length], ["3'", 4]);
+  assert.equal(fragmentExtent(pst, n).start, pst.source.start + 4);
 });

@@ -69,7 +69,10 @@ export interface CutSite {
   bottomCut: number;
   forward: boolean;
   overhang: string;
-  /** Number of times this enzyme is predicted to cut the sequence: its sites less those methylation blocks. */
+  /**
+   * Number of times this enzyme is predicted to cut the sequence, as the digest counts: the
+   * cuts of its sites that make fragments, less those of sites methylation blocks.
+   */
   cuts: number;
   /** Number of its sites, cut or not. */
   sites: number;
@@ -310,44 +313,103 @@ function updateAround(a: string, b: string, p: number, s: number, hits: SiteHit[
   return [...kept, ...fresh];
 }
 
+const hitKey = (h: SiteHit) => `${h.enzyme}@${h.start}@${h.forward}`;
+
+/**
+ * A recognition's marker at the first of `complete`, its cuts that make fragments, unless it
+ * already is at one. The search draws each at its cut after the site, which for BcgI near a
+ * linear end can be at the end, or off it, though the cut before the site is a real one.
+ */
+function placed(h: SiteHit, complete: [number, number][], sequence: string): SiteHit {
+  if (!complete.length || complete.some(([top, bottom]) => top === h.cut && bottom === h.bottomCut)) return h;
+  const [cut, bottomCut] = complete[0];
+  return { ...h, cut, bottomCut, overhang: sequence.slice(Math.min(cut, bottomCut), Math.max(cut, bottomCut)) };
+}
+
+/**
+ * Recognitions of enzymes that cut on both sides which the search left out of a linear
+ * sequence because its cut after the site is off it, though the cut before the site is a real
+ * one, each marked at that cut. Only a site within reach of an end can be one, so those
+ * stretches alone are searched, with no cuts to leave a site out for. One with no cut that
+ * makes fragments isn't wanted, as it wasn't drawn before.
+ */
+function endSites(sequence: string, ends: FragmentEnds | undefined, enzymes: Enzyme[], listed: ReadonlySet<string>): SiteHit[] {
+  const n = sequence.length;
+  const searching = enzymes.filter(e => e.site.length <= n).map(e => ({ ...e, topSnipOffset: 0, bottomSnipOffset: 0 }));
+  if (!searching.length) return [];
+  const windows: [string, number][] = n <= 2 * MARGIN ? [[sequence, 0]] : [[sequence.slice(0, MARGIN), 0], [sequence.slice(n - MARGIN), n - MARGIN]];
+  const out: SiteHit[] = [];
+  for (const [text, from] of windows) {
+    for (const h of search(text, false, searching, from)) {
+      const [pair] = completeLinearCuts(h, n, ends);
+      if (pair && !listed.has(hitKey(h))) out.push(placed(h, [pair], sequence));
+    }
+  }
+  return out;
+}
+
 /**
  * Sites from the chosen list, filtered by how many times each enzyme is predicted to cut and
  * sorted by position. Membership preserves chosen names, so a personal Esp3I does not add
- * BsmBI labels. Given the sequence (`dna`) and `o.methylation`, a site Dam or Dcm methylation
+ * BsmBI labels. Given the sequence (`dna`), a cut is one the digest makes: both strands'
+ * boundaries on the molecule, between the ends of a linear fragment (`dna.ends`). A site cut
+ * at the very end or in an overhang counts none, and a site of an enzyme that cuts on both
+ * sides (BcgI) counts each cut it makes. Given `o.methylation`, a site Dam or Dcm methylation
  * blocks is still listed, with its `methylation`, but not counted as a cut, so an enzyme with
- * one of two sites blocked counts as a unique cutter.
+ * one of two sites blocked counts as a unique cutter. There is one marker for each recognition,
+ * at its cut after the site, as the search has it, or on a linear sequence at its cut before the
+ * site where that one is no cut and this is (`placed`).
  */
-export function selectSites(hits: SiteHit[], o: EnzymeOptions, dna?: { sequence: string; circular: boolean }): CutSite[] {
+export function selectSites(hits: SiteHit[], o: EnzymeOptions, dna?: Pick<SeqData, "sequence" | "circular" | "ends">): CutSite[] {
   const names = new Set(sourceEnzymes(o).map(enzymeName));
   const maxCuts = o.enzymeFilter === "all" ? Infinity : o.enzymeFilter === "unique2" ? 2 : 1;
   const minSpecificity = o.enzymeFilter === "unique6" ? 6 : 0;
-  const byEnzyme = new Map<string, SiteHit[]>();
-  for (const h of hits) {
-    if (!names.has(h.enzyme)) continue;
-    const list = byEnzyme.get(h.enzyme);
-    if (list) list.push(h);
-    else {
-      const e = ENZYMES.get(h.enzyme.toLowerCase());
-      byEnzyme.set(h.enzyme, (e ? specificity(e) : 0) >= minSpecificity ? [h] : []);
+  // An enzyme whose site is shorter than the filter asks for has no list, not an empty one for
+  // a later site to start.
+  const byEnzyme = new Map<string, SiteHit[] | null>();
+  const listOf = (enzyme: string) => {
+    let list = byEnzyme.get(enzyme);
+    if (list === undefined) {
+      const e = ENZYMES.get(enzyme.toLowerCase());
+      byEnzyme.set(enzyme, (list = (e ? specificity(e) : 0) >= minSpecificity ? [] : null));
+    }
+    return list;
+  };
+  for (const h of hits) if (names.has(h.enzyme)) listOf(h.enzyme)?.push(h);
+  const n = dna?.sequence.length ?? 0;
+  const ends = dna && validFragmentEnds(dna);
+  if (dna && !dna.circular) {
+    const both = [...names].flatMap(name => (name && known(name)?.bothSides && listOf(name) ? [known(name)!] : []));
+    if (both.length) {
+      const wanted = new Set(both.map(e => e.name));
+      const listed = new Set(hits.filter(h => wanted.has(h.enzyme)).map(hitKey));
+      for (const h of endSites(dna.sequence, ends, both, listed)) listOf(h.enzyme)!.push(h);
     }
   }
   const methylation = dna && o.methylation;
   const out: CutSite[] = [];
   for (const [enzyme, list] of byEnzyme) {
-    if (!list.length || (!methylation && list.length > maxCuts)) continue;
+    if (!list?.length) continue;
     const effects: (SiteMethylation | null)[] = [];
+    const complete: ([number, number][] | null)[] = [];
     let cuts = 0;
     // Once it cuts more often than the filter allows, the rest of its sites needn't be looked at.
     for (const h of list) {
       const m = methylation ? siteMethylation(dna.sequence, dna.circular, h, methylation) : null;
+      const pairs = dna ? (dna.circular ? siteCuts(h) : completeLinearCuts(h, n, ends)) : null;
       effects.push(m);
-      if (!m?.blocked && ++cuts > maxCuts) break;
+      complete.push(pairs);
+      cuts += m?.blocked ? 0 : (pairs?.length ?? 1);
+      if (cuts > maxCuts) break;
     }
     // One that cuts nowhere stays only where its sites alone pass (a lone blocked XbaI under
     // unique cutters), so a filter for useful enzymes doesn't fill with blocked ones.
     if (cuts > maxCuts || (!cuts && list.length > maxCuts)) continue;
     // Stable ids, so a selected site stays selected when the sites are recomputed.
-    list.forEach((h, i) => out.push({ id: `${enzyme}@${h.start}`, ...h, cuts, sites: list.length, ...(effects[i] ? { methylation: effects[i]! } : {}) }));
+    list.forEach((h, i) => {
+      const marker = dna && !dna.circular ? placed(h, complete[i]!, dna.sequence) : h;
+      out.push({ id: `${enzyme}@${h.start}`, ...marker, cuts, sites: list.length, ...(effects[i] ? { methylation: effects[i]! } : {}) });
+    });
   }
   out.sort((x, y) => x.cut - y.cut || x.enzyme.localeCompare(y.enzyme));
   return out;

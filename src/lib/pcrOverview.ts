@@ -32,22 +32,37 @@ function templateCutCounts(sequence: string, circular: boolean, members: readonl
 }
 
 /** The last template digested, kept for the reason the counts above are. */
-let digested: { sequence: string; circular: boolean; enzymes: string; sizes: number[] } | null = null;
+let digested: { sequence: string; circular: boolean; enzymes: string; sizes: number[]; problem?: string } | null = null;
+
+function templateDigest(template: SeqData, enzymes: readonly string[], methylation?: DnaMethylation) {
+  const key = `${[...enzymes].sort().join("+")}|${methylationKey(methylation ?? template.methylation)}|${JSON.stringify(template.ends ?? null)}`;
+  if (digested && digested.sequence === template.sequence && digested.circular === template.circular && digested.enzymes === key) return digested;
+  const { fragments, problem } = digestSequence(template, [...enzymes], methylation);
+  return (digested = { sequence: template.sequence, circular: template.circular, enzymes: key, sizes: fragments.map(fragmentSize), problem });
+}
 
 /**
  * The template cut by a digest's enzymes, as top-strand sizes largest first, so a lane of it
  * can run beside the product's. A circular template cut once gives one fragment of its whole
  * length, as the plasmid is only opened up; enzymes that don't cut it at all give none, which
- * is what a site a primer's 5′ tail brought in looks like from here. The template is grown
+ * is what a site a primer's 5′ tail brought in looks like from here, and so does a digest that
+ * can't be simulated (`templateDigestProblem` says which). The template is grown
  * in cells (`methylation`, its file's strain), so Dam or Dcm methylation may block a site
  * the unmethylated product cuts, and DpnI cuts it where it can't cut the product.
  */
 export function templateDigestSizes(template: SeqData, enzymes: readonly string[], methylation?: DnaMethylation): number[] {
-  const key = `${[...enzymes].sort().join("+")}|${methylationKey(methylation ?? template.methylation)}|${JSON.stringify(template.ends ?? null)}`;
-  if (digested && digested.sequence === template.sequence && digested.circular === template.circular && digested.enzymes === key) return digested.sizes;
-  const sizes = digestSequence(template, [...enzymes], methylation).fragments.map(fragmentSize);
-  digested = { sequence: template.sequence, circular: template.circular, enzymes: key, sizes };
-  return sizes;
+  return templateDigest(template, enzymes, methylation).sizes;
+}
+
+/**
+ * Why the template has no lane cut by this digest when the digest can't be simulated on it,
+ * as the Digest dialog says, rather than because the enzymes don't cut it: null otherwise,
+ * and where the template isn't in the tube (genomic DNA, cDNA) or no digest is shown, as
+ * `pcrGelLanes` leaves its lanes out. It takes no lane or band in its place.
+ */
+export function templateDigestProblem(template: SeqData, kind: TemplateKind, digest: SuggestedDigest | null, methylation?: DnaMethylation): string | null {
+  if (kind === "complex" || !digest) return null;
+  return templateDigest(template, digest.enzymes, methylation).problem ?? null;
 }
 
 /** One lane of the PCR product's gel. */

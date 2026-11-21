@@ -509,6 +509,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   assumed dam⁺ dcm⁺) and is predicted site by site, from the bases around each; a blocked
   site is still listed and drawn but isn't a cut (`CutSite.cuts` against `sites`), and a
   PCR product is unmethylated. Caches of sites and digests key on `methylationKey`.
+  A cut counts only where the digest makes one (`completeLinearCuts`): both strands'
+  boundaries on the molecule and past a linear fragment's overhangs (`SeqData.ends`). So a
+  site cut at the very end, or inside an overhang, is a site with no cut, and one of an
+  enzyme that cuts both sides (BcgI) counts each cut it makes. `selectSites` counts them
+  that way for the map, the outline and the unique filters, which therefore agree with
+  the Digest dialog (`reactionCounts`); there is still one marker for each recognition, and
+  the cached list also keys on the fragment's valid ends.
   Both lists are kept by the shell (`src-tauri/src/app_data.rs`, which writes only the
   files it names), with browser storage in the web version. A saved list keeps names
   this version doesn't know, leaving them off the map. An unreadable file blocks writes
@@ -579,7 +586,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (the ruler in `src/views/sequenceView.ts`).
 - **Cut sites** are updated around each edit (`rescanSites` in `src/lib/enzymes.ts`), not
   searched again, so typing stays fast in long sequences. A randomised test compares the
-  result with a full search; keep it passing if you touch either.
+  result with a full search; keep it passing if you touch either. The search is TeselaGen's,
+  which sees an enzyme's cut after its site only and leaves out a site whose cut is off a
+  linear end, so `selectSites` looks again in the stretches by each end for an enzyme that
+  cuts both sides, whose cut before its site may be on the sequence; it never changes what
+  `rescanSites` keeps.
 - **SnapGene files** need fixing up after the generic parser (`src/doc/fileio.ts` with
   `src/lib/snapgene.ts`): it skips primers (whose binding sites, unlike features, are
   0-based), and it keeps a feature's `type="gap"` segments (introns) as parts of it.

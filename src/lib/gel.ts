@@ -101,14 +101,18 @@ export interface Band {
   mass: number;
 }
 
-/** Fragments that run together (within `resolution` of each other's size) make one band. */
+/**
+ * Fragments that run together make one band: those within `resolution` of the band's largest
+ * size, so a run of close sizes (1000, 985, 970, …) doesn't chain into one band. The mean
+ * only places the band.
+ */
 export function bands(sizes: number[], resolution = 0.02): Band[] {
   const order = sizes.map((size, i) => ({ size, i })).sort((a, b) => b.size - a.size);
   const out: Band[] = [];
   for (const { size, i } of order) {
     const last = out[out.length - 1];
-    const prev = last ? sizes[last.fragments[last.fragments.length - 1]] : 0;
-    if (last && (prev - size) / prev <= resolution) {
+    const top = last ? sizes[last.fragments[0]] : 0;
+    if (last && (top - size) / top <= resolution) {
       last.fragments.push(i);
       last.mass += size;
       last.size = last.mass / last.fragments.length;

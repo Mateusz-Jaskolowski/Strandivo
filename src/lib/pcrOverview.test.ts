@@ -24,6 +24,7 @@ import {
   smallestGelBand,
   suggestedDigests,
   tailSiteFlanks,
+  templateDigestProblem,
   templateDigestSizes,
   type PcrGelLane
 } from "./pcrOverview.ts";
@@ -230,7 +231,7 @@ test("the suggestion's limits hold on both sides: 3 sites, 2–4 fragments and a
   assert.equal(offered(2000, [hit("A", 1800), hit("B", 1000)], ["A", "B"]).includes("A + B"), false);
 });
 
-test("an enzyme that cuts on both sides of its site is never suggested, as only its cut after the site is found", () => {
+test("an enzyme that cuts on both sides of its site is suggested with both its cuts, though a found site carries only the one after it", () => {
   assert.equal(cutsBothSides("BcgI"), true);
   assert.equal(cutsBothSides("EcoRI"), false);
   assert.equal(cutsBothSides("NoSuchI"), false);
@@ -644,4 +645,41 @@ test("a PCR product is unmethylated: DpnI can't cut it and Dam blocks none of it
   assert.deepEqual(templateDigestSizes(grown, ["DpnI"], dna), [template.length]);
   assert.deepEqual(templateDigestSizes(grown, ["XbaI"], dna), []);
   assert.deepEqual(templateDigestSizes(grown, ["XbaI"], PCR_DNA), [template.length]);
+});
+
+test("a template digest that can't be simulated is told apart from one that doesn't cut it, with no lane made up", () => {
+  // NlaIII cuts CATG^ and leaves a 3′ overhang of CATG, so the two sites of CATGCATG leave
+  // their overhangs touching: the template can't be digested. The product, with one site, can.
+  const overlap = "The cuts overlap on the two strands, so their fragments can’t be simulated.";
+  const template: SeqData = { ...doc(pad + "CATGCATG" + pad + "CATG" + pad), circular: true };
+  assert.equal(template.sequence.length, 312);
+  const f = { name: "F", start: 150, end: 169, strand: 1 as const, bases: template.sequence.slice(150, 170) };
+  const r = { name: "R", start: 250, end: 269, strand: -1 as const, bases: reverseComplement(template.sequence.slice(250, 270)) };
+  const product = pcrProduct(template.sequence, true, f, r)!;
+  assert.equal(product.length, 120);
+  const data = productOverview(product, template.sequence, true, { ...opts, enzymeSource: "lab", labEnzymes: ["NlaIII"], enzymeFilter: "all" });
+  const digest = pickDigest(data.digests, "")!;
+  assert.deepEqual([digestName(digest), digest.sizes.length], ["NlaIII", 2]);
+  // Nothing cuts the template into fragments, as nothing is simulated, and the reason is kept.
+  assert.deepEqual(templateDigestSizes(template, ["NlaIII"]), []);
+  assert.equal(templateDigestProblem(template, "plasmid", digest), overlap);
+  assert.equal(templateDigestProblem(template, "colony", digest), overlap);
+  assert.deepEqual(shape(pcrGelLanes(template, "plasmid", product.length, digest)), [
+    ["Template, supercoiled", [312]],
+    ["Product, uncut", [120]],
+    ["Product, NlaIII", digest.sizes]
+  ]);
+  // A linear template is the same, with its own uncut lane and no cut one.
+  const linear: SeqData = { ...template, circular: false };
+  assert.equal(templateDigestProblem(linear, "plasmid", digest), overlap);
+  assert.deepEqual(shape(pcrGelLanes(linear, "plasmid", product.length, digest)).map(l => l[0]), ["Template, uncut", "Product, uncut", "Product, NlaIII"]);
+  // An enzyme that has no site in the template is no problem, and neither is a digest it can make
+  // or no digest, or a template that isn't in the tube. The cached digest is the one asked for.
+  assert.equal(templateDigestProblem(template, "plasmid", digestOf(["BamHI"], [60, 60])), null);
+  assert.equal(templateDigestProblem(template, "plasmid", digest), overlap);
+  const single: SeqData = { ...doc(pad + "CATG" + pad), circular: true };
+  assert.equal(templateDigestProblem(single, "plasmid", digest), null);
+  assert.equal(templateDigestProblem({ ...single, circular: false }, "plasmid", digest), null);
+  assert.equal(templateDigestProblem(template, "plasmid", null), null);
+  assert.equal(templateDigestProblem(template, "complex", digest), null);
 });

@@ -36,6 +36,15 @@ methylation blocks a cut.
   PCR applies a change shared by both primers once, keeps annotations across the
   former origin, and reopens from GenBank as unmethylated. Mutagenesis primers stay
   within the bases left after a deletion.
+- **Cut counts agree with the digest.** The map, the outline and the unique-cutter
+  filters now count the cuts a digest makes. A site whose cut falls at the very end of a
+  linear piece, or inside an overhang, no longer counts, and an enzyme such as BcgI that
+  cuts on both sides of its site counts each cut, even near an end.
+- **Clearer notes on gels and primers.** When a template's digest can't be simulated, the
+  PCR product dialog now says why under the gel instead of just leaving the lane out.
+  A string of fragment sizes, each close to the next, no longer merges into one band on
+  the gel, and a primer with too few bases to work out a Tm says so, rather than
+  claiming it has bases other than A, C, G and T.
 - **Genes cut by a digest, PCR or cloning keep their reading frame.** A piece that begins
   partway through a coding sequence now translates from the gene's own codons, as the gene
   did, instead of from its first base, and saves where its first whole codon starts. A

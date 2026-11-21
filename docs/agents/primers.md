@@ -81,7 +81,8 @@ and CI checks that they exist.
   where no single one tells its fragments apart (`DISTINCT_DIGEST`, this suggestion's own
   bar, which no digest with a fragment below the smallest band of the gel's ladders,
   100 bp today, reaches). Sizes are top-strand lengths, as `src/lib/gel.ts` gives them, and a cut that is not
-  complete on both strands is left out, and overlapping cuts make no suggestion. An
+  complete on both strands is left out (the sites drawn on the product count cuts the same
+  way, `selectSites`), and overlapping cuts make no suggestion. An
   enzyme that cuts on both sides of its site (BcgI) contributes both complete cuts. Beside the
   suggestion a gel runs up to four lanes in the order they would be loaded: the template
   uncut and cut by that digest, then the product uncut and cut, drawn by the renderer the
@@ -94,11 +95,16 @@ and CI checks that they exist.
   the reaction doesn't have. Its sizes come from the same digest the Digest dialog runs
   (`templateDigestSizes`, kept while the template and the enzymes stay the same, as the
   dialog is drawn again on every change); a circular template cut once gives one fragment
-  of its whole length. Which lanes exist is `pcrGelLanes`, not the view: a circular
+  of its whole length. A digest that can't be simulated on the template (NlaIII's two
+  sites in CATGCATG leave their overhangs touching) has no lane, as an enzyme that doesn't
+  cut it has none, so `templateDigestProblem` tells them apart and the overview says why in
+  the Digest dialog's words under the key; it draws no lane or band in its place, and the
+  gate for a lane is the same. Which lanes exist is `pcrGelLanes`, not the view: a circular
   template runs supercoiled, and cut only when the digest cuts it; a linear one runs uncut
   only when its length differs from the product's and cut only in two pieces or more, as a
   lane that would only repeat the one above it is left out. Fragments within the gel's
-  resolution run as one band, lanes are numbered and named in a key beside the gel, and
+  resolution of a band's largest run as one band (`bands`), so a run of close sizes doesn't
+  chain into one; lanes are numbered and named in a key beside the gel, and
   the ladder is the one chosen in either dialog, kept for as long as the window is open.
   Until one is chosen the Digest dialog opens on the first, and this gel on the first that
   reaches its smallest band (`ladderReaching`, in `src/lib/gel.ts`), or on the one that goes
@@ -210,6 +216,12 @@ and CI checks that they exist.
   deduplicate against `findBindingSites` and the primer's stored site, surface as a
   `"Partial off-target"` warning in `primerReport().checks`, and never enter `findBindingSites`
   or PCR pairing.
+- **A primer with no Tm** says why (`primerReport`). The Tm comes from the bases that pair,
+  or from the 3′ arm of a primer with changes. If those include a base other than A, C, G
+  or T the check is "Not ACGT"; if there are fewer than two, as when a change is the last
+  base or the one before it, it is "Short 3′ arm" (a primer with changes) or "Few bases
+  pair", as "other bases" would mislead. The Tm itself, and what a primer or product
+  accepts, are as before.
 - **Primer inspector & unified Primer Dialog** (`src/views/inspector.ts`,
   `src/views/primerDialog.ts`, `src/lib/primerInsert.ts`): the inspector is read-first
   (colour badge popover, hoisted warnings matching `report.checks`, styled sequence + Copy,

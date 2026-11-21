@@ -46,8 +46,8 @@ export const bits = site => [...site].reduce((sum, c) => sum + BITS[c], 0);
  * boundaries counted from the site's first base, the top strand's then the bottom
  * strand's, both on top-strand coordinates (G^AATTC is 1 and 5). `bothSides` is set for
  * an enzyme that also cuts before its site, as BcgI's (10/12)CGANNNNNNTGC(12/10), of
- * which the search keeps only the cut after it. Returns null for a site with no cut
- * marked.
+ * which the search keeps only the cut after it, where digests use both. Returns null for
+ * a site with no cut marked.
  *
  * A ^ in a palindromic site marks both strands' cuts. REBASE writes a few enzymes that
  * cut outside a palindromic core as the core, Ns and a ^ (TspRI's CASTGNN^): their
@@ -154,7 +154,8 @@ ${Object.entries(suppliers).map(([code, name]) => `  ${code}: ${JSON.stringify(n
 /**
  * Every restriction enzyme REBASE lists as sold, one per line: name, cut as REBASE writes
  * it, site searched for, top- and bottom-strand cuts from the site's first base, 1 if it
- * also cuts before its site (only the cut after it is used), and suppliers' codes.
+ * also cuts before its site (the search finds it by the cut after it, and digests use both
+ * cuts), and suppliers' codes.
  */
 export const REBASE_ENZYMES = \`
 ${kept.map(e => [e.name, e.notation, e.site, e.top, e.bottom, e.bothSides ? 1 : 0, e.suppliers].map(String).map(escape).join("\t")).join("\n")}

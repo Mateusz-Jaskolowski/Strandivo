@@ -164,6 +164,41 @@ test("primer Tm, GC and checks match primer3-style conditions", () => {
   assert.ok(tailed.checks.every(c => c.level === "ok"), JSON.stringify(tailed.checks));
 });
 
+test("a primer with no Tm says why: too few bases pair, or bases that aren't A, C, G or T", () => {
+  const seq = puc19();
+  const site = seq.slice(1000, 1033);
+  const other = (base: string) => (base === "A" ? "C" : "A");
+  const place = (bases: string) => alignPrimer({ start: 1000, end: 1032, strand: 1, bases }, seq);
+  /** The checks that explain why there is no Tm, with what the report has for it. */
+  const noTm = (bases: string, binds: number | ReturnType<typeof place>) => {
+    const r = primerReport(bases, binds, seq, true);
+    return { tm: r.tm, notes: r.checks.filter(c => /Tm can't be calculated/.test(c.text)).map(c => [c.level, c.short, c.text]) };
+  };
+  // Bases that are all A, C, G and T, but the 3′ arm of a primer with a change has none or one of them.
+  const lastBase = site.slice(0, 32) + other(site[32]);
+  assert.equal(place(lastBase).arms[0], "");
+  assert.deepEqual(noTm(lastBase, place(lastBase)), { tm: null, notes: [["warn", "Short 3′ arm", "The 3′ arm has no bases, so the Tm can't be calculated."]] });
+  const nextToLast = site.slice(0, 31) + other(site[31]) + site[32];
+  assert.equal(place(nextToLast).arms[0], site[32]);
+  assert.deepEqual(noTm(nextToLast, place(nextToLast)), { tm: null, notes: [["warn", "Short 3′ arm", "The 3′ arm has 1 base, so the Tm can't be calculated."]] });
+  // The 3′ change warning stays as it was, beside it.
+  assert.ok(primerReport(lastBase, place(lastBase), seq, true).checks.some(c => c.short === "3′ change"));
+  // A primer that isn't changed has too few bases pairing: one, or none.
+  assert.deepEqual(noTm(site, 1), { tm: null, notes: [["warn", "Few bases pair", "Only 1 base pairs with the template, so the Tm can't be calculated."]] });
+  assert.deepEqual(noTm(site, { ...place(site), binding: "", tail: site }), { tm: null, notes: [["warn", "Few bases pair", "No bases pair with the template, so the Tm can't be calculated."]] });
+  // Bases other than A, C, G and T still say so, whether or not they are also too few, and in a 3′ arm.
+  const text = "Contains bases other than A, C, G and T, so the Tm can't be calculated.";
+  assert.deepEqual(noTm(site.slice(0, 20) + "N" + site.slice(21), 33), { tm: null, notes: [["warn", "Not ACGT", text]] });
+  assert.deepEqual(noTm("N", 1), { tm: null, notes: [["warn", "Not ACGT", text]] });
+  const inArm = site.slice(0, 10) + other(site[10]) + site.slice(11, 31) + "N" + site[32];
+  assert.ok(place(inArm).arms[0].includes("N"));
+  assert.deepEqual(noTm(inArm, place(inArm)), { tm: null, notes: [["warn", "Not ACGT", text]] });
+  // A primer whose Tm is worked out gets none of these, and its Tm is as before.
+  const fine = primerReport(site, 33, seq, true);
+  assert.equal(fine.checks.filter(c => /can't be calculated/.test(c.text)).length, 0);
+  assert.equal(fine.tm, meltingTemp(site));
+});
+
 test("a 5′ tail that matches the sequence too is reported, with where it does", () => {
   const seq = puc19();
   const site = seq.slice(1000, 1033);

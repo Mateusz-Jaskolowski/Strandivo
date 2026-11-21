@@ -252,6 +252,7 @@ assembled, with the line of the first part.
 | 421 | no product (circular) | "These primers don't make a product here." |
 | 421 | no product (linear) | "These primers point away from each other on this linear sequence, so they make no product." |
 | 432 | fact (NEB method only) | "Anneal at" "… °C · {polymerase}: {rule}" |
+| — | overview note (the template's digest can't be simulated; `src/views/pcrOverviewView.ts` line 84) | "The template's … digest isn't shown. The cuts overlap on the two strands, so their fragments can’t be simulated." |
 
 ### Design primers
 
@@ -311,7 +312,8 @@ assembled, with the line of the first part.
 | 89 | dialog title, note | the enzyme's name; "Site, cut, suppliers and methylation from REBASE." |
 | 103 | fact | "Methylation": "Dam blocked · Dcm not tested · CpG cuts" (each of "cuts", "cuts slowly", "blocked", "varies", "not tested", "needed to cut"); "Its site can't overlap a Dam, Dcm or CpG site." |
 | 122 | facts (sites methylation blocks) | "Predicted": "… sites · … predicted cuts"; "Won't cut": their positions, marked m |
-| 125 | fact (nothing cuts a plasmid) | "Fragments": "None: the plasmid stays uncut" |
+| 131 | fact (nothing cuts a plasmid) | "Fragments": "The plasmid stays uncut" |
+| 131 | fact (cuts overlap) | "Fragments": "The cuts overlap on the two strands, so their fragments can’t be simulated." |
 | 87 | figure (screen readers) | "… cuts …: …" (its site and ends) |
 | 78 | sections | "Cut" / "In this sequence" / "Lab stock" |
 | 78 | unknown enzyme | "Not in this version's enzyme list." |
@@ -534,20 +536,22 @@ My enzymes — `src/views/personalEnzymesPanel.ts`, and the cut — `src/views/e
 
 | Line | Where | Text |
 |------|-------|------|
-| 592 | 3′ change (at end) | "The 3′ end base doesn't pair with the template, so extension may fail." |
-| 592 | 3′ change (near end) | "A change … bases from the 3′ end may stop extension." |
-| 596 | not ACGT | "Contains bases other than A, C, G and T, so the Tm can't be calculated." |
-| 597 | low Tm | "Tm is … °C — below 52 °C may anneal poorly." |
-| 598 | high Tm | "Tm is … °C — above 72 °C." |
-| 602 | Tm mismatch | "Tm differs from its partner by … °C (aim for under 5 °C)." |
-| 607 | low/high GC | "GC content is …% (aim for 40–60%)." |
-| 612 | no 3′ G/C | "No G or C in the last two bases at the 3′ end." |
-| 613 | GC-rich 3′ | "More than three G/C in the last five bases can cause mispriming." |
-| 617 | long run | "Has a run of … identical bases." |
-| 621 | self-dimer | "The 3′ end can pair with itself over … bases." |
-| 626 | no site | "Doesn't bind this sequence." |
-| 627 | multi-site | "Binds … places in this sequence." |
-| 642 | tail binds | "… bases of the 5′ tail also match this sequence at …, so the primer may prime there as well." |
+| 702 | 3′ change (at end) | "The 3′ end base doesn't pair with the template, so extension may fail." |
+| 702 | 3′ change (near end) | "A change … bases from the 3′ end may stop extension." |
+| 710 | not ACGT | "Contains bases other than A, C, G and T, so the Tm can't be calculated." |
+| 711 | short 3′ arm (primer with changes; no Tm) | "The 3′ arm has no bases, so the Tm can't be calculated." / "The 3′ arm has 1 base, so the Tm can't be calculated." |
+| 712 | few bases pair (no Tm) | "No bases pair with the template, so the Tm can't be calculated." / "Only 1 base pairs with the template, so the Tm can't be calculated." |
+| 713 | low Tm | "Tm is … °C — below 52 °C may anneal poorly." |
+| 714 | high Tm | "Tm is … °C — above 72 °C." |
+| 719 | Tm mismatch | "Tm differs from its partner by … °C (aim for under 5 °C)." |
+| 723 | low/high GC | "GC content is …% (aim for 40–60%)." |
+| 728 | no 3′ G/C | "No G or C in the last two bases at the 3′ end." |
+| 729 | GC-rich 3′ | "More than three G/C in the last five bases can cause mispriming." |
+| 733 | long run | "Has a run of … identical bases." |
+| 737 | self-dimer | "The 3′ end can pair with itself over … bases." |
+| 741 | no site | "Doesn't bind this sequence." |
+| 742 | multi-site | "Binds … places in this sequence." |
+| 767 | tail binds | "… bases of the 5′ tail also match this sequence at …, so the primer may prime there as well." |
 
 ---
 

@@ -703,8 +703,14 @@ export function primerReport(bases: string, binds: number | PrimerAlignment, tem
     else ok(`${what[0].toUpperCase()}${what.slice(1)}; ${from3} bases pair after the last`);
   }
 
-  if (tm === null) warn("Not ACGT", "Contains bases other than A, C, G and T, so the Tm can't be calculated.");
-  else if (tm < 52) warn("Low Tm", `${changed ? "The 3′ arm's Tm" : "Tm"} is ${tm.toFixed(1)} °C — below 52 °C may anneal poorly.`);
+  if (tm === null) {
+    // The bases the Tm comes from (a primer with changes: its 3′ arm) are not all A, C, G or T,
+    // or are fewer than two. Say which, as "other bases" would mislead for the second.
+    const basis = a ? tmBases(a) : binding;
+    if (/[^ACGT]/i.test(basis)) warn("Not ACGT", "Contains bases other than A, C, G and T, so the Tm can't be calculated.");
+    else if (changed) warn("Short 3′ arm", `The 3′ arm has ${basis ? "1 base" : "no bases"}, so the Tm can't be calculated.`);
+    else warn("Few bases pair", `${basis ? "Only 1 base pairs" : "No bases pair"} with the template, so the Tm can't be calculated.`);
+  } else if (tm < 52) warn("Low Tm", `${changed ? "The 3′ arm's Tm" : "Tm"} is ${tm.toFixed(1)} °C — below 52 °C may anneal poorly.`);
   else if (tm > 72) warn("High Tm", `${changed ? "The 3′ arm's Tm" : "Tm"} is ${tm.toFixed(1)} °C — above 72 °C.`);
   else ok(`${changed ? "3′ arm Tm" : "Tm"} ${tm.toFixed(1)} °C`);
 

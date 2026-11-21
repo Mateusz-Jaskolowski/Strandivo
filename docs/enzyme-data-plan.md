@@ -55,7 +55,10 @@ See Methylation below.
   sites would fall every few bases. The generator lists what it leaves out, and refuses
   a site it can't read rather than guess.
 - **Cuts on both sides** (BcgI's (10/12)CGANNNNNNTGC(12/10)): the map labels the recognition
-  site once. Digests use both sets of cut coordinates from REBASE.
+  site once. Digests use both sets of cut coordinates from REBASE, and so do the map's
+  counts and the unique filters (21 November 2026): a site counts each cut it makes, and
+  one whose cut after the site is off a linear end is still marked, at the cut before it,
+  if that one is on the sequence.
 - **A ^ at the cut, with Ns out to a cut past the site**, as it reads at a glance where
   REBASE's numbers have to be worked out: AciI is C^CGC (REBASE's CCGC(-3/-1)), BsaI
   GGTCTCN^NNNN (GGTCTC(1/5)), so the Ns after the ^ of a 5′ overhang are the overhang.
@@ -139,6 +142,9 @@ Decisions (17–19 November 2026):
 - **Filters count predicted cuts.** An enzyme with two sites, one blocked, is a unique
   cutter, and both sites are drawn. One that cuts nowhere passes a filter only if its
   sites alone would, so filters for useful enzymes don't fill with blocked four-cutters.
+  A predicted cut is one the digest makes (21 November 2026): a site cut at the very end
+  of a linear sequence, or inside the overhang of a fragment, makes none, so an enzyme
+  with one such site and one that cuts is a unique cutter.
 - **The strain decides methylation only, not amber suppression.** DH5α, XL1-Blue, JM109
   and TG1 are supE44 amber suppressors: anyone typing DH5α, which is most people, would
   have every translation, ORF and read difference read TAG as glutamine, which is wrong

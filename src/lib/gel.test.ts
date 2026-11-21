@@ -89,6 +89,23 @@ test("gel: fragments of nearly the same size run as one band", () => {
   assert.equal(b[1].size, 1005);
 });
 
+test("gel: a band takes fragments within the resolution of its largest, so close sizes don't chain into one", () => {
+  // Each is 1.5% under the one before it, but the last is 6% under the first.
+  const b = bands([1000, 985, 970, 955, 940]);
+  assert.deepEqual(b.map(x => x.fragments), [[0, 1], [2, 3], [4]]);
+  assert.deepEqual(b.map(x => x.size), [992.5, 962.5, 940]);
+  // Exactly 2.0% under the largest is one band and 2.1% is two, with fragments between or not.
+  assert.deepEqual(bands([1000, 980]).map(x => x.fragments), [[0, 1]]);
+  assert.deepEqual(bands([1000, 979]).map(x => x.fragments), [[0], [1]]);
+  assert.deepEqual(bands([1000, 990, 980]).map(x => x.fragments), [[0, 1, 2]]);
+  assert.deepEqual(bands([1000, 990, 979]).map(x => x.fragments), [[0, 1], [2]]);
+  // The indexes are the lane's list, in whatever order it came, and the resolution can be changed.
+  assert.deepEqual(bands([940, 1000, 955, 985, 970]).map(x => x.fragments), [[1, 3], [4, 2], [0]]);
+  assert.deepEqual(bands([100, 90], 0.1).map(x => x.fragments), [[0, 1]]);
+  assert.deepEqual(bands([100, 89], 0.1).map(x => x.fragments), [[0], [1]]);
+  assert.deepEqual(bands([]), []);
+});
+
 test("gel: it opens on the first ladder that reaches the smallest band, else the first", () => {
   const smallest = (id: string) => Math.min(...LADDERS.find(l => l.id === id)!.bands);
   assert.equal(smallest("1kb"), 500);

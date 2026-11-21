@@ -13,7 +13,7 @@ import { bindingTm, changesText, currentTmSettings } from "../lib/primers.ts";
 import { alignPrimer, type PrimerAlignment } from "../lib/primerAlign.ts";
 import { primerPairs, type PrimerPair } from "../lib/primerPairs.ts";
 import { fmt, fmtRange } from "../ui/format.ts";
-import { type SeqData, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
+import { validFragmentEnds, type SeqData, type SeqFeature, type SeqPrimer } from "../lib/seqdata.ts";
 
 // Primers are replaced, never changed, so each keeps its alignment until the sequence changes.
 const alignCache = new WeakMap<SeqPrimer, { sequence: string; a: PrimerAlignment }>();
@@ -162,8 +162,10 @@ export function cutSites(d: SeqData, o: EnzymeOptions): CutSite[] {
     const hits = hitCache && hitCache.extra === extra ? rescanSites(hitCache, d.sequence, d.circular, names) : scanSites(d.sequence, d.circular, names);
     hitCache = { sequence: d.sequence, circular: d.circular, extra, hits };
   }
-  // Which sites methylation blocks depends on the strain, which changes what passes the filter.
-  const key = JSON.stringify([o.enzymeSource, o.enzymeFilter, names, methylationKey(o.methylation)]);
+  // Which sites methylation blocks depends on the strain, which changes what passes the filter,
+  // and so do a fragment's ends, which a cut can't be in: the same bases with other ends
+  // (or none) are another list.
+  const key = JSON.stringify([o.enzymeSource, o.enzymeFilter, names, methylationKey(o.methylation), validFragmentEnds(d) ?? null]);
   if (!cutCache || cutCache.hits !== hitCache.hits) cutCache = { hits: hitCache.hits, lists: new Map() };
   let sites = cutCache.lists.get(key);
   if (!sites) {

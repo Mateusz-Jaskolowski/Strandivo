@@ -1595,6 +1595,29 @@ async function main() {
     await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
     await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
 
+    // --- a site cut at the very end of a linear sequence is no cut, in the outline as in the digest ---
+    // BsaI cuts 7 and 11 bases on from the start of its site, so the second of these two sites,
+    // five bases from the end, has its cuts on the last base: the outline's unique filter counts
+    // one cut and keeps the enzyme, and the Digest dialog gives the two fragments that cut makes.
+    const endBases = "AT".repeat(30);
+    await s.exec(`window.__strandivo.openNew({ name: "end-test", description: "", circular: false, sequence: "${endBases}GGTCTC${endBases}GGTCTCAAAAA", features: [], primers: [], sources: [] })`);
+    await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.activeTab() === 1", 10000);
+    await s.exec("window.__strandivo.setView('map')");
+    const endChip = await s.waitFor("document.querySelector('.sv-enzyme-chip[data-id=\"BsaI@60\"]')", 5000);
+    const endTitle = endChip ? await s.exec("return document.querySelector('.sv-enzyme-chip[data-id=\"BsaI@60\"]').title") : "";
+    check("A site whose cuts fall at the end of a linear sequence isn't counted, so BsaI stays a unique cutter in the outline", endChip && endTitle.includes("2 sites · 1 predicted cut"), endTitle);
+    await s.exec(`${doc} s.selectRange({ start: 60, end: 65 }, { kind: "cutsite", id: "BsaI@60" }, "e2e");`);
+    await sleep(300);
+    await s.click("//button[contains(., 'Digest with BsaI')]", "xpath");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-digest-table')", 5000);
+    const endSizes = await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-digest-table tr[data-size]')).map(r => r.dataset.size)");
+    check("The Digest dialog gives the same one cut, as two fragments", JSON.stringify(endSizes) === '["70","67"]', JSON.stringify(endSizes));
+    await s.press(ESCAPE);
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    await s.exec("window.__strandivo.closeTab()");
+    await s.click("//*[contains(@class,'ps-modal')]//button[contains(., \"Don't Save\")]", "xpath");
+    await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+
     // --- a dialog belongs to its file's tab ---
     // One opened for a file closes, as Cancel does, when another tab or Home becomes the
     // current one (a key, a click, a file opening) or when its tab closes; Escape closes only

@@ -758,6 +758,41 @@ async function main(outDir) {
       }
     }
 
+    // --- a site cut at the very end of a linear sequence is no cut, in the outline as in the digest ---
+    // Invented bases: BsaI cuts 7 and 11 bases on from the start of its site, so the second of
+    // two sites, five bases from the end, has its cuts on the last base. The outline's unique
+    // filter counts one cut and keeps the enzyme, and the Digest dialog gives the two fragments
+    // that cut makes. Saved first, a download here, so that closing the tab asks nothing.
+    {
+      const first = await s.exec("return window.__strandivo.tabs().length");
+      const downloads = await s.exec("return window.__e2eDownloads.length");
+      const bases = "AT".repeat(30);
+      await s.exec("window.__strandivo.openNew(arguments[0]);", {
+        name: "end-test",
+        description: "",
+        circular: false,
+        sequence: `${bases}GGTCTC${bases}GGTCTCAAAAA`,
+        features: [],
+        primers: [],
+        sources: []
+      });
+      await s.waitFor("window.__strandivo.store?.data.name === 'end-test'", 5000);
+      await s.exec("window.__strandivo.command('save')");
+      await s.waitFor(`window.__e2eDownloads.length === ${downloads + 1}`, 5000);
+      const chip = await s.waitFor("document.querySelector('.sv-enzyme-chip[data-id=\"BsaI@60\"]')", 5000);
+      const title = chip ? await s.exec("return document.querySelector('.sv-enzyme-chip[data-id=\"BsaI@60\"]').title") : "";
+      check("A site whose cuts fall at the end of a linear sequence isn't counted, so BsaI stays a unique cutter in the outline", chip && title.includes("2 sites · 1 predicted cut"), title);
+      await s.exec("window.__strandivo.command('digest')");
+      await s.waitFor("document.querySelector('input[data-enzyme=\"BsaI\"]')", 5000);
+      await s.click("//input[@data-enzyme='BsaI']");
+      const sizes = (await s.waitFor("document.querySelectorAll('.sv-dialog .sv-digest-table tr[data-size]').length === 2", 5000))
+        ? await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-digest-table tr[data-size]')).map(r => r.dataset.size)")
+        : [];
+      check("The Digest dialog gives the same one cut, as two fragments", JSON.stringify(sizes) === '["70","67"]', JSON.stringify(sizes));
+      await s.exec(`window.__strandivo.showTab(${first}); window.__strandivo.closeTab();`);
+      await s.waitFor(`window.__strandivo.tabs().length === ${first}`, 5000);
+    }
+
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");
     await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));

@@ -32,7 +32,8 @@ export const SUPPLIERS: Readonly<Record<string, string>> = {
 /**
  * Every restriction enzyme REBASE lists as sold, one per line: name, cut as REBASE writes
  * it, site searched for, top- and bottom-strand cuts from the site's first base, 1 if it
- * also cuts before its site (only the cut after it is used), and suppliers' codes.
+ * also cuts before its site (the search finds it by the cut after it, and digests use both
+ * cuts), and suppliers' codes.
  */
 export const REBASE_ENZYMES = `
 AanI	TTA^TAA	TTATAA	3	3	0	B

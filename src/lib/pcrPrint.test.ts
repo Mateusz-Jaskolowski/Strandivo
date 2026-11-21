@@ -14,6 +14,7 @@ import { programContext } from "./pcrPlan.ts";
 import {
   buildPcrPlanSnapshot,
   DEFAULT_PLAN_SECTIONS,
+  mdText,
   paperForLocale,
   PCR_PLAN_SHEET_CSS,
   pcrPlanGelLayout,
@@ -408,7 +409,7 @@ test("Markdown export reflects edited program, collapsed mix, section toggles, u
     { title: "Bench | Run #1", experimentDate: "", notes: "Line A\nLine B" },
     { ...DEFAULT_PLAN_SECTIONS, productMap: false }
   );
-  assert.ok(md.startsWith("# Bench | Run #1\n"));
+  assert.ok(md.startsWith("# Bench \\| Run \\#1\n"));
   assert.equal(md.includes("**Experiment date:**"), false);
   assert.ok(md.includes("`gcgcgaattc"));
   assert.ok(md.includes("## Cycling program (Edited)"));
@@ -416,7 +417,8 @@ test("Markdown export reflects edited program, collapsed mix, section toggles, u
   assert.ok(md.includes("5 reactions (+10% extra → 5.5× master mix)"));
   assert.ok(md.includes("## Simulated gel"));
   assert.equal(md.includes("## Product map"), false);
-  assert.ok(md.includes("Line A\nLine B"));
+  // Notes keep their line break as a hard break.
+  assert.ok(md.includes("Line A\\\nLine B"));
   assert.ok(md.includes("Plan exported 2026-11-19"));
   assert.equal(md.includes(d.sequence), false);
 
@@ -432,6 +434,7 @@ test("Markdown export reflects edited program, collapsed mix, section toggles, u
   assert.equal(ventMd.includes("| Step | Temp | Time |"), false);
   assert.equal(ventMd.includes("| Component |"), false);
 });
+
 // ---------- exact values, sections, warnings and escaping ----------
 
 const SECTION_KEYS = Object.keys(DEFAULT_PLAN_SECTIONS) as (keyof PcrPlanSections)[];
@@ -587,6 +590,59 @@ test("the supercoiled band is explained only when a lane draws one", () => {
     assert.match(text, /Template carryover runs fainter than the product\./);
     assert.equal(/supercoiled|dashed/i.test(text), false);
   }
+});
+
+/** The cells of a GFM table row, split at pipes no backslash escapes, as GFM and markdown-it split them. */
+function tableCells(row: string): string[] {
+  const cells: string[] = [];
+  let cell = "";
+  let slashes = 0;
+  for (const c of row.trim().slice(1, -1)) {
+    if (c === "|" && slashes % 2 === 0) {
+      cells.push(cell.trim());
+      cell = "";
+    } else cell += c;
+    slashes = c === "\\" ? slashes + 1 : 0;
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+/** What a CommonMark reader shows for escaped text: a backslash before punctuation is dropped. */
+const unescapeMd = (text: string) => text.replace(/\\([!-/:-@[-`{-~])/g, "$1");
+
+test("Markdown keeps names and notes literal: a backslash before a pipe stays in one cell, punctuation stays inert", () => {
+  const literal = 'pre\\|post *em* _u_ `code` [a](b) <b>x</b> &amp; $x$ #1 ~~s~~ 🧪';
+  const { snapshot } = buildScenario({ fwdName: `${literal}\nnext line`, templateName: "pUC19 <v2> | *demo*" });
+  const md = pcrPlanMarkdown(snapshot, { title: "T", experimentDate: "", notes: "" });
+  const row = md.split("\n").find(l => l.startsWith("| Forward |"))!;
+  const cells = tableCells(row);
+  assert.equal(cells.length, 6, row);
+  assert.equal(unescapeMd(cells[1]), `${literal} next line`);
+  // Every Markdown character in the cell is escaped, so nothing in the name formats.
+  assert.equal(/(^|[^\\])(\\\\)*[`*_[\]<>|~&$#]/.test(cells[1]), false, cells[1]);
+  assert.ok(cells[1].includes("pre\\\\\\|post"));
+  assert.equal(mdText("a\\|b"), "a\\\\\\|b");
+  assert.ok(md.includes("- **Template:** pUC19 \\<v2\\> \\| \\*demo\\* (2,686 bp"));
+});
+
+test("Markdown notes are literal text with their line breaks kept", () => {
+  const { snapshot } = buildScenario();
+  const notes = "- not a list\n1. not a step\n# not a heading\n> not a quote\n---\n\nAfter a blank line *still* plain \\";
+  const md = pcrPlanMarkdown(snapshot, { title: "Notes", experimentDate: "", notes });
+  const body = md.split("## Bench notes & observations\n\n")[1].split("\n\n---\n")[0];
+  assert.equal(
+    body,
+    ["\\- not a list\\", "1\\. not a step\\", "\\# not a heading\\", "\\> not a quote\\", "\\---", "", "After a blank line \\*still\\* plain \\\\"].join("\n")
+  );
+});
+
+test("an edited cycle count is bold once in the Markdown row", () => {
+  const { snapshot } = buildScenario({ editCycles: "28" });
+  const md = pcrPlanMarkdown(snapshot, { title: "Cycles", experimentDate: "", notes: "" });
+  assert.ok(md.includes("| Repeat **28 cycles** (gen. 25) | | |"));
+  assert.equal(/\*\*Repeat|\*\*\*\*/.test(md), false);
+  const plain = pcrPlanMarkdown(buildScenario().snapshot, { title: "Cycles", experimentDate: "", notes: "" });
+  assert.ok(plain.includes("| Repeat 25 cycles | | |"));
 });
 
 test("names and sequences from the file are escaped in the saved HTML, which stays offline", () => {

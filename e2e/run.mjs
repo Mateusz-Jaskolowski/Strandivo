@@ -1127,7 +1127,7 @@ async function main() {
       return window.__pcrMd;
     `);
     await s.exec("delete navigator.clipboard; delete window.__pcrMd;");
-    check("Copy Markdown copies a Markdown bench sheet with edited program and collapsed mix", /# Clone verification #7/.test(copiedMd) && /\*\*64 °C\*\*/.test(copiedMd) && /5 reactions/.test(copiedMd), copiedMd.slice(0, 220));
+    check("Copy Markdown copies a Markdown bench sheet with edited program and collapsed mix", /# Clone verification \\#7/.test(copiedMd) && /\*\*64 °C\*\*/.test(copiedMd) && /5 reactions/.test(copiedMd), copiedMd.slice(0, 220));
     const printCalled = await s.exec(`window.__e2ePrintCalls = 0; window.__strandivoPrint = () => { window.__e2ePrintCalls++; }; document.querySelector('[data-focus="plan-print"]').click(); return window.__e2ePrintCalls;`);
     await s.exec("delete window.__strandivoPrint; delete window.__e2ePrintCalls;");
     check("Print… invokes the print path cleanly", printCalled === 1, String(printCalled));

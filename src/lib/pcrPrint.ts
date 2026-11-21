@@ -1462,8 +1462,33 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
 </html>`;
 }
 
-function mdCell(text: string): string {
-  return text.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+/** Markdown punctuation that can start formatting, a link, HTML, an entity, math or a table cell. */
+const MD_SPECIAL = /[\\`*_[\]<>|~&$#]/g;
+
+/**
+ * Text from the user or a file as literal Markdown: one pass, so a backslash before a pipe
+ * stays both characters, and newlines become spaces. Safe in table cells and after `# `.
+ */
+export function mdText(text: string): string {
+  return text.replace(/\r?\n/g, " ").replace(MD_SPECIAL, "\\$&");
+}
+
+/** One line of literal text at the start of a Markdown line, where `-`, `+`, `=` and `1.` start blocks. */
+function mdLine(text: string): string {
+  return mdText(text.trim())
+    .replace(/^([-+=])/, "\\$1")
+    .replace(/^(\d+)([.)])/, "$1\\$2");
+}
+
+/** Notes as typed: literal, each line break kept as a hard break, blank lines as paragraph breaks. */
+function mdNotes(notes: string): string {
+  const lines = notes.split("\n").map(mdLine);
+  return lines.map((line, i) => (line && lines[i + 1] ? `${line}\\` : line)).join("\n");
+}
+
+/** A primer's bases in a code span, or as escaped text if a file gave it anything else. */
+function mdBases(bases: string): string {
+  return /^[A-Za-z]+$/.test(bases) ? `\`${bases}\`` : mdText(bases);
 }
 
 /**
@@ -1471,30 +1496,33 @@ function mdCell(text: string): string {
  * Obsidian, GitHub, email), respecting the preview's chosen sections and local metadata.
  */
 export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sections: PcrPlanSections = DEFAULT_PLAN_SECTIONS): string {
+  // Every text here is escaped with `mdText` (or `mdNotes`), ours too, so the only Markdown
+  // is the markup written below.
+  const t = mdText;
   const title = meta.title.trim() || snapshot.suggestedTitle;
   const expDate = meta.experimentDate.trim();
-  const notes = meta.notes.replace(/\r\n/g, "\n").trimEnd();
+  const notes = meta.notes.replace(/\r\n?/g, "\n").trim();
   const out: string[] = [];
 
-  out.push(`# ${title}`);
+  out.push(`# ${t(title)}`);
   out.push("");
-  if (expDate) out.push(`- **Experiment date:** ${expDate}`);
-  out.push(`- **Template:** ${snapshot.template.name} (${fmtInt(snapshot.template.length)} bp, ${snapshot.template.circular ? "circular" : "linear"} · ${snapshot.template.kindLabel})`);
+  if (expDate) out.push(`- **Experiment date:** ${t(expDate)}`);
+  out.push(`- **Template:** ${t(snapshot.template.name)} (${fmtInt(snapshot.template.length)} bp, ${snapshot.template.circular ? "circular" : "linear"} · ${t(snapshot.template.kindLabel)})`);
   out.push(`- **Predicted product:** ${fmtInt(snapshot.product.length)} bp · ${snapshot.product.gcPercent.toFixed(1)}% GC${snapshot.product.hasTails ? " (5′ tails incl.)" : ""}`);
-  out.push(`- **Template span:** ${snapshot.template.spanText}`);
-  out.push(`- **Polymerase:** ${snapshot.polymerase.name}`);
-  out.push(`- **Product ends:** ${snapshot.product.ends}`);
+  out.push(`- **Template span:** ${t(snapshot.template.spanText)}`);
+  out.push(`- **Polymerase:** ${t(snapshot.polymerase.name)}`);
+  out.push(`- **Product ends:** ${t(snapshot.product.ends)}`);
   out.push(
-    `- **Annealing:** ${snapshot.product.annealText ? `${snapshot.product.annealText}${snapshot.product.annealRule ? ` (${snapshot.product.annealRule})` : ""}` : "Unavailable (Tm unknown)"}`
+    `- **Annealing:** ${snapshot.product.annealText ? t(`${snapshot.product.annealText}${snapshot.product.annealRule ? ` (${snapshot.product.annealRule})` : ""}`) : "Unavailable (Tm unknown)"}`
   );
-  out.push(`- **Features:** ${snapshot.product.featuresText}`);
+  out.push(`- **Features:** ${t(snapshot.product.featuresText)}`);
 
   const warnings = planWarnings(snapshot, sections);
   if (warnings.length) {
     out.push("");
     out.push("## Warnings & notes");
     out.push("");
-    for (const w of warnings) out.push(`- ${w}`);
+    for (const w of warnings) out.push(`- ${t(w)}`);
   }
 
   if (sections.primers) {
@@ -1505,7 +1533,7 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     out.push("| --- | --- | --- | ---: | ---: | --- |");
     for (const p of snapshot.primers) {
       const tm = p.tm === null ? "—" : `${p.tm.toFixed(1)} °C`;
-      out.push(`| ${p.role} | ${mdCell(p.name)} | \`${mdCell(p.sequence)}\` | ${fmtInt(p.length)} nt | ${tm} | ${mdCell(p.binds)} |`);
+      out.push(`| ${p.role} | ${t(p.name)} | ${mdBases(p.sequence)} | ${fmtInt(p.length)} nt | ${tm} | ${t(p.binds)} |`);
     }
     const primerNotes: string[] = [];
     if (snapshot.product.hasTails) primerNotes.push("Lower-case 5′ bases are non-binding tails.");
@@ -1513,7 +1541,7 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     if (snapshot.polymerase.tmNote) primerNotes.push(`${snapshot.polymerase.tmNote}.`);
     if (primerNotes.length) {
       out.push("");
-      out.push(`_${primerNotes.join(" ")}_`);
+      out.push(`_${t(primerNotes.join(" "))}_`);
     }
   }
 
@@ -1521,16 +1549,16 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     out.push("");
     out.push("## Product map");
     out.push("");
-    out.push(`- **Cut-site filter:** ${snapshot.product.enzymeFilterNote}`);
+    out.push(`- **Cut-site filter:** ${t(snapshot.product.enzymeFilterNote)}`);
     if (snapshot.product.cutSites.length) {
-      const listed = snapshot.product.cutSites.slice(0, 24).map(s => `${s.enzyme} (${fmtInt(s.cut)})`);
+      const listed = snapshot.product.cutSites.slice(0, 24).map(s => `${t(s.enzyme)} (${fmtInt(s.cut)})`);
       const extra = snapshot.product.cutSites.length > 24 ? `, … (+${snapshot.product.cutSites.length - 24} more)` : "";
       out.push(`- **Cut sites:** ${listed.join(", ")}${extra}`);
     } else {
       out.push("- **Cut sites:** None matching the selected list and filter.");
     }
     for (const f of snapshot.product.tailFlankNotes) {
-      out.push(`- **Tail cut-site flank:** ${f}`);
+      out.push(`- **Tail cut-site flank:** ${t(f)}`);
     }
   }
 
@@ -1538,18 +1566,18 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     out.push("");
     out.push("## Simulated gel");
     out.push("");
-    out.push(`- **Digest:** ${snapshot.digest ? `${snapshot.digest.name} — ${snapshot.digestNote}` : snapshot.digestNote}`);
-    out.push(`- **Ladder:** ${snapshot.gel.ladder.name}`);
+    out.push(`- **Digest:** ${t(snapshot.digest ? `${snapshot.digest.name} — ${snapshot.digestNote}` : snapshot.digestNote)}`);
+    out.push(`- **Ladder:** ${t(snapshot.gel.ladder.name)}`);
     out.push("");
     out.push("| Lane | Sample | Expected bands |");
     out.push("| ---: | --- | --- |");
     for (const l of snapshot.gel.lanes) {
-      out.push(`| ${l.number} | ${mdCell(l.what)} | ${mdCell(l.sizesText)} |`);
+      out.push(`| ${l.number} | ${t(l.what)} | ${t(l.sizesText)} |`);
     }
     const laneNote = gelLaneNote(snapshot.gel, false);
     if (laneNote) {
       out.push("");
-      out.push(`_${laneNote}_`);
+      out.push(`_${t(laneNote)}_`);
     }
   }
 
@@ -1559,11 +1587,12 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     out.push("");
     if (snapshot.program) {
       const p = snapshot.program;
-      out.push(`_${p.edited ? `Based on ${p.source} (edited locally)` : p.source}_`);
-      if (p.stale) out.push(`\n> Note: Program edits were kept from an earlier setup (${p.context}).`);
+      out.push(`_${t(p.edited ? `Based on ${p.source} (edited locally)` : p.source)}_`);
+      if (p.stale) out.push(`\n> Note: Program edits were kept from an earlier setup (${t(p.context)}).`);
       out.push("");
       out.push("| Step | Temp | Time |");
       out.push("| --- | ---: | ---: |");
+      // Edited values in bold, once: the row around them is plain.
       const fmtTemp = (s: PcrPlanStep) => (s.tempEdited ? `**${s.temp} °C** (gen. ${s.originalTemp} °C)` : `${s.temp} °C`);
       const fmtTime = (s: PcrPlanStep) => {
         if (s.seconds === null) return "Hold (∞)";
@@ -1573,16 +1602,16 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
       for (const st of p.stages) {
         if (st.cycles !== null) {
           const cyc = st.cyclesEdited && st.originalCycles !== null ? `**${st.cycles} cycles** (gen. ${st.originalCycles})` : `${st.cycles} cycles`;
-          out.push(`| **Repeat ${cyc}** | | |`);
-          for (const s of st.steps) out.push(`| &nbsp;&nbsp;${mdCell(s.name)} | ${fmtTemp(s)} | ${fmtTime(s)} |`);
+          out.push(`| Repeat ${cyc} | | |`);
+          for (const s of st.steps) out.push(`| &nbsp;&nbsp;${t(s.name)} | ${fmtTemp(s)} | ${fmtTime(s)} |`);
         } else {
-          for (const s of st.steps) out.push(`| ${mdCell(s.name)} | ${fmtTemp(s)} | ${fmtTime(s)} |`);
+          for (const s of st.steps) out.push(`| ${t(s.name)} | ${fmtTemp(s)} | ${fmtTime(s)} |`);
         }
       }
       out.push("");
-      out.push(`_Baseline context: ${p.context}._`);
+      out.push(`_Baseline context: ${t(p.context)}._`);
     } else {
-      out.push(snapshot.programUnavailableReason ?? "No cycling program available.");
+      out.push(t(snapshot.programUnavailableReason ?? "No cycling program available."));
     }
   }
 
@@ -1593,28 +1622,28 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     if (snapshot.mix) {
       const m = snapshot.mix;
       const master = m.mixReactions > 1;
-      out.push(`_${m.source}_`);
+      out.push(`_${t(m.source)}_`);
       out.push("");
-      out.push(mixSummaryText(m));
+      out.push(t(mixSummaryText(m)));
       out.push("");
       if (master) {
         out.push(`| Component | 1× (µl) | Mix (${fmtVolume(m.mixReactions)}×, µl) | Final |`);
         out.push("| --- | ---: | ---: | --- |");
         for (const r of m.rows) {
-          out.push(`| ${mdCell(r.name)} | ${fmtVolume(r.each)} | ${r.mix === null ? "—" : fmtVolume(r.mix)} | ${mdCell(r.final)} |`);
+          out.push(`| ${t(r.name)} | ${fmtVolume(r.each)} | ${r.mix === null ? "—" : fmtVolume(r.mix)} | ${t(r.final)} |`);
         }
         out.push(`| **Master mix** | **${fmtVolume(m.perTube)}** | **${fmtVolume(m.mixTotal)}** | |`);
       } else {
         out.push("| Component | 1× (µl) | Final |");
         out.push("| --- | ---: | --- |");
         for (const r of m.rows) {
-          out.push(`| ${mdCell(r.name)} | ${fmtVolume(r.each)} | ${mdCell(r.final)} |`);
+          out.push(`| ${t(r.name)} | ${fmtVolume(r.each)} | ${t(r.final)} |`);
         }
       }
-      for (const w of m.warnings) out.push(`\n> Mix note: ${w}`);
-      if (m.scaledNote) out.push(`\n_${m.scaledNote}_`);
+      for (const w of m.warnings) out.push(`\n> Mix note: ${t(w)}`);
+      if (m.scaledNote) out.push(`\n_${t(m.scaledNote)}_`);
     } else {
-      out.push(snapshot.mixUnavailableReason ?? "No reaction mix available.");
+      out.push(t(snapshot.mixUnavailableReason ?? "No reaction mix available."));
     }
   }
 
@@ -1622,15 +1651,11 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     out.push("");
     out.push("## Bench notes & observations");
     out.push("");
-    if (notes.length > 0) {
-      out.push(notes);
-    } else {
-      out.push("_None_");
-    }
+    out.push(notes.length > 0 ? mdNotes(notes) : "_None_");
   }
 
   out.push("");
   out.push("---");
-  out.push(`_Plan exported ${snapshot.exportedAt} · Strandivo (planning snapshot only — not a record that PCR was performed)._`);
+  out.push(`_Plan exported ${t(snapshot.exportedAt)} · Strandivo (planning snapshot only — not a record that PCR was performed)._`);
   return out.join("\n") + "\n";
 }

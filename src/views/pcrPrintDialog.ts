@@ -808,7 +808,7 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
         await withPlanTitle(() => saveWindowPdf(path, paper));
         toast("Saved the PCR plan as a PDF.", "success");
       } catch (e) {
-        toast(`Couldn't save the PDF: ${errorText(e)}`, "error", 7000);
+        toast(`Couldn't save the PDF: ${errorText(e)} Try Print… or Save HTML… instead.`, "error", 7000);
       }
     });
 

@@ -1297,7 +1297,7 @@ async function main() {
     const pdfFailedToasts = await newToasts();
     check(
       "A PDF that can't be written says why and leaves the preview ready to try again",
-      pdfFailedToasts.includes("Couldn't save the PDF: Disk full.") && pdfFailed.title === appTitle && pdfFailed.enabled && pdfFailed.mirrors === 1,
+      pdfFailedToasts.includes("Couldn't save the PDF: Disk full. Try Print… or Save HTML… instead.") && pdfFailed.title === appTitle && pdfFailed.enabled && pdfFailed.mirrors === 1,
       JSON.stringify({ pdfFailed, pdfFailedToasts })
     );
     await s.exec("delete window.__strandivoSavePdf; delete window.__strandivoSavePath; delete window.__e2ePdfCalls; delete window.__e2eAsked; delete window.__e2eLatePrint;");

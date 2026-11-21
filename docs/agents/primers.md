@@ -200,8 +200,13 @@ and CI checks that they exist.
   (`src-tauri/src/pdf_macos.rs`; tried from a small wry program on macOS: A4 and Letter at their sizes,
   9.5 mm margins, the main thread free), WebView2's `PrintToPdf` (`src-tauri/src/pdf_windows.rs`; only
   compiled), and WebKitGTK printing to the file printer, named as GTK's translations name
-  it (not yet tried). WebKit sets the type taller than Chromium, so on US Letter the
-  default plan's footer runs onto a second page there. In `openPcrDialog`, Product map,
+  it (not yet tried). The sheet has no footer: one ran onto a second US Letter page in
+  WebKit, which sets type taller than Chromium, so the snapshot note and the export date
+  ride on the header's kicker and template lines. Measured on 21 Nov 2026 (WebKit through
+  that wry program, Chromium through headless printing): the default plan is one page on A4
+  and on Letter in both, and in Chromium so is every variant tried (sections left out, an
+  edited program, no protocol, the dark theme) but long names with 14 lines of notes,
+  which take two. In `openPcrDialog`, Product map,
   Simulated gel and Cycling program fold, kept in `strandivo.pcrDialogFolds`
   (`src/pcrDialogFolds.ts`); the mix's fold lasts the session, as before. Each fold
   button's accessible name says which section it folds.

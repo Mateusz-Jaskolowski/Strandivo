@@ -243,7 +243,7 @@ export interface PcrPlanSnapshotInput {
 
 const fmtInt = (n: number) => n.toLocaleString("en-US");
 
-/** Local calendar date as YYYY-MM-DD, used only for the export footer timestamp. */
+/** Local calendar date as YYYY-MM-DD, used only for the export date (the sheet's header, the Markdown's last line). */
 export function localDateIso(now = new Date()): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -744,6 +744,10 @@ html, body {
   flex: 1 1 auto;
 }
 .sv-sheet-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -760,9 +764,22 @@ html, body {
   overflow-wrap: anywhere;
 }
 .sv-sheet-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
   margin: 2px 0 0;
   font-size: 10px;
   color: #334155;
+}
+/* The snapshot note and the export date ride on the kicker's and template's lines: a footer
+   of their own ran onto a second US Letter page in WebKit. */
+.sv-sheet-head-note {
+  font-size: 8.5px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #475569;
 }
 .sv-sheet-date-box {
   flex: 0 0 auto;
@@ -1080,17 +1097,6 @@ html, body {
 .sv-sheet-notes-line {
   height: 18px;
   border-bottom: 1px solid #cbd5e1;
-}
-.sv-sheet-foot {
-  margin-top: 7px;
-  padding-top: 5px;
-  border-top: 1px solid #cbd5e1;
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  font-size: 8.5px;
-  color: #475569;
 }
 .sv-sheet-avoid {
   break-inside: avoid;
@@ -1429,9 +1435,9 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
 <article class="sv-sheet">
   <header class="sv-sheet-head">
     <div class="sv-sheet-head-main">
-      <div class="sv-sheet-kicker">PCR Plan · Bench Sheet</div>
+      <div class="sv-sheet-kicker"><span>PCR Plan · Bench Sheet</span><span class="sv-sheet-head-note">Planning snapshot only — not a record that PCR was performed.</span></div>
       <h1 class="sv-sheet-title">${escapeHtml(title)}</h1>
-      <p class="sv-sheet-sub">Template: <strong>${escapeHtml(snapshot.template.name)}</strong> (${escapeHtml(fmtInt(snapshot.template.length))} bp, ${snapshot.template.circular ? "circular" : "linear"} · ${escapeHtml(snapshot.template.kindLabel)})</p>
+      <p class="sv-sheet-sub"><span>Template: <strong>${escapeHtml(snapshot.template.name)}</strong> (${escapeHtml(fmtInt(snapshot.template.length))} bp, ${snapshot.template.circular ? "circular" : "linear"} · ${escapeHtml(snapshot.template.kindLabel)})</span><span class="sv-sheet-head-note">Plan exported ${escapeHtml(snapshot.exportedAt)} · Strandivo</span></p>
     </div>
     <div class="sv-sheet-date-box">
       <span class="sv-sheet-date-label">Experiment date</span>
@@ -1452,11 +1458,6 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
   ${protocolHtml}
 
   ${benchNotesSectionHtml}
-
-  <footer class="sv-sheet-foot">
-    <span>Plan exported ${escapeHtml(snapshot.exportedAt)} · Strandivo</span>
-    <span>Planning snapshot only — not a record that PCR was performed.</span>
-  </footer>
 </article>
 </body>
 </html>`;

@@ -410,14 +410,24 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       h(
         "div",
         { class: "sv-sheet-head-main" },
-        h("div", { class: "sv-sheet-kicker" }, "PCR Plan · Bench Sheet"),
+        h(
+          "div",
+          { class: "sv-sheet-kicker" },
+          h("span", null, "PCR Plan · Bench Sheet"),
+          h("span", { class: "sv-sheet-head-note" }, "Planning snapshot only — not a record that PCR was performed.")
+        ),
         titleEl,
         h(
           "p",
           { class: "sv-sheet-sub" },
-          "Template: ",
-          h("strong", null, snapshot.template.name),
-          ` (${fmt(snapshot.template.length)} bp, ${snapshot.template.circular ? "circular" : "linear"} · ${snapshot.template.kindLabel})`
+          h(
+            "span",
+            null,
+            "Template: ",
+            h("strong", null, snapshot.template.name),
+            ` (${fmt(snapshot.template.length)} bp, ${snapshot.template.circular ? "circular" : "linear"} · ${snapshot.template.kindLabel})`
+          ),
+          h("span", { class: "sv-sheet-head-note" }, `Plan exported ${snapshot.exportedAt} · Strandivo`)
         )
       ),
       h("div", { class: "sv-sheet-date-box" }, h("span", { class: "sv-sheet-date-label" }, "Experiment date"), dateSlot)
@@ -431,13 +441,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
     primersSection,
     overviewSlot,
     protocolSlot,
-    notesSection,
-    h(
-      "footer",
-      { class: "sv-sheet-foot" },
-      h("span", null, `Plan exported ${snapshot.exportedAt} · Strandivo`),
-      h("span", null, "Planning snapshot only — not a record that PCR was performed.")
-    )
+    notesSection
   );
 
   let lastVisualMode = "";

@@ -725,7 +725,10 @@ async function main(outDir) {
         savedBody.includes("First line\nSecond line with &lt;script&gt;x&lt;/script&gt;") &&
         !savedHtml.includes("<script>x</script>") &&
         !savedHtml.includes(fullSeq) &&
-        savedBody.includes('class="sv-sheet-date-blank"'),
+        savedBody.includes('class="sv-sheet-date-blank"') &&
+        savedBody.includes('<span class="sv-sheet-head-note">Planning snapshot only') &&
+        savedBody.includes('<span class="sv-sheet-head-note">Plan exported') &&
+        !savedBody.includes("<footer"),
       savedHtml.slice(0, 260)
     );
     // The page that prints and the saved file are built apart (DOM and a string), so their words are compared:

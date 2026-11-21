@@ -5777,6 +5777,10 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   flex: 1 1 auto;
 }
 .sv-sheet-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -5793,9 +5797,22 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   overflow-wrap: anywhere;
 }
 .sv-sheet-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
   margin: 2px 0 0;
   font-size: 10px;
   color: #334155;
+}
+/* The snapshot note and the export date ride on the kicker's and template's lines: a footer
+   of their own ran onto a second US Letter page in WebKit. */
+.sv-sheet-head-note {
+  font-size: 8.5px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #475569;
 }
 .sv-sheet-date-box {
   flex: 0 0 auto;
@@ -6199,17 +6216,6 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
 .sv-sheet-notes-line {
   height: 18px;
   border-bottom: 1px solid #cbd5e1;
-}
-.sv-sheet-foot {
-  margin-top: 7px;
-  padding-top: 5px;
-  border-top: 1px solid #cbd5e1;
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  font-size: 8.5px;
-  color: #475569;
 }
 .sv-sheet-avoid {
   break-inside: avoid;

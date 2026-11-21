@@ -14,7 +14,7 @@ the PCR dialog.
 
 - **Local preview fields & section choices**: experiment name (suggested from template and
   primer pair), optional experiment date (left blank unless filled in, distinct from the
-  export date in the footer), multiline bench notes (with ruled writing lines when blank),
+  export date in the header), multiline bench notes (with ruled writing lines when blank),
   and **Include** toggles for Primers, Product map, Simulated gel, Cycling program, Reaction
   mix, and Bench notes (remembered when printed or exported, untouched on Cancel).
 - **PCR dialog controls**: the PCR product dialog splits Product map and Simulated gel into

@@ -1121,7 +1121,10 @@ async function main() {
         dateBlank: !!sheet.querySelector('.sv-sheet-date-blank'),
         dateVal: !!sheet.querySelector('.sv-sheet-date-val'),
         hasGel: !!sheet.querySelector('.sv-sheet-gel-svg'),
-        hasMap: !!sheet.querySelector('.sv-sheet-map-svg')
+        hasMap: !!sheet.querySelector('.sv-sheet-map-svg'),
+        kicker: sheet.querySelector('.sv-sheet-kicker')?.textContent ?? '',
+        sub: sheet.querySelector('.sv-sheet-sub')?.textContent ?? '',
+        footers: sheet.querySelectorAll('footer').length + (mirror?.querySelectorAll('footer').length ?? 1)
       };
     `);
     check(
@@ -1141,6 +1144,13 @@ async function main() {
         printPreview.hasMap &&
         printPreview.mirrorNotes === "Line one: fresh polymerase\nLine two: check gel at 120V",
       JSON.stringify(printPreview).slice(0, 400)
+    );
+    check(
+      "The plan's header says it is a planning snapshot and when it was exported, and the sheet has no footer to spill onto a page",
+      /Planning snapshot only — not a record that PCR was performed\./.test(printPreview.kicker) &&
+        /Plan exported \d{4}-\d{2}-\d{2} · Strandivo/.test(printPreview.sub) &&
+        printPreview.footers === 0,
+      JSON.stringify({ kicker: printPreview.kicker, sub: printPreview.sub, footers: printPreview.footers })
     );
     // Toggling Product map and Simulated gel independently updates both preview and print mirror.
     const toggledSections = await s.exec(`

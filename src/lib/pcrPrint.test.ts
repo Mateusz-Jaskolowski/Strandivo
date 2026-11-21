@@ -255,10 +255,26 @@ test("unset experiment date stays blank and is never filled from the export date
   const html = pcrPlanHtml(snapshot, { title: snapshot.suggestedTitle, experimentDate: "", notes: "" });
   assert.match(html, /class="sv-sheet-date-blank"/);
   assert.equal(/class="sv-sheet-date-val"/.test(html), false);
-  // Footer still carries the distinct export date.
+  // The header still carries the distinct export date.
   assert.match(html, /Plan exported 2026-11-19/);
   // Blank notes leave ruled writing lines.
   assert.equal((html.match(/class="sv-sheet-notes-line"/g) ?? []).length, 4);
+});
+
+test("the snapshot note and export date ride on the header's lines, and there is no footer", () => {
+  const { snapshot } = buildScenario();
+  const html = pcrPlanHtml(snapshot, { title: "", experimentDate: "", notes: "" });
+  const head = html.match(/<header class="sv-sheet-head">([\s\S]*?)<\/header>/)?.[1] ?? "";
+  assert.match(
+    head,
+    /<div class="sv-sheet-kicker"><span>PCR Plan · Bench Sheet<\/span><span class="sv-sheet-head-note">Planning snapshot only — not a record that PCR was performed\.<\/span><\/div>/
+  );
+  assert.match(head, /<p class="sv-sheet-sub"><span>Template: [^]*?<\/span><span class="sv-sheet-head-note">Plan exported 2026-11-19 · Strandivo<\/span><\/p>/);
+  // Said once each, and nothing after the last section to spill onto a page of its own.
+  assert.equal(html.split("Planning snapshot only").length, 2);
+  assert.equal(html.split("Plan exported").length, 2);
+  assert.equal(/<footer|sv-sheet-foot/.test(html), false);
+  assert.match(html, /<\/section>\s*<\/article>/);
 });
 
 test("long primer names, long tailed 5′→3′ sequences, multiline notes, and HTML escaping render safely and completely", () => {

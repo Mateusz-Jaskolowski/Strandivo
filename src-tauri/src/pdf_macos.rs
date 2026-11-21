@@ -68,7 +68,7 @@ pub fn start(webview: &WKWebView, path: &str, width_pt: f64, height_pt: f64, don
     // SAFETY: AppKit and WebKit calls on the main thread, on objects that live through them.
     unsafe {
         if !webview.respondsToSelector(sel!(printOperationWithPrintInfo:)) {
-            return Err("This needs macOS 11 or later; Print… can still save a PDF.".into());
+            return Err("This needs macOS 11 or later.".into());
         }
         let window = webview.window().ok_or("The window isn't showing.")?;
         // A fresh NSPrintInfo, so the app's shared print settings are left alone.

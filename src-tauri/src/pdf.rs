@@ -10,6 +10,10 @@
 //! The engine writes beside the destination, as `write_atomically` in `lib.rs` does, and the
 //! file is moved into place only once it holds something, so a failed export never leaves a
 //! half-written PDF or removes an older file of the same name.
+//!
+//! The interface shows an error after "Couldn't save the PDF: ", so a message here says what
+//! happened without saying again that saving failed, and ends in a full stop of its own, not
+//! a path: the interface puts one after a message without.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -66,15 +70,15 @@ fn destination(path: &str) -> Result<PathBuf, String> {
     }
     let target = PathBuf::from(path);
     if !target.is_absolute() {
-        return Err(format!("The destination isn't a full path: {path}"));
+        return Err(format!("The destination {path} isn't a full path."));
     }
     if target.file_name().is_none() {
-        return Err(format!("The destination doesn't name a file: {path}"));
+        return Err(format!("The destination {path} doesn't name a file."));
     }
     match target.parent() {
         Some(parent) if parent.is_dir() => Ok(target),
-        Some(parent) => Err(format!("The folder doesn't exist: {}", parent.display())),
-        None => Err(format!("The destination doesn't name a file: {path}")),
+        Some(parent) => Err(format!("The folder {} doesn't exist.", parent.display())),
+        None => Err(format!("The destination {path} doesn't name a file.")),
     }
 }
 
@@ -113,9 +117,10 @@ fn finish(outcome: Outcome, staging: &Path, target: &Path) -> Result<(), String>
         let _ = std::fs::remove_file(staging);
         return Err("The system finished without writing the file.".into());
     }
+    // The finished PDF goes too, as `write_atomically`'s does: exporting again takes seconds.
     std::fs::rename(staging, target).map_err(|e| {
         let _ = std::fs::remove_file(staging);
-        format!("Could not save {}: {e}", target.display())
+        format!("The PDF was made but couldn't be put in place: {e}. If the file is open in another program, close it and save again.")
     })
 }
 
@@ -172,7 +177,7 @@ fn dispatch_pdf(
                 let _ = tx.send(Err(e));
             }
         })
-        .map_err(|e| format!("Couldn't reach the window: {e}"))
+        .map_err(|e| format!("The window couldn't be reached: {e}"))
 }
 
 #[cfg(windows)]
@@ -189,7 +194,7 @@ fn dispatch_pdf(
                 let _ = tx.send(Err(e));
             }
         })
-        .map_err(|e| format!("Couldn't reach the window: {e}"))
+        .map_err(|e| format!("The window couldn't be reached: {e}"))
 }
 
 #[cfg(any(
@@ -247,7 +252,7 @@ fn dispatch_pdf(
             });
             op.print();
         })
-        .map_err(|e| format!("Couldn't reach the window: {e}"))
+        .map_err(|e| format!("The window couldn't be reached: {e}"))
 }
 
 #[cfg(not(any(
@@ -327,8 +332,12 @@ mod tests {
         let given = spaced.to_str().unwrap();
         assert_eq!(destination(given).unwrap(), spaced, "spaces at the ends are part of the name");
         assert!(destination("").is_err());
-        assert!(destination("plan.pdf").unwrap_err().contains("full path"));
-        assert!(destination(dir.join("missing").join("plan.pdf").to_str().unwrap()).unwrap_err().contains("doesn't exist"));
+        assert_eq!(destination("plan.pdf").unwrap_err(), "The destination plan.pdf isn't a full path.");
+        let missing = dir.join("missing");
+        assert_eq!(
+            destination(missing.join("plan.pdf").to_str().unwrap()).unwrap_err(),
+            format!("The folder {} doesn't exist.", missing.display())
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -370,6 +379,22 @@ mod tests {
 
         assert!(finish(Outcome::Done, &staging, &target).unwrap_err().contains("without writing"), "no file at all");
         assert_eq!(std::fs::read(&target).unwrap(), b"older");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_pdf_that_cant_be_put_in_place_is_removed_and_says_what_to_do() {
+        let dir = scratch("locked");
+        // A folder in the way stands in for a file Windows won't let go of.
+        let target = dir.join("plan.pdf");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("inside"), b"").unwrap();
+        let staging = staging_path(&target, 0);
+        std::fs::write(&staging, b"%PDF-1.7").unwrap();
+        let message = finish(Outcome::Done, &staging, &target).unwrap_err();
+        assert!(message.starts_with("The PDF was made but couldn't be put in place: "), "{message}");
+        assert!(message.ends_with("If the file is open in another program, close it and save again."), "{message}");
+        assert!(!staging.exists(), "the finished PDF goes, as exporting again is quick");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

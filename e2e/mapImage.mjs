@@ -453,7 +453,9 @@ export async function checkMapImage(s, check, save) {
     // and measured at each, all in one script, so nothing is painted or redrawn in between.
     await attempt("Checking Export image's menu at every header width finished without errors", async () => {
       await closeMenu();
-      const headState = () => s.exec("return { style: document.querySelector('.sv-map .sv-pane-head').getAttribute('style'), menuHidden: document.querySelector('.sv-map-image').closest('.sv-chip-menu').hidden };");
+      // An empty style is no style: Chrome writes style="" back onto an element whose style was
+      // changed through `.style`, even after the attribute is removed.
+      const headState = () => s.exec("return { style: document.querySelector('.sv-map .sv-pane-head').getAttribute('style') || null, menuHidden: document.querySelector('.sv-map-image').closest('.sv-chip-menu').hidden };");
       const headBefore = await headState();
       const sweep = await s.exec(`
         const head = document.querySelector('.sv-map .sv-pane-head');

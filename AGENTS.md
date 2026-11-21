@@ -393,9 +393,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   folders, `saveSettings`) plus those of the file in the current tab (store, `command()`, adding
   reads, saving and `saveCheck` without a file dialog). The save dialog, printing and PDF export
   are stood in for by `window.__strandivoSavePath`, `__strandivoPrint` and `__strandivoSavePdf`
-  (`src/platform.ts`), which check what the page hands over, not the native engines. It runs a debug
-  build, where Ctrl+Shift+I opens WebKitGTK's inspector over part of the window for the rest of
-  the run, even sent from a script and cancelled by the page, so it never sends that key;
+  (`src/platform.ts`), which check what the page hands over, not the native engines. When
+  `__strandivoSavePath` is set, it answers the save dialog and `__strandivoSave` (above) isn't
+  asked. It runs a debug build, where Ctrl+Shift+I opens WebKitGTK's inspector over part of the
+  window for the rest of the run, even sent from a script and cancelled by the page, so it never
+  sends that key;
   `documentShortcut` in `src/lib/shortcuts.ts` is unit-tested instead. At its end it switches to
   Dark through `saveSettings` and takes `13-dark-*` screenshots of the map, sequence, reads and
   a dialog: look at them after a change to colours, as no test sees what reads badly. Then

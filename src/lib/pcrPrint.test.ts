@@ -565,19 +565,33 @@ test("every section can be left out on its own, in the HTML and the Markdown, an
 });
 
 test("rendering never changes the snapshot or what it was built from", () => {
-  const { snapshot, input } = buildScenario({ editAnnealTemp: "61", staleKey: true, reactions: 3, digestScore: 0.01 });
-  const before = structuredClone(snapshot);
-  const inputBefore = structuredClone({ draft: input.programDraft, mix: input.mix, digest: input.digest, warnings: input.warnings, primers: [input.forward, input.reverse] });
-  const meta = { title: "Twice", experimentDate: "2026-11-30", notes: "a\nb" };
-  for (const key of [null, ...SECTION_KEYS]) {
-    const sections = key ? { ...DEFAULT_PLAN_SECTIONS, [key]: false } : DEFAULT_PLAN_SECTIONS;
-    pcrPlanHtml(snapshot, meta, sections);
-    pcrPlanMarkdown(snapshot, meta, sections);
-    planWarnings(snapshot, sections);
+  const tmWarning = "One or both primer Tms could not be calculated, so annealing and cycling predictions are incomplete.";
+  const given = ["Template has a nick."];
+  const scenarios = [
+    { label: "known Tms", built: buildScenario({ editAnnealTemp: "61", staleKey: true, reactions: 3, digestScore: 0.01 }), tmWarned: false },
+    // An unknown Tm takes the branch that adds a warning to a copy of the input's list.
+    { label: "unknown Tm", built: buildScenario({ polymerase: "q5", unknownTm: true, warnings: given }), tmWarned: true }
+  ];
+  for (const { label, built, tmWarned } of scenarios) {
+    const { snapshot, input } = built;
+    assert.equal(snapshot.warnings.includes(tmWarning), tmWarned, `${label}: the Tm warning`);
+    const before = structuredClone(snapshot);
+    const inputBefore = structuredClone({ draft: input.programDraft, mix: input.mix, digest: input.digest, warnings: input.warnings, primers: [input.forward, input.reverse] });
+    const meta = { title: "Twice", experimentDate: "2026-11-30", notes: "a\nb" };
+    for (const key of [null, ...SECTION_KEYS]) {
+      const sections = key ? { ...DEFAULT_PLAN_SECTIONS, [key]: false } : DEFAULT_PLAN_SECTIONS;
+      pcrPlanHtml(snapshot, meta, sections);
+      pcrPlanMarkdown(snapshot, meta, sections);
+      planWarnings(snapshot, sections);
+    }
+    assert.deepEqual(snapshot, before, label);
+    const again = buildPcrPlanSnapshot(input);
+    assert.deepEqual(again, before, `${label}: a second build gives the same snapshot`);
+    assert.deepEqual({ draft: input.programDraft, mix: input.mix, digest: input.digest, warnings: input.warnings, primers: [input.forward, input.reverse] }, inputBefore, label);
   }
-  assert.deepEqual(snapshot, before);
-  buildPcrPlanSnapshot(input);
-  assert.deepEqual({ draft: input.programDraft, mix: input.mix, digest: input.digest, warnings: input.warnings, primers: [input.forward, input.reverse] }, inputBefore);
+  const unknown = scenarios[1].built;
+  assert.deepEqual(unknown.input.warnings, ["Template has a nick."], "the input's own list has no Tm warning");
+  assert.deepEqual(unknown.snapshot.warnings, [...given, tmWarning]);
 });
 
 test("a hard-to-read digest is said once: with the gel, or among the warnings without it", () => {
@@ -661,13 +675,64 @@ test("Markdown keeps a name with any line ending in one cell: \\r\\n, a bare \\r
 
 test("Markdown notes are literal text with their line breaks kept", () => {
   const { snapshot } = buildScenario();
-  const notes = "- not a list\n1. not a step\n# not a heading\n> not a quote\n---\n\nAfter a blank line *still* plain \\";
+  const notes = "- not a list\n1. not a step\n# not a heading\n> not a quote\n---\n+ not a list\n1) not a step\n===\n\nAfter a blank line *still* plain \\";
   const md = pcrPlanMarkdown(snapshot, { title: "Notes", experimentDate: "", notes });
   const body = md.split("## Bench notes & observations\n\n")[1].split("\n\n---\n")[0];
   assert.equal(
     body,
-    ["\\- not a list\\", "1\\. not a step\\", "\\# not a heading\\", "\\> not a quote\\", "\\---", "", "After a blank line \\*still\\* plain \\\\"].join("\n")
+    ["\\- not a list\\", "1\\. not a step\\", "\\# not a heading\\", "\\> not a quote\\", "\\---\\", "\\+ not a list\\", "1\\) not a step\\", "\\===", "", "After a blank line \\*still\\* plain \\\\"].join("\n")
   );
+});
+
+test("Markdown prints bases in a code span only when they are all letters, and as escaped text otherwise", () => {
+  const { snapshot } = buildScenario({ fwdTail: "GCGCGAATTC" });
+  const meta = { title: "Bases", experimentDate: "", notes: "" };
+  const rowOf = (s: typeof snapshot, role: string) => pcrPlanMarkdown(s, meta).split("\n").find(l => l.startsWith(`| ${role} |`))!;
+  const forward = snapshot.primers[0];
+  assert.equal(forward.sequence, forward.sequence.replace(/[^A-Za-z]/g, ""));
+  assert.ok(rowOf(snapshot, "Forward").includes(`| \`${forward.sequence}\` |`), "letters only: a code span");
+  // A file can give a primer anything: what Markdown treats specially must not format, split the cell or reach a code span.
+  const odd = "ACGT*N_x|a\\b`c`<d>";
+  const withForward = (sequence: string): typeof snapshot => ({ ...snapshot, primers: [{ ...forward, sequence }, snapshot.primers[1]] });
+  const changed = withForward(odd);
+  const row = rowOf(changed, "Forward");
+  assert.ok(row.includes("| ACGT\\*N\\_x\\|a\\\\b\\`c\\`\\<d\\> |"), row);
+  assert.equal(row.includes("`" + odd), false, "not in a code span");
+  assert.equal(tableCells(row).length, 6, row);
+  assert.equal(unescapeMd(tableCells(row)[2]), odd);
+  // An empty sequence is not letters either: no empty code span.
+  assert.equal(rowOf(withForward(""), "Forward").includes("``"), false);
+});
+
+test("the Markdown's predicted product line is pinned: bases, GC to one decimal and the tail note", () => {
+  const plain = pcrPlanMarkdown(buildScenario().snapshot, { title: "Product", experimentDate: "", notes: "" });
+  assert.ok(plain.split("\n").includes("- **Predicted product:** 1,322 bp · 55.2% GC"), plain);
+  const tailed = buildScenario({ fwdTail: "GCGCGAATTC" }).snapshot;
+  assert.equal(tailed.product.hasTails, true);
+  const line = pcrPlanMarkdown(tailed, { title: "Product", experimentDate: "", notes: "" })
+    .split("\n")
+    .find(l => l.startsWith("- **Predicted product:**"));
+  assert.equal(line, `- **Predicted product:** ${tailed.product.length.toLocaleString("en-US")} bp · ${tailed.product.gcPercent.toFixed(1)}% GC (5′ tails incl.)`);
+  assert.match(line!, /^- \*\*Predicted product:\*\* 1,332 bp · \d\d\.\d% GC \(5′ tails incl\.\)$/);
+});
+
+test("Markdown warnings are escaped like every other text", () => {
+  const { snapshot } = buildScenario({ warnings: ["Primer *F* | bad <b> text_1", "Plain note."] });
+  const md = pcrPlanMarkdown(snapshot, { title: "Warn", experimentDate: "", notes: "" });
+  const lines = md.split("\n");
+  const at = lines.indexOf("## Warnings & notes");
+  assert.ok(at > 0);
+  assert.deepEqual(lines.slice(at + 1, at + 5), ["", "- Primer \\*F\\* \\| bad \\<b\\> text\\_1", "- Plain note.", ""]);
+  assert.equal(md.includes("Primer *F*"), false);
+});
+
+test("Markdown notes of only spaces and line breaks are the same as no notes", () => {
+  const { snapshot } = buildScenario();
+  const empty = pcrPlanMarkdown(snapshot, { title: "Blank", experimentDate: "", notes: "" });
+  for (const notes of ["   ", " \t ", "  \n   \n ", "\r\n  \r\n"]) {
+    assert.equal(pcrPlanMarkdown(snapshot, { title: "Blank", experimentDate: "", notes }), empty, JSON.stringify(notes));
+  }
+  assert.ok(empty.includes("## Bench notes & observations\n\n_None_"));
 });
 
 test("an edited cycle count is bold once in the Markdown row", () => {
@@ -736,6 +801,25 @@ test("suggested file names keep whole characters, fit in bytes and avoid names W
   assert.ok(bytes(cjk) <= 160, String(bytes(cjk)));
   assert.equal(planFileName("CON"), "PCR plan CON.html");
   assert.equal(planFileName("nul.backup"), "PCR plan nul.backup.html");
+  // Every device name Windows keeps, with or without an extension and in any case.
+  for (const [title, kept] of [
+    ["LPT1", "PCR plan LPT1"],
+    ["lpt³", "PCR plan lpt³"],
+    ["aux", "PCR plan aux"],
+    ["AUX.log", "PCR plan AUX.log"],
+    ["PRN.txt", "PCR plan PRN.txt"],
+    ["prn", "PCR plan prn"],
+    ["COM1", "PCR plan COM1"],
+    ["com²", "PCR plan com²"],
+    ["Com9.backup", "PCR plan Com9.backup"]
+  ]) {
+    assert.equal(planFileName(title), `${kept}.html`, title);
+    assert.equal(planPdfFileName(title), `${kept}.pdf`, title);
+  }
+  assert.equal(planPdfFileName("CON"), "PCR plan CON.pdf");
+  assert.equal(planPdfFileName("nul.backup"), "PCR plan nul.backup.pdf");
+  // Names that only start like a device are left alone.
+  for (const title of ["com", "LPT", "COM10", "auxiliary", "Printer run"]) assert.equal(planFileName(title), `${title}.html`, title);
   assert.equal(planFileName("Console run"), "Console run.html");
   assert.equal(planFileName("..hidden.."), "hidden.html");
   assert.equal(planFileName("a\tb\nc\u0007d"), "a b c d.html");
@@ -785,6 +869,45 @@ test("the in-app sheet and the saved file share their sheet styles", () => {
     compared++;
   }
   assert.ok(compared > 50, String(compared));
+});
+
+test("the in-app sheet's map and gel are drawn in the colours of the saved file's", () => {
+  const hex = /#[0-9a-f]{3,8}\b/gi;
+  // A product with sites that name themselves (unique and not) and a crowd of close ones, so every kind of mark is drawn.
+  const { snapshot } = buildScenario({ digestIndex: 0 });
+  const cutSites = [
+    { enzyme: "UniqueI", cut: 100, unique: true },
+    { enzyme: "TwiceI", cut: 400, unique: false },
+    ...Array.from({ length: 12 }, (_, i) => ({ enzyme: `Near${i}`, cut: 700 + i * 3, unique: i % 2 === 0 }))
+  ];
+  const drawn = { ...snapshot, product: { ...snapshot.product, cutSites } };
+  const html = pcrPlanHtml(drawn, { title: "Colours", experimentDate: "", notes: "" }).split("<body>")[1];
+  const svgs = html.match(/<svg\b[^]*?<\/svg>/g) ?? [];
+  const mapSvg = svgs.filter(s => s.includes('class="sv-sheet-map-svg'));
+  const gelSvg = svgs.filter(s => s.includes('class="sv-sheet-gel-svg'));
+  assert.equal(mapSvg.length, 1);
+  assert.equal(gelSvg.length, 1);
+  assert.equal(mapSvg[0], pcrPlanOverviewSvg(drawn.product), "the saved file draws the map pcrPlanOverviewSvg gives");
+  assert.equal(gelSvg[0], pcrPlanGelSvg(drawn.gel), "the saved file draws the gel pcrPlanGelSvg gives");
+
+  // Saved file: colours in `fill` and `stroke` attributes. The strip's levels are one table both sheets read.
+  const strip = new Set(Object.values(PRINT_GC_FILL).map(c => c.toLowerCase()));
+  const attributes = [...(mapSvg[0] + gelSvg[0]).matchAll(/\b(?:fill|stroke)="(#[0-9a-fA-F]{3,8})"/g)].map(m => m[1].toLowerCase());
+  assert.ok(attributes.some(c => strip.has(c)), "the strip is drawn");
+  const savedColours = new Set(attributes.filter(c => !strip.has(c)));
+
+  // In-app sheet: colours the stylesheet gives the classes of the map's and gel's marks (not their boxes' borders or backgrounds).
+  const liveColours = new Set<string>();
+  for (const [key, decls] of cssRules(liveSheetCss)) {
+    const [media, selector] = key.split("|");
+    if (media !== "" || !/^\.sv-sheet-(map|gel)-/.test(selector)) continue;
+    for (const decl of decls.split("; ")) {
+      const [prop, value] = [decl.slice(0, decl.indexOf(":")).trim(), decl.slice(decl.indexOf(":") + 1)];
+      if (prop === "fill" || prop === "stroke") for (const c of value.match(hex) ?? []) liveColours.add(c.toLowerCase());
+    }
+  }
+  assert.ok(savedColours.size >= 12 && liveColours.size >= 12, `${savedColours.size} saved, ${liveColours.size} live`);
+  assert.deepEqual([...savedColours].sort(), [...liveColours].sort());
 });
 
 test("the sheet keeps its columns on paper, prints light, and breaks only where it should", () => {

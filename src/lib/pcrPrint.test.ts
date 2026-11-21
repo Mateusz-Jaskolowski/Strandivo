@@ -767,7 +767,7 @@ test("short sections and blank writing lines are kept on one page; written notes
   const { snapshot } = buildScenario({ reactions: 5 });
   const blank = pcrPlanHtml(snapshot, { title: "Breaks", experimentDate: "", notes: "" });
   for (const title of ["Primers (5′→3′)", "Cycling program", "Reaction mix", "Bench notes &amp; observations"]) {
-    assert.match(blank, new RegExp(`<section class="sv-sheet-sec sv-sheet-avoid">\\s*<div class="sv-sheet-sec-head">\\s*<h2 class="sv-sheet-sec-title">${title.replace(/[()]/g, "\\$&")}`), title);
+    assert.match(blank, new RegExp(`<section class="sv-sheet-sec sv-sheet-avoid">\\s*<div class="sv-sheet-sec-head">\\s*<h2 class="sv-sheet-sec-title">${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), title);
   }
   const written = pcrPlanHtml(snapshot, { title: "Breaks", experimentDate: "", notes: "Fourteen lines…" });
   assert.match(written, /<section class="sv-sheet-sec">\s*<div class="sv-sheet-sec-head">\s*<h2 class="sv-sheet-sec-title">Bench notes/);
@@ -786,7 +786,7 @@ test("the GC strip's five levels read apart in grey and each has a key", () => {
     ["AT-rich (<35%)", "35–40%", "40–60%", "60–65%", "GC-rich (>65%)"]
   );
   const html = pcrPlanHtml(buildScenario().snapshot, { title: "GC", experimentDate: "", notes: "" });
-  for (const k of PRINT_GC_KEY) assert.ok(html.includes(`background:${PRINT_GC_FILL[k.level]}"></span>${k.label.replace("<", "&lt;").replace(">", "&gt;")}`), k.label);
+  for (const k of PRINT_GC_KEY) assert.ok(html.includes(`background:${PRINT_GC_FILL[k.level]}"></span>${k.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}`), k.label);
 });
 
 test("suggested file names keep whole characters, fit in bytes and avoid names Windows keeps", () => {

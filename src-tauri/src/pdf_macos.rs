@@ -5,8 +5,9 @@
 //! so a small program can run the same code on a test page and look at the PDF it makes.
 //!
 //! The operation runs as wry's Print… does, with `runOperationModalForWindow`, and says it has
-//! finished through a delegate. The blocking `runOperation` writes blank pages without end
-//! from a WKWebView, as its pages are drawn by the web process while the main thread waits.
+//! finished through a delegate. The blocking `runOperation` wrote blank pages without end
+//! from a WKWebView in a test program; the likely cause is that the web process draws the
+//! pages while the main thread waits.
 
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;

@@ -133,6 +133,9 @@ fn clear_when_answered(rx: mpsc::Receiver<Result<(), String>>, staging: PathBuf)
     })
 }
 
+/// `async` on purpose: Tauri runs a plain `fn` command on the main thread (the `async`
+/// option in tauri-macros' documentation), where the wait below would hold the thread the
+/// engines answer on, and every export would end at the timeout.
 #[tauri::command]
 pub async fn save_window_pdf(window: tauri::WebviewWindow, path: String, paper: String) -> Result<(), String> {
     let spec = paper_spec(&paper)?;
@@ -237,7 +240,7 @@ fn dispatch_pdf(
             op.set_print_settings(&settings);
             op.set_page_setup(&setup);
 
-            // "failed" comes before "finished", so whichever is first answers.
+            // Whichever of "failed" and "finished" comes first answers; the other finds no sender.
             let tx_done = Rc::new(RefCell::new(Some(tx)));
             let tx_fail = Rc::clone(&tx_done);
             op.connect_finished(move |_| {

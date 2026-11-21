@@ -600,6 +600,8 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
 
   /** True while printing or saving a PDF: the mirror they print stays as it was when they began. */
   let busy = false;
+  /** Which job is running, so a second Print PCR plan… can say what to wait for. */
+  let job: "pdf" | "print" | null = null;
   let dialogOpen = true;
   // The mirror goes once the dialog is closed and no job is printing it.
   const release = () => {
@@ -637,7 +639,9 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
     meta.title = titleInput.value;
     syncAll();
   });
-  openPreview = { focus: () => (dialogOpen ? titleInput.focus() : toast("Wait for the PDF to finish saving.", "info")) };
+  openPreview = {
+    focus: () => (dialogOpen ? titleInput.focus() : toast(job === "print" ? "Wait for printing to finish." : "Wait for the PDF to finish saving.", "info"))
+  };
 
   const dateInput = h("input", {
     type: "date",
@@ -732,19 +736,25 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
   const jobButtons: HTMLButtonElement[] = [];
 
   /** Runs a print or PDF job alone, with the mirror held still until it ends. */
-  const runJob = async (work: () => Promise<void>) => {
+  const runJob = async (kind: "pdf" | "print", work: () => Promise<void>) => {
     if (busy) return;
     busy = true;
+    job = kind;
+    // A focused button that is disabled sends focus to the page in Chromium, and it stays there once the button is enabled again.
+    const focused = jobButtons.find(b => b === document.activeElement);
     jobButtons.forEach(b => (b.disabled = true));
     try {
       await work();
     } finally {
       busy = false;
+      job = null;
       if (!dialogOpen) {
         release();
       } else {
         jobButtons.forEach(b => (b.disabled = false));
         printSheet.sync(meta, sections);
+        // Only when focus is nowhere: one the user moved meanwhile stays where it is.
+        if (focused && (!document.activeElement || document.activeElement === document.body)) focused.focus();
       }
     }
   };
@@ -790,7 +800,7 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
   };
 
   const savePdf = () =>
-    runJob(async () => {
+    runJob("pdf", async () => {
       const path = await pickPath(planPdfFileName(planTitle()), [{ name: "PDF", extensions: ["pdf"] }]);
       if (!path) return;
       savePrintPrefs(sections, paper);
@@ -803,7 +813,7 @@ export function openPcrPrintDialog(ctx: DocContext, snapshot: PcrPlanSnapshot) {
     });
 
   const runPrint = () =>
-    runJob(async () => {
+    runJob("print", async () => {
       savePrintPrefs(sections, paper);
       try {
         await withPlanTitle(printWindow);

@@ -1471,7 +1471,7 @@ const MD_SPECIAL = /[\\`*_[\]<>|~&$#]/g;
  * stays both characters, and newlines become spaces. Safe in table cells and after `# `.
  */
 export function mdText(text: string): string {
-  return text.replace(/\r?\n/g, " ").replace(MD_SPECIAL, "\\$&");
+  return text.replace(/\r\n|[\r\n]/g, " ").replace(MD_SPECIAL, "\\$&");
 }
 
 /** One line of literal text at the start of a Markdown line, where `-`, `+`, `=` and `1.` start blocks. */

@@ -641,6 +641,24 @@ test("Markdown keeps names and notes literal: a backslash before a pipe stays in
   assert.ok(md.includes("- **Template:** pUC19 \\<v2\\> \\| \\*demo\\* (2,686 bp"));
 });
 
+test("Markdown keeps a name with any line ending in one cell: \\r\\n, a bare \\r and \\n", () => {
+  for (const [label, ending] of [["CRLF", "\r\n"], ["CR", "\r"], ["LF", "\n"]]) {
+    const name = `fwd${ending}injected | line`;
+    const { snapshot } = buildScenario({ fwdName: name, templateName: `tpl${ending}name` });
+    const md = pcrPlanMarkdown(snapshot, { title: `Ti${ending}tle`, experimentDate: "", notes: "" });
+    const lines = md.split("\n");
+    const header = lines.find(l => l.startsWith("| Dir |"))!;
+    const row = lines.find(l => l.startsWith("| Forward |"));
+    assert.ok(row, `${label}: the primer's row is one line`);
+    assert.equal(tableCells(row).length, tableCells(header).length, `${label}: ${row}`);
+    assert.equal(unescapeMd(tableCells(row)[1]), "fwd injected | line", label);
+    assert.equal(md.includes("\r"), false, `${label}: no carriage return is left in the Markdown`);
+    assert.ok(md.startsWith("# Ti tle\n"), label);
+    assert.ok(md.includes("- **Template:** tpl name ("), label);
+  }
+  assert.equal(mdText("a\r\nb\rc\nd"), "a b c d");
+});
+
 test("Markdown notes are literal text with their line breaks kept", () => {
   const { snapshot } = buildScenario();
   const notes = "- not a list\n1. not a step\n# not a heading\n> not a quote\n---\n\nAfter a blank line *still* plain \\";

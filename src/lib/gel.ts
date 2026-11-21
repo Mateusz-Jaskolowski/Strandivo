@@ -117,13 +117,17 @@ export function bands(sizes: number[], resolution = 0.02): Band[] {
 
 const INTEGER = new Intl.NumberFormat("en-US");
 
-/** Up to this many fragments a lane's sizes are named one by one; more are counted instead. */
-export const NAMED_SIZES = 4;
+/** Up to this many fragments a lane key lists one by one; more are counted instead. */
+export const KEY_SIZES = 4;
 
-/** "2,635 + 51 bp", or "6 fragments, 2,686 bp in all": what a lane runs, as a key beside the gel says it. */
-export function laneSizesText(sizes: readonly number[]): string {
-  if (sizes.length <= NAMED_SIZES) return `${sizes.map(size => INTEGER.format(Math.round(size))).join(" + ")} bp`;
-  return `${sizes.length} fragments, ${INTEGER.format(sizes.reduce((a, b) => a + b, 0))} bp in all`;
+/**
+ * "2,635 + 51 bp", or "6 fragments, 2,686 bp in all": what a lane runs, as a key beside the
+ * gel says it, on screen or under a gel saved as an image. Past `maxListed` they are counted.
+ */
+export function laneSizesText(sizes: readonly number[], maxListed = KEY_SIZES): string {
+  return sizes.length <= maxListed
+    ? `${sizes.map(size => INTEGER.format(Math.round(size))).join(" + ")} bp`
+    : `${sizes.length} fragments, ${INTEGER.format(Math.round(sizes.reduce((a, b) => a + b, 0)))} bp in all`;
 }
 
 /**
@@ -140,3 +144,104 @@ export function fragmentName(f: Fragment, sourceName: string): string {
   const ends = `${f.left.enzyme ?? "end"}–${f.right.enzyme ?? "end"}`;
   return `${sourceName || "Fragment"} ${ends} ${INTEGER.format(fragmentSize(f))} bp`;
 }
+
+export interface GelLayoutBand {
+  size: number;
+  runsAs?: number;
+  mass: number;
+  uncut?: boolean;
+}
+
+export interface GelLayoutLane {
+  label: string;
+  bands: readonly GelLayoutBand[];
+}
+
+export interface GelLayoutShape {
+  height?: number;
+  laneWidth?: number;
+  labelWidth?: number;
+}
+
+export interface GelLayout {
+  width: number;
+  height: number;
+  gelX: number;
+  gelY: number;
+  gelWidth: number;
+  gelHeight: number;
+  wells: { x: number; y: number; width: number; height: number }[];
+  laneLabels: { x: number; y: number; lane: number; label: string }[];
+  ladderBands: { x: number; y: number; width: number; height: number; opacity: number; size: number; label: string | null; labelX: number; labelY: number }[];
+  sampleBands: { lane: number; bandIndex: number; x: number; y: number; width: number; height: number; opacity: number; size: number; uncut: boolean }[];
+}
+
+/** Room above the wells for the lane labels. */
+const GEL_TOP = 22;
+
+/** Pure geometry for a simulated agarose gel (ladder in the first lane, then sample lanes). */
+export function gelLayout(lanes: readonly GelLayoutLane[], ladder: Ladder, shape: GelLayoutShape = {}): GelLayout {
+  const gelH = shape.height ?? 300;
+  const laneW = shape.laneWidth ?? 46;
+  const labelW = shape.labelWidth ?? 52;
+  const width = labelW + laneW * (lanes.length + 1) + 8;
+  const height = GEL_TOP + gelH + 18;
+  const y = (size: number) => GEL_TOP + 6 + bandY(size, ladder) * (gelH - 12);
+  const laneX = (i: number) => labelW + 4 + i * laneW;
+
+  const wells: GelLayout["wells"] = [];
+  const laneLabels: GelLayout["laneLabels"] = [];
+  [{ label: "M" }, ...lanes].forEach((lane, i) => {
+    wells.push({ x: laneX(i) + 5, y: GEL_TOP + 2, width: laneW - 10, height: 3 });
+    laneLabels.push({ x: laneX(i) + laneW / 2, y: GEL_TOP - 8, lane: i, label: lane.label });
+  });
+
+  const ladderBands: GelLayout["ladderBands"] = [];
+  let lastLabel = -Infinity;
+  for (let i = 0; i < ladder.bands.length; i++) {
+    const size = ladder.bands[i];
+    const bright = ladder.bright.includes(size);
+    const cy = y(size);
+    const next = ladder.bands[i + 1];
+    const crowdsBright = next !== undefined && ladder.bright.includes(next) && y(next) - cy < 10;
+    let label: string | null = null;
+    if (cy - lastLabel >= 10 && (bright || !crowdsBright)) {
+      lastLabel = cy;
+      label = size >= 1000 ? `${size / 1000} kb` : `${size}`;
+    }
+    ladderBands.push({
+      x: laneX(0) + 5,
+      y: cy - 1.5,
+      width: laneW - 10,
+      height: bright ? 3.5 : 2.5,
+      opacity: bright ? 0.95 : 0.6,
+      size,
+      label,
+      labelX: labelW - 6,
+      labelY: cy + 3.5
+    });
+  }
+
+  const sampleBands: GelLayout["sampleBands"] = [];
+  lanes.forEach((lane, li) => {
+    const x = laneX(li + 1) + 5;
+    const total = lane.bands.reduce((sum, b) => sum + b.mass, 0) || 1;
+    lane.bands.forEach((b, bi) => {
+      const opacity = Math.min(1, 0.3 + (1.4 * b.mass) / total);
+      sampleBands.push({
+        lane: li + 1,
+        bandIndex: bi,
+        x,
+        y: y(b.runsAs ?? b.size) - 1.5,
+        width: laneW - 10,
+        height: 3,
+        opacity,
+        size: b.size,
+        uncut: !!b.uncut
+      });
+    });
+  });
+
+  return { width, height, gelX: labelW, gelY: GEL_TOP, gelWidth: width - labelW, gelHeight: gelH, wells, laneLabels, ladderBands, sampleBands };
+}
+

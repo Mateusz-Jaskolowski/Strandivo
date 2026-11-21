@@ -9,6 +9,7 @@ mod app_data;
 mod appearance;
 mod crash;
 mod feedback;
+mod pdf;
 mod usage;
 mod updates;
 
@@ -631,6 +632,11 @@ fn cancel_quit(app: AppHandle, state: tauri::State<'_, Shared>) {
 }
 
 #[tauri::command]
+fn print_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn read_file(path: String) -> Result<tauri::ipc::Response, String> {
     std::fs::read(&path)
         .map(tauri::ipc::Response::new)
@@ -778,6 +784,8 @@ pub fn run() {
             read_file,
             write_file,
             write_bytes,
+            print_window,
+            pdf::save_window_pdf,
             align_reads,
             detect_features,
             catalog_version,

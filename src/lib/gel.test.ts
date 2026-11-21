@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { bandY, bands, digestLaneText, digestSequence, fragmentName, fragmentSize, fragmentSpan, laneSizesText, ladderReaching, LADDERS } from "./gel.ts";
+import { bandY, bands, digestLaneText, digestSequence, fragmentName, fragmentSize, fragmentSpan, gelLayout, ladderReaching, LADDERS, laneSizesText } from "./gel.ts";
 import type { SeqData } from "./seqdata.ts";
 
 const puc19 = (): SeqData => {
@@ -88,9 +88,11 @@ test("gel: it opens on the first ladder that reaches the smallest band, else the
 });
 
 test("a gel image's key names each lane's sizes, and counts them past four", () => {
+  assert.equal(laneSizesText([1200]), "1,200 bp");
   assert.equal(laneSizesText([2635, 51]), "2,635 + 51 bp");
   assert.equal(laneSizesText([1000.4]), "1,000 bp");
   assert.equal(laneSizesText([500, 400, 300, 200, 100]), "5 fragments, 1,500 bp in all");
+  assert.equal(laneSizesText([3000, 1500, 800, 400, 200]), "5 fragments, 5,900 bp in all");
   const d = puc19();
   const n = d.sequence.length;
   assert.equal(digestLaneText("pUC19", ["EcoRI", "HindIII"], digestSequence(d, ["EcoRI", "HindIII"]), n), "pUC19 · EcoRI, HindIII · 2,635 + 51 bp");
@@ -113,4 +115,21 @@ test("a plasmid cut once runs as one linear fragment, which its key doesn't call
   assert.equal(once.uncut, false);
   assert.deepEqual(once.fragments.map(fragmentSize), [d.sequence.length]);
   assert.equal(digestLaneText("pUC19", ["EcoRI"], once, d.sequence.length), "pUC19 · EcoRI · 2,686 bp");
+});
+
+test("gel: gelLayout produces deterministic coordinates for ladder and sample lanes", () => {
+  const layout = gelLayout(
+    [
+      { label: "1", bands: [{ size: 2686, runsAs: 1880, mass: 2686, uncut: true }] },
+      { label: "2", bands: [{ size: 1000, mass: 1000 }, { size: 500, mass: 500 }] }
+    ],
+    LADDERS[0],
+    { height: 160, laneWidth: 40, labelWidth: 46 }
+  );
+  assert.equal(layout.wells.length, 3);
+  assert.deepEqual(layout.laneLabels.map(l => l.label), ["M", "1", "2"]);
+  assert.equal(layout.sampleBands.length, 3);
+  assert.equal(layout.sampleBands[0].uncut, true);
+  // Larger fragment runs higher (smaller y) than smaller fragment in the same lane.
+  assert.ok(layout.sampleBands[1].y < layout.sampleBands[2].y);
 });

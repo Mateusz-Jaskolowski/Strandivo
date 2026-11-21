@@ -717,6 +717,10 @@ const testSave = (path?: string): TestSave | undefined => {
  * where it has one, or else a download of the suggested name (src/webFiles.ts).
  */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
+  // End-to-end tests answer for the save dialog, which WebDriver can't reach.
+  const hook = (window as unknown as { __strandivoSavePath?: (defaultPath: string, filters: { name: string; extensions: string[] }[]) => string | null | Promise<string | null> }).__strandivoSavePath;
+  if (hook) return hook(defaultPath, filters);
+  // Or they take the name offered and catch what is saved under it (`testSave`).
   if (testSave()) return `test:${basename(defaultPath)}`;
   if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);
   const { save } = await import("@tauri-apps/plugin-dialog");
@@ -782,6 +786,45 @@ export async function closeWindow(): Promise<void> {
   }
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().close();
+}
+
+/** Paper sizes supported by native desktop PDF export (`src-tauri/src/pdf.rs`). */
+export type PdfPaper = "a4" | "letter";
+
+/**
+ * Opens the system print dialog for this window. On desktop, WKWebView ignores JS
+ * `window.print()`, so the shell calls `WebviewWindow::print()` directly (NSPrintOperation
+ * on macOS, WebKitGTK PrintOperation on Linux, WebView2 `window.print()` on Windows).
+ * End-to-end tests can intercept this with `window.__strandivoPrint`.
+ */
+export async function printWindow(): Promise<void> {
+  const hook = (window as unknown as { __strandivoPrint?: () => Promise<void> | void }).__strandivoPrint;
+  if (hook) {
+    await hook();
+    return;
+  }
+  if (isDesktop) return invoke<void>("print_window");
+  if (typeof window.print !== "function") throw new Error("Printing isn't available in this browser.");
+  window.print();
+}
+
+/** Whether direct Save as PDF is available (desktop shell or E2E hook; browsers print to PDF via the print dialog). */
+export function canSavePdf(): boolean {
+  return isDesktop || typeof (window as unknown as { __strandivoSavePdf?: unknown }).__strandivoSavePdf === "function";
+}
+
+/**
+ * Saves the current window's print layout (`@media print`) directly to a PDF file on desktop.
+ * End-to-end tests can intercept this with `window.__strandivoSavePdf`.
+ */
+export async function saveWindowPdf(path: string, paper: PdfPaper): Promise<void> {
+  const hook = (window as unknown as { __strandivoSavePdf?: (path: string, paper: PdfPaper) => Promise<void> | void }).__strandivoSavePdf;
+  if (hook) {
+    await hook(path, paper);
+    return;
+  }
+  if (!isDesktop) throw new Error("Direct PDF saving is only available in the desktop app; use Print / Save as PDF in a browser.");
+  return invoke<void>("save_window_pdf", { path, paper });
 }
 
 /**

@@ -33,9 +33,15 @@ import { copyText } from "./inspector.ts";
 import { editableProgram } from "./pcrProgramView.ts";
 import { pcrOverviewView, type ProductViewChoice } from "./pcrOverviewView.ts";
 import { pcrMixView, type MixChoice } from "./pcrMixView.ts";
-import { enzymeSourceSelect } from "./enzymeControls.ts";
+import { enzymeSourceSelect, enzymeSummary } from "./enzymeControls.ts";
 import { programDraft, programInputKey, syncProgram, type ProgramDraft, type ProgramSnapshot } from "../lib/pcrProgramEdit.ts";
-import { productAdvice, productOverview } from "../lib/pcrOverview.ts";
+import { NO_DIGEST, pcrGelLanes, pickDigest, productAdvice, productOverview, smallestGelBand } from "../lib/pcrOverview.ts";
+import { effectivePcrMix } from "../lib/pcrMix.ts";
+import { mixPrefs } from "../pcrMixPrefs.ts";
+import { ladderReaching } from "../lib/gel.ts";
+import { currentLadder } from "./gelDraw.ts";
+import { buildPcrPlanSnapshot } from "../lib/pcrPrint.ts";
+import { openPcrPrintDialog } from "./pcrPrintDialog.ts";
 import { PCR_GUIDANCE } from "../lib/pcrGuidance.ts";
 import { openPrimerDialog } from "./primerDialog.ts";
 
@@ -475,9 +481,19 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
         )
       : null;
     if (!f || !r) {
-      result = [h("p", { class: "sv-small sv-dim" }, "Choose a forward and a reverse primer to see the product.")];
+      const reason = "Choose a forward and a reverse primer to see the product.";
+      result = [h("p", { class: "sv-small sv-dim" }, reason)];
+      actions.push(
+        h("button", { type: "button", class: "sv-btn sv-foot-start", "data-focus": "close", onclick: () => dlg.close() }, "Close"),
+        h("button", { type: "button", class: "sv-btn", "data-focus": "print-pcr-plan", disabled: true, title: reason }, iconSvg("print", 14), "Print PCR plan…")
+      );
     } else if (!product) {
-      result = [h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), d.circular ? " These primers don't make a product here." : " These primers point away from each other on this linear sequence, so they make no product.")];
+      const reason = d.circular ? "These primers don't make a product here." : "These primers point away from each other on this linear sequence, so they make no product.";
+      result = [h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), ` ${reason}`)];
+      actions.push(
+        h("button", { type: "button", class: "sv-btn sv-foot-start", "data-focus": "close", onclick: () => dlg.close() }, "Close"),
+        h("button", { type: "button", class: "sv-btn", "data-focus": "print-pcr-plan", disabled: true, title: reason }, iconSvg("print", 14), "Print PCR plan…")
+      );
     } else {
       // As the Primers tab gives it: the part that pairs, or a mutagenic primer's 3′ arm.
       const alignF = alignPrimer(f, d.sequence);
@@ -502,19 +518,21 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
       disposeViews.push(overviewView.dispose);
       measureViews.push(overviewView.measure);
       const guidance = PCR_GUIDANCE[polymerase];
+      const endsText = guidance ? `${guidance.ends} · ${guidance.product}` : "No end guidance for this polymerase yet";
       const annealText = anneal ? `${Math.round(anneal.ta)} °C${useTwo ? `, then ${Math.round(taFull!)} °C` : ""}` : "";
       const annealRow: [string, Node][] = anneal ? [["Anneal at", h("span", null, annealText, h("span", { class: "sv-dim" }, ` · ${anneal.polymerase}: ${anneal.rule}`))]] : [];
       // Products are told apart by where the primers' 3′ ends sit.
       const others = allProducts(d.sequence, d.circular, f, r).filter(p => !(p.forward.end === product.forward.end && p.reverse.start === product.reverse.start));
       const inside = d.features.filter(x => rangeWithin(x, product.span, n));
       const partly = d.features.filter(x => !rangeWithin(x, product.span, n) && rangesOverlap(x, product.span, n));
+      const featuresText = inside.length ? inside.map(x => x.name).join(", ") + (partly.length ? `; part of ${partly.map(x => x.name).join(", ")}` : "") : partly.length ? `Part of ${partly.map(x => x.name).join(", ")}` : "No features";
       const tmText = tmF !== null && tmR !== null ? `${tmF.toFixed(1)} °C and ${tmR.toFixed(1)} °C · ${Math.abs(tmF - tmR).toFixed(1)} °C apart` : "—";
       const facts: [string, Node | string][] = [
         ["Template", h("span", null, `${fmt(product.span.start + 1)}–${fmt(product.span.end + 1)} of ${fmt(n)} bp${product.span.start > product.span.end ? " (across the origin)" : ""}`, productBar(n, product))],
-        ["Ends", guidance ? `${guidance.ends} · ${guidance.product}` : "No end guidance for this polymerase yet"],
+        ["Ends", endsText],
         ["Tm", h("span", null, tmText, sameAsSettings ? null : h("span", { class: "sv-dim" }, ` · NEB, ${poly.name}`))],
         ...annealRow,
-        ["Contains", inside.length ? inside.map(x => x.name).join(", ") + (partly.length ? `; part of ${partly.map(x => x.name).join(", ")}` : "") : partly.length ? `Part of ${partly.map(x => x.name).join(", ")}` : "No features"]
+        ["Contains", featuresText]
       ];
       const warnings: string[] = productAdvice(polymerase, template, product.length, overview.gcPercent);
       if (tmF !== null && tmR !== null && Math.abs(tmF - tmR) > TM_APART) warnings.push(`The two Tms are more than ${TM_APART} °C apart.`);
@@ -544,6 +562,54 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
             h("label", { class: "sv-check-row" }, stageBox, "Anneal in two stages")
           ]
         : [];
+      const programUnavailableReason = !anneal ? "A primer's Tm is unknown, so there is no program." : `There is no program for ${poly.name} yet.`;
+      const printBtn = h(
+        "button",
+        {
+          type: "button",
+          class: "sv-btn",
+          "data-focus": "print-pcr-plan",
+          onclick: () => {
+            const digest = pickDigest(overview.digests, overviewChoice.digest);
+            const gelRows = pcrGelLanes(d, template, product.length, digest, overview.templateMethylation);
+            const ladder = currentLadder(ladderReaching(smallestGelBand(gelRows)));
+            const mix = effectivePcrMix(polymerase, product.length, pcrChoice.mix, mixPrefs());
+            const snapshot = buildPcrPlanSnapshot({
+              template: d,
+              templateKind: template,
+              product,
+              forward: f,
+              reverse: r,
+              alignF,
+              alignR,
+              tmF,
+              tmR,
+              polymeraseId: polymerase,
+              polymeraseName: poly.name,
+              sameAsSettings,
+              endsText,
+              annealText: anneal ? annealText : null,
+              annealRule: anneal ? `${anneal.polymerase}: ${anneal.rule}` : null,
+              twoStage: useTwo,
+              featuresText,
+              overview,
+              enzymeFilterNote: enzymeSummary({ enzymeSource, enzymeFilter }),
+              digest,
+              digestExplicitlyNone: overviewChoice.digest === NO_DIGEST,
+              ladder,
+              programDraft: draft,
+              programInputKey: inputKey,
+              programUnavailableReason,
+              mix,
+              mixUnavailableReason: `There is no reaction setup for ${poly.name} yet.`,
+              warnings
+            });
+            openPcrPrintDialog(ctx, snapshot);
+          }
+        },
+        iconSvg("print", 14),
+        "Print PCR plan…"
+      ) as HTMLButtonElement;
       const programView = draft ? editableProgram(draft, generated, inputKey,
         infoButton("About the program", info === "program", () => toggleInfo("program")),
         info === "program" ? h("div", { class: "sv-info-pop" }, h("p", null, "These notes describe the generated starting program."), ...(draft.original.notes ?? []).map(t => h("p", null, t))) : null,
@@ -555,10 +621,14 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
           focusAfter = "copy-program";
           redraw();
         },
-        text => void copyText(text, "the program")) : null;
+        text => void copyText(text, "the program"),
+        valid => {
+          printBtn.disabled = !valid;
+          printBtn.title = valid ? "" : "Fix the invalid cycling program value before printing.";
+        }) : null;
       if (programView) disposeViews.push(programView.dispose);
       if (programView) cancelProgramEdit = programView.cancelEdit;
-      const program = programView?.el ?? h("p", { class: "sv-small sv-dim" }, !anneal ? "A primer's Tm is unknown, so there is no program." : `There is no program for ${poly.name} yet.`);
+      const program = programView?.el ?? h("p", { class: "sv-small sv-dim" }, programUnavailableReason);
       // Last, and folded until it is wanted: the mix is what a bench sets up once the rest reads right.
       const mixView = pcrMixView(polymerase, poly.name, product.length, pcrChoice.mix, text => void copyText(text, "the reaction mix"));
       result = [overviewView.el, h("dl", { class: "sv-facts sv-pcr-facts" }, ...facts.flatMap(([k, v]) => [h("dt", null, k), h("dd", null, v)])), ...warnings.map(w => h("p", { class: "sv-small sv-text-warn" }, iconSvg("warn", 13), " ", w)), ...stageNote, program, mixView.el];
@@ -577,6 +647,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
           },
           "Show on map"
         ),
+        printBtn,
         h("button", { type: "button", class: "sv-btn", "data-focus": "copy-sequence", onclick: () => void copyText(product.sequence, `the ${fmt(product.length)} bp product`) }, iconSvg("copy", 14), "Copy sequence"),
         h("button", { type: "button", class: "sv-btn sv-btn-primary", "data-focus": "open-new-file", onclick: () => void saveProduct(d, product) }, "Open as new file…")
       );
@@ -595,7 +666,7 @@ export function openPcrDialog(ctx: DocContext, preset: { forward?: string; rever
     rows.push(h("div", { class: "sv-pcr-result", "aria-live": "polite" }, ...result));
     dlg.body.replaceChildren(...rows);
     measureViews.forEach(measure => measure());
-    dlg.footer.replaceChildren(...(actions.length ? actions : [h("button", { type: "button", class: "sv-btn sv-foot-start", "data-focus": "close", onclick: () => dlg.close() }, "Close")]));
+    dlg.footer.replaceChildren(...actions);
     if (focusAfter) {
       const key = CSS.escape(focusAfter);
       (dlg.el.querySelector(`[aria-label="${key}"], [data-focus="${key}"]`) as HTMLElement | null)?.focus();

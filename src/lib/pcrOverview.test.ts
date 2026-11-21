@@ -13,6 +13,7 @@ import {
   digestName,
   HIGH_GC,
   MAX_LABEL_LANES,
+  NO_DIGEST,
   pcrGelLanes,
   pickDigest,
   pickSite,
@@ -634,4 +635,11 @@ test("a PCR product is unmethylated: DpnI can't cut it and Dam blocks none of it
   assert.deepEqual(templateDigestSizes(grown, ["DpnI"], dna), [template.length]);
   assert.deepEqual(templateDigestSizes(grown, ["XbaI"], dna), []);
   assert.deepEqual(templateDigestSizes(grown, ["XbaI"], PCR_DNA), [template.length]);
+});
+
+test("NO_DIGEST explicitly suppresses any suggested digest so the gel shows uncut DNA only", () => {
+  const digests = [digestOf(["ScaI"], [564, 314]), digestOf(["BtsI"], [600, 278])];
+  assert.equal(pickDigest(digests, "")?.enzymes[0], "ScaI");
+  assert.equal(pickDigest(digests, "BtsI")?.enzymes[0], "BtsI");
+  assert.equal(pickDigest(digests, NO_DIGEST), null);
 });

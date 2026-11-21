@@ -195,8 +195,10 @@ and CI checks that they exist.
   printed, copied or saved (once a path is chosen), never on Cancel. Print… goes through
   `printWindow()` to `print_window` (wry's print) or `window.print()` in a browser; Save as
   PDF… (desktop only) through `saveWindowPdf()` to `src-tauri/src/pdf.rs`, which writes
-  beside the destination and moves the file in once it holds something, and stops waiting
-  after 2 minutes without claiming the job stopped. Its engines: WKWebView run modally
+  beside the destination under a hidden name of the export's own and moves the file in once
+  it holds something. After 2 minutes without an answer it stops waiting and says nothing
+  was saved: the job may go on, but a late answer only removes its file, which no retry
+  shares. Its engines: WKWebView run modally
   (`src-tauri/src/pdf_macos.rs`; measured by the author on 21 Nov 2026 with a small wry
   program that is not in the repository: A4 and Letter at their sizes, 9.5 mm margins, the
   main thread free), WebView2's `PrintToPdf` (`src-tauri/src/pdf_windows.rs`; type-checked

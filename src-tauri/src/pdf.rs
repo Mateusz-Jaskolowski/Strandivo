@@ -10,8 +10,13 @@
 //! The engine writes beside the destination, as `write_atomically` in `lib.rs` does, and the
 //! file is moved into place only once it holds something, so a failed export never leaves a
 //! half-written PDF or removes an older file of the same name.
+//!
+//! The interface shows an error after "Couldn't save the PDF: ", so a message here says what
+//! happened without saying again that saving failed, and ends in a full stop of its own, not
+//! a path: the interface puts one after a message without.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -23,9 +28,10 @@ mod pdf_macos;
 mod pdf_windows;
 
 /// How long to wait for the engine to say it has finished. Stopping the wait doesn't stop
-/// the operating system's job, so the message says the file may still appear.
+/// the operating system's job, but what it writes later never reaches the destination: it
+/// goes under the export's own hidden name and is removed when the engine answers.
 const FINISH_WITHIN: Duration = Duration::from_secs(120);
-const TIMED_OUT: &str = "No answer from the system after 2 minutes, so Strandivo stopped waiting. The file may still appear.";
+const TIMED_OUT: &str = "No answer from the system after 2 minutes, so Strandivo stopped waiting. Nothing was saved.";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct PaperSpec {
@@ -64,23 +70,27 @@ fn destination(path: &str) -> Result<PathBuf, String> {
     }
     let target = PathBuf::from(path);
     if !target.is_absolute() {
-        return Err(format!("The destination isn't a full path: {path}"));
+        return Err(format!("The destination {path} isn't a full path."));
     }
     if target.file_name().is_none() {
-        return Err(format!("The destination doesn't name a file: {path}"));
+        return Err(format!("The destination {path} doesn't name a file."));
     }
     match target.parent() {
         Some(parent) if parent.is_dir() => Ok(target),
-        Some(parent) => Err(format!("The folder doesn't exist: {}", parent.display())),
-        None => Err(format!("The destination doesn't name a file: {path}")),
+        Some(parent) => Err(format!("The folder {} doesn't exist.", parent.display())),
+        None => Err(format!("The destination {path} doesn't name a file.")),
     }
 }
 
+/// Counts this run's exports, so each has a staging file of its own.
+static EXPORTS: AtomicU64 = AtomicU64::new(0);
+
 /// Where the engine writes before the file is moved into place: beside it, hidden, like
-/// `write_atomically`'s temporary file.
-fn staging_path(target: &Path) -> PathBuf {
+/// `write_atomically`'s temporary file. The name is this export's own (the process and the
+/// export's number), so a job that answers late never meets a later export of the same file.
+fn staging_path(target: &Path, export: u64) -> PathBuf {
     let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "plan.pdf".into());
-    target.with_file_name(format!(".{name}.saving"))
+    target.with_file_name(format!(".{name}.{}-{export}.saving", std::process::id()))
 }
 
 /// What the engine said, or that it said nothing in time.
@@ -92,7 +102,7 @@ enum Outcome {
 }
 
 /// Moves a finished PDF into place, or clears what a failed one left. After a timeout the
-/// engine may still be writing, so its file is left alone.
+/// engine may still be writing, so its file is left for `clear_when_answered`.
 fn finish(outcome: Outcome, staging: &Path, target: &Path) -> Result<(), String> {
     match outcome {
         Outcome::Done => {}
@@ -107,28 +117,46 @@ fn finish(outcome: Outcome, staging: &Path, target: &Path) -> Result<(), String>
         let _ = std::fs::remove_file(staging);
         return Err("The system finished without writing the file.".into());
     }
+    // The finished PDF goes too, as `write_atomically`'s does: exporting again takes seconds.
     std::fs::rename(staging, target).map_err(|e| {
         let _ = std::fs::remove_file(staging);
-        format!("Could not save {}: {e}", target.display())
+        format!("The PDF was made but couldn't be put in place: {e}. If the file is open in another program, close it and save again.")
     })
 }
 
+/// After a timeout, waits on another thread for the engine's late answer (or for it to drop
+/// its sender) and removes whatever it wrote, as the person was told nothing was saved.
+fn clear_when_answered(rx: mpsc::Receiver<Result<(), String>>, staging: PathBuf) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let _ = rx.recv();
+        let _ = std::fs::remove_file(&staging);
+    })
+}
+
+/// `async` on purpose: Tauri runs a plain `fn` command on the main thread (the `async`
+/// option in tauri-macros' documentation), where the wait below would hold the thread the
+/// engines answer on, and every export would end at the timeout.
 #[tauri::command]
 pub async fn save_window_pdf(window: tauri::WebviewWindow, path: String, paper: String) -> Result<(), String> {
     let spec = paper_spec(&paper)?;
     let target = destination(&path)?;
-    let staging = staging_path(&target);
-    // A leftover from an export that timed out would otherwise pass for this one's output.
+    let staging = staging_path(&target, EXPORTS.fetch_add(1, Ordering::Relaxed));
+    // Only a run of the app that ended mid-export, with the same process number, could have
+    // left a file under this name, and it would pass for this export's output.
     let _ = std::fs::remove_file(&staging);
     let staging_text = staging.to_str().ok_or("The destination path isn't valid text.")?.to_string();
     let (tx, rx) = mpsc::channel::<Result<(), String>>();
 
     dispatch_pdf(window, staging_text, spec, tx)?;
 
+    let late = staging.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || match rx.recv_timeout(FINISH_WITHIN) {
         Ok(Ok(())) => Outcome::Done,
         Ok(Err(e)) => Outcome::Failed(e),
-        Err(mpsc::RecvTimeoutError::Timeout) => Outcome::TimedOut,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            clear_when_answered(rx, late);
+            Outcome::TimedOut
+        }
         Err(mpsc::RecvTimeoutError::Disconnected) => Outcome::Failed("The export stopped without finishing.".into()),
     })
     .await
@@ -152,7 +180,7 @@ fn dispatch_pdf(
                 let _ = tx.send(Err(e));
             }
         })
-        .map_err(|e| format!("Couldn't reach the window: {e}"))
+        .map_err(|e| format!("The window couldn't be reached: {e}"))
 }
 
 #[cfg(windows)]
@@ -169,7 +197,7 @@ fn dispatch_pdf(
                 let _ = tx.send(Err(e));
             }
         })
-        .map_err(|e| format!("Couldn't reach the window: {e}"))
+        .map_err(|e| format!("The window couldn't be reached: {e}"))
 }
 
 #[cfg(any(
@@ -212,7 +240,7 @@ fn dispatch_pdf(
             op.set_print_settings(&settings);
             op.set_page_setup(&setup);
 
-            // "failed" comes before "finished", so whichever is first answers.
+            // Whichever of "failed" and "finished" comes first answers; the other finds no sender.
             let tx_done = Rc::new(RefCell::new(Some(tx)));
             let tx_fail = Rc::clone(&tx_done);
             op.connect_finished(move |_| {
@@ -227,7 +255,7 @@ fn dispatch_pdf(
             });
             op.print();
         })
-        .map_err(|e| format!("Couldn't reach the window: {e}"))
+        .map_err(|e| format!("The window couldn't be reached: {e}"))
 }
 
 #[cfg(not(any(
@@ -307,15 +335,21 @@ mod tests {
         let given = spaced.to_str().unwrap();
         assert_eq!(destination(given).unwrap(), spaced, "spaces at the ends are part of the name");
         assert!(destination("").is_err());
-        assert!(destination("plan.pdf").unwrap_err().contains("full path"));
-        assert!(destination(dir.join("missing").join("plan.pdf").to_str().unwrap()).unwrap_err().contains("doesn't exist"));
+        assert_eq!(destination("plan.pdf").unwrap_err(), "The destination plan.pdf isn't a full path.");
+        let missing = dir.join("missing");
+        assert_eq!(
+            destination(missing.join("plan.pdf").to_str().unwrap()).unwrap_err(),
+            format!("The folder {} doesn't exist.", missing.display())
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn staging_file_sits_beside_the_destination() {
+    fn each_export_stages_beside_the_destination_under_its_own_name() {
         let target = Path::new("/plans/PCR plan.pdf");
-        assert_eq!(staging_path(target), Path::new("/plans/.PCR plan.pdf.saving"));
+        let pid = std::process::id();
+        assert_eq!(staging_path(target, 7), PathBuf::from(format!("/plans/.PCR plan.pdf.{pid}-7.saving")));
+        assert_ne!(staging_path(target, 7), staging_path(target, 8), "a retry never writes where a late job may");
     }
 
     #[test]
@@ -323,7 +357,7 @@ mod tests {
         let dir = scratch("done");
         let target = dir.join("plan.pdf");
         std::fs::write(&target, b"older").unwrap();
-        let staging = staging_path(&target);
+        let staging = staging_path(&target, 0);
         std::fs::write(&staging, b"%PDF-1.7").unwrap();
         finish(Outcome::Done, &staging, &target).unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"%PDF-1.7");
@@ -336,7 +370,7 @@ mod tests {
         let dir = scratch("fail");
         let target = dir.join("plan.pdf");
         std::fs::write(&target, b"older").unwrap();
-        let staging = staging_path(&target);
+        let staging = staging_path(&target, 0);
 
         std::fs::write(&staging, b"half").unwrap();
         assert_eq!(finish(Outcome::Failed("engine said no".into()), &staging, &target).unwrap_err(), "engine said no");
@@ -352,14 +386,45 @@ mod tests {
     }
 
     #[test]
-    fn a_timeout_leaves_the_engines_file_alone() {
+    fn a_pdf_that_cant_be_put_in_place_is_removed_and_says_what_to_do() {
+        let dir = scratch("locked");
+        // A folder in the way stands in for a file Windows won't let go of.
+        let target = dir.join("plan.pdf");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("inside"), b"").unwrap();
+        let staging = staging_path(&target, 0);
+        std::fs::write(&staging, b"%PDF-1.7").unwrap();
+        let message = finish(Outcome::Done, &staging, &target).unwrap_err();
+        assert!(message.starts_with("The PDF was made but couldn't be put in place: "), "{message}");
+        assert!(message.ends_with("If the file is open in another program, close it and save again."), "{message}");
+        assert!(!staging.exists(), "the finished PDF goes, as exporting again is quick");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_timeout_saves_nothing_and_the_late_answer_clears_the_engines_file() {
         let dir = scratch("timeout");
         let target = dir.join("plan.pdf");
-        let staging = staging_path(&target);
+        let staging = staging_path(&target, 0);
         std::fs::write(&staging, b"still writing").unwrap();
         assert_eq!(finish(Outcome::TimedOut, &staging, &target).unwrap_err(), TIMED_OUT);
-        assert!(staging.exists());
+        assert!(TIMED_OUT.ends_with("Nothing was saved."));
+        assert!(staging.exists(), "the engine may still be writing");
+
+        let (tx, rx) = mpsc::channel();
+        let waiting = clear_when_answered(rx, staging.clone());
+        tx.send(Ok(())).unwrap();
+        waiting.join().unwrap();
+        assert!(!staging.exists(), "even a late success isn't moved into place");
         assert!(!target.exists());
+
+        // An engine that drops its sender without answering is cleared up too.
+        std::fs::write(&staging, b"abandoned").unwrap();
+        let (tx, rx) = mpsc::channel::<Result<(), String>>();
+        let waiting = clear_when_answered(rx, staging.clone());
+        drop(tx);
+        waiting.join().unwrap();
+        assert!(!staging.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

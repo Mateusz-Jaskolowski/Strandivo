@@ -31,10 +31,10 @@ pub fn start(
         let core = controller.CoreWebView2().map_err(text)?;
         let core7: ICoreWebView2_7 = core
             .cast()
-            .map_err(|_| "This version of WebView2 can't save PDFs. Updating Windows updates it.".to_string())?;
+            .map_err(|_| "This version of WebView2 can't save PDFs.".to_string())?;
         let env6: ICoreWebView2Environment6 = environment
             .cast()
-            .map_err(|_| "This version of WebView2 can't set a PDF's paper size. Updating Windows updates it.".to_string())?;
+            .map_err(|_| "This version of WebView2 can't set a PDF's paper size.".to_string())?;
         let settings = env6.CreatePrintSettings().map_err(text)?;
         settings.SetPageWidth(width_in).map_err(text)?;
         settings.SetPageHeight(height_in).map_err(text)?;

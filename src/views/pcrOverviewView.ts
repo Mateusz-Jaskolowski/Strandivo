@@ -166,7 +166,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   const digestBody = h(
     "div",
     { class: "sv-pcr-digest" },
-    h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h4", { class: "sv-pcr-title" }, "Suggested digest"), data.digests.length ? digestSelect : null), digestNote, lanes),
+    h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h5", { class: "sv-pcr-title" }, "Suggested digest"), data.digests.length ? digestSelect : null), digestNote, lanes),
     h("div", { class: "sv-pcr-gel" }, gelFigure)
   );
 
@@ -194,7 +194,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
       if (!mapFolded) measure();
       mapSection.querySelector<HTMLElement>(".sv-fold-link")?.focus();
     });
-    const head = h("div", { class: "sv-pcr-head sv-small" }, h("h3", { class: "sv-pcr-subhead sv-dim" }, "Product map"), fold, ...(mapFolded ? [mapSummary] : [source, filter]));
+    const head = h("div", { class: "sv-pcr-head sv-small" }, h("h4", { class: "sv-pcr-subhead sv-dim" }, "Product map"), fold, ...(mapFolded ? [mapSummary] : [source, filter]));
     mapSection.replaceChildren(head, ...(mapFolded ? [] : [map, detail, ...(flanksEl ? [flanksEl] : [])]));
   };
 
@@ -205,7 +205,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
       renderGelSection();
       gelSection.querySelector<HTMLElement>(".sv-fold-link")?.focus();
     });
-    const head = h("div", { class: "sv-pcr-head sv-small" }, h("h3", { class: "sv-pcr-subhead sv-dim" }, "Simulated gel"), fold, ...(gelFolded ? [gelSummary] : []));
+    const head = h("div", { class: "sv-pcr-head sv-small" }, h("h4", { class: "sv-pcr-subhead sv-dim" }, "Simulated gel"), fold, ...(gelFolded ? [gelSummary] : []));
     gelSection.replaceChildren(head, ...(gelFolded ? [] : [digestBody]));
   };
 

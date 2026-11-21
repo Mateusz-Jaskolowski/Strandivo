@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // One renderer for every simulated agarose gel: the Digest dialog's lanes and the PCR
-// product's own. Sizes are top-strand lengths, as src/lib/gel.ts gives them, and the gel
-// keeps its own colours in every theme.
+// product's own, on screen and as an image to copy or save (`gelFigure`). Sizes are
+// top-strand lengths, as src/lib/gel.ts gives them, and the gel keeps its own colours in
+// every theme.
 
 import { h } from "../ui/dom.ts";
 import { s } from "../ui/svg.ts";
@@ -99,4 +100,40 @@ export function gelSvg(lanes: GelLane[], ladder: Ladder, shape: GelShape = {}): 
     root.appendChild(band);
   }
   return root;
+}
+
+/** A lane in the key under a gel saved as an image: its label over the well, and what it holds. */
+export interface GelKeyRow {
+  lane: string;
+  text: string;
+}
+
+/** Room for the caption over the gel in an image, and for each row of its key. */
+const CAPTION = 20;
+const KEY_ROW = 16;
+
+/**
+ * The gel as an image: said to be simulated over it, as drawn on screen, with a key under
+ * it saying what each lane holds, as nothing can be hovered there to ask. Nothing is
+ * picked, faded or clickable: the gel as it would run.
+ */
+export function gelFigure(lanes: GelLane[], ladder: Ladder, shape: GelShape, key: GelKeyRow[]): SVGSVGElement {
+  const plain = lanes.map(l => ({ label: l.label, bands: l.bands.map(b => ({ size: b.size, runsAs: b.runsAs, mass: b.mass, title: b.title, class: b.class })) }));
+  const gel = gelSvg(plain, ladder, shape);
+  const left = shape.labelWidth ?? 52;
+  const laneW = shape.laneWidth ?? 46;
+  const gelH = Number(gel.getAttribute("height"));
+  const figure = s("svg", { class: "sv-gel", role: "img", "aria-label": shape.ariaLabel ?? "Simulated agarose gel" });
+  figure.appendChild(s("text", { x: left, y: 12, class: "sv-gel-caption" }, "Simulated agarose gel"));
+  const body = s("g", { transform: `translate(0 ${CAPTION})` });
+  body.append(...Array.from(gel.childNodes));
+  figure.appendChild(body);
+  const top = CAPTION + gelH + 12;
+  key.forEach((row, i) => {
+    const y = top + i * KEY_ROW;
+    // The lane's label, under the gel's own labels' column.
+    figure.appendChild(s("text", { x: left + 4 + laneW / 2, y, "text-anchor": "middle", class: "sv-gel-lane-label" }, row.lane));
+    figure.appendChild(s("text", { x: left + 4 + laneW, y, class: "sv-gel-key" }, row.text));
+  });
+  return figure;
 }

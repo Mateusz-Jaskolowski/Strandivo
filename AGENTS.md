@@ -48,9 +48,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - `src/views/` has one class per part of the window (map, sequence, primers, reads with its
   canvas trace view, outline, inspector, search). Each builds its own DOM or SVG. Every
   simulated gel is laid out by `gelLayout` (`src/lib/gel.ts`): `src/views/gelDraw.ts` draws
-  the Digest dialog's lanes and the PCR product's own, with the ladder they share, and the
-  printable PCR plan draws the same layout in paper colours
-  (`docs/agents/primers.md` says how).
+  the Digest dialog's lanes and the PCR product's own, with the ladder they share, and
+  either gel can also be saved as an image; the printable PCR plan draws the same layout
+  in paper colours (`docs/agents/primers.md` says how).
 - `src/lib/` is pure logic with unit tests: the sequence model and edits
   (`src/lib/seqdata.ts`), primers and Tm, enzymes, primer design, PCR products, primer
   lists, alignment layout, codon effects, construct summaries for Home, cloning simulation
@@ -248,6 +248,19 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   Each tick keeps its own coordinate, and the count opens a list whose rows select
   or pick a single site just as its map label would. Grouping follows the drawing's
   scale, so sites gain individual names as soon as the ticks can be told apart.
+- **Images** of a gel are copied or saved by `src/views/imageExport.ts`, as the protein
+  schematic is: Copy image, Save as PNG… and Save as SVG…. The view draws its figure anew
+  for it, never from the one on screen, so nothing picked, hovered or faded comes along;
+  it is drawn off screen in the light theme, fitted to what it covers, and each shape is
+  given its computed style as attributes of its own, so the SVG keeps its text as text, in
+  whatever fonts are installed where it is opened. It was checked in browsers and macOS
+  Quick Look only: editors such as Illustrator, Inkscape and PowerPoint substitute fonts
+  and differ in `dominant-baseline` and `textPath`, so don't promise more until one is tried.
+  The PNG is painted from that SVG shape by shape on a canvas (about 3,000 pixels
+  across, marked with its resolution), as the Content Security Policy loads no image that
+  isn't one of the app's files, and copying has to happen within the click. A view that
+  draws something it can't paint yet (a gradient, a mask, a filter, a nested `<svg>`)
+  adds it there.
 - **Sortable tables** use `sortHeader` (`src/ui/sortHead.ts`) and `src/lib/tableSort.ts`,
   each keeping its sort in local storage. A column sorts its useful way first (newest,
   most clones, worst status). Where the table's own order means something, as in the
@@ -291,8 +304,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `src/themeBoot.ts`, a plain script in `<head>` (a module can run after the first paint),
   sets the theme before anything is drawn; `src/theme.ts` keeps it to Settings and the
   system. CSS follows by itself, but a canvas reads its colours as it draws, so it redraws on
-  `onThemeChanged`. The gel and what is saved or copied as an image (the protein figure)
-  keep their own colours in every theme. `src/lib/themes.test.ts` holds every block it finds
+  `onThemeChanged`. The gel and what is saved or copied as an image (the protein figure, a
+  gel) keep their own colours in every theme. `src/lib/themes.test.ts` holds every block it finds
   to this, with a short list of allowed literals, each with its reason, and every theme's
   text tokens to WCAG AA on their backgrounds: fix a token that fails, never the bar.
 - **Interface text** is plain and short, sentence case, says what happens ("Add reads…",
@@ -361,7 +374,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   UniProt is asked for real unless the page defines `window.__strandivoUniprot`, which e2e
   tests do, in the app too. A
   right-click menu is drawn in the page there, or handed to `window.__strandivoMenu` if
-  defined, which is how e2e tests pick items (WebDriver can't click native menus).
+  defined, which is how e2e tests pick items (WebDriver can't click native menus). So is
+  what Save as… would write, to `window.__strandivoSave`, as WebDriver can't answer the
+  app's save dialog either.
 - **Checks** (`.github/workflows/checks.yml`) runs on every pull request and push to
   `main`, on Linux, with clippy on Windows beside it, as the shell has code only Windows
   compiles (WebView2's PDF export); macOS's own code compiles only on a Mac, so build there

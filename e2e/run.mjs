@@ -34,6 +34,32 @@ function check(name, ok, detail = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
+/**
+ * Clicks the buttons `labels` names inside `scope` (a class) and gives back what they saved,
+ * caught with `window.__strandivoSave` as WebDriver can't answer a save dialog: text as it
+ * is, and a PNG as its size in pixels and whether it says its resolution.
+ * A PNG is decoded in the page too, for the rest of its summary (`PNG_PIXELS`).
+ */
+async function savedImages(s, scope, labels) {
+  await s.exec(`window.__e2eSaved = {}; window.__strandivoSave = (name, contents) => {
+    if (typeof contents === 'string') { window.__e2eSaved[name] = contents; return; }
+    const v = new DataView(contents.buffer, contents.byteOffset);
+    window.__e2eSaved[name] = { png: String.fromCharCode(...contents.subarray(1, 4)) === 'PNG', width: v.getUint32(16), height: v.getUint32(20), dpi: String.fromCharCode(...contents.subarray(0, 100)).includes('pHYs') };
+    const entry = window.__e2eSaved[name];
+    window.__e2ePending = (window.__e2ePending || 0) + 1;
+    (${PNG_PIXELS})(contents).then(more => Object.assign(entry, more), e => { entry.error = String(e); }).then(() => { if (!--window.__e2ePending) delete window.__e2ePending; });
+  };`);
+  for (const label of labels) await s.click(`//*[contains(@class,'${scope}')]//button[contains(., '${label}')]`, "xpath");
+  await s.waitFor(`Object.keys(window.__e2eSaved).length === ${labels.length} && !window.__e2ePending`, 10000);
+  const saved = await s.exec("const out = window.__e2eSaved; delete window.__strandivoSave; delete window.__e2eSaved; return out;");
+  const svg = Object.entries(saved).find(([name]) => name.endsWith(".svg"));
+  const png = Object.entries(saved).find(([name]) => name.endsWith(".png"));
+  return { svgName: svg?.[0] ?? "", svg: svg?.[1] ?? "", pngName: png?.[0] ?? "", png: png?.[1] ?? {} };
+}
+
+/** An SVG file that opens as it looks elsewhere: every style its own, nothing only the page understood. */
+const standaloneSvg = svg => /^<\?xml/.test(svg) && /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
+
 async function wd(method, url, body) {
   const res = await fetch(DRIVER + url, {
     method,
@@ -195,6 +221,58 @@ const CLIPPED_LABELS = `
     return r.width && (r.left < area.left - 1 || r.right > area.right + 1 || r.top < area.top - 1 || r.bottom > area.bottom + 1);
   }).map(t => t.textContent);
 `;
+
+/**
+ * Run in the page on a saved PNG's bytes: the resolution its pHYs chunk gives (dots per inch)
+ * and, from its decoded pixels, the corner's alpha, whether the last column and the last row
+ * are opaque, and how many pixels are neither clear nor the white paper. Decoded as the page's
+ * own code can, with no <img> or blob: URL (the Content Security Policy loads no image that
+ * isn't the app's); only this summary goes back over WebDriver. e2e/web.mjs has the same text.
+ */
+const PNG_PIXELS = `async bytes => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let dotsPerInch = null;
+  for (let at = 8; at + 8 <= bytes.length; at += 12 + view.getUint32(at)) {
+    const type = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+    if (type === 'pHYs') { dotsPerInch = bytes[at + 16] === 1 ? view.getUint32(at + 8) * 0.0254 : null; break; }
+    if (type === 'IDAT') break;
+  }
+  const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const g = canvas.getContext('2d');
+  g.drawImage(image, 0, 0);
+  image.close();
+  const { data, width, height } = g.getImageData(0, 0, canvas.width, canvas.height);
+  let lastColumnOpaque = true, lastRowOpaque = true, ink = 0;
+  for (let y = 0; y < height; y++) if (data[((y + 1) * width - 1) * 4 + 3] !== 255) lastColumnOpaque = false;
+  for (let x = 0; x < width; x++) if (data[((height - 1) * width + x) * 4 + 3] !== 255) lastRowOpaque = false;
+  for (let i = 0; i < data.length; i += 4) if (data[i + 3] && (data[i + 3] < 255 || data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255)) ink++;
+  return { dotsPerInch, cornerAlpha: data[3], lastColumnOpaque, lastRowOpaque, ink };
+}`;
+
+/** A saved PNG with at least a twentieth of its pixels inked: a blank one of the right size has none. */
+const inked = png => !!png && png.ink >= 0.05 * png.width * png.height;
+
+/** Opaque to its last pixel: a figure drawn on paper has no clear corner, last column or last row. */
+const opaqueToEdge = png => !!png && png.cornerAlpha === 255 && png.lastColumnOpaque === true && png.lastRowOpaque === true;
+
+/**
+ * Whether a PNG's resolution fits the SVG saved with it, which is the same figure: 96 dpi for
+ * each pixel the SVG is wide, so 96 times the PNG's width over the SVG's. The PNG's width is
+ * the figure's rounded to whole pixels, up to half a pixel off (48 / the SVG's width, in dpi),
+ * and the file keeps whole pixels per metre (0.02 dpi covers that).
+ */
+function resolutionFits(png, svg) {
+  const svgWidth = Number(/<svg\b[^>]*\swidth="([\d.]+)"/.exec(svg)?.[1]);
+  const wanted = (96 * png?.width) / svgWidth;
+  const within = 48 / svgWidth + 0.02;
+  return {
+    ok: typeof png?.dotsPerInch === "number" && Math.abs(png.dotsPerInch - wanted) <= within,
+    detail: `${png?.dotsPerInch?.toFixed(2)} dpi in the file, ${wanted.toFixed(2)} from ${png?.width} px over the SVG's ${svgWidth}, within ${within.toFixed(2)}`
+  };
+}
 
 const doc = `const s = window.__strandivo.store;`;
 const outlineRow = name => `//*[contains(@class,'sv-outline')]//*[contains(@class,'sv-list-row')][.//*[normalize-space(text())='${name}']]`;
@@ -885,6 +963,19 @@ async function main() {
     const reach = await s.exec(`const ys = selector => Array.from(document.querySelectorAll('.sv-pcr-gel ' + selector)).map(b => Number(b.getAttribute('y')));
       return { ladder: document.querySelector(".sv-dialog select[aria-label='Ladder']").value, samples: Math.max(...ys('.sv-gel-band[data-lane]')), ladderLowest: Math.max(...ys('.sv-gel-band:not([data-lane])')) };`);
     check("A short product opens the gel on a ladder that reaches its smallest band", reach.ladder === "1kb-plus" && reach.samples <= reach.ladderLowest, JSON.stringify(reach));
+    // The gel as an image: said to be simulated, the key under it, as nothing can be hovered there.
+    const pcrGel = await savedImages(s, "sv-gel-export", ["Save as SVG", "Save as PNG"]);
+    check(
+      "Under the product's gel, Save as SVG… saves it with the ladder and each lane in a key",
+      standaloneSvg(pcrGel.svg) && pcrGel.svg.includes(">Simulated agarose gel<") && pcrGel.svg.includes(">1 kb Plus ladder<") && pcrGel.svg.includes(">Product, ScaI · 564 + 314 bp<") && pcrGel.svg.includes('fill="#1c2130"') && pcrGel.svgName.endsWith(" PCR product gel.svg"),
+      `${pcrGel.svgName}: ${pcrGel.svg.slice(0, 300)}`
+    );
+    check("And Save as PNG… a sharp PNG that says its resolution", pcrGel.png.png && Math.max(pcrGel.png.width, pcrGel.png.height) >= 2000 && pcrGel.png.dpi, JSON.stringify(pcrGel.png));
+    // Its pixels, decoded in the page: the gel is painted, the paper reaches the last pixel, and the resolution is the SVG's size.
+    check("The product gel's PNG has the gel drawn on it, not only the paper", inked(pcrGel.png), JSON.stringify(pcrGel.png));
+    check("The product gel's PNG is opaque to its last column and row, as a gel has no transparent background", opaqueToEdge(pcrGel.png), JSON.stringify(pcrGel.png));
+    const pcrFit = resolutionFits(pcrGel.png, pcrGel.svg);
+    check("The product gel's PNG says the resolution that sets it at the SVG's size", pcrFit.ok, pcrFit.detail);
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
     // A ladder picked holds for the window, so this is the 1 kb ladder the Digest dialog's checks below start on.
@@ -1815,6 +1906,40 @@ async function main() {
     check("EcoRI and HindIII cut out pUC19's 51 bp MCS piece, the sizes adding up to the plasmid", sizes.length === 2 && sizes[1] === 51 && sizes[0] + sizes[1] === amp.len, `${JSON.stringify(sizes)} of ${amp.len} bp`);
     check("The gel shows a band for each fragment next to the ladder", await s.exec("return document.querySelectorAll('.sv-dialog .sv-gel-pick').length === 2 && document.querySelectorAll('.sv-dialog .sv-gel-band').length > 5"));
     await s.shot("10-digest");
+    // The gel as an image: as it would run, with nothing picked, said to be simulated, and a
+    // key saying what each lane holds.
+    await s.exec("document.querySelector('.sv-dialog .sv-gel-pick').dispatchEvent(new MouseEvent('click', { bubbles: true }))");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-gel-band-on')", 3000);
+    const digestGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG", "Save as PNG"]);
+    check(
+      "The Digest dialog's Save as SVG… saves the gel with its ladder, lanes and a key, nothing picked",
+      standaloneSvg(digestGel.svg) && digestGel.svg.includes(">Simulated agarose gel<") && digestGel.svg.includes(` · EcoRI, HindIII · ${sizes[0].toLocaleString("en")} + ${sizes[1]} bp<`) && digestGel.svg.includes(">10 kb<") && !digestGel.svg.includes("#ffd166") && digestGel.svgName.endsWith(" digest gel.svg"),
+      `${digestGel.svgName}: ${digestGel.svg.slice(0, 300)}`
+    );
+    check("Its Save as PNG… saves a sharp PNG that says its resolution", digestGel.png.png && Math.max(digestGel.png.width, digestGel.png.height) >= 2000 && digestGel.png.dpi, JSON.stringify(digestGel.png));
+    check("The Digest gel's PNG has the gel drawn on it, not only the paper", inked(digestGel.png), JSON.stringify(digestGel.png));
+    check("The Digest gel's PNG is opaque to its last column and row, as a gel has no transparent background", opaqueToEdge(digestGel.png), JSON.stringify(digestGel.png));
+    const digestFit = resolutionFits(digestGel.png, digestGel.svg);
+    check("The Digest gel's PNG says the resolution that sets it at the SVG's size", digestFit.ok, digestFit.detail);
+    // Copy image: one PNG on the clipboard, put there within the click, as a browser lets a page copy only then.
+    // The real clipboard is a getter on Navigator.prototype, so a property of our own shadows it until it is deleted.
+    const copied = await s.exec(`window.__e2eCopied = null;
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: items => { window.__e2eCopied = Array.from(items); return Promise.resolve(); } } });
+      const button = Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent.includes('Copy image'));
+      button?.click();
+      const items = window.__e2eCopied;
+      return { found: !!button, inClick: !!items, items: items ? items.length : 0, types: items ? items.map(i => Array.from(i.types)) : [], clipboardItem: typeof ClipboardItem };`);
+    check("Copy image puts one PNG on the clipboard within the click that asked", copied.found && copied.inClick && copied.items === 1 && copied.types[0].includes("image/png"), JSON.stringify(copied));
+    const copiedPng = await s.execAsync(`const done = arguments[arguments.length - 1];
+      const toasts = Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)'), t => t.textContent);
+      const item = window.__e2eCopied && window.__e2eCopied[0];
+      if (!item) return done({ toasts });
+      item.getType('image/png').then(blob => blob.arrayBuffer()).then(buffer => done({ toasts, size: buffer.byteLength, signature: Array.from(new Uint8Array(buffer).slice(0, 8)) }), e => done({ toasts, error: String(e) }));`);
+    check("What it copied starts as a PNG does, and a toast says the gel was copied", JSON.stringify(copiedPng.signature) === "[137,80,78,71,13,10,26,10]" && copiedPng.toasts.some(t => /Copied the gel/.test(t)), JSON.stringify(copiedPng));
+    const clipboard = await s.exec(`delete navigator.clipboard; delete window.__e2eCopied;
+      const real = Object.getOwnPropertyDescriptor(Navigator.prototype, 'clipboard');
+      return { own: Object.prototype.hasOwnProperty.call(navigator, 'clipboard'), real: navigator.clipboard === (real && real.get ? real.get.call(navigator) : undefined), type: typeof navigator.clipboard };`);
+    check("With the stand-in deleted, the page's own clipboard is back", !clipboard.own && clipboard.real, JSON.stringify(clipboard));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
     check("Done closes the Digest dialog", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
 
@@ -3168,6 +3293,30 @@ async function main() {
         await s.click(".sv-dialog input[data-enzyme='EcoRI']");
         await sleep(600);
         await s.shot("13-dark-digest");
+        // An image is drawn from the light theme's colours, so the gel saves as the same SVG from either theme.
+        const themeRead = async want => {
+          await s.waitFor(`document.documentElement.dataset.theme === '${want}'`, 5000);
+          return s.exec("return document.documentElement.dataset.theme");
+        };
+        const inDark = await themeRead("dark");
+        const darkGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG"]);
+        await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");
+        const inLight = await themeRead("light");
+        const lightGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG"]);
+        await s.exec("window.__strandivo.saveSettings({ appearance: 'dark' })");
+        const backInDark = await themeRead("dark");
+        check("In dark, the Digest dialog's Save as SVG… still saves the whole gel", standaloneSvg(darkGel.svg) && darkGel.svg.includes(">Simulated agarose gel<"), `${darkGel.svgName}: ${darkGel.svg.slice(0, 300)}`);
+        const withoutIds = svg => svg.replace(/sv-export-\d+-/g, "");
+        const [darkText, lightText] = [withoutIds(darkGel.svg), withoutIds(lightGel.svg)];
+        let differAt = 0;
+        while (differAt < darkText.length && darkText[differAt] === lightText[differAt]) differAt++;
+        check(
+          "Saved in dark or in light, the gel is the same SVG, as an image is always drawn in the light theme",
+          inDark === "dark" && inLight === "light" && backInDark === "dark" && darkText.length > 0 && darkText === lightText,
+          `theme read: ${inDark}, then ${inLight}, then ${backInDark}; ${darkText.length} and ${lightText.length} characters${darkText === lightText ? "" : `, they differ at ${differAt}: …${darkText.slice(Math.max(0, differAt - 60), differAt + 60)}… and …${lightText.slice(Math.max(0, differAt - 60), differAt + 60)}…`}`
+        );
+        // The saves' toasts, gone before the next screenshots.
+        await s.waitFor("!Array.from(document.querySelectorAll('.ps-toast')).some(t => /^Saved /.test(t.textContent))", 8000);
         await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
       } else check("In dark, Digest opens its dialog", false);
     } else check("The library's parent opens again for the dark screenshots", false);

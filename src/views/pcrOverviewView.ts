@@ -10,9 +10,11 @@ import { methylationNote } from "../lib/methylation.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
 import { bands, ladderReaching, laneSizesText } from "../lib/gel.ts";
+import { imageFileName } from "../lib/imageExport.ts";
 import type { TemplateKind } from "../lib/pcrProtocols.ts";
 import type { SeqData } from "../lib/seqdata.ts";
-import { currentLadder, gelSvg, ladderSelect, type GelBand, type GelLane } from "./gelDraw.ts";
+import { currentLadder, gelFigure, gelSvg, ladderSelect, type GelBand, type GelLane, type GelShape } from "./gelDraw.ts";
+import { imageButtons } from "./imageExport.ts";
 import { pcrSectionFolded, setPcrSectionFolded } from "../pcrDialogFolds.ts";
 
 /** What the user chose here, kept while the dialog is open, as it is drawn anew on every change. */
@@ -46,7 +48,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     map.querySelectorAll<HTMLElement>("button[data-more]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.more === choice.more)));
   };
   const digestNote = h("p", { class: "sv-small sv-dim" });
-  const gelFigure = h("div", { class: "sv-pcr-gel-figure" });
+  const gelHost = h("div", { class: "sv-pcr-gel-figure" });
   const laneKey = h("ul", { class: "sv-pcr-lane-key sv-small" });
   // About the template's lanes, so it goes with them.
   const leftover = h("p", { class: "sv-small sv-dim" }, "Template left over from the reaction runs far fainter than the product.");
@@ -71,29 +73,30 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
           }
         ];
   /** Hovering a lane in the key picks it out of the gel; the ladder stays as it is. */
-  const fade = (lane: number | null) => gelFigure.querySelectorAll<SVGElement>("[data-lane]").forEach(el => el.classList.toggle("sv-gel-fade", lane !== null && el.dataset.lane !== String(lane)));
+  const fade = (lane: number | null) => gelHost.querySelectorAll<SVGElement>("[data-lane]").forEach(el => el.classList.toggle("sv-gel-fade", lane !== null && el.dataset.lane !== String(lane)));
+  /** What the folded gel section says in place of the gel. */
   const gelSummary = h("span", { class: "sv-small sv-dim" });
-  const drawGel = () => {
+  /** The gel as drawn: the digest it runs, its lanes, ladder and shape, and the rows of the key beside it. */
+  const gelNow = () => {
     const d = pickDigest(data.digests, choice.digest);
     const rows = pcrGelLanes(template, templateKind, product.length, d, data.templateMethylation);
-    leftover.hidden = !rows.some(r => r.of === "template");
     // Until a ladder is picked, the gel opens on one that reaches its smallest band. What it
     // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.
     const ladder = currentLadder(ladderReaching(smallestGelBand(rows)));
+    const shape: GelShape = {
+      height: 160,
+      laneWidth: 40,
+      labelWidth: 46,
+      ariaLabel: `A gel of ${rows.some(r => r.of === "template") ? "the template and " : ""}the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
+    };
+    return { d, rows, ladder, shape, lanes: rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })) };
+  };
+  const drawGel = () => {
+    const { d, rows, ladder, shape, lanes } = gelNow();
+    leftover.hidden = !rows.some(r => r.of === "template");
     ladderMenu.value = ladder.id;
     gelSummary.textContent = `${d ? digestName(d) : "Uncut only"} · ${ladder.name}`;
-    gelFigure.replaceChildren(
-      gelSvg(
-        rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })),
-        ladder,
-        {
-          height: 160,
-          laneWidth: 40,
-          labelWidth: 46,
-          ariaLabel: `A gel of ${rows.some(r => r.of === "template") ? "the template and " : ""}the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
-        }
-      )
-    );
+    gelHost.replaceChildren(gelSvg(lanes, ladder, shape));
     laneKey.replaceChildren(
       ...rows.map((r, i) =>
         h(
@@ -108,12 +111,24 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   };
   // The ladder is made once, so changing it keeps the focus on its own menu.
   const ladderMenu = ladderSelect("sv-select-quiet", drawGel);
+  // As an image, the key goes under the gel, with the ladder's name, as nothing can be hovered there.
+  const exportGel = imageButtons({
+    what: "the gel",
+    small: true,
+    fileName: () => imageFileName(template.name, "PCR product gel", "PCR product"),
+    title: () => `Simulated gel of the ${fmt(product.length)} bp PCR product`,
+    figure: () => {
+      const { rows, ladder, shape, lanes } = gelNow();
+      return gelFigure(lanes, ladder, shape, [{ lane: "M", text: ladder.name }, ...rows.map((r, i) => ({ lane: String(i + 1), text: `${r.what} · ${laneSizesText(r.sizes)}` }))]);
+    }
+  });
   const lanes = h(
     "div",
     { class: "sv-pcr-lanes" },
     h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderMenu),
     laneKey,
-    leftover
+    leftover,
+    h("div", { class: "sv-gel-export", role: "group", "aria-label": "Export gel" }, ...exportGel)
   );
   const updateDigest = () => {
     const d = pickDigest(data.digests, choice.digest);
@@ -167,7 +182,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     "div",
     { class: "sv-pcr-digest" },
     h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h5", { class: "sv-pcr-title" }, "Suggested digest"), data.digests.length ? digestSelect : null), digestNote, lanes),
-    h("div", { class: "sv-pcr-gel" }, gelFigure)
+    h("div", { class: "sv-pcr-gel" }, gelHost)
   );
 
   /** `what` names the section for a screen reader, as every fold says only Show or Hide. */

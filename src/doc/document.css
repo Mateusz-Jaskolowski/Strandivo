@@ -1369,6 +1369,17 @@
   border-color: var(--accent);
   background: var(--accent-soft);
 }
+/* The same count in an image of the map, where it is drawn rather than pressed. */
+.sv-map-cut-count rect {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.sv-map-cut-count text {
+  fill: var(--text-2);
+  font-family: var(--mono);
+  font-weight: 400;
+}
 .sv-map-cut-group:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -1585,6 +1596,21 @@
 .sv-chip-menu-body {
   display: grid;
   gap: 10px;
+}
+/* A menu at the end of its row opens leftwards, inside the pane. */
+.sv-chip-menu-end {
+  left: auto;
+  right: 0;
+  width: 220px;
+}
+.sv-map-image {
+  gap: 6px;
+}
+.sv-map-image .sv-check-row {
+  margin-bottom: 4px;
+}
+.sv-map-image .sv-btn {
+  justify-content: flex-start;
 }
 .sv-chip-menu-body > .sv-enzyme-edit {
   justify-self: start;

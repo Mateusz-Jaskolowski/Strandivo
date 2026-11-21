@@ -461,11 +461,13 @@ function paintNode(g: CanvasRenderingContext2D, el: Element, svg: SVGSVGElement)
   const clip = referenced(svg, el.getAttribute("clip-path"));
   if (clip) {
     const area = new Path2D();
+    let rule: CanvasFillRule = "nonzero";
     for (const part of Array.from(clip.children)) {
       const p = outline(part);
       if (p) area.addPath(p);
+      if (part.getAttribute("clip-rule") === "evenodd") rule = "evenodd";
     }
-    g.clip(area);
+    g.clip(area, rule);
   }
   if (el.localName === "svg" || el.localName === "g" || el.localName === "a") for (const child of Array.from(el.children)) paintNode(g, child, svg);
   else if (el.localName === "text") paintText(g, el as SVGTextElement, svg);

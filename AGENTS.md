@@ -158,8 +158,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
   selected. This keeps windows from getting crowded. On the map, what is drawn is chosen
-  from the chips and the menus beside them (Cut sites, Regions); the floating bar only
-  moves the drawing (rotate, zoom, label size).
+  from the chips and the menus beside them (Cut sites, Regions), and Export image at the
+  end of that row copies or saves it; the floating bar only moves the drawing (rotate,
+  zoom, label size).
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
   base on either strand, written as the top strand, plus each end (blunt, 5′ or 3′
   overhang). Two ends ligate when kind and bases match; joining writes the shared bases
@@ -246,9 +247,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   Each tick keeps its own coordinate, and the count opens a list whose rows select
   or pick a single site just as its map label would. Grouping follows the drawing's
   scale, so sites gain individual names as soon as the ticks can be told apart.
-- **Images** of a gel are copied or saved by `src/views/imageExport.ts`, as the protein
-  schematic is: Copy image, Save as PNG… and Save as SVG…. The view draws its figure anew
-  for it, never from the one on screen, so nothing picked, hovered or faded comes along;
+- **Images** of a gel or a map are copied or saved by `src/views/imageExport.ts`, as the
+  protein schematic is: Copy image, Save as PNG… and Save as SVG…. The view draws its
+  figure anew for it, never from the one on screen, so nothing picked, hovered or faded
+  comes along (the map draws into a `Drawing` it then drops, with buttons over the drawing,
+  such as the linear map's counts of crowded cut sites, drawn into the SVG instead);
   it is drawn off screen in the light theme, fitted to what it covers, and each shape is
   given its computed style as attributes of its own, so the SVG keeps its text as text, in
   whatever fonts are installed where it is opened. It was checked in browsers and macOS
@@ -258,7 +261,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   across, marked with its resolution), as the Content Security Policy loads no image that
   isn't one of the app's files, and copying has to happen within the click. A view that
   draws something it can't paint yet (a gradient, a mask, a filter, a nested `<svg>`)
-  adds it there.
+  adds it there. As its background may be transparent, an image cuts shapes out rather
+  than covering them in the page's colour (the map's introns). The whole map is the image,
+  whatever the zoom: the linear map is drawn 1,200 pixels wide for it.
 - **Sortable tables** use `sortHeader` (`src/ui/sortHead.ts`) and `src/lib/tableSort.ts`,
   each keeping its sort in local storage. A column sorts its useful way first (newest,
   most clones, worst status). Where the table's own order means something, as in the
@@ -303,7 +308,7 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   sets the theme before anything is drawn; `src/theme.ts` keeps it to Settings and the
   system. CSS follows by itself, but a canvas reads its colours as it draws, so it redraws on
   `onThemeChanged`. The gel and what is saved or copied as an image (the protein figure, a
-  gel) keep their own colours in every theme. `src/lib/themes.test.ts` holds every block it finds
+  gel, a map) keep their own colours in every theme. `src/lib/themes.test.ts` holds every block it finds
   to this, with a short list of allowed literals, each with its reason, and every theme's
   text tokens to WCAG AA on their backgrounds: fix a token that fails, never the bar.
 - **Interface text** is plain and short, sentence case, says what happens ("Add reads…",

@@ -7,7 +7,7 @@
 import { alignPrimer, type PrimerAlignment, type PrimerOp } from "./primerAlign.ts";
 import { PCR_DNA } from "./methylation.ts";
 import { findBindingSites } from "./primers.ts";
-import { basesIn, deleteRange, insertBases, linearize, rangeLength, replaceRange, reverseComplement, setOrigin, type Range, type SeqData } from "./seqdata.ts";
+import { basesIn, clipRange, insertBases, linearize, rangeLength, replaceRange, reverseComplement, setOrigin, withoutStaleTranslations, type Range, type SeqData } from "./seqdata.ts";
 
 /** A primer at one binding site: `start`…`end` is the part that pairs, on the top strand. */
 export interface PlacedPrimer {
@@ -176,17 +176,22 @@ export function allProducts(template: string, circular: boolean, a: { name: stri
   return out.sort((x, y) => x.length - y.length);
 }
 
-/** The product as a linear document, with the template's features and primers that lie inside it. */
+/**
+ * The product as a linear document, with the template's features and primers that lie inside
+ * it. A CDS it starts inside keeps the codons it had, and one whose bases the product
+ * changes (cut short, or written over by a primer) loses the /translation it was imported
+ * with, which says what its bases were.
+ */
 export function productDocument(template: SeqData, product: PcrProduct): SeqData {
   const n = template.sequence.length;
   const len = rangeLength(product.span, n);
   let d: SeqData = template;
   if (template.circular) {
     d = setOrigin(d, product.span.start);
-    if (len < n) d = deleteRange(d, { start: len, end: n - 1 });
+    if (len < n) d = clipRange(d, { start: len, end: n - 1 });
   } else {
-    if (product.span.end < n - 1) d = deleteRange(d, { start: product.span.end + 1, end: n - 1 });
-    if (product.span.start > 0) d = deleteRange(d, { start: 0, end: product.span.start - 1 });
+    if (product.span.end < n - 1) d = clipRange(d, { start: product.span.end + 1, end: n - 1 });
+    if (product.span.start > 0) d = clipRange(d, { start: 0, end: product.span.start - 1 });
   }
   d = linearize(d);
   const written = productEdits(template.sequence, template.circular, product.forward, product.reverse)!;
@@ -195,12 +200,12 @@ export function productDocument(template: SeqData, product: PcrProduct): SeqData
   }
   d = insertBases(d, 0, written.fTail);
   d = insertBases(d, d.sequence.length, written.rTail);
-  return {
+  return withoutStaleTranslations(template, {
     ...d,
     name: `${template.name} PCR`,
     description: `PCR product of ${product.forward.name} and ${product.reverse.name} on ${template.name} (${product.length} bp).`,
     circular: false,
     ends: undefined,
     methylation: PCR_DNA
-  };
+  });
 }

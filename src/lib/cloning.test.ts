@@ -6,11 +6,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { cloningDigest, compatible, cutsFor, digest, existingFragment, findOverlap, flip, fragmentDigest, fragmentWith, goldenGate, GIBSON, IN_FUSION, joinFragments, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, vectorPcrRange, wholeFragment, type OverlapMethod } from "./cloning.ts";
+import { assemblyBases, cloningDigest, compatible, cutsFor, digest, existingFragment, findOverlap, flip, fragmentDigest, fragmentWith, goldenGate, GIBSON, IN_FUSION, joinFragments, largest, ligateInsert, overlapMatches, planAssembly, selfLigates, vectorPcrRange, wholeFragment, type Fragment, type OverlapMethod } from "./cloning.ts";
+import { codingPositions, useAmberSuppression } from "./genetics.ts";
 import { hostMethylation } from "./methylation.ts";
 import { DEFAULT_TM, meltingTemp, type TmMethod } from "./primers.ts";
-import { regionsOf, withRegions } from "./regions.ts";
-import { featureBases, reverseComplement, setOrigin, type SeqData, type SeqFeature } from "./seqdata.ts";
+import { regionsOf, regionSpans, withRegions, type ProteinRegion } from "./regions.ts";
+import { basesIn, clipRange, deleteRange, featureBases, reverseComplement, setOrigin, type Range, type SeqData, type SeqFeature } from "./seqdata.ts";
 
 const puc19 = (): string => {
   const gb = readFileSync(new URL("../../testdata/e2e/pUC19-annotated.gb", import.meta.url), "utf8");
@@ -811,4 +812,319 @@ test("Golden Gate: per-part methylation blocks sites in a dcm+ strain and cuts i
   );
   assert.deepEqual(assembled.problems, []);
   assert.ok(sameCircle(assembled.product!.sequence, bb + o1 + gene + o2));
+});
+
+// ---------- a CDS cut by a simulated digest, PCR or trim: its codons and its translation ----------
+//
+// A cut that takes the first bases of a CDS leaves it starting mid-codon. The bases that are
+// left still pair into the codons they had, so the CDS has to say where its first whole
+// codon is (/codon_start). What it must read is worked out here from the CDS's parts alone,
+// not with the code that reads a CDS, so that code is what these tests check. The bases are
+// made up.
+
+const N = 300;
+
+interface Shape {
+  label: string;
+  circular: boolean;
+  /** The CDS's parts as a file lists them, along the sequence; one may cross a circle's origin. */
+  parts: Range[];
+  strand: 1 | -1;
+  codonStart?: unknown;
+}
+
+const FORWARD: Shape = { label: "forward", circular: false, parts: [{ start: 100, end: 198 }], strand: 1 };
+const REVERSE: Shape = { ...FORWARD, label: "reverse", strand: -1 };
+const SHAPES: Shape[] = [
+  FORWARD,
+  REVERSE,
+  { label: "forward in two parts", circular: false, parts: [{ start: 100, end: 130 }, { start: 160, end: 198 }], strand: 1 },
+  { label: "reverse in two parts", circular: false, parts: [{ start: 100, end: 130 }, { start: 160, end: 198 }], strand: -1 },
+  { label: "forward from its second base", circular: false, parts: [{ start: 100, end: 198 }], strand: 1, codonStart: ["2"] },
+  { label: "reverse from its third base", circular: false, parts: [{ start: 100, end: 198 }], strand: -1, codonStart: [3] },
+  { label: "forward on a circle", circular: true, parts: [{ start: 100, end: 198 }], strand: 1 },
+  { label: "reverse on a circle", circular: true, parts: [{ start: 100, end: 198 }], strand: -1 },
+  { label: "forward across the origin", circular: true, parts: [{ start: 280, end: 78 }], strand: 1 },
+  { label: "reverse across the origin", circular: true, parts: [{ start: 280, end: 78 }], strand: -1, codonStart: ["2"] },
+  { label: "forward in two parts round the origin", circular: true, parts: [{ start: 270, end: 299 }, { start: 20, end: 70 }], strand: 1 },
+  { label: "reverse in two parts round the origin", circular: true, parts: [{ start: 270, end: 299 }, { start: 20, end: 70 }], strand: -1, codonStart: 2 }
+];
+
+const wrap = (p: number) => ((p % N) + N) % N;
+const partLength = (r: Range) => wrap(r.end - r.start) + 1;
+const within = (w: Range) => (p: number) => (w.start <= w.end ? p >= w.start && p <= w.end : p >= w.start || p <= w.end);
+
+/** Every position of the CDS, along the sequence and in the order it is read. */
+function positionsOf(shape: Shape): { along: number[]; read: number[] } {
+  const along = shape.parts.flatMap(r => Array.from({ length: partLength(r) }, (_, i) => wrap(r.start + i)));
+  return { along, read: shape.strand === 1 ? along : [...along].reverse() };
+}
+
+const cdsOf = (shape: Shape, id = "cds"): SeqFeature => ({
+  id,
+  name: id,
+  type: "CDS",
+  strand: shape.strand,
+  start: shape.parts[0].start,
+  end: shape.parts[shape.parts.length - 1].end,
+  ...(shape.parts.length > 1 ? { locations: shape.parts } : {}),
+  notes: { product: ["a made-up protein"], ...(shape.codonStart === undefined ? {} : { codon_start: shape.codonStart }) },
+  raw: {}
+});
+
+/** The bases a CDS has before its first whole codon, by GenBank's /codon_start as a file gives it. */
+const givenSkip = (shape: Shape) => {
+  const given = Number(Array.isArray(shape.codonStart) ? shape.codonStart[0] : shape.codonStart);
+  return given === 2 || given === 3 ? given - 1 : 0;
+};
+
+/** The codons a CDS reads, each as the positions of its three bases: whole ones only, from its first, and only those that `keep` holds all three of. */
+function wholeCodons(shape: Shape, keep: (p: number) => boolean = () => true): number[][] {
+  const read = positionsOf(shape).read.slice(givenSkip(shape));
+  const codons: number[][] = [];
+  for (let i = 0; i + 2 < read.length; i += 3) codons.push(read.slice(i, i + 3));
+  return codons.filter(codon => codon.every(keep));
+}
+
+/** The codons a product's CDS reads, each as the positions of its bases on the template (`back` maps a product's to it). */
+function codonsRead(d: SeqData, cds: SeqFeature, back: (q: number) => number): number[][] {
+  const positions = codingPositions(cds, d.sequence.length).map(back);
+  const codons: number[][] = [];
+  for (let i = 0; i + 2 < positions.length; i += 3) codons.push(positions.slice(i, i + 3));
+  return codons;
+}
+
+/** A window that takes `lead` bases off the start of the CDS's reading and `trail` off its end, with room to spare on a side where nothing is cut. */
+function windowFor(shape: Shape, lead: number, trail: number): Range {
+  const { read } = positionsOf(shape);
+  const first = read[lead];
+  const last = read[read.length - 1 - trail];
+  const margin = 12;
+  return shape.strand === 1
+    ? { start: lead ? first : wrap(first - margin), end: trail ? last : wrap(last + margin) }
+    : { start: trail ? last : wrap(last - margin), end: lead ? first : wrap(first + margin) };
+}
+
+/** Leading cuts to try: a few bases, and for a CDS in parts the same just beyond its first part, so that a gap is not counted. */
+function leadsFor(shape: Shape): number[] {
+  const first = partLength(shape.strand === 1 ? shape.parts[0] : shape.parts[shape.parts.length - 1]);
+  return [0, 1, 2, 3, 4, 5, ...(shape.parts.length > 1 ? [first, first + 1, first + 2, first + 3] : [])];
+}
+
+/** What cutting `template` down to `window` must leave of its CDS `id`, checked on `product`. */
+function assertCut(shape: Shape, template: SeqData, product: SeqData, window: Range, context: string, id = "cds") {
+  const keep = within(window);
+  const back = (q: number) => wrap(window.start + q);
+  assert.equal(product.circular, false, `${context}: linear`);
+  assert.equal(product.sequence, basesIn(template.sequence, window), `${context}: its bases`);
+  const { along, read } = positionsOf(shape);
+  const cds = product.features.find(f => f.id === id);
+  const left = along.filter(keep);
+  if (!left.length) {
+    assert.equal(cds, undefined, `${context}: a CDS with no base left is gone`);
+    return;
+  }
+  assert.ok(cds, `${context}: the CDS is kept`);
+  assert.equal(featureBases(product.sequence, cds), left.map(p => template.sequence[p]).join(""), `${context}: the CDS's bases`);
+  assert.deepEqual(codonsRead(product, cds, back), wholeCodons(shape, keep), `${context}: the codons it reads`);
+  // Only /codon_start changes, and only when the cut moved the first whole codon. (A /translation
+  // goes when the bases change: the tests of that look at it.)
+  const was = template.features.find(f => f.id === id)!;
+  const cut = read.findIndex(keep);
+  const plain = ({ translation: _text, ...rest }: Record<string, unknown>) => rest;
+  if (cut % 3 === 0) assert.deepEqual(plain(cds.notes), plain(was.notes), `${context}: its qualifiers`);
+  else {
+    assert.deepEqual({ ...plain(cds.notes), codon_start: null }, { ...plain(was.notes), codon_start: null }, `${context}: its qualifiers`);
+    assert.deepEqual(cds.notes.codon_start, [String((((givenSkip(shape) - cut) % 3) + 3) % 3 + 1)], `${context}: its /codon_start`);
+  }
+}
+
+test("a cut that takes the start of a CDS leaves the codons it had", () => {
+  const sequence = filler(N, 11);
+  for (const shape of SHAPES) {
+    const template = doc("template", sequence, shape.circular, [cdsOf(shape)]);
+    for (const lead of leadsFor(shape)) {
+      for (const trail of [0, 1, 2, 4]) {
+        const window = windowFor(shape, lead, trail);
+        assertCut(shape, template, wholeFragment(template, window).data, window, `${shape.label}, ${lead} bases off its start and ${trail} off its end`);
+      }
+    }
+  }
+});
+
+test("a digest that cuts into a CDS leaves the codons it had, on a line and on a circle", () => {
+  const plant = (s: string, at: number, site: string) => s.slice(0, at) + site + s.slice(at + site.length);
+  for (const circular of [false, true]) {
+    for (const strand of [1, -1] as const) {
+      for (let into = 0; into <= 5; into++) {
+        const shape: Shape = { label: `${strand === 1 ? "forward" : "reverse"} ${circular ? "circle" : "line"}`, circular, parts: [{ start: 100, end: 198 }], strand };
+        // EcoRI cuts G^AATTC: the piece on the right of its top cut starts at the site's second base, the one on the left ends at its last.
+        let sequence = plant(filler(N, 11), strand === 1 ? 99 + into : 194 - into, "GAATTC");
+        if (circular) sequence = plant(sequence, 250, "AAGCTT");
+        const template = doc("template", sequence, circular, [cdsOf(shape)]);
+        const enzymes = circular ? ["EcoRI", "HindIII"] : ["EcoRI"];
+        assert.equal(cutsFor(sequence, circular, enzymes).length, enzymes.length, `${shape.label}: one site each`);
+        const fragments = digest(template, enzymes);
+        assert.equal(fragments.length, 2);
+        for (const f of fragments) {
+          const window = { start: f.source.start, end: wrap(f.source.start + f.source.length - 1) };
+          assertCut(shape, template, f.data, window, `${shape.label}, EcoRI ${into} bases into the CDS`);
+        }
+      }
+    }
+  }
+});
+
+test("protein regions keep their residues when a cut leaves a CDS mid-codon", () => {
+  const region = (name: string, start: number, end: number): ProteinRegion => ({ name, kind: "Domain", start, end, accession: "", sourceStart: start, sourceEnd: end, predicted: false });
+  const sequence = filler(N, 11);
+  for (const shape of SHAPES) {
+    const all = wholeCodons(shape);
+    const regions = [region("head", 1, 4), region("middle", 10, 12), region("tail", all.length - 2, all.length)];
+    const cds = { ...cdsOf(shape), notes: withRegions(cdsOf(shape).notes, regions) };
+    const template = doc("template", sequence, shape.circular, [cds]);
+    // Cuts at the start only: a region left between codons at the end has its own rule (`codingBases`).
+    for (const lead of [0, 1, 2, 3, 4, 5, 12, 13, 14]) {
+      const window = windowFor(shape, lead, 0);
+      const context = `${shape.label}, ${lead} bases off its start`;
+      const product = wholeFragment(template, window).data;
+      const kept = wholeCodons(shape, within(window));
+      const first = all.findIndex(codon => codon[0] === kept[0][0]);
+      const got = product.features[0];
+      const back = (q: number) => wrap(window.start + q);
+      const found = regionsOf(got);
+      const want = regions.flatMap(r => {
+        const from = Math.max(r.start, first + 1);
+        const to = Math.min(r.end, first + kept.length);
+        return from <= to ? [{ name: r.name, start: from - first, end: to - first, positions: all.slice(from - 1, to).flat().sort((a, b) => a - b) }] : [];
+      });
+      assert.deepEqual(found.map(r => r.name), want.map(r => r.name), `${context}: the regions that are left`);
+      for (const w of want) {
+        const r = found.find(x => x.name === w.name)!;
+        assert.deepEqual([r.start, r.end], [w.start, w.end], `${context}: ${w.name}'s residues`);
+        const positions = regionSpans(got, r, product.sequence.length).flatMap(s => Array.from({ length: s.end - s.start + 1 }, (_, i) => back(s.start + i)));
+        assert.deepEqual(positions.sort((a, b) => a - b), w.positions, `${context}: ${w.name}'s bases`);
+      }
+    }
+  }
+});
+
+test("deleting bases in the editor leaves a CDS's reading frame as it was", () => {
+  // Only a simulated cut re-frames a CDS. An edit the user makes does not: the edit card shows
+  // what it does to the frame, and a protein change is the point of some of them.
+  for (const circular of [false, true]) {
+    const template = doc("template", filler(N, 11), circular, [{ ...cdsOf(FORWARD), notes: { product: ["a made-up protein"], translation: ["MAAA"] } }]);
+    for (const range of [{ start: 90, end: 101 }, { start: 150, end: 160 }, { start: 250, end: 12 }]) {
+      if (!circular && range.start > range.end) continue;
+      const edited = deleteRange(template, range);
+      const clipped = clipRange(template, range);
+      assert.equal(edited.features[0].notes, template.features[0].notes, "a deletion leaves its qualifiers alone");
+      assert.equal(clipped.sequence, edited.sequence);
+      const place = ({ notes: _notes, ...rest }: SeqFeature) => rest;
+      assert.deepEqual(clipped.features.map(place), edited.features.map(place));
+    }
+  }
+});
+
+test("trimming 3′ overhangs for an assembly keeps the codons of a CDS it cuts into", () => {
+  // Four bases of a 3′ overhang come off each end, as a PstI or KpnI cut leaves them.
+  const stored = filler(N, 21);
+  const a: Shape = { label: "starts in the left overhang", circular: false, parts: [{ start: 0, end: 98 }], strand: 1 };
+  const b: Shape = { label: "starts in the right overhang", circular: false, parts: [{ start: 201, end: 299 }], strand: -1 };
+  const c: Shape = { label: "in the middle", circular: false, parts: [{ start: 150, end: 200 }], strand: 1 };
+  const translated = (shape: Shape, id: string): SeqFeature => ({ ...cdsOf(shape, id), notes: { ...cdsOf(shape, id).notes, translation: [`M${id.toUpperCase()}`] } });
+  const piece: Fragment = {
+    data: doc("piece", stored, false, [translated(a, "a"), translated(b, "b"), translated(c, "c")]),
+    left: { kind: "3'", bases: stored.slice(0, 4), enzyme: "PstI" },
+    right: { kind: "3'", bases: stored.slice(N - 4), enzyme: "KpnI" },
+    source: { name: "piece", start: 0, length: N, flipped: false }
+  };
+  const trimmed = assemblyBases(piece);
+  const window = { start: 4, end: N - 5 };
+  assert.deepEqual([trimmed.left.kind, trimmed.right.kind], ["blunt", "blunt"]);
+  assertCut(a, piece.data, trimmed.data, window, "left trim", "a");
+  assertCut(b, piece.data, trimmed.data, window, "right trim", "b");
+  assertCut(c, piece.data, trimmed.data, window, "no CDS cut", "c");
+  const translation = (id: string) => trimmed.data.features.find(f => f.id === id)?.notes.translation;
+  assert.deepEqual([translation("a"), translation("b"), translation("c")], [undefined, undefined, ["MC"]], "only the CDS it did not touch keeps its translation");
+});
+
+// The /translation a CDS was imported with is the protein of the bases it had. Once a cut
+// changes them it is stale, and the app can't tell what it should say: it must not be
+// carried, and no other qualifier is made up in its place.
+
+/** A CDS with the translation a database gave it. The text is made up: nothing here reads it. */
+const imported = (shape: Shape, id: string, protein: string): SeqFeature => ({ ...cdsOf(shape, id), notes: { ...cdsOf(shape, id).notes, translation: [protein] } });
+const translationOf = (d: SeqData, id: string) => {
+  const f = d.features.find(x => x.id === id);
+  assert.ok(f, `${id} is in the product`);
+  return f.notes.translation;
+};
+const PROTEIN_A = `M${"A".repeat(32)}`;
+const PROTEIN_B = `M${"B".repeat(26)}`;
+const BEHIND: Shape = { label: "reverse, behind it", circular: false, parts: [{ start: 210, end: 290 }], strand: -1 };
+
+test("a fragment keeps a CDS's imported translation while its coding bases are the same", () => {
+  const linear = doc("t", filler(N, 11), false, [imported(FORWARD, "a", PROTEIN_A), imported(BEHIND, "b", PROTEIN_B)]);
+  const both = (d: SeqData) => [translationOf(d, "a"), translationOf(d, "b")];
+  const whole = wholeFragment(linear, { start: 50, end: 295 });
+  assert.deepEqual(both(whole.data), [[PROTEIN_A], [PROTEIN_B]]);
+  assert.deepEqual(both(flip(whole).data), [[PROTEIN_A], [PROTEIN_B]], "turned round");
+  assert.deepEqual(both(wholeFragment(linear).data), [[PROTEIN_A], [PROTEIN_B]], "the whole molecule");
+  // On a circle, rotated and opened elsewhere, including a CDS that crosses the origin.
+  const across: Shape = { label: "across the origin", circular: true, parts: [{ start: 280, end: 78 }], strand: 1 };
+  const circle = doc("c", filler(N, 12), true, [imported(across, "a", PROTEIN_A), imported({ ...BEHIND, circular: true, parts: [{ start: 150, end: 230 }] }, "b", PROTEIN_B)]);
+  for (const window of [{ start: 140, end: 100 }, { start: 250, end: 249 }, { start: 100, end: 99 }]) {
+    const f = wholeFragment(circle, window);
+    assert.deepEqual(both(f.data), [[PROTEIN_A], [PROTEIN_B]], `opened at ${window.start}`);
+    assert.deepEqual(both(flip(f).data), [[PROTEIN_A], [PROTEIN_B]], `opened at ${window.start}, turned round`);
+  }
+  // A digest that leaves the CDS whole.
+  const cutAfter = doc("t", filler(N, 11).slice(0, 20) + "GAATTC" + filler(N, 11).slice(26), false, [imported(FORWARD, "a", PROTEIN_A)]);
+  assert.equal(digest(cutAfter, ["EcoRI"]).length, 2);
+  assert.deepEqual(translationOf(digest(cutAfter, ["EcoRI"])[1].data, "a"), [PROTEIN_A]);
+});
+
+test("a fragment that cuts into a CDS drops the translation it was imported with, and adds no qualifier", () => {
+  const linear = doc("t", filler(N, 11), false, [imported(FORWARD, "a", PROTEIN_A), imported(BEHIND, "b", PROTEIN_B)]);
+  const cut = (start: number, end: number) => wholeFragment(linear, { start, end }).data;
+  assert.equal(translationOf(cut(50, 150), "a"), undefined, "its end cut off");
+  assert.equal(translationOf(cut(150, 295), "a"), undefined, "its start cut off");
+  assert.equal(translationOf(cut(50, 250), "b"), undefined, "a reverse CDS's start cut off");
+  assert.equal(translationOf(cut(250, 295), "b"), undefined, "a reverse CDS's end cut off");
+  // What it did not cut keeps it, and everything else about the CDS stays.
+  assert.deepEqual(translationOf(cut(50, 250), "a"), [PROTEIN_A]);
+  assert.deepEqual(translationOf(cut(150, 295), "b"), [PROTEIN_B]);
+  const notes = (d: SeqData, id: string) => Object.keys(d.features.find(f => f.id === id)!.notes).sort();
+  assert.deepEqual(notes(cut(50, 150), "a"), ["product"], "no /codon_start where the frame did not change");
+  assert.deepEqual(notes(cut(150, 295), "a"), ["codon_start", "product"], "only the /codon_start a cut at its start needs");
+});
+
+test("a cut that only takes bases outside a CDS's whole codons keeps its translation", () => {
+  // A partial CDS from a database: GenBank's /codon_start=2 says its first base ends a codon before it,
+  // and 100 coding bases make 33 codons and one base over.
+  const partial: Shape = { label: "partial", circular: false, parts: [{ start: 100, end: 200 }], strand: 1, codonStart: ["2"] };
+  const linear = doc("t", filler(N, 11), false, [imported(partial, "p", PROTEIN_A)]);
+  const cds = (start: number, end: number) => wholeFragment(linear, { start, end }).data.features.find(f => f.id === "p")!;
+  assert.deepEqual(cds(101, 250).notes.translation, [PROTEIN_A], "its skipped first base");
+  assert.deepEqual(cds(101, 250).notes.codon_start, ["1"], "it starts on a codon now");
+  assert.equal(cds(102, 250).notes.translation, undefined, "a base of its first codon");
+  assert.deepEqual(cds(50, 199).notes.translation, [PROTEIN_A], "its base after the last codon");
+  assert.equal(cds(50, 198).notes.translation, undefined, "the last codon's last base");
+});
+
+test("a translation that is kept is the text it was imported with, whatever the amber setting", () => {
+  // TAG is a codon here: the app reads it as Q or as a stop by its setting, but an imported text is not read.
+  const gene = "ATGTAGGCTAAATGA";
+  const sequence = filler(N, 11).slice(0, 100) + gene + filler(N, 12).slice(0, N - 100 - gene.length);
+  const linear = doc("t", sequence, false, [imported({ label: "gene", circular: false, parts: [{ start: 100, end: 114 }], strand: 1 }, "g", "MQAK")]);
+  for (const amber of [false, true]) {
+    useAmberSuppression(amber);
+    try {
+      assert.deepEqual(translationOf(wholeFragment(linear, { start: 90, end: 130 }).data, "g"), ["MQAK"], `amber ${amber}: whole gene`);
+      assert.equal(translationOf(wholeFragment(linear, { start: 90, end: 112 }).data, "g"), undefined, `amber ${amber}: cut gene`);
+    } finally {
+      useAmberSuppression(false);
+    }
+  }
 });

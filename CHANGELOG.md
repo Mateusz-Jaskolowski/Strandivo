@@ -36,6 +36,11 @@ methylation blocks a cut.
   PCR applies a change shared by both primers once, keeps annotations across the
   former origin, and reopens from GenBank as unmethylated. Mutagenesis primers stay
   within the bases left after a deletion.
+- **Genes cut by a digest, PCR or cloning keep their reading frame.** A piece that begins
+  partway through a coding sequence now translates from the gene's own codons, as the gene
+  did, instead of from its first base, and saves where its first whole codon starts. A
+  translation that came with the gene in an imported file is left out of a piece whose
+  codons changed, so it isn't saved as if it still fitted.
 - **Features across the origin save and reopen exactly.** A feature, primer or source that
   crosses the origin of a circular sequence is now saved the standard GenBank way, as two
   ranges joined in order, and reopens on the same bases. Making the sequence linear keeps

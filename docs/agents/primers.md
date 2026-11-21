@@ -182,6 +182,12 @@ and CI checks that they exist.
   as `findBindingSites` needs 15 at the 3′ end or the checks would say "No site". A codon is
   chosen by fewest changes, then not rare in E. coli, which is only a tie-break; TAG counts
   as a stop even with amber suppression on, as a plasmid made that way works in one strain.
+- **A PCR product's document** (`productDocument` in `src/lib/pcr.ts`: what Open as new
+  file… in the PCR dialog saves, and what cloning's amplified pieces use) is the template
+  cut to the product the way a digest fragment is cut (`clipRange`, and `AGENTS.md`'s
+  Reading a CDS), so a gene the primers cut into keeps its codons through `/codon_start`,
+  and one whose whole codons a primer cut or changed loses the `/translation` its file
+  came with.
 - **Protein regions around a primer** are template annotations: show every region in the
   visible sequence window, including nearby boundaries, using `regionSpans` and the shared
   renderer in `src/views/regionTracks.ts`. The panel's Regions button shares the Sequence

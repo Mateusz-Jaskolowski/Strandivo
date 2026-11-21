@@ -9,8 +9,9 @@ import { readFileSync } from "node:fs";
 import { COMMON_SEQUENCING_PRIMERS, formatPrimerList, libraryHits, newEntries, parsePrimerList, type LibraryPrimer } from "./library.ts";
 import { allProducts, pcrProduct, productDocument, type PlacedPrimer } from "./pcr.ts";
 import { DEFAULT_DESIGN, designPairs, joinTail } from "./design.ts";
+import { codingPositions } from "./genetics.ts";
 import { gcContent, meltingTemp } from "./primers.ts";
-import { basesIn, reverseComplement, type SeqData, type SeqFeature } from "./seqdata.ts";
+import { basesIn, reverseComplement, type Range, type SeqData, type SeqFeature } from "./seqdata.ts";
 
 const puc19 = (): string => {
   const gb = readFileSync(new URL("../../testdata/e2e/pUC19-annotated.gb", import.meta.url), "utf8");
@@ -328,4 +329,208 @@ test("on a linear sequence a moved end stops at the sequence's own end", () => {
   assert.ok(far.forward.start < far.forward.end && far.reverse.start < far.reverse.end);
   assert.ok(far.reverse.end <= n - 1);
   assert.equal(far.forward.bases, lin.slice(far.forward.start, far.forward.end + 1));
+});
+
+// ---------- a CDS in a PCR product: its codons and its translation ----------
+//
+// A product that starts inside a CDS leaves it beginning mid-codon, so it has to say where
+// its first whole codon is. What it must read is worked out here from the template's CDS
+// parts alone, not with the code that reads a CDS, so that code is what these tests check.
+// The bases are made up: coordinates and frames need no real sequence.
+
+/** Made-up bases, the same on every run. */
+function synthetic(length: number, seed: number): string {
+  let x = seed;
+  let s = "";
+  while (s.length < length) {
+    x = (x * 1103515245 + 12345) % 2147483648;
+    s += "ACGT"[(x >> 16) & 3];
+  }
+  return s;
+}
+
+const T = 300;
+const around = (p: number) => ((p % T) + T) % T;
+
+interface Gene {
+  label: string;
+  circular: boolean;
+  /** The CDS's parts as a file lists them, along the sequence; one may cross a circle's origin. */
+  parts: Range[];
+  strand: 1 | -1;
+  codonStart?: string[];
+}
+
+const GENES: Gene[] = [
+  { label: "forward", circular: false, parts: [{ start: 100, end: 198 }], strand: 1 },
+  { label: "reverse", circular: false, parts: [{ start: 100, end: 198 }], strand: -1 },
+  { label: "reverse in two parts", circular: false, parts: [{ start: 100, end: 130 }, { start: 160, end: 198 }], strand: -1 },
+  { label: "forward from its third base", circular: false, parts: [{ start: 100, end: 198 }], strand: 1, codonStart: ["3"] },
+  { label: "forward on a circle", circular: true, parts: [{ start: 100, end: 198 }], strand: 1 },
+  { label: "reverse on a circle", circular: true, parts: [{ start: 100, end: 198 }], strand: -1 },
+  { label: "forward across the origin", circular: true, parts: [{ start: 280, end: 78 }], strand: 1 },
+  { label: "reverse across the origin", circular: true, parts: [{ start: 280, end: 78 }], strand: -1, codonStart: ["2"] }
+];
+
+const along = (g: Gene) => g.parts.flatMap(r => Array.from({ length: around(r.end - r.start) + 1 }, (_, i) => around(r.start + i)));
+const reading = (g: Gene) => (g.strand === 1 ? along(g) : along(g).reverse());
+const isIn = (w: Range) => (p: number) => (w.start <= w.end ? p >= w.start && p <= w.end : p >= w.start || p <= w.end);
+
+const geneDoc = (g: Gene, sequence: string): SeqData => ({
+  name: "template",
+  description: "",
+  circular: g.circular,
+  sequence,
+  features: [{
+    id: "g",
+    name: "g",
+    type: "CDS",
+    strand: g.strand,
+    start: g.parts[0].start,
+    end: g.parts[g.parts.length - 1].end,
+    ...(g.parts.length > 1 ? { locations: g.parts } : {}),
+    notes: { product: ["a made-up protein"], translation: ["MAAA"], ...(g.codonStart ? { codon_start: g.codonStart } : {}) },
+    raw: {}
+  }],
+  primers: [],
+  sources: []
+});
+
+/** The codons the gene reads as the template positions of their bases: whole ones from its /codon_start, and only those wholly inside `w`. */
+function codonsWithin(g: Gene, w: Range): number[][] {
+  const read = reading(g).slice(g.codonStart ? Number(g.codonStart[0]) - 1 : 0);
+  const out: number[][] = [];
+  for (let i = 0; i + 2 < read.length; i += 3) if (read.slice(i, i + 3).every(isIn(w))) out.push(read.slice(i, i + 3));
+  return out;
+}
+
+/** The stretch that takes `lead` bases off the start of the gene's reading and `trail` off its end, with room to spare where nothing is cut. */
+function windowAround(g: Gene, lead: number, trail: number): Range {
+  const read = reading(g);
+  const first = read[lead];
+  const last = read[read.length - 1 - trail];
+  return g.strand === 1
+    ? { start: lead ? first : around(first - 12), end: trail ? last : around(last + 12) }
+    : { start: trail ? last : around(last - 12), end: lead ? first : around(first + 12) };
+}
+
+/** A primer that pairs with the template on `start`…`end` (across the origin if `start` is past `end`), changing the top strand's base at `change.at` if asked. */
+function primerOn(seq: string, start: number, end: number, strand: 1 | -1, change?: { at: number; base: string }): PlacedPrimer {
+  const top = (start <= end ? seq.slice(start, end + 1) : seq.slice(start) + seq.slice(0, end + 1)).split("");
+  if (change) top[(change.at - start + seq.length) % seq.length] = change.base;
+  const bases = top.join("");
+  return { name: strand === 1 ? "F" : "R", bases: strand === 1 ? bases : reverseComplement(bases), start, end, strand };
+}
+
+/** The product of two primers at the ends of `w`, as a document. */
+function productOver(d: SeqData, w: Range): SeqData {
+  const p = pcrProduct(d.sequence, d.circular, primerOn(d.sequence, w.start, around(w.start + 19), 1), primerOn(d.sequence, around(w.end - 19), w.end, -1));
+  assert.ok(p, "the primers make a product");
+  assert.deepEqual(p.span, w);
+  return productDocument(d, p);
+}
+
+test("a PCR product that starts inside a CDS reads the codons the CDS had", () => {
+  const seq = synthetic(T, 5);
+  for (const g of GENES) {
+    const template = geneDoc(g, seq);
+    const all = codonsWithin(g, { start: 0, end: T - 1 });
+    for (const lead of [0, 1, 2, 3, 4, 5, ...(g.parts.length > 1 ? [39, 40, 41, 42] : [])]) {
+      for (const trail of [0, 1, 2, 4]) {
+        const w = windowAround(g, lead, trail);
+        const context = `${g.label}, ${lead} bases off its start and ${trail} off its end`;
+        const product = productOver(template, w);
+        const cds = product.features.find(f => f.id === "g");
+        assert.ok(cds, `${context}: the CDS is kept`);
+        assert.equal(product.sequence, basesIn(seq, w), `${context}: the bases`);
+        const positions = codingPositions(cds, product.sequence.length).map(q => around(w.start + q));
+        const codons: number[][] = [];
+        for (let i = 0; i + 2 < positions.length; i += 3) codons.push(positions.slice(i, i + 3));
+        const want = codonsWithin(g, w);
+        assert.deepEqual(codons, want, `${context}: the codons it reads`);
+        // The translation stays only while every whole codon is still there.
+        assert.equal(cds.notes.translation !== undefined, want.length === all.length, `${context}: its translation`);
+      }
+    }
+  }
+});
+
+test("a PCR product drops the translation of a CDS whose bases its primers change", () => {
+  const seq = synthetic(T, 5);
+  const gene = GENES[0];
+  const template = geneDoc(gene, seq);
+  const translation = (d: SeqData) => d.features.find(f => f.id === "g")!.notes.translation;
+  const site = seq.slice(88, 121);
+  const forward = (bases: string): PlacedPrimer => ({ name: "F", bases, start: 88, end: 120, strand: 1 });
+  const reverse = primerOn(seq, 211, 230, -1);
+  const other = (b: string) => (b === "A" ? "C" : "A");
+  const product = (f: PlacedPrimer, r = reverse) => {
+    const p = pcrProduct(seq, false, f, r);
+    assert.ok(p, "the primers make a product");
+    return { p, doc: productDocument(template, p) };
+  };
+  // The whole CDS, with a tail: the translation stays.
+  const plain = product(forward(`GGATCC${site}`));
+  assert.equal(plain.doc.sequence, `GGATCC${seq.slice(88, 231)}`);
+  assert.deepEqual(translation(plain.doc), ["MAAA"]);
+  // A base changed inside the CDS, one inserted, three skipped.
+  const changed = site.slice(0, 15) + other(site[15]) + site.slice(16);
+  const substituted = product(forward(changed));
+  assert.equal(substituted.doc.sequence, changed + seq.slice(121, 231));
+  assert.equal(translation(substituted.doc), undefined, "a substitution");
+  const inserted = product(forward(`GGATCC${site.slice(0, 15)}TAG${site.slice(15)}`));
+  assert.equal(inserted.doc.sequence, `GGATCC${site.slice(0, 15)}TAG${site.slice(15)}${seq.slice(121, 231)}`);
+  assert.equal(translation(inserted.doc), undefined, "an insertion");
+  const skipped = product(forward(site.slice(0, 15) + site.slice(18)));
+  assert.equal(skipped.doc.sequence, site.slice(0, 15) + seq.slice(106, 231));
+  assert.equal(translation(skipped.doc), undefined, "a skipped stretch");
+  // The same on the reverse primer's side, inside the CDS.
+  const reverseChanged = primerOn(seq, 191, 210, -1, { at: 195, base: other(seq[195]) });
+  const fromReverse = product(primerOn(seq, 88, 120, 1), reverseChanged);
+  assert.equal(translation(fromReverse.doc), undefined, "a change on the reverse primer");
+  // A change outside the CDS leaves it alone.
+  const outside = product(forward(site.slice(0, 5) + other(site[5]) + site.slice(6)));
+  assert.equal(outside.doc.sequence[5], other(site[5]));
+  assert.deepEqual(translation(outside.doc), ["MAAA"], "a change before the CDS");
+});
+
+test("primers that can't make one product make none", () => {
+  const seq = synthetic(300, 9);
+  const f = primerOn(seq, 40, 69, 1);
+  const r = primerOn(seq, 100, 129, -1);
+  assert.equal(pcrProduct(seq, false, f, r)?.length, 90);
+  // A site off the sequence or not a whole position is no site, on either primer.
+  for (const circular of [false, true]) {
+    for (const bad of [{ start: -1 }, { end: 300 }, { start: Number.NaN }, { end: 2.5 }]) {
+      assert.equal(pcrProduct(seq, circular, { ...f, ...bad }, r), null, `forward ${JSON.stringify(bad)}`);
+      assert.equal(pcrProduct(seq, circular, f, { ...r, ...bad }), null, `reverse ${JSON.stringify(bad)}`);
+    }
+  }
+  // A site that runs past the end of the sequence is only a site on a circle.
+  const wrapped = primerOn(seq, 280, 10, 1);
+  assert.equal(pcrProduct(seq, true, wrapped, primerOn(seq, 100, 119, -1))?.length, 140);
+  assert.equal(pcrProduct(seq, false, wrapped, primerOn(seq, 100, 119, -1)), null);
+  const wrappedReverse = primerOn(seq, 280, 10, -1);
+  assert.equal(pcrProduct(seq, true, primerOn(seq, 200, 219, 1), wrappedReverse)?.length, 111);
+  assert.equal(pcrProduct(seq, false, primerOn(seq, 200, 219, 1), wrappedReverse), null);
+  // The reverse primer's site must end after the forward primer's, on a circle or not.
+  for (const circular of [false, true]) assert.equal(pcrProduct(seq, circular, f, primerOn(seq, 45, 60, -1)), null, "a site that ends inside the other");
+  // Behind the forward primer there is no product on a line; round a circle there is.
+  assert.equal(pcrProduct(seq, false, primerOn(seq, 100, 129, 1), primerOn(seq, 20, 49, -1)), null);
+  assert.equal(pcrProduct(seq, true, primerOn(seq, 100, 129, 1), primerOn(seq, 20, 49, -1))?.length, 250);
+});
+
+test("primers that disagree about a base make no product, and ones that agree write it once", () => {
+  const seq = synthetic(300, 9);
+  const [x, y] = [..."ACGT"].filter(b => b !== seq[55]);
+  // Two different bases at one place.
+  assert.equal(pcrProduct(seq, false, primerOn(seq, 40, 69, 1, { at: 55, base: x }), primerOn(seq, 50, 79, -1, { at: 55, base: y })), null);
+  // The same two sites, each changing a base the other leaves as it is.
+  const [u] = [..."ACGT"].filter(b => b !== seq[50]);
+  const [v] = [..."ACGT"].filter(b => b !== seq[60]);
+  assert.equal(pcrProduct(seq, false, primerOn(seq, 40, 69, 1, { at: 50, base: u }), primerOn(seq, 40, 69, -1, { at: 60, base: v })), null);
+  // The same base, put by both primers: it is in the product once.
+  const agreed = pcrProduct(seq, false, primerOn(seq, 40, 69, 1, { at: 55, base: x }), primerOn(seq, 50, 79, -1, { at: 55, base: x }));
+  assert.ok(agreed);
+  assert.equal(agreed.sequence, seq.slice(40, 55) + x + seq.slice(56, 80));
 });

@@ -141,6 +141,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   database says so with GenBank's `/codon_start`, kept in the feature's notes. Anything that
   translates, numbers residues or maps them back to bases walks `codingPositions`
   (`src/lib/genetics.ts`), never `featurePositions`, which is every base the feature covers.
+  A piece cut from a molecule (a digest fragment, a PCR product, an assembly's trimmed
+  overhang) keeps the codons its CDS had: it is cut with `clipRange` (`src/lib/seqdata.ts`),
+  which moves `/codon_start`, where `deleteRange`, the user's own deletion, leaves it alone
+  (the edit card says what a deletion does to a frame). `withoutStaleTranslations` then drops
+  a `/translation` the file brought once the CDS's whole codons are not the ones it was
+  written for, and nothing replaces it: one made here would follow display settings such as
+  amber suppression and read as if the file had said it.
 - **Where things go**: the app bar holds what is about the app (Home, a tab per open file,
   Report a bug and Send feedback, the primer and enzyme libraries, Settings and, in a
   browser, the menu); the bar under it is the file's own (its five views,

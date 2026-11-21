@@ -700,6 +700,64 @@ async function main(outDir) {
       }
     }
 
+    // --- a gene a digest cuts into keeps its reading frame, and drops its stale translation ---
+    // Invented bases: a CDS with one EcoRI site, whose G starts a codon (EcoRI cuts G^AATTC, so
+    // the right piece begins two bases into that codon), and a reverse CDS the digest leaves
+    // whole. Each has a translation, as a database file brings it. Both tabs are saved, a
+    // download here, so that closing them asks nothing.
+    {
+      const unit = "GCTAACGATTGTCAGGGTCATATTCTGAAA"; // ten codons, no EcoRI site
+      const gene = `ATG${unit.repeat(4)}GAATTC${unit.repeat(5)}TAA`; // 282 bases, the site's G its 124th
+      const whole = `ATG${unit.repeat(3)}TAA`; // 96 bases
+      const revcomp = bases => Array.from(bases, b => "TGCA"["ACGT".indexOf(b)]).reverse().join("");
+      const spacer = "CT".repeat(15);
+      const cds = (id, start, end, strand) => ({ id, name: id, type: "CDS", start, end, strand, notes: { translation: ["MAAAA"] }, raw: {} });
+      const first = await s.exec("return window.__strandivo.tabs().length");
+      const downloads = await s.exec("return window.__e2eDownloads.length");
+      await s.exec("window.__strandivo.openNew(arguments[0]);", {
+        name: "frame-test",
+        description: "",
+        circular: false,
+        sequence: spacer + gene + spacer + revcomp(whole) + spacer,
+        features: [cds("gene", 30, 311, 1), cds("control", 342, 437, -1)],
+        primers: [],
+        sources: []
+      });
+      await s.waitFor("window.__strandivo.store?.data.name === 'frame-test'", 5000);
+      await s.exec("window.__strandivo.command('save')");
+      await s.waitFor(`window.__e2eDownloads.length === ${downloads + 1}`, 5000);
+      await s.exec("window.__strandivo.command('digest')");
+      await s.waitFor("document.querySelector('input[data-enzyme=\"EcoRI\"]')", 5000);
+      await s.click("//input[@data-enzyme='EcoRI']");
+      await s.waitFor("document.querySelector('tr[data-size=\"314\"] button')", 5000);
+      await s.click("//tr[@data-size='314']//button[normalize-space()='Open']");
+      const framed = await s.waitFor(`window.__strandivo.tabs().length === ${first + 2} && window.__strandivo.store?.data.sequence.length === 314`, 5000);
+      const piece = framed
+        ? await s.exec(`
+            const s = window.__strandivo.store;
+            const read = id => { const f = s.data.features.find(x => x.id === id); return f && { start: f.start, end: f.end, bases: s.data.sequence.slice(f.start, f.end + 1), codonStart: f.notes.codon_start ?? null, translation: f.notes.translation ?? null }; };
+            return { gene: read("gene"), control: read("control") };`)
+        : null;
+      check(
+        "A gene a digest cuts into keeps its codons: the 314 bp piece reads on from its first whole one",
+        piece?.gene?.start === 0 && piece.gene.end === 157 && piece.gene.bases === gene.slice(124) && JSON.stringify(piece.gene.codonStart) === '["3"]',
+        JSON.stringify(piece?.gene)
+      );
+      check(
+        "It leaves out the translation the cut made wrong, while a gene left whole keeps its own",
+        piece?.gene?.translation === null && JSON.stringify(piece.control?.translation) === '["MAAAA"]' && piece.control.codonStart === null && piece.control.bases === revcomp(whole),
+        JSON.stringify(piece)
+      );
+      await s.exec("window.__strandivo.command('save')");
+      const text = (await s.waitFor(`window.__e2eDownloads.length === ${downloads + 2}`, 5000)) ? await s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));") : "";
+      const qualifiers = text.match(/\/(?:codon_start|translation)=[^\n]*/g) ?? [];
+      check("Saved as GenBank, the piece writes that frame and only the translation that still fits", qualifiers.length === 2 && /^\/codon_start="?3/.test(qualifiers[0]) && qualifiers[1].startsWith("/translation="), qualifiers.join(" ") || text.slice(0, 120));
+      for (const tab of [first + 1, first]) {
+        await s.exec(`window.__strandivo.showTab(${tab}); window.__strandivo.closeTab();`);
+        await s.waitFor(`window.__strandivo.tabs().length === ${tab}`, 5000);
+      }
+    }
+
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");
     await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));

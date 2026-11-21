@@ -15,8 +15,10 @@ import { designOf, formatDesign, VARIABLE_QUALIFIER } from "./variable.ts";
 import { regionsOf, withRegions, type ProteinRegion } from "./regions.ts";
 import { readFeatureTables } from "./genbankQualifiers.ts";
 import { protein } from "../doc/analysis.ts";
-import { basesIn, deleteRange, featureBases, insertBases, linearize, reverseComplement, reverseComplementRange, setOrigin, topStrandLength, withTopology, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "./seqdata.ts";
-import { cutsFor, wholeFragment, type Fragment } from "./cloning.ts";
+import { basesIn, deleteRange, featureBases, insertBases, linearize, reverseComplement, reverseComplementRange, reverseEnd, setOrigin, topStrandLength, withTopology, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "./seqdata.ts";
+import { cutsFor, fragmentDigest, wholeFragment, type Fragment } from "./cloning.ts";
+import { reactionCounts } from "./enzymes.ts";
+import { translateCodon } from "./genetics.ts";
 import { digestSequence, fragmentDocument, fragmentSize } from "./gel.ts";
 import { documentMethylation, hostMethylation, PCR_DNA } from "./methylation.ts";
 import { pcrProduct, productDocument } from "./pcr.ts";
@@ -696,4 +698,201 @@ test("ends that don't match the bases are blunt on opening, and a circle has non
   assert.equal(circle.data.sequence, stored);
   // A document made circular saves none either.
   assert.ok(!save(fromParsed({}), { ...fragmentDocument(middle, "template"), circular: true }).includes("Strandivo fragment ends"));
+});
+
+// ---------- a fragment's outer ends when it is digested again or edited ----------
+
+test("digesting a fragment again keeps its outer ends and never cuts inside an overhang", async () => {
+  // BamHI leaves GATC on both ends of the middle piece, and DpnI cuts GA^TC: it has a site in each overhang and one between.
+  const sequence = "A".repeat(30) + "GGATCC" + "C".repeat(40) + "GATC" + "C".repeat(40) + "GGATCC" + "A".repeat(30);
+  const middle = digestSequence(bare("template", sequence, false).data, ["BamHI"]).fragments.find(f => fragmentSize(f) === 90)!;
+  assert.deepEqual([middle.left.kind, middle.left.bases, middle.right.kind, middle.right.bases], ["5'", "GATC", "5'", "GATC"]);
+  const opened = (await reopen(save(fromParsed({}), fragmentDocument(middle, "template")))).data;
+  assert.equal(opened.sequence.length, 94);
+  const dam = hostMethylation("");
+  const counts = reactionCounts(opened, ["DpnI"], dam);
+  assert.equal(counts.sites.get("DpnI"), 3, "a site in each overhang and one between");
+  assert.equal(counts.cuts.get("DpnI"), 1, "only the one between cuts");
+  const again = fragmentDigest(opened, ["DpnI"], dam);
+  assert.equal(again.fragments.length, 2);
+  assert.deepEqual(again.fragments[0].left, opened.ends!.left);
+  assert.deepEqual(again.fragments[1].right, opened.ends!.right);
+  assert.equal(again.fragments[0].right.kind, "blunt");
+  assert.equal(again.fragments[1].left.kind, "blunt");
+  assert.equal(again.fragments.map(fragmentSize).reduce((a, b) => a + b), fragmentSize(middle), "the pieces add up to the top strand");
+  // A 3′ overhang on the left and a 5′ one on the right hide sites of RsaI (GT^AC) and MluCI (^AATT) the same way.
+  const sticky = (await reopen(save(fromParsed({}), fragmentDocument(piece(["KpnI", "EcoRI"], 32), "template")))).data;
+  for (const [enzyme, sites] of [["RsaI", 1], ["MluCI", 1]] as const) {
+    assert.equal(reactionCounts(sticky, [enzyme], dam).sites.get(enzyme), sites, `${enzyme}'s site`);
+    assert.equal(reactionCounts(sticky, [enzyme], dam).cuts.get(enzyme) ?? 0, 0, `${enzyme} can't cut inside an overhang`);
+    assert.equal(fragmentDigest(sticky, [enzyme], dam).cut, false, enzyme);
+  }
+});
+
+test("editing a fragment clears an end only when the edit reaches into its overhang", async () => {
+  const stored = (await reopen(save(fromParsed({}), fragmentDocument(piece(["KpnI", "EcoRI"], 32), "template")))).data;
+  const blunt = { kind: "blunt", bases: "" };
+  // The piece as cut (a 3′ overhang on the left, a 5′ one on the right, four bases each), and turned round.
+  const turned = reverseComplementRange(stored, null);
+  assert.deepEqual(turned.ends, { left: reverseEnd(stored.ends!.right), right: reverseEnd(stored.ends!.left) });
+  for (const [what, d] of [["as cut", stored], ["turned round", turned]] as const) {
+    const { left, right } = d.ends!;
+    const ends = (x: SeqData) => [x.ends?.left, x.ends?.right];
+    assert.equal(d.sequence.length, 40);
+    // Edits between the overhangs touch neither, and one at their edge keeps them.
+    assert.deepEqual(ends(insertBases(d, 20, "TTT")), [left, right], `${what}: inside`);
+    assert.deepEqual(ends(deleteRange(d, { start: 20, end: 22 })), [left, right], `${what}: deleting inside`);
+    assert.deepEqual(ends(insertBases(d, 4, "T")), [left, right], `${what}: after the left overhang`);
+    assert.deepEqual(ends(insertBases(d, 36, "T")), [left, right], `${what}: before the right overhang`);
+    assert.deepEqual(ends(deleteRange(d, { start: 4, end: 7 })), [left, right], `${what}: deleting after the left overhang`);
+    assert.deepEqual(ends(deleteRange(d, { start: 33, end: 35 })), [left, right], `${what}: deleting before the right overhang`);
+    // One that reaches into an overhang or past an end clears that end only.
+    assert.deepEqual(ends(insertBases(d, 3, "T")), [blunt, right], `${what}: in the left overhang`);
+    assert.deepEqual(ends(insertBases(d, 0, "T")), [blunt, right], `${what}: before the first base`);
+    assert.deepEqual(ends(insertBases(d, 37, "T")), [left, blunt], `${what}: in the right overhang`);
+    assert.deepEqual(ends(insertBases(d, 40, "T")), [left, blunt], `${what}: after the last base`);
+    assert.deepEqual(ends(deleteRange(d, { start: 3, end: 6 })), [blunt, right], `${what}: deleting into the left overhang`);
+    assert.deepEqual(ends(deleteRange(d, { start: 33, end: 36 })), [left, blunt], `${what}: deleting into the right overhang`);
+    // Bases that make the same overhang again are new bases: the end is still cleared.
+    assert.deepEqual(ends(insertBases(d, 0, d.sequence.slice(0, 4))), [blunt, right], `${what}: the left overhang typed again`);
+    assert.deepEqual(ends(insertBases(d, 40, d.sequence.slice(36))), [left, blunt], `${what}: the right overhang typed again`);
+    // Turning round a stretch between the overhangs leaves both; one that takes in an overhang clears it.
+    assert.deepEqual(ends(reverseComplementRange(d, { start: 10, end: 20 })), [left, right], `${what}: a stretch turned round`);
+    assert.deepEqual(ends(reverseComplementRange(d, { start: 0, end: 10 })), [blunt, right], `${what}: a stretch with the left overhang`);
+    assert.deepEqual(ends(reverseComplementRange(d, { start: 30, end: 39 })), [left, blunt], `${what}: a stretch with the right overhang`);
+  }
+});
+
+// ---------- a piece cut through a CDS: its frame and its translation, saved and reopened ----------
+// Synthetic records: codons picked from a short list, meaning nothing.
+
+const SENSE = ["GCT", "CGT", "AAC", "GAT", "TGT", "CAG", "GGT", "CAT", "ATT", "CTG", "AAA", "CCT", "TCT", "ACC", "TGG", "TAT", "GTT"];
+/** `count` sense codons picked by position, so that neighbours differ, beginning `from` places along. */
+const codons = (count: number, from = 0) => Array.from({ length: count }, (_, i) => SENSE[((from + i) * 5) % SENSE.length]).join("");
+const translated = (bases: string) => Array.from({ length: Math.floor(bases.length / 3) }, (_, i) => translateCodon(bases.slice(3 * i, 3 * i + 3))).join("");
+
+/** A CDS as a database gives it: with the protein its bases make as /translation, the stop left off. */
+const imported = (name: string, start: number, end: number, strand: Strand, coding: string): SeqFeature => ({
+  ...mark(name, "CDS", start, end, strand),
+  notes: { product: [`${name} protein`], translation: [translated(coding).replace(/\*$/, "")] }
+});
+
+/** A saved file's CDS entries by their /label, with their qualifiers as written. */
+const cdsIn = (text: string) => Object.fromEntries(readFeatureTables(text)[0].filter(f => f.key === "CDS").map(f => {
+  const q = Object.fromEntries(f.qualifiers);
+  return [q.label, q];
+}));
+
+test("a digest piece cut through a CDS is saved in frame, without the translation it no longer matches", async () => {
+  const spacer = "CT".repeat(15);
+  const b = `ATG${codons(20)}TAA`;
+  const a = `ATG${codons(40, 3)}GAATTC${codons(50, 7)}TAA`;
+  const c = `ATG${codons(30, 11)}TAA`;
+  const sequence = spacer + b + spacer + a + spacer + reverseComplement(c) + spacer;
+  assert.equal(sequence.length, 564);
+  assert.equal(cutsFor(sequence, false, ["EcoRI"]).length, 1, "one site, inside the middle gene");
+  const features = [imported("B", 30, 95, 1, b), imported("A", 126, 407, 1, a), imported("C", 438, 533, -1, c)];
+  const template = await reopen(save(fromParsed({}), { ...bare("template", sequence, false).data, features }));
+  const original = (name: string) => template.data.features.find(f => f.name === name)!;
+  assert.ok(original("A").notes.translation && original("B").notes.translation && original("C").notes.translation, "the file gave each a translation");
+  const { fragments } = digestSequence(template.data, ["EcoRI"]);
+  const saved = async (f: Fragment) => {
+    const text = save(fromParsed({}), fragmentDocument(f, "template"));
+    return { data: (await reopen(text)).data, cds: cdsIn(text) };
+  };
+  const named = (d: SeqData, name: string) => d.features.find(f => f.name === name)!;
+
+  // The left piece ends inside the middle gene: that gene is cut short and the first one is whole.
+  const left = await saved(fragments.find(f => fragmentSize(f) === 250)!);
+  assert.deepEqual(left.data.features.map(f => f.name), ["B", "A"]);
+  assert.deepEqual(named(left.data, "B").notes.translation, original("B").notes.translation);
+  assert.equal(left.cds.B.translation, (original("B").notes.translation as string[])[0], "written in the file");
+  assert.equal(named(left.data, "A").notes.translation, undefined);
+  assert.ok(!("translation" in left.cds.A), "no translation written for the cut gene");
+  assert.ok(!("codon_start" in left.cds.A) && !("codon_start" in left.cds.B), "no /codon_start where the frame did not move");
+
+  // The right piece starts inside it, after 124 of its bases: two bases of a codon, then the next whole codon.
+  const right = await saved(fragments.find(f => fragmentSize(f) === 314)!);
+  assert.deepEqual(right.data.features.map(f => f.name), ["A", "C"]);
+  const cut = named(right.data, "A");
+  assert.ok(!("translation" in right.cds.A), "no translation written for the cut gene");
+  assert.equal(right.cds.A.codon_start, "3");
+  assert.deepEqual(cut.notes.codon_start, ["3"]);
+  assert.equal(featureBases(right.data.sequence, cut), featureBases(template.data.sequence, original("A")).slice(124));
+  assert.equal(protein(cut, right.data.sequence), protein(original("A"), template.data.sequence).slice(42), "it reads from the codon it had");
+  assert.deepEqual(named(right.data, "C").notes.translation, original("C").notes.translation, "a gene it did not touch keeps its translation");
+  assert.ok(!("codon_start" in right.cds.C));
+});
+
+test("a piece cut from a partial CDS keeps its codons, whatever frame the file gave", async () => {
+  const body = codons(30, 2);
+  const sequence = `T${body}GG`;
+  const origin = sequence.match(/.{1,60}/g)!.map((line, i) => `${String(i * 60 + 1).padStart(9)} ${line.toLowerCase().match(/.{1,10}/g)!.join(" ")}`).join("\n");
+  // /codon_start=2 as GenBank writes it, with no quotes: the first base ends a codon before the CDS.
+  const file = `LOCUS       partial                  ${sequence.length} bp    DNA     linear   SYN 01-JAN-2026
+FEATURES             Location/Qualifiers
+     CDS             <1..${sequence.length}
+                     /codon_start=2
+                     /transl_table=11
+                     /product="part of a protein"
+                     /translation="${translated(body)}"
+ORIGIN
+${origin}
+//
+`;
+  const doc = await reopen(file);
+  assert.equal(doc.data.features.length, 1);
+  const whole = protein(doc.data.features[0], doc.data.sequence);
+  assert.equal(whole, translated(body));
+  for (let lead = 0; lead <= 5; lead++) {
+    const label = `${lead} bases cut off its start`;
+    const again = (await reopen(save(fromParsed({}), wholeFragment(doc.data, { start: lead, end: sequence.length - 1 }).data))).data;
+    const f = again.features[0];
+    assert.equal(Number((f.notes.codon_start as unknown[])[0]), ((((1 - lead) % 3) + 3) % 3) + 1, `${label}: /codon_start`);
+    assert.equal(protein(f, again.sequence), whole.slice(lead <= 1 ? 0 : Math.ceil((lead - 1) / 3)), `${label}: its protein`);
+    // The first base was no part of a codon, so cutting only it changes nothing the translation says.
+    assert.deepEqual(f.notes.translation, lead <= 1 ? [translated(body)] : undefined, `${label}: its translation`);
+  }
+});
+
+test("a rotated, opened or turned-round circle keeps the translation its CDS was imported with", async () => {
+  const translation = ["MKVLAAGIVGLLLAAQPAMAQKLSEE"];
+  const circle: SeqData = { ...bare("circle", synthetic(366), true).data, features: [{ ...mark("wrapped", "CDS", 300, 59), notes: { translation } }] };
+  const opened = wholeFragment(circle, { start: 200, end: 199 }).data;
+  const made: [string, SeqData][] = [
+    ["rotated", setOrigin(circle, 100)],
+    ["opened elsewhere", opened],
+    ["turned round", reverseComplementRange(circle, null)],
+    ["opened and turned round", reverseComplementRange(opened, null)]
+  ];
+  for (const [what, d] of made) {
+    const again = await reopen(save(fromParsed({}), d));
+    assert.deepEqual(again.data.features[0].notes.translation, translation, what);
+    assert.equal(again.data.features[0].notes.codon_start, undefined, what);
+  }
+});
+
+test("a PCR product is saved in frame, with the translation only while its CDS is whole and unchanged", async () => {
+  const sequence = synthetic(300);
+  const coding = sequence.slice(100, 199);
+  const template: SeqData = { ...bare("template", sequence, false).data, features: [imported("gene", 100, 198, 1, coding)] };
+  const reverse = { name: "R", bases: reverseComplement(sequence.slice(211, 231)), start: 211, end: 230, strand: -1 as const };
+  const site = sequence.slice(88, 121);
+  const make = async (bases: string, start = 88, end = 120) => {
+    const p = pcrProduct(sequence, false, { name: "F", bases, start, end, strand: 1 }, reverse);
+    assert.ok(p, "the primers make a product");
+    return (await reopen(save(fromParsed({}), productDocument(template, p)))).data;
+  };
+  const whole = await make(`GGATCC${site}`);
+  assert.deepEqual(whole.features[0].notes.translation, template.features[0].notes.translation, "the whole CDS, with a tail");
+  assert.equal(whole.features[0].notes.codon_start, undefined);
+  // Starting one base into the CDS.
+  const clipped = await make(sequence.slice(101, 121), 101, 120);
+  assert.equal(clipped.features[0].notes.translation, undefined, "a CDS cut at its start");
+  assert.deepEqual(clipped.features[0].notes.codon_start, ["3"]);
+  assert.equal(protein(clipped.features[0], clipped.sequence), protein(template.features[0], sequence).slice(1));
+  // A base the primer changes inside the CDS.
+  const changed = await make(site.slice(0, 17) + (site[17] === "A" ? "C" : "A") + site.slice(18));
+  assert.equal(changed.features[0].notes.translation, undefined, "a CDS the primer changed");
+  assert.equal(changed.features[0].notes.codon_start, undefined);
 });

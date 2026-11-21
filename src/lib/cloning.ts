@@ -11,7 +11,7 @@ import { blockedSite, completeLinearCuts, digestSites, enzymeName, siteCuts } fr
 import type { DnaMethylation } from "./methylation.ts";
 import { pcrProduct, productDocument } from "./pcr.ts";
 import { DEFAULT_TM, findBindingSites, meltingTemp, TM_METHODS, type TmMethod } from "./primers.ts";
-import { BLUNT_END as BLUNT, basesIn, deleteRange, linearize, newId, rangeLength, reverseComplement, reverseComplementRange, reverseEnd, setOrigin, validFragmentEnds, type FragmentEnd, type Range, type SeqData } from "./seqdata.ts";
+import { BLUNT_END as BLUNT, basesIn, clipRange, linearize, newId, rangeLength, reverseComplement, reverseComplementRange, reverseEnd, setOrigin, validFragmentEnds, withoutStaleTranslations, type FragmentEnd, type Range, type SeqData } from "./seqdata.ts";
 
 export type { FragmentEnd } from "./seqdata.ts";
 
@@ -76,20 +76,24 @@ function endAt(c: Cut, sequence: string): FragmentEnd {
   return { kind: c.top < c.bottom ? "5'" : "3'", bases: basesIn(sequence, r).toUpperCase(), enzyme: c.enzyme };
 }
 
-/** `length` bases from `start` as a linear document (circular sources: past the origin, even round it again). */
+/**
+ * `length` bases from `start` as a linear document (circular sources: past the origin, even
+ * round it again). A CDS cut into keeps the codons it had, and loses the /translation it
+ * was imported with, which says what its bases were.
+ */
 function extract(d: SeqData, start: number, length: number): SeqData {
   const n = d.sequence.length;
   let x: SeqData = d;
   if (d.circular) {
     x = setOrigin(d, start);
-    if (length < n) x = deleteRange(x, { start: length, end: n - 1 });
+    if (length < n) x = clipRange(x, { start: length, end: n - 1 });
     x = linearize(x);
     if (length > n) x = { ...x, sequence: x.sequence + x.sequence.slice(0, length - n) };
   } else {
-    if (start + length < n) x = deleteRange(x, { start: start + length, end: n - 1 });
-    if (start > 0) x = deleteRange(x, { start: 0, end: start - 1 });
+    if (start + length < n) x = clipRange(x, { start: start + length, end: n - 1 });
+    if (start > 0) x = clipRange(x, { start: 0, end: start - 1 });
   }
-  return { ...x, ends: undefined };
+  return withoutStaleTranslations(d, { ...x, ends: undefined });
 }
 
 /** A stretch as a linear fragment, keeping any existing ends included in it. */
@@ -308,14 +312,14 @@ export function assemblyBases(f: Fragment): Fragment {
   let { left, right } = f;
   const n = data.sequence.length;
   if (right.kind === "3'") {
-    data = deleteRange(data, { start: n - right.bases.length, end: n - 1 });
+    data = clipRange(data, { start: n - right.bases.length, end: n - 1 });
     right = BLUNT;
   }
   if (left.kind === "3'") {
-    data = deleteRange(data, { start: 0, end: left.bases.length - 1 });
+    data = clipRange(data, { start: 0, end: left.bases.length - 1 });
     left = BLUNT;
   }
-  return data === f.data ? f : { ...f, data, left, right };
+  return data === f.data ? f : { ...f, data: withoutStaleTranslations(f.data, data), left, right };
 }
 
 /** The longest end of `a` (at least `min` bases, at most `max`) that `b` starts with, or 0. */

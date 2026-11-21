@@ -450,7 +450,10 @@ Corrected and extended after review.
   `planAssembly` already does, shows where they end up — not that they amplify one thing.
 - **No functional check of the construct.** Orientation, reading frame across a fusion,
   retained start and stop codons, linker residues, intact expression elements. A product
-  can be exactly the sequence we predicted and still be the wrong construct.
+  can be exactly the sequence we predicted and still be the wrong construct. A gene a
+  digest, PCR or trimmed overhang cuts into keeps the codons it had and loses an imported
+  `/translation` that no longer fits its bases (`src/lib/seqdata.ts`), but nothing judges
+  whether the shorter protein is the one wanted.
 - **A primer you already have cannot be used.** Every primer is designed from scratch. A
   working primer in the freezer, or a standard sequencing primer, cannot be pinned with the
   rest designed to fit. A constraint the user brings is a different thing from a decision

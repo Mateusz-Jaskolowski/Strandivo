@@ -193,7 +193,7 @@ jobs:
           if-no-files-found: ignore
 
   # The shell has code only Windows compiles (native PDF export through WebView2), which the
-  # Linux job never sees, and 0.6.0's first try at it didn't compile there. Linting it on
+  # Linux job never sees, and an earlier version of it didn't compile there. Linting it on
   # Windows compiles it, tests included, without building or running the app.
   windows:
     name: Windows shell compiles

@@ -175,10 +175,10 @@ and CI checks that they exist.
   edited, the digest or `NO_DIGEST`, `currentLadder`, `effectivePcrMix` even while the mix
   is folded), and nothing is worked out again after that: rendering must never change it,
   which `src/lib/pcrPrint.test.ts` checks. The sheet has two builders: DOM in
-  `src/views/pcrPrintDialog.ts`, for the preview and for a copy on `document.body` (`.sv-print-sheet`)
-  that is all `@media print` shows while the preview is open, and a string in `pcrPlanHtml`
-  for the saved file, with its own stylesheet (`PCR_PLAN_SHEET_CSS`, as the file must work
-  offline). A change to one goes into the other: the test holds the two stylesheets'
+  `src/views/pcrPrintDialog.ts`, for the preview and for a copy on `document.body`
+  (`.sv-print-sheet`) that is all `@media print` shows while the preview is open, and a string
+  in `pcrPlanHtml` for the saved file, with its own stylesheet (`PCR_PLAN_SHEET_CSS`, as the
+  file must work offline). A change to one goes into the other: the test holds the two stylesheets'
   sheet rules together, and the web e2e compares the printed page's words with the saved
   file's and their page counts on A4 and Letter. `pcrPlanMarkdown` is the third output; it
   escapes every text, user's and ours, in one pass (`mdText`), so a name stays literal in
@@ -197,17 +197,21 @@ and CI checks that they exist.
   PDF… (desktop only) through `saveWindowPdf()` to `src-tauri/src/pdf.rs`, which writes
   beside the destination and moves the file in once it holds something, and stops waiting
   after 2 minutes without claiming the job stopped. Its engines: WKWebView run modally
-  (`src-tauri/src/pdf_macos.rs`; tried from a small wry program on macOS: A4 and Letter at their sizes,
-  9.5 mm margins, the main thread free), WebView2's `PrintToPdf` (`src-tauri/src/pdf_windows.rs`; only
-  compiled), and WebKitGTK printing to the file printer, named as GTK's translations name
-  it (not yet tried). The sheet has no footer: one ran onto a second US Letter page in
-  WebKit, which sets type taller than Chromium, so the snapshot note and the export date
-  ride on the header's kicker and template lines. Measured on 21 Nov 2026 (WebKit through
-  that wry program, Chromium through headless printing): the default plan is one page on A4
-  and on Letter in both, and in Chromium so is every variant tried (sections left out, an
-  edited program, no protocol, the dark theme) but long names with 14 lines of notes,
-  which take two. In `openPcrDialog`, Product map,
-  Simulated gel and Cycling program fold, kept in `strandivo.pcrDialogFolds`
+  (`src-tauri/src/pdf_macos.rs`; measured by the author on 21 Nov 2026 with a small wry
+  program that is not in the repository: A4 and Letter at their sizes, 9.5 mm margins, the
+  main thread free), WebView2's `PrintToPdf` (`src-tauri/src/pdf_windows.rs`; type-checked
+  by the author against the locked webview2-com and windows-core outside the repository,
+  compiled by CI's Windows job in `.github/workflows/checks.yml`, never run), and WebKitGTK
+  printing to the file printer, named as GTK's translations name it (not yet tried). No
+  test runs a native engine (the e2e stands in for printing and PDF export with hooks, see
+  AGENTS.md's "Checking work"), so a smoke test of each engine is left for later. The sheet
+  has no footer: one ran onto a second US Letter page in WebKit, which sets type taller than
+  Chromium, so the snapshot note and the export date ride on the header's kicker and
+  template lines. Measured on 21 Nov 2026 (WebKit through that wry program, Chromium through
+  headless printing): the default plan is one page on A4 and on Letter in both, and in
+  Chromium so is every variant tried (sections left out, an edited program, no protocol, the
+  dark theme) but long names with 14 lines of notes, which take two. In `openPcrDialog`,
+  Product map, Simulated gel and Cycling program fold, kept in `strandivo.pcrDialogFolds`
   (`src/pcrDialogFolds.ts`); the mix's fold lasts the session, as before. Each fold
   button's accessible name says which section it folds.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in

@@ -92,6 +92,7 @@ export function pcrMixView(polymerase: string, polyName: string, productLength: 
         class: "sv-fold-link",
         "data-focus": "mix-fold",
         "aria-expanded": String(choice.open),
+        "aria-label": `${choice.open ? "Hide" : "Show"} reaction mix`,
         onclick: () => {
           choice.open = !choice.open;
           draw();

@@ -170,26 +170,41 @@ and CI checks that they exist.
   being looked over. Only the table and the notes are drawn again when a field changes, so a
   field keeps its focus; each mix control also carries a `data-focus` key for full-dialog
   redraws, and the fold is the one thing that builds the section anew.
-  **Printable PCR plan** (`src/lib/pcrPrint.ts`, `src/views/pcrPrintDialog.ts`): clicking
-  **Print PCR plan…** in `openPcrDialog` captures one immutable `PcrPlanSnapshot` from the
-  current effective dialog state (edited program draft, selected digest or explicit
-  `NO_DIGEST`, `currentLadder`, and `effectivePcrMix` even while the mix section is folded).
-  Preview, native print, native desktop PDF, offline HTML (`pcrPlanHtml`), and Markdown
-  (`pcrPlanMarkdown`) all render from that same snapshot and share `gelLayout`
-  (`src/lib/gel.ts`) for the gel; local title, experiment date (blank unless set, never
-  filled from `exportedAt`), bench notes, and independent section toggles (Primers, Product
-  map, Simulated gel, Cycling program, Reaction mix, Bench notes) update live without
-  regenerating calculations. Desktop printing goes through `printWindow()` (`src/platform.ts`)
-  to Rust `print_window` (`src-tauri/src/lib.rs`, calling `WebviewWindow::print()`), and
-  desktop **Save as PDF…** goes through `saveWindowPdf()` to `src-tauri/src/pdf.rs`
-  (NSPrintOperation on macOS, WebView2 `PrintToPdf` on Windows, WebKitGTK `PrintOperation`
-  on Linux); in the browser version, **Print / Save as PDF…** uses `window.print()`. A
-  print-only `.sv-print-sheet` mirror lives on `document.body` while the preview is open so
-  `@media print` renders a theme-independent light bench sheet without app chrome, and **Save
-  HTML…** and **Copy Markdown** provide offline/ELN exports. In `openPcrDialog`, Product map,
-  Simulated gel, and Cycling program each fold cleanly (`src/pcrDialogFolds.ts`,
-  `src/lib/pcrDialogFolds.ts`) alongside Reaction mix, and the digest menu offers **No digest
-  (uncut only)** (`NO_DIGEST` in `src/lib/pcrOverview.ts`).
+  **Printable PCR plan** (`src/lib/pcrPrint.ts`, `src/views/pcrPrintDialog.ts`): **Print
+  PCR plan…** captures one `PcrPlanSnapshot` of what the dialog shows (the program as
+  edited, the digest or `NO_DIGEST`, `currentLadder`, `effectivePcrMix` even while the mix
+  is folded), and nothing is worked out again after that: rendering must never change it,
+  which `src/lib/pcrPrint.test.ts` checks. The sheet has two builders: DOM in
+  `src/views/pcrPrintDialog.ts`, for the preview and for a copy on `document.body` (`.sv-print-sheet`)
+  that is all `@media print` shows while the preview is open, and a string in `pcrPlanHtml`
+  for the saved file, with its own stylesheet (`PCR_PLAN_SHEET_CSS`, as the file must work
+  offline). A change to one goes into the other: the test holds the two stylesheets'
+  sheet rules together, and the web e2e compares the printed page's words with the saved
+  file's and their page counts on A4 and Letter. `pcrPlanMarkdown` is the third output; it
+  escapes every text, user's and ours, in one pass (`mdText`), so a name stays literal in
+  its table cell, and keeps notes as typed with hard line breaks. The sheet is light in any
+  theme (`color-scheme: light` on the printed page), keeps its columns on paper (the
+  narrow-window rule is screen only), keeps short sections and blank writing lines whole,
+  and writes the mix total as the table's last row, as a browser repeats a `tfoot` on
+  each page. A stale program or a hard-to-read digest is said in its section, or among the
+  warnings when that section is left out (`planWarnings`). One preview is open at a time,
+  and while Print… or Save as PDF… runs the copy being printed is held still and kept
+  until it ends, even if the preview closes; the page title is the plan's meanwhile. Title,
+  date and notes are never kept; the sections chosen and the PDF paper are
+  (`strandivo.pcrPrintSections`, `strandivo.pcrPrintPaper`), written when the plan is
+  printed, copied or saved (once a path is chosen), never on Cancel. Print… goes through
+  `printWindow()` to `print_window` (wry's print) or `window.print()` in a browser; Save as
+  PDF… (desktop only) through `saveWindowPdf()` to `src-tauri/src/pdf.rs`, which writes
+  beside the destination and moves the file in once it holds something, and stops waiting
+  after 2 minutes without claiming the job stopped. Its engines: WKWebView run modally
+  (`src-tauri/src/pdf_macos.rs`; tried from a small wry program on macOS: A4 and Letter at their sizes,
+  9.5 mm margins, the main thread free), WebView2's `PrintToPdf` (`src-tauri/src/pdf_windows.rs`; only
+  compiled), and WebKitGTK printing to the file printer, named as GTK's translations name
+  it (not yet tried). WebKit sets the type taller than Chromium, so on US Letter the
+  default plan's footer runs onto a second page there. In `openPcrDialog`, Product map,
+  Simulated gel and Cycling program fold, kept in `strandivo.pcrDialogFolds`
+  (`src/pcrDialogFolds.ts`); the mix's fold lasts the session, as before. Each fold
+  button's accessible name says which section it folds.
 - **Mutagenesis primers** (`src/lib/mutagenesis.ts`, the dialog in
   `src/views/mutagenesisDialog.ts`) are stored like any primer: the site covers the bases
   they change, so the renderer, `primerReport` and PCR products need nothing of their own.

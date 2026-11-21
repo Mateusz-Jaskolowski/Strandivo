@@ -74,6 +74,7 @@ export function editableProgram(
         class: "sv-fold-link",
         "data-focus": "pcr-fold-program",
         "aria-expanded": String(!folded),
+        "aria-label": `${folded ? "Show" : "Hide"} cycling program`,
         onclick: () => {
           folded = !folded;
           setPcrSectionFolded("program", folded);

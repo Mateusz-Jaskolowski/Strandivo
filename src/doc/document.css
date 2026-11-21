@@ -2368,6 +2368,11 @@
   font-weight: 600;
   color: var(--text-2);
 }
+/* Product map and Simulated gel: headings that look like the small labels beside them. */
+.sv-pcr-subhead {
+  margin: 0;
+  font: inherit;
+}
 .sv-pcr-copy {
   margin-left: auto;
 }

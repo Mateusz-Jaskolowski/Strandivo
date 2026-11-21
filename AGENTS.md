@@ -46,9 +46,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - `src/doc/store.ts` holds the document: immutable `SeqData` snapshots, the selection and
   undo history. Views get a `DocContext` (`src/doc/context.ts`) and subscribe to changes.
 - `src/views/` has one class per part of the window (map, sequence, primers, reads with its
-  canvas trace view, outline, inspector, search). Each builds its own DOM or SVG. One
-  renderer draws every simulated gel (`src/views/gelDraw.ts`): the Digest dialog's lanes
-  and the PCR product's own, with the ladder they share.
+  canvas trace view, outline, inspector, search). Each builds its own DOM or SVG. Every
+  simulated gel is laid out by `gelLayout` (`src/lib/gel.ts`): `src/views/gelDraw.ts` draws
+  the Digest dialog's lanes and the PCR product's own, with the ladder they share, and the
+  printable PCR plan draws the same layout in paper colours
+  (`docs/agents/primers.md` says how).
 - `src/lib/` is pure logic with unit tests: the sequence model and edits
   (`src/lib/seqdata.ts`), primers and Tm, enzymes, primer design, PCR products, primer
   lists, alignment layout, codon effects, construct summaries for Home, cloning simulation

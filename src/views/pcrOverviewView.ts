@@ -166,11 +166,12 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   const digestBody = h(
     "div",
     { class: "sv-pcr-digest" },
-    h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Suggested digest"), data.digests.length ? digestSelect : null), digestNote, lanes),
+    h("div", { class: "sv-pcr-digest-text" }, h("div", { class: "sv-pcr-head" }, h("h4", { class: "sv-pcr-title" }, "Suggested digest"), data.digests.length ? digestSelect : null), digestNote, lanes),
     h("div", { class: "sv-pcr-gel" }, gelFigure)
   );
 
-  const foldButton = (focusKey: string, open: boolean, toggle: () => void) =>
+  /** `what` names the section for a screen reader, as every fold says only Show or Hide. */
+  const foldButton = (focusKey: string, what: string, open: boolean, toggle: () => void) =>
     h(
       "button",
       {
@@ -178,6 +179,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
         class: "sv-fold-link",
         "data-focus": focusKey,
         "aria-expanded": String(open),
+        "aria-label": `${open ? "Hide" : "Show"} ${what}`,
         onclick: toggle
       },
       iconSvg("chevronDown", 12),
@@ -185,25 +187,25 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     );
 
   const renderMapSection = () => {
-    const fold = foldButton("pcr-fold-map", !mapFolded, () => {
+    const fold = foldButton("pcr-fold-map", "product map", !mapFolded, () => {
       mapFolded = !mapFolded;
       setPcrSectionFolded("map", mapFolded);
       renderMapSection();
       if (!mapFolded) measure();
       mapSection.querySelector<HTMLElement>(".sv-fold-link")?.focus();
     });
-    const head = h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Product map"), fold, ...(mapFolded ? [mapSummary] : [source, filter]));
+    const head = h("div", { class: "sv-pcr-head sv-small" }, h("h3", { class: "sv-pcr-subhead sv-dim" }, "Product map"), fold, ...(mapFolded ? [mapSummary] : [source, filter]));
     mapSection.replaceChildren(head, ...(mapFolded ? [] : [map, detail, ...(flanksEl ? [flanksEl] : [])]));
   };
 
   const renderGelSection = () => {
-    const fold = foldButton("pcr-fold-gel", !gelFolded, () => {
+    const fold = foldButton("pcr-fold-gel", "simulated gel", !gelFolded, () => {
       gelFolded = !gelFolded;
       setPcrSectionFolded("gel", gelFolded);
       renderGelSection();
       gelSection.querySelector<HTMLElement>(".sv-fold-link")?.focus();
     });
-    const head = h("div", { class: "sv-pcr-head sv-small" }, h("span", { class: "sv-dim" }, "Simulated gel"), fold, ...(gelFolded ? [gelSummary] : []));
+    const head = h("div", { class: "sv-pcr-head sv-small" }, h("h3", { class: "sv-pcr-subhead sv-dim" }, "Simulated gel"), fold, ...(gelFolded ? [gelSummary] : []));
     gelSection.replaceChildren(head, ...(gelFolded ? [] : [digestBody]));
   };
 

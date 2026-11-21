@@ -3,7 +3,8 @@
 
 // What every exported image shares, apart from drawing it (src/views/imageExport.ts): its
 // file name, how many pixels of PNG it gets per pixel of drawing, the box it is fitted to,
-// and colours written as SVG 1.1 has them, so a file opens the same in any program.
+// and colours written as SVG 1.1 has them, for programs that read neither `color-mix()`
+// nor `rgb()` with an alpha.
 
 /** Characters no file system takes in a name. */
 const UNSAFE = /[\\/:*?"<>|\u0000-\u001f]+/g;

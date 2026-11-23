@@ -174,7 +174,9 @@ and CI checks that they exist.
   internet, and only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's
   own `fetch`; the API allows any origin); the other is a feedback report the user sends
   (`docs/agents/updates-and-reports.md`). `connect-src` in the Content Security Policy names both, so the page can reach
-  nothing else. The update check is the shell's, not the page's. A construct's protein is rarely the entry's (both mRNAs Q9UKG4
+  nothing else. The update check is the shell's, not the page's. The fields asked for are
+  the kinds `parseEntry` reads (`KINDS`), so a kind added there goes in `UNIPROT_FIELDS`
+  too. A construct's protein is rarely the entry's (both mRNAs Q9UKG4
   cites differ from it, one in length), so residues are never taken at face value: the
   CDS's translation is aligned locally with gaps, and regions are carried across. Under
   `MIN_IDENTITY` nothing is placed, since a wrong accession would otherwise mark the wrong

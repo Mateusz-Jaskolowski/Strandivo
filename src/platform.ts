@@ -154,7 +154,8 @@ export async function readFile(path: string): Promise<Uint8Array> {
   return buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf);
 }
 
-const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit,protein_name,gene_names,sequence";
+/** The entry's name and sequence, and the kinds of region `parseEntry` reads (`KINDS` in src/lib/uniprot.ts). */
+const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit,ft_domain,ft_region,ft_repeat,ft_motif,ft_coiled,ft_compbias,ft_propep,ft_peptide,ft_chain,protein_name,gene_names,sequence";
 
 /**
  * An entry from UniProt's REST API, the one thing the app fetches from the internet, and

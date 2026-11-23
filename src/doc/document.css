@@ -5122,10 +5122,13 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   gap: 6px;
 }
 .sv-region-actions .sv-btn { padding: 0 6px; gap: 4px; font-size: 12px; }
+/* Get regions from UniProt: the search and the entries stay put while the list scrolls. */
+.sv-uniprot-body {
+  overflow: hidden;
+}
 .sv-uniprot-search {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
 }
 .sv-uniprot-search .sv-input {
   flex: 1;
@@ -5135,14 +5138,104 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
   margin: 0;
   font-size: 13px;
 }
+.sv-uniprot-refs {
+  flex: none;
+  align-self: flex-start;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.sv-uniprot-refs > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+}
+.sv-uniprot-refs > button:first-child {
+  font-family: inherit;
+}
+.sv-uniprot-ref-state {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.sv-uniprot-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sv-uniprot-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sv-uniprot-all {
+  gap: 3px;
+}
+.sv-uniprot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.sv-uniprot-actions:empty {
+  display: none;
+}
+.sv-uniprot-remove {
+  margin-left: auto;
+}
+.sv-uniprot-limit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sv-uniprot-limit .sv-input {
+  width: 6.5em;
+}
+.sv-uniprot-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 2px;
+}
+/* The list scrolls; what is in it keeps its height. */
+.sv-uniprot-list > * {
+  flex: none;
+}
+.sv-uniprot-list > .sv-small {
+  margin: 8px 0 0;
+}
+/* A region: tick and name, the entry's residues, the CDS's, identity, how much lines up. */
+.sv-uniprot-cols,
 .sv-uniprot-row {
   display: grid;
-  grid-template-columns: auto minmax(7em, 1fr) 6.5em 9em 5em;
+  grid-template-columns: minmax(8em, 1fr) 11em 7em 4.5em 7em 8.5em;
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
+}
+.sv-uniprot-cols {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 2px 13px 6px;
+  background: var(--panel);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.sv-uniprot-cols > span:first-child {
+  padding-left: 24px;
+}
+.sv-uniprot-row {
+  row-gap: 3px;
   padding: 6px 12px;
   font-size: 13px;
-  cursor: pointer;
 }
 .sv-uniprot-row + .sv-uniprot-row {
   border-top: 1px solid var(--line);
@@ -5150,16 +5243,86 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
 .sv-uniprot-row:hover {
   background: var(--hover);
 }
-.sv-uniprot-here {
+.sv-uniprot-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+.sv-uniprot-pick:has(input:disabled) {
+  cursor: default;
+}
+.sv-uniprot-pick .sv-detect-kind {
+  flex: none;
+}
+.sv-uniprot-from,
+.sv-uniprot-to {
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sv-uniprot-acc {
   color: var(--text-3);
 }
-.sv-uniprot-clipped .sv-uniprot-here {
-  color: var(--warn);
+.sv-uniprot-score {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sv-uniprot-view {
+  justify-self: end;
+}
+.sv-uniprot-flags {
+  grid-column: 1 / -1;
+  padding-left: 24px;
+  font-size: 11.5px;
+  color: var(--text-3);
 }
 .sv-uniprot-absent {
   color: var(--text-3);
-  cursor: default;
+}
+/* The alignment under a region: the entry over the CDS, each numbered its own way. */
+.sv-uniprot-alignment {
+  grid-column: 1 / -1;
+  margin: 4px 0 2px 24px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--chip);
+  overflow-x: auto;
+}
+.sv-uniprot-alignment > p {
+  margin: 0 0 6px;
+}
+.sv-aln-grid {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  column-gap: 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre;
+}
+/* Each line of the alignment is three rows of four cells; a gap after its CDS row. */
+.sv-aln-grid > :nth-child(12n + 9),
+.sv-aln-grid > :nth-child(12n + 10),
+.sv-aln-grid > :nth-child(12n + 11),
+.sv-aln-grid > :nth-child(12n + 12) {
+  margin-bottom: 6px;
+}
+.sv-aln-label,
+.sv-aln-num,
+.sv-aln-marks,
+.sv-aln-gap {
+  color: var(--text-3);
+}
+.sv-aln-num {
+  min-width: 4ch;
+  text-align: right;
+}
+.sv-aln-diff {
+  border-radius: 2px;
+  background: var(--diff-soft);
+  color: var(--diff);
 }
 .sv-detect-group {
   display: flex;
@@ -5272,6 +5435,15 @@ text.sv-figure-pick.sv-selected { fill: var(--accent-text); }
 @media (max-width: 820px) {
   .sv-detect-row {
     grid-template-columns: auto 1fr;
+  }
+  .sv-uniprot-cols {
+    display: none;
+  }
+  .sv-uniprot-row {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+  .sv-uniprot-pick {
+    grid-column: 1 / -1;
   }
   .sv-fold-row {
     grid-template-columns: minmax(0, 1fr) auto minmax(8em, 10em);

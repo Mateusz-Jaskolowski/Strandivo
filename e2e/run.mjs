@@ -1700,6 +1700,7 @@ async function main() {
     await s.waitFor("!!document.querySelector('.sv-code')", 5000);
     await s.exec(`
       const protein = document.querySelector('.sv-code').textContent.replace(/[*]+$/, "");
+      window.__strandivoProtein = protein;
       window.__strandivoUniprot = async accession => ({
         primaryAccession: accession,
         entryType: "UniProtKB reviewed (Swiss-Prot)",
@@ -1728,6 +1729,69 @@ async function main() {
     check("An imported region labels both coordinate systems", await s.waitFor("/Construct residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent) && /UniProtKB P62593 · residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent)", 3000));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
+
+    // Two entries for one CDS, as for a chimera: Q9AAA1 is its first half, P0DTC2 its second
+    // (the other half of each has every third residue changed), and P00000 fails.
+    await s.exec(`
+      const protein = window.__strandivoProtein;
+      const changed = (from, to) => [...protein].map((c, i) => (i >= from && i < to && i % 3 === 0 ? (c === "W" ? "Y" : "W") : c)).join("");
+      const domain = (description, start, end, type = "Domain") => ({ type, description, location: { start: { value: start }, end: { value: end } } });
+      const entries = {
+        Q9AAA1: { sequence: changed(150, protein.length), features: [domain("Front", 30, 140), domain("Back", 160, 260)] },
+        P0DTC2: { sequence: changed(0, 140), features: [domain("Front", 30, 140), domain("Back", 160, 260), domain("Box", 200, 206, "Motif")] }
+      };
+      window.__strandivoUniprot = async accession => {
+        const e = entries[accession];
+        if (!e) throw new Error("UniProt has no entry " + accession + ".");
+        return { primaryAccession: accession, entryType: "UniProtKB reviewed (Swiss-Prot)", genes: [{ geneName: { value: accession === "Q9AAA1" ? "front" : "back" } }], sequence: { value: e.sequence }, features: e.features };
+      };
+    `);
+    const uniprotRow = (accession, name) => `Array.from(document.querySelectorAll('.sv-dialog .sv-uniprot-row')).find(r => r.querySelector('.sv-uniprot-acc')?.textContent === '${accession}' && r.querySelector('.sv-detect-name').textContent === '${name}')`;
+    await s.exec(`${doc} const cds = s.data.features.find(f => f.id === window.__strandivoCds); s.select({ range: { start: cds.start, end: cds.end }, focus: { kind: "feature", id: cds.id } });`);
+    await s.waitFor("Array.from(document.querySelectorAll('.sv-link')).some(b => b.textContent.includes('Get from UniProt'))", 5000);
+    await s.click("//button[contains(., 'Get from UniProt')]", "xpath");
+    await s.exec("const i = document.querySelector('.sv-uniprot-search input'); i.value = 'Q9AAA1, P00000 https://www.uniprot.org/uniprotkb/P0DTC2/entry'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));");
+    check("Several entries can be looked up at once, and one failing keeps the others", await s.waitFor("Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',') === 'All,Q9AAA1 1,P00000 !,P0DTC2 2'.replace(/ /g, '')", 5000), await s.exec("return Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',');"));
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[normalize-space(.)='All']", "xpath");
+    check("Each region shows its identity and how much of it lines up", await s.exec(`
+      const row = ${uniprotRow("Q9AAA1", "Front")};
+      const scores = Array.from(row.querySelectorAll('.sv-uniprot-score')).map(x => x.textContent);
+      return scores[0] === '100%' && scores[1] === '111 of 111' && row.querySelector('.sv-uniprot-to').textContent === '30–140';
+    `));
+    check("Where two entries place a region, the better one starts ticked and the other says so", await s.exec(`
+      const front = ${uniprotRow("Q9AAA1", "Front")}, back = ${uniprotRow("Q9AAA1", "Back")}, theirs = ${uniprotRow("P0DTC2", "Back")}, box = ${uniprotRow("P0DTC2", "Box")};
+      return front.querySelector('input').checked && !back.querySelector('input').checked && theirs.querySelector('input').checked && box.querySelector('input').checked &&
+        /Low identity/.test(back.querySelector('.sv-uniprot-flags').textContent) && /Also P0DTC2 Back at 160–260 \\(100%\\)/.test(back.querySelector('.sv-uniprot-flags').textContent) &&
+        document.querySelector('.sv-dialog-foot .sv-btn-primary').textContent === 'Add 3 regions';
+    `), await s.exec(`return ${uniprotRow("Q9AAA1", "Back")}?.textContent;`));
+    await s.exec(`${uniprotRow("Q9AAA1", "Back")}.querySelector('.sv-uniprot-view').click();`);
+    check("A region's alignment opens under it, numbered as each protein numbers itself", await s.waitFor(`(() => {
+      const row = ${uniprotRow("Q9AAA1", "Back")};
+      const panel = row && document.getElementById(row.querySelector('.sv-uniprot-view').getAttribute('aria-controls'));
+      return panel && row.querySelector('.sv-uniprot-view').getAttribute('aria-expanded') === 'true' && panel.querySelectorAll('.sv-aln-diff').length > 0 && /^Q9AAA1160/.test(panel.querySelector('.sv-aln-grid').textContent.replace(/\\s/g, ''));
+    })()`, 3000));
+    await s.shot("11-uniprot-two-entries");
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[starts-with(normalize-space(.), 'Q9AAA1')]", "xpath");
+    await s.click("//*[contains(@class,'sv-uniprot-head')]//button[normalize-space(.)='Limit to CDS residues…']", "xpath");
+    await s.exec("document.querySelector('[aria-label=\"Last CDS residue\"]').value = '150';");
+    await s.click("//*[contains(@class,'sv-uniprot-limit')]/button[normalize-space(.)='Apply']", "xpath");
+    check("Limiting an entry to residues of the CDS keeps the CDS's numbers", await s.waitFor(`/limited to 1–150/.test(document.querySelector('.sv-uniprot-head').textContent) && /Not in CDS residues 1–150/.test(${uniprotRow("Q9AAA1", "Back")}.textContent) && ${uniprotRow("Q9AAA1", "Front")}.querySelector('.sv-uniprot-to').textContent === '30–140'`, 3000));
+    await s.click("//*[contains(@class,'sv-uniprot-limit')]/button[normalize-space(.)='Clear']", "xpath");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[contains(., 'Add ')]", "xpath");
+    const twoEntries = await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds); return { regions: (f.notes.strandivo_regions || []).map(v => v.split('|').slice(0, 4).join('|')), xref: f.notes.db_xref ?? null };`);
+    check("Regions from both entries go on the one CDS, each with its source", JSON.stringify(twoEntries.regions) === JSON.stringify(["Front|Domain|30-140|Q9AAA1:30-140", "Back|Domain|160-260|P0DTC2:160-260", "Box|Motif|200-206|P0DTC2:200-206"]), JSON.stringify(twoEntries));
+    check("Neither entry becomes the chimera's cross-reference", twoEntries.xref === null, JSON.stringify(twoEntries.xref));
+    await s.click("//button[contains(., 'Get from UniProt')]", "xpath");
+    check("Opened again, the entries the CDS used are compared again", await s.waitFor("Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',') === 'All,Q9AAA1,P0DTC2' && document.querySelectorAll('.sv-dialog .sv-uniprot-row').length === 5", 5000));
+    check("What is on the CDS is shown as there, and nothing starts ticked", await s.exec(`
+      const there = Array.from(document.querySelectorAll('.sv-dialog .sv-uniprot-row')).filter(r => /Already on this CDS/.test(r.textContent));
+      return there.length === 3 && there.every(r => r.querySelector('input').checked && r.querySelector('input').disabled) && document.querySelector('.sv-dialog-foot .sv-btn-primary').disabled;
+    `));
+    await s.exec(`${uniprotRow("Q9AAA1", "Back")}.querySelector('input').click();`);
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[contains(., 'Add 1 region')]", "xpath");
+    check("Importing again adds only what was ticked, never twice", await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds); const v = f.notes.strandivo_regions.map(x => x.split('|').slice(0, 4).join('|')); return v.length === 4 && v.includes("Back|Domain|160-260|Q9AAA1:160-260") && v.includes("Back|Domain|160-260|P0DTC2:160-260");`));
+    await s.exec(`${doc} s.undo(); s.undo();`);
+    check("Each import is one undo step", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
 
     // A protein remains one CDS while its domains and CDRs are authored and selected.
     const fillProteinRegion = async (name, kind, start, end, parent = "") => {

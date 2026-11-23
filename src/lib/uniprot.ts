@@ -7,11 +7,17 @@
 // value: the CDS's translation is aligned to the entry, and each region is carried across
 // that alignment. Pure, so it is unit-tested; the fetching is in `src/platform.ts`.
 
-import { isClipped, type ProteinRegion } from "./regions.ts";
+import type { ProteinRegion } from "./regions.ts";
 
 /** Below this the CDS isn't taken to be the entry's protein: placing regions would be a guess. */
 export const MIN_IDENTITY = 0.6;
 export const MIN_ALIGNED = 20;
+/**
+ * A region this alike, all of it facing the CDS's residues, is well supported: it starts
+ * ticked. A fusion's partner, or the other protein of a chimera, lines up with less, as
+ * homologues share well under this outside their most conserved stretches.
+ */
+export const STRONG_IDENTITY = 0.8;
 /** Cells of the alignment, a byte each: two proteins of about 8,000 residues. */
 const MAX_CELLS = 64_000_000;
 
@@ -22,26 +28,53 @@ const GAP_EXTEND = -1;
 
 const ACCESSION = /[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9](?:[A-Z][A-Z0-9]{2}[0-9]){1,2}/;
 
+const accessionIn = () => new RegExp(`(?:^|[^A-Z0-9])(${ACCESSION.source})(-\\d+)?(?![A-Z0-9])`, "g");
+
+/** Every accession in what was typed or pasted (IDs, or links to entries), each once, in order. */
+export function parseAccessions(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.toUpperCase().matchAll(accessionIn())) {
+    const accession = m[1] + (m[2] ?? "");
+    if (!out.includes(accession)) out.push(accession);
+  }
+  return out;
+}
+
 /** The accession in what was typed or pasted (an ID, or a link to the entry), or null. */
 export function parseAccession(text: string): string | null {
-  const m = new RegExp(`(?:^|[^A-Z0-9])(${ACCESSION.source})(-\\d+)?(?![A-Z0-9])`).exec(text.trim().toUpperCase());
-  return m ? m[1] + (m[2] ?? "") : null;
+  return parseAccessions(text.trim())[0] ?? null;
 }
 
-/** The accession in a feature's /db_xref qualifiers, as ENA's records have it. */
-export function accessionOf(notes: Record<string, unknown> | undefined): string | null {
+const UNIPROT_XREF = /^(?:UniProt(?:KB)?(?:\/(?:Swiss-Prot|TrEMBL))?|Swiss-?Prot):(.+)$/i;
+const xrefs = (notes: Record<string, unknown> | undefined) => {
   const raw = notes?.db_xref;
-  for (const v of Array.isArray(raw) ? raw : raw ? [raw] : []) {
-    const m = /^(?:UniProt(?:KB)?(?:\/(?:Swiss-Prot|TrEMBL))?|Swiss-?Prot):(.+)$/i.exec(String(v).trim());
-    if (m) return parseAccession(m[1]);
+  return Array.isArray(raw) ? raw : raw ? [raw] : [];
+};
+
+/** The UniProt entries in a feature's /db_xref qualifiers, as ENA's records have them. */
+export function accessionsOf(notes: Record<string, unknown> | undefined): string[] {
+  const out: string[] = [];
+  for (const v of xrefs(notes)) {
+    const m = UNIPROT_XREF.exec(String(v).trim());
+    const accession = m && parseAccession(m[1]);
+    if (accession && !out.includes(accession)) out.push(accession);
   }
-  return null;
+  return out;
 }
 
-/** Qualifiers with this entry as the feature's UniProt cross-reference, the others kept. */
+/** The first UniProt entry in a feature's /db_xref qualifiers, or null. */
+export const accessionOf = (notes: Record<string, unknown> | undefined): string | null => accessionsOf(notes)[0] ?? null;
+
+/**
+ * Qualifiers with this entry among the feature's UniProt cross-references. Every other
+ * cross-reference stays, other UniProt entries too; one for the same entry is replaced, as
+ * an entry can move from TrEMBL to Swiss-Prot.
+ */
 export function withAccession(notes: Record<string, unknown>, accession: string, reviewed: boolean): Record<string, unknown> {
-  const raw = notes.db_xref;
-  const others = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(v => !/^(?:UniProt|Swiss-?Prot)/i.test(String(v)));
+  const others = xrefs(notes).filter(v => {
+    const m = UNIPROT_XREF.exec(String(v).trim());
+    return !m || parseAccession(m[1]) !== accession;
+  });
   return { ...notes, db_xref: [...others, `UniProtKB/${reviewed ? "Swiss-Prot" : "TrEMBL"}:${accession}`] };
 }
 
@@ -131,21 +164,52 @@ export function parseEntry(json: unknown): UniprotEntry | null {
 
 // ---------- the alignment ----------
 
+/** A column of an alignment: a residue of each facing the other, or one facing a gap. */
+export const PAIR = 0;
+/** A residue of the CDS that the entry lacks. */
+export const CDS_ONLY = 1;
+/** A residue of the entry that the CDS lacks. */
+export const ENTRY_ONLY = 2;
+
+/** Residues of the CDS, from 1, inclusive: where the user said an entry's part of it is. */
+export interface ResidueRange {
+  start: number;
+  end: number;
+}
+
 export interface ProteinAlignment {
   /** For each residue of the entry (from 0), the residue of the CDS facing it, or -1. */
   map: Int32Array;
   /** Residues aligned to each other, and how many of those are the same. */
   aligned: number;
   same: number;
+  /** The two proteins: all of the CDS's, even when only part of it was searched. */
+  cds: string;
+  entry: string;
+  /**
+   * The alignment as traceback found it: where it starts in each protein (from 0) and its
+   * columns from there (`PAIR`, `CDS_ONLY`, `ENTRY_ONLY`), so a region's gaps can be
+   * counted and shown, not only its ends.
+   */
+  cdsStart: number;
+  entryStart: number;
+  path: Uint8Array;
+  /** The CDS residues searched, if the user limited them; numbers stay the whole CDS's. */
+  within: ResidueRange | null;
 }
 
 /**
  * Local alignment with affine gaps (Smith-Waterman-Gotoh), since a tag or a fusion partner
- * shouldn't count against a match, and an indel must not throw off what follows it. Null
- * if the proteins are too long to compare.
+ * shouldn't count against a match, and an indel must not throw off what follows it. With
+ * `within`, only those residues of the CDS are searched, as where a chimera's junction is
+ * is the user's to say. Null if the proteins are too long to compare.
  */
-export function alignProteins(cds: string, entry: string): ProteinAlignment | null {
-  const n = cds.length;
+export function alignProteins(cds: string, entry: string, within?: ResidueRange | null): ProteinAlignment | null {
+  const from = within ? Math.max(1, Math.round(within.start)) : 1;
+  const to = within ? Math.min(cds.length, Math.round(within.end)) : cds.length;
+  const offset = from - 1;
+  const part = cds.slice(offset, to);
+  const n = part.length;
   const m = entry.length;
   if (!n || !m || (n + 1) * (m + 1) > MAX_CELLS) return null;
   const w = m + 1;
@@ -159,7 +223,7 @@ export function alignProteins(cds: string, entry: string): ProteinAlignment | nu
   for (let i = 1; i <= n; i++) {
     let diagonal = 0;
     let left = GAP_OPEN * 2;
-    const a = cds.charCodeAt(i - 1);
+    const a = part.charCodeAt(i - 1);
     for (let j = 1; j <= m; j++) {
       const openUp = score[j] + GAP_OPEN;
       const extendUp = up[j] + GAP_EXTEND;
@@ -181,6 +245,9 @@ export function alignProteins(cds: string, entry: string): ProteinAlignment | nu
     }
   }
   const map = new Int32Array(m).fill(-1);
+  // Columns are found from the end; written backwards from the end of this buffer.
+  const columns = new Uint8Array(n + m);
+  let k = columns.length;
   let aligned = 0;
   let same = 0;
   let i = Math.floor(bestCell / w);
@@ -189,74 +256,262 @@ export function alignProteins(cds: string, entry: string): ProteinAlignment | nu
   while (i > 0 && j > 0 && state) {
     const cell = back[i * w + j];
     if (state === 1) {
-      map[j - 1] = i - 1;
+      map[j - 1] = offset + i - 1;
       aligned++;
-      if (cds[i - 1] === entry[j - 1]) same++;
+      if (part[i - 1] === entry[j - 1]) same++;
+      columns[--k] = PAIR;
       i--;
       j--;
       state = back[i * w + j] & 3;
     } else if (state === 2) {
       const extends_ = cell & 4;
+      columns[--k] = CDS_ONLY;
       i--;
       state = extends_ ? 2 : back[i * w + j] & 3;
     } else {
       const extends_ = cell & 8;
+      columns[--k] = ENTRY_ONLY;
       j--;
       state = extends_ ? 3 : back[i * w + j] & 3;
     }
   }
-  return { map, aligned, same };
+  return {
+    map,
+    aligned,
+    same,
+    cds,
+    entry,
+    cdsStart: offset + i,
+    entryStart: j,
+    path: columns.slice(k),
+    within: within && (from > 1 || to < cds.length) ? { start: from, end: to } : null
+  };
+}
+
+// ---------- a region across the alignment ----------
+
+/** How one of the entry's regions lines up with the CDS. */
+export interface RegionMatch {
+  /** Residues of the region in the entry. */
+  length: number;
+  /** Those facing a residue of the CDS, and how many of those are the same. */
+  pairs: number;
+  same: number;
+  /** Residues of the CDS between the region's own that face none of the entry's. */
+  inserted: number;
+  /** Residues of the region before its first that faces the CDS, and after its last. */
+  missingStart: number;
+  missingEnd: number;
+  /** The first and last residues facing each other (from 0), or -1 if none do. */
+  entryFirst: number;
+  entryLast: number;
+  cdsFirst: number;
+  cdsLast: number;
+}
+
+/** Identical residues over aligned pairs, 0…1. */
+export const regionIdentity = (r: RegionMatch) => (r.pairs ? r.same / r.pairs : 0);
+
+/** The region of the entry from `start` to `end` (from 1, inclusive) as the alignment has it. */
+export function regionMatch(a: ProteinAlignment, start: number, end: number): RegionMatch {
+  const first = start - 1;
+  const last = Math.min(end, a.entry.length) - 1;
+  let pairs = 0;
+  let same = 0;
+  let inserted = 0;
+  let entryFirst = -1;
+  let entryLast = -1;
+  let e = a.entryStart;
+  let c = a.cdsStart;
+  for (let k = 0; k < a.path.length && e <= last; k++) {
+    const column = a.path[k];
+    if (column === PAIR) {
+      if (e >= first) {
+        pairs++;
+        if (a.cds[c] === a.entry[e]) same++;
+        if (entryFirst < 0) entryFirst = e;
+        entryLast = e;
+      }
+      e++;
+      c++;
+    } else if (column === CDS_ONLY) {
+      // Between two of the region's residues, whether or not they face anything.
+      if (e > first && e <= last) inserted++;
+      c++;
+    } else e++;
+  }
+  const length = last - first + 1;
+  return {
+    length,
+    pairs,
+    same,
+    inserted,
+    missingStart: entryFirst < 0 ? length : entryFirst - first,
+    missingEnd: entryLast < 0 ? length : last - entryLast,
+    entryFirst,
+    entryLast,
+    cdsFirst: entryFirst < 0 ? -1 : a.map[entryFirst],
+    cdsLast: entryLast < 0 ? -1 : a.map[entryLast]
+  };
+}
+
+/** A column to show: residues of each (from 0), or null for a gap. */
+export interface ShownColumn {
+  entry: number | null;
+  cds: number | null;
+}
+
+/**
+ * The alignment under a region, as placing it used it: every residue of the region in the
+ * entry, facing a CDS residue or a gap, with the CDS's own residues that fall between them.
+ */
+export function regionColumns(a: ProteinAlignment, start: number, end: number): ShownColumn[] {
+  const first = start - 1;
+  const last = Math.min(end, a.entry.length) - 1;
+  const out: ShownColumn[] = [];
+  // Residues of the region before the alignment starts face nothing.
+  for (let e = first; e <= last && e < a.entryStart; e++) out.push({ entry: e, cds: null });
+  let e = a.entryStart;
+  let c = a.cdsStart;
+  for (let k = 0; k < a.path.length && e <= last; k++) {
+    const column = a.path[k];
+    if (column === PAIR) {
+      if (e >= first) out.push({ entry: e, cds: c });
+      e++;
+      c++;
+    } else if (column === CDS_ONLY) {
+      if (e > first && e <= last) out.push({ entry: null, cds: c });
+      c++;
+    } else {
+      if (e >= first) out.push({ entry: e, cds: null });
+      e++;
+    }
+  }
+  // And so do those after it ends.
+  for (let r = Math.max(e, first); r <= last; r++) out.push({ entry: r, cds: null });
+  return out;
+}
+
+/** One line of a shown alignment, with the first and last residue of each (from 1) on it. */
+export interface AlignmentLine {
+  entry: string;
+  marks: string;
+  cds: string;
+  entryFrom: number | null;
+  entryTo: number | null;
+  cdsFrom: number | null;
+  cdsTo: number | null;
+}
+
+/** Columns as lines of text: residues or "-", and "|" for the same residue, "·" for another. */
+export function alignmentLines(a: ProteinAlignment, columns: ShownColumn[], width = 50): AlignmentLine[] {
+  const lines: AlignmentLine[] = [];
+  for (let at = 0; at < columns.length; at += width) {
+    const slice = columns.slice(at, at + width);
+    const entries = slice.flatMap(x => (x.entry === null ? [] : [x.entry + 1]));
+    const cdss = slice.flatMap(x => (x.cds === null ? [] : [x.cds + 1]));
+    lines.push({
+      entry: slice.map(x => (x.entry === null ? "-" : a.entry[x.entry])).join(""),
+      marks: slice.map(x => (x.entry === null || x.cds === null ? " " : a.entry[x.entry] === a.cds[x.cds] ? "|" : "·")).join(""),
+      cds: slice.map(x => (x.cds === null ? "-" : a.cds[x.cds])).join(""),
+      entryFrom: entries[0] ?? null,
+      entryTo: entries[entries.length - 1] ?? null,
+      cdsFrom: cdss[0] ?? null,
+      cdsTo: cdss[cdss.length - 1] ?? null
+    });
+  }
+  return lines;
 }
 
 // ---------- placing regions ----------
 
-export type Placement = "whole" | "clipped" | "absent";
+/**
+ * Whole: every residue faces one of the CDS's, with nothing between. Gapped: both ends do,
+ * but residues inside face gaps or the CDS has residues the entry lacks. Clipped: one end or
+ * both face nothing, so only part of it is here. Absent: none of it is.
+ */
+export type Placement = "whole" | "gapped" | "clipped" | "absent";
 
 export interface PlacedFeature {
   feature: UniprotFeature;
+  /** What it is known by among the entry's regions (`ProteinRegion.sourceKey`). */
+  key: string;
   placement: Placement;
-  /** In this CDS; null if none of it is here. */
+  /** In this CDS, from the first residue facing it to the last; null if none of it is here. */
   region: ProteinRegion | null;
+  match: RegionMatch;
+  /** Part of it may lie past the CDS residues the user limited the search to. */
+  pastLimit: boolean;
 }
+
+/** The key a region is known by among its entry's, so another import finds it again. */
+export const regionKey = (r: Pick<ProteinRegion, "kind" | "sourceStart" | "sourceEnd" | "sourceKey">) => r.sourceKey ?? `${r.kind}:${r.sourceStart}-${r.sourceEnd}`;
 
 /** Carries an entry's features across the alignment onto a CDS. */
 export function placeFeatures(entry: UniprotEntry, alignment: ProteinAlignment): PlacedFeature[] {
+  const keys = new Map<string, number>();
+  const within = alignment.within;
   return entry.features.map(feature => {
-    let first = -1;
-    let last = -1;
-    for (let i = feature.start - 1; i < feature.end && i < alignment.map.length; i++) {
-      if (alignment.map[i] < 0) continue;
-      if (first < 0) first = i;
-      last = i;
-    }
-    if (first < 0) return { feature, placement: "absent", region: null };
+    const match = regionMatch(alignment, feature.start, feature.end);
+    // UniProt can list two regions of a kind over the same residues (a disordered stretch
+    // and a binding region); the second is told apart, so an import finds each again.
+    const base = `${feature.kind}:${feature.start}-${feature.end}`;
+    const seen = (keys.get(base) ?? 0) + 1;
+    keys.set(base, seen);
+    const key = seen > 1 ? `${base}#${seen}` : base;
+    if (!match.pairs) return { feature, key, placement: "absent", region: null, match, pastLimit: !!within };
     const region: ProteinRegion = {
       name: feature.name,
       kind: feature.kind,
-      sourceKey: `${feature.kind}:${feature.start}-${feature.end}`,
-      start: alignment.map[first] + 1,
-      end: alignment.map[last] + 1,
+      sourceKey: key,
+      start: match.cdsFirst + 1,
+      end: match.cdsLast + 1,
       accession: entry.accession,
-      sourceStart: first + 1,
-      sourceEnd: last + 1,
+      sourceStart: match.entryFirst + 1,
+      sourceEnd: match.entryLast + 1,
       predicted: feature.predicted
     };
-    const whole = first === feature.start - 1 && last === feature.end - 1;
-    return { feature, placement: whole && !isClipped(region) ? "whole" : "clipped", region };
+    const placement: Placement = match.missingStart || match.missingEnd ? "clipped" : match.pairs < match.length || match.inserted ? "gapped" : "whole";
+    // Residues it lacks at an end would have had to fit between it and the limit.
+    const pastLimit = !!within && ((match.missingStart > 0 && within.start > 1 && match.cdsFirst - (within.start - 1) < match.missingStart) ||
+      (match.missingEnd > 0 && within.end < alignment.cds.length && within.end - 1 - match.cdsLast < match.missingEnd));
+    return { feature, key, placement, region, match, pastLimit };
   });
 }
+
+/** Whole, and alike enough to place without a second look. */
+export const wellSupported = (p: PlacedFeature) => p.placement === "whole" && regionIdentity(p.match) >= STRONG_IDENTITY;
 
 export interface Match {
   /** Share of aligned residues that are the same, 0…1. */
   identity: number;
   aligned: number;
+  /** Where the alignment starts and ends in each protein, from 1. */
+  entryFrom: number;
+  entryTo: number;
+  cdsFrom: number;
+  cdsTo: number;
   /** Is it fair to place the entry's features on this CDS? */
   ok: boolean;
 }
 
 export function describeAlignment(a: ProteinAlignment): Match {
   const identity = a.aligned ? a.same / a.aligned : 0;
-  return { identity, aligned: a.aligned, ok: a.aligned >= MIN_ALIGNED && identity >= MIN_IDENTITY };
+  let entryLength = 0;
+  let cdsLength = 0;
+  for (const column of a.path) {
+    if (column !== CDS_ONLY) entryLength++;
+    if (column !== ENTRY_ONLY) cdsLength++;
+  }
+  return {
+    identity,
+    aligned: a.aligned,
+    entryFrom: a.entryStart + 1,
+    entryTo: a.entryStart + entryLength,
+    cdsFrom: a.cdsStart + 1,
+    cdsTo: a.cdsStart + cdsLength,
+    ok: a.aligned >= MIN_ALIGNED && identity >= MIN_IDENTITY
+  };
 }
 
 /** The protein of a CDS as UniProt would write it: no stop at the end. */

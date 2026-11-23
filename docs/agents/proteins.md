@@ -174,13 +174,44 @@ and CI checks that they exist.
   internet, and only when asked to (`fetchUniprotEntry` in `src/platform.ts`, the page's
   own `fetch`; the API allows any origin); the other is a feedback report the user sends
   (`docs/agents/updates-and-reports.md`). `connect-src` in the Content Security Policy names both, so the page can reach
-  nothing else. The update check is the shell's, not the page's. The fields asked for are
-  the kinds `parseEntry` reads (`KINDS`), so a kind added there goes in `UNIPROT_FIELDS`
-  too. A construct's protein is rarely the entry's (both mRNAs Q9UKG4
+  nothing else. The update check is the shell's, not the page's. Only accessions are sent;
+  the construct is compared here. A lookup is the user's: typing accessions, or opening Get
+  from UniProt… for a CDS, which looks up the entries it used before. The fields asked for
+  are the kinds `parseEntry` reads (`KINDS`), so a kind added there goes in
+  `UNIPROT_FIELDS` too. A construct's protein is rarely the entry's (both mRNAs Q9UKG4
   cites differ from it, one in length), so residues are never taken at face value: the
   CDS's translation is aligned locally with gaps, and regions are carried across. Under
   `MIN_IDENTITY` nothing is placed, since a wrong accession would otherwise mark the wrong
-  bases. The entry goes in `/db_xref` as `UniProtKB/Swiss-Prot:…`, as ENA's records have it,
-  so those files fill the field in themselves.
-  Domains, repeats, motifs and other bounded regions are offered too. Locally edited
+  bases. Domains, repeats, motifs and other bounded regions are offered too. Locally edited
   imported regions keep their source key and survive another import of that entry.
+- **Each region's evidence** comes from the alignment that placed it: traceback keeps its
+  columns (`path`), so a region's identity (identical over aligned pairs) and coverage
+  (entry residues paired, gaps inside counted, out of the whole region) are counted
+  (`regionMatch`), and View alignment shows those columns, each protein numbered its own
+  way (`regionColumns`). Whole means every residue paired with nothing between; gapped,
+  both ends paired but not all between; clipped, an end unpaired, and the row then names
+  the entry's residues that did line up and where. Only whole regions at
+  `STRONG_IDENTITY` or more start ticked; anything else waits for the user to tick it.
+- **Several entries** (`src/lib/uniprotImport.ts`, `src/views/uniprotDialog.ts`): a
+  chimera's domains come from more than one protein, so the dialog keeps every entry looked
+  up, each with its rows, ticks and an optional limit to residues of the CDS, which the
+  user sets where they know a junction; numbers stay the whole CDS's, and a region the
+  limit may cut says so. A failed lookup is one entry's state, never the dialog's. All
+  lists every entry's rows by CDS position. Rows of the same kind from different entries
+  that share at least half the longer stretch are rivals, and say so; where both are well
+  supported, or the CDS already has a region of that kind there (another entry's, or the
+  user's), neither starts ticked, as which homologue a stretch came from is the user's to
+  say. A region inside a much larger one of its kind is another annotation, not a rival.
+  New rows of an entry the CDS already used start unticked too, since what was left out
+  was left out on purpose. An import only adds and moves: a row already on the CDS shows
+  as there, an edited one is kept, and a region placed elsewhere now moves only when
+  ticked, keeping its id and colour; the user's regions and other entries' are never
+  touched. A region is found again by its entry and key, or by its entry, kind and name
+  over the same residues of the entry, so UniProt renumbering adds nothing twice. Everything
+  ticked is one `store.apply`.
+- **Which entries a CDS used** is read from what it keeps, with no field of its own
+  (`rememberedEntries`): its UniProt `/db_xref`s, as ENA's records have them
+  (`UniProtKB/Swiss-Prot:…`), then its regions' accessions. The cross-reference says which
+  protein the CDS is, so an import adds one only when one entry was looked up, the CDS had
+  none and every imported region on it is that entry's (`importNotes`). An entry giving
+  part of a chimera is named by its regions alone, and cross-references already there stay.

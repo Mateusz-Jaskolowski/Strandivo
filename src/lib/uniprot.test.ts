@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { accessionOf, alignProteins, describeAlignment, parseAccession, parseEntry, placeFeatures, translationForMatch, withAccession } from "./uniprot.ts";
+import { accessionOf, accessionsOf, alignmentLines, alignProteins, CDS_ONLY, describeAlignment, ENTRY_ONLY, PAIR, parseAccession, parseAccessions, parseEntry, placeFeatures, regionColumns, regionIdentity, regionMatch, translationForMatch, wellSupported, withAccession } from "./uniprot.ts";
 
 // The entry as the API gives it, and the protein of an mRNA that UniProt cites for it.
 const fixture = JSON.parse(readFileSync(new URL("../../testdata/uniprot/Q9UKG4.json", import.meta.url), "utf8"));
@@ -31,12 +31,23 @@ test("an accession is found in what people type or paste", () => {
   assert.equal(parseAccession(""), null);
 });
 
+test("several accessions can be typed or pasted at once", () => {
+  assert.deepEqual(parseAccessions("Q62205, D0E0C2"), ["Q62205", "D0E0C2"]);
+  assert.deepEqual(parseAccessions("https://www.uniprot.org/uniprotkb/Q62205/entry https://rest.uniprot.org/uniprotkb/d0e0c2.json q62205"), ["Q62205", "D0E0C2"]);
+  assert.deepEqual(parseAccessions("SLC13A4 and P00533-2"), ["P00533-2"]);
+  assert.deepEqual(parseAccessions("nothing here"), []);
+});
+
 test("a /db_xref is read in the ways files write it, and others are kept", () => {
   assert.equal(accessionOf({ db_xref: ["GeneID:26266", "UniProtKB/Swiss-Prot:Q9UKG4"] }), "Q9UKG4");
   assert.equal(accessionOf({ db_xref: "UniProtKB/TrEMBL:A0A024R161" }), "A0A024R161");
   assert.equal(accessionOf({ db_xref: ["GeneID:26266"] }), null);
   assert.equal(accessionOf(undefined), null);
-  assert.deepEqual(withAccession({ db_xref: ["GeneID:1", "UniProtKB/TrEMBL:A0A024R161"], gene: ["x"] }, "Q9UKG4", true), { db_xref: ["GeneID:1", "UniProtKB/Swiss-Prot:Q9UKG4"], gene: ["x"] });
+  assert.deepEqual(accessionsOf({ db_xref: ["UniProtKB/Swiss-Prot:Q62205", "GeneID:1", "UniProt:D0E0C2", "UniProtKB/Swiss-Prot:Q62205"] }), ["Q62205", "D0E0C2"]);
+  // Another entry's cross-reference stays: a chimera's CDS can have had one before.
+  assert.deepEqual(withAccession({ db_xref: ["GeneID:1", "UniProtKB/TrEMBL:A0A024R161"], gene: ["x"] }, "Q9UKG4", true), { db_xref: ["GeneID:1", "UniProtKB/TrEMBL:A0A024R161", "UniProtKB/Swiss-Prot:Q9UKG4"], gene: ["x"] });
+  // The same entry's is replaced, as an entry moves from TrEMBL to Swiss-Prot.
+  assert.deepEqual(withAccession({ db_xref: ["UniProtKB/TrEMBL:Q9UKG4", "GeneID:1"] }, "Q9UKG4", true), { db_xref: ["GeneID:1", "UniProtKB/Swiss-Prot:Q9UKG4"] });
   assert.deepEqual(withAccession({}, "A0A024R161", false), { db_xref: ["UniProtKB/TrEMBL:A0A024R161"] });
 });
 
@@ -117,9 +128,116 @@ test("a tagged truncation says what is whole, clipped and absent", () => {
 
 test("a helix split by a deletion is still placed, and says it isn't whole", () => {
   const { placed } = place(protein.slice(0, 85) + protein.slice(90));
-  assert.equal(placed[2].placement, "clipped");
+  // Both ends of TM3 (77–97) line up, but five residues inside face a gap.
+  assert.equal(placed[2].placement, "gapped");
+  assert.deepEqual([placed[2].match.pairs, placed[2].match.length, placed[2].match.inserted], [16, 21, 0]);
+  assert.equal(placed[2].pastLimit, false);
   assert.equal(placed[1].placement, "whole");
   assert.deepEqual(placed[3].region && [placed[3].region.start, placed[3].region.end], [108, 128]);
+});
+
+test("each region says how alike it is and how much of it lines up", () => {
+  // TM3 (77–97) exact; TM4 (113–133) with two substitutions.
+  const cds = protein.slice(0, 115) + "WW" + protein.slice(117);
+  const { placed } = place(cds);
+  const exact = placed[2].match;
+  assert.deepEqual([exact.pairs, exact.same, exact.length, exact.inserted], [21, 21, 21, 0]);
+  assert.equal(regionIdentity(exact), 1);
+  const changed = placed[3].match;
+  assert.deepEqual([changed.pairs, changed.same, changed.length], [21, 19, 21]);
+  assert.equal(placed[3].placement, "whole");
+  assert.ok(wellSupported(placed[3]));
+  assert.ok(Math.abs(regionIdentity(changed) - 19 / 21) < 1e-9);
+});
+
+test("residues the CDS has inside a region make it gapped, though all of the entry's line up", () => {
+  // Five residues more in the middle of TM3 (77–97).
+  const cds = protein.slice(0, 86) + "GGGGG" + protein.slice(86);
+  const tm3 = place(cds).placed[2];
+  assert.equal(tm3.placement, "gapped");
+  assert.deepEqual([tm3.match.pairs, tm3.match.length, tm3.match.inserted], [21, 21, 5]);
+  assert.deepEqual([tm3.region!.start, tm3.region!.end, tm3.region!.sourceStart, tm3.region!.sourceEnd], [77, 102, 77, 97]);
+  assert.equal(wellSupported(tm3), false);
+});
+
+test("the alignment under a region is what placed it, gaps and all", () => {
+  const cds = protein.slice(0, 85) + "GG" + protein.slice(90);
+  const a = alignProteins(cds, entry.sequence)!;
+  // The path walks both proteins from where the alignment starts to where it ends.
+  const counts = [0, 0, 0];
+  for (const column of a.path) counts[column]++;
+  assert.equal(a.cdsStart + counts[PAIR] + counts[CDS_ONLY], describeAlignment(a).cdsTo);
+  assert.equal(a.entryStart + counts[PAIR] + counts[ENTRY_ONLY], describeAlignment(a).entryTo);
+  const columns = regionColumns(a, 77, 97);
+  assert.equal(columns.filter(c => c.entry !== null).length, 21);
+  assert.equal(columns.filter(c => c.cds === null).length, 21 - regionMatch(a, 77, 97).pairs);
+  assert.equal(columns.filter(c => c.entry === null).length, regionMatch(a, 77, 97).inserted);
+  const lines = alignmentLines(a, columns, 10);
+  assert.equal(lines.length, Math.ceil(columns.length / 10));
+  assert.equal(lines.map(l => l.entry.replace(/-/g, "")).join(""), entry.sequence.slice(76, 97));
+  assert.equal(lines[0].entryFrom, 77);
+  assert.equal(lines[0].cdsFrom, 77);
+  assert.equal(lines.at(-1)!.entryTo, 97);
+  assert.match(lines.map(l => l.cds).join(""), /-/);
+  assert.match(lines.map(l => l.marks).join(""), /^\|+/);
+});
+
+test("a substitution shows as a mark of its own", () => {
+  const cds = protein.slice(0, 80) + "W" + protein.slice(81);
+  const a = alignProteins(cds, entry.sequence)!;
+  const [line] = alignmentLines(a, regionColumns(a, 77, 97), 60);
+  assert.equal(line.marks, "||||·||||||||||||||||");
+  assert.equal(line.cds[4], "W");
+});
+
+test("residues of a region past the alignment's ends face gaps", () => {
+  const a = alignProteins("MHHHHHHENLYFQG" + protein.slice(39, 560), entry.sequence)!;
+  const columns = regionColumns(a, 543, 570);
+  assert.equal(columns.length, 28);
+  assert.deepEqual(columns.slice(-10).map(c => c.cds), Array(10).fill(null));
+  const line = alignmentLines(a, columns, 60)[0];
+  assert.equal(line.entryFrom, 543);
+  assert.equal(line.entryTo, 570);
+  assert.equal(line.cdsTo, line.cdsFrom! + 17);
+});
+
+test("limiting the search to part of the CDS keeps the CDS's own numbers", () => {
+  const cds = GFP + protein;
+  const within = { start: GFP.length + 1, end: GFP.length + 320 };
+  const a = alignProteins(cds, entry.sequence, within)!;
+  assert.deepEqual(a.within, within);
+  const placed = placeFeatures(entry, a);
+  assert.deepEqual([placed[0].region!.start, placed[0].region!.end], [GFP.length + 13, GFP.length + 33]);
+  assert.equal(placed[4].placement, "whole");
+  // TM6 (309–329) runs past the limit: clipped there, and said to be.
+  assert.equal(placed[5].placement, "clipped");
+  assert.equal(placed[5].pastLimit, true);
+  assert.deepEqual([placed[5].region!.end, placed[5].region!.sourceEnd], [GFP.length + 320, 320]);
+  // What lies wholly past the limit isn't here, and may be past it.
+  assert.equal(placed[6].placement, "absent");
+  assert.equal(placed[6].pastLimit, true);
+  // A limit covering the whole CDS is no limit, and an empty one finds nothing.
+  assert.equal(alignProteins(cds, entry.sequence, { start: 1, end: cds.length })!.within, null);
+  assert.equal(alignProteins(cds, entry.sequence, { start: 10, end: 5 }), null);
+});
+
+test("a region cut by the limit says so; one the construct itself cuts short doesn't", () => {
+  // TM3 is 77–97; limit the search to end at its 90th residue.
+  const limited = placeFeatures(entry, alignProteins(protein, entry.sequence, { start: 1, end: 90 })!)[2];
+  assert.equal(limited.placement, "clipped");
+  assert.equal(limited.pastLimit, true);
+  assert.deepEqual([limited.region!.start, limited.region!.end, limited.region!.sourceEnd], [77, 90, 90]);
+  // The same helix cut short in the construct, with the CDS ending there.
+  const short = placeFeatures(entry, alignProteins(protein.slice(0, 90), entry.sequence)!)[2];
+  assert.equal(short.placement, "clipped");
+  assert.equal(short.pastLimit, false);
+});
+
+test("two regions of a kind over the same residues keep keys of their own", () => {
+  const e = parseEntry({ primaryAccession: "P12345", sequence: { value: "M".repeat(60) }, features: ["Disordered", "Interaction with X"].map(description => ({ type: "Region", description, location: { start: { value: 10 }, end: { value: 30 } } })) })!;
+  const placed = placeFeatures(e, alignProteins(e.sequence, e.sequence)!);
+  assert.deepEqual(placed.map(p => p.key), ["Region:10-30", "Region:10-30#2"]);
+  assert.deepEqual(placed.map(p => p.region!.sourceKey), ["Region:10-30", "Region:10-30#2"]);
 });
 
 test("a large insert in a loop leaves the helices on both sides", () => {

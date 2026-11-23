@@ -703,10 +703,22 @@ export async function pickFiles(title: string, extensions: string[], keep = fals
 export const pickFileKeys = (title: string, extensions: string[]) => pickToOpen(title, extensions);
 
 /**
+ * End-to-end tests catch saves with `window.__strandivoSave`, as WebDriver can't answer the
+ * app's save dialog: the place chosen is then the name offered, after "test:", and what is
+ * saved there is handed to the hook instead of written.
+ */
+type TestSave = (name: string, contents: string | Uint8Array) => void;
+const testSave = (path?: string): TestSave | undefined => {
+  const hook = (window as unknown as { __strandivoSave?: TestSave }).__strandivoSave;
+  return hook && (path === undefined || path.startsWith("test:")) ? hook : undefined;
+};
+
+/**
  * Asks where to save; returns null if cancelled. In a browser: the browser's save dialog
  * where it has one, or else a download of the suggested name (src/webFiles.ts).
  */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
+  if (testSave()) return `test:${basename(defaultPath)}`;
   if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);
   const { save } = await import("@tauri-apps/plugin-dialog");
   const p = await save({ defaultPath, filters });
@@ -715,6 +727,8 @@ export async function chooseSavePath(defaultPath: string, filters: { name: strin
 
 /** Saves text: to disk in the app; in a browser over a file it has a handle to, or else as a download. */
 export async function saveText(path: string, contents: string): Promise<void> {
+  const hook = testSave(path);
+  if (hook) return hook(path.slice(5), contents);
   if (isDesktop) return writeFile(path, contents);
   await saveKey(path, contents);
 }
@@ -724,6 +738,8 @@ export async function saveText(path: string, contents: string): Promise<void> {
  * body, not as JSON, with the path in a header, percent-encoded as headers are ASCII.
  */
 export async function saveBytes(path: string, bytes: Uint8Array): Promise<void> {
+  const hook = testSave(path);
+  if (hook) return hook(path.slice(5), bytes);
   if (isDesktop) return invoke<void>("write_bytes", bytes, { headers: { path: encodeURIComponent(path) } });
   await saveKey(path, bytes);
 }

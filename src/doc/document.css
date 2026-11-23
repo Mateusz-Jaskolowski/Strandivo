@@ -4834,6 +4834,23 @@ main.sv-enzyme-section-body {
 .sv-gel-lane-on {
   fill: var(--accent-text);
 }
+/* A gel as an image (`gelFigure`): said to be simulated over it, its lanes in a key under it. */
+.sv-gel-caption {
+  fill: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sv-gel-key {
+  fill: var(--text-2);
+  font-size: 11px;
+}
+/* Copy image and the saves, under the PCR product's gel. */
+.sv-gel-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
 
 /* The clone table in the Reads tab: one row per different clone. */
 .sv-clonetab-wrap {

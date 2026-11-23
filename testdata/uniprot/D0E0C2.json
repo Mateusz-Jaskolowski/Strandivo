@@ -1,0 +1,1616 @@
+{
+ "entryType": "UniProtKB reviewed (Swiss-Prot)",
+ "primaryAccession": "D0E0C2",
+ "proteinDescription": {
+  "recommendedName": {
+   "fullName": {
+    "evidences": [
+     {
+      "evidenceCode": "ECO:0000303",
+      "source": "PubMed",
+      "id": "19800971"
+     }
+    ],
+    "value": "Sodium channel protein PaFPC1"
+   },
+   "shortNames": [
+    {
+     "evidences": [
+      {
+       "evidenceCode": "ECO:0000303",
+       "source": "PubMed",
+       "id": "19800971"
+      }
+     ],
+     "value": "PaFPC1"
+    }
+   ]
+  },
+  "alternativeNames": [
+   {
+    "fullName": {
+     "evidences": [
+      {
+       "evidenceCode": "ECO:0000303",
+       "source": "PubMed",
+       "id": "28183995"
+      }
+     ],
+     "value": "NavPaS"
+    }
+   }
+  ]
+ },
+ "features": [
+  {
+   "type": "Chain",
+   "location": {
+    "start": {
+     "value": 1,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1553,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Sodium channel protein PaFPC1",
+   "featureId": "PRO_0000439762"
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 140,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 141,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 159,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S1 of repeat I",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 160,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 165,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 166,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 186,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S2 of repeat I",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 187,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 200,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 201,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 218,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S3 of repeat I",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 219,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 224,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 225,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 241,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S4 of repeat I",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 242,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 260,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 261,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 280,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S5 of repeat I",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 281,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 360,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Intramembrane",
+   "location": {
+    "start": {
+     "value": 361,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 385,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Pore-forming",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 386,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 392,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 393,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 413,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S6 of repeat I",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 414,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 519,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 520,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 538,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S1 of repeat II",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 539,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 549,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 550,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 569,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S2 of repeat II",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 570,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 583,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 584,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 603,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S3 of repeat II",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 604,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 605,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 606,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 623,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S4 of repeat II",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 624,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 639,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 640,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 658,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S5 of repeat II",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 659,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 686,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Intramembrane",
+   "location": {
+    "start": {
+     "value": 687,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 707,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Pore-forming",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 708,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 719,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 720,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 740,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S6 of repeat II",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 741,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 857,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 858,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 875,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S1 of repeat III",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 876,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 888,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 889,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 907,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S2 of repeat III",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 908,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 921,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 922,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 940,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S3 of repeat III",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 941,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 945,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 946,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 964,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S4 of repeat III",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 965,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 981,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 982,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1001,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S5 of repeat III",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1002,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1047,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Intramembrane",
+   "location": {
+    "start": {
+     "value": 1048,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1069,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Pore-forming",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1070,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1086,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 1087,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1108,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S6 of repeat III",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1109,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1171,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 1172,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1189,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S1 of repeat IV",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1190,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1200,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 1201,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1219,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S2 of repeat IV",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1220,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1231,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 1232,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1249,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S3 of repeat IV",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1250,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1262,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 1263,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1279,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S4 of repeat IV",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1280,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1298,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 1299,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1316,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S5 of repeat IV",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1317,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1338,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Intramembrane",
+   "location": {
+    "start": {
+     "value": 1339,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1361,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Pore-forming",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1362,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1387,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Extracellular",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Transmembrane",
+   "location": {
+    "start": {
+     "value": 1388,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1410,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Helical; Name=S6 of repeat IV",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Topological domain",
+   "location": {
+    "start": {
+     "value": 1411,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1553,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Cytoplasmic",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000269",
+     "source": "PubMed",
+     "id": "28183995"
+    },
+    {
+     "evidenceCode": "ECO:0007744",
+     "source": "PDB",
+     "id": "5X0M"
+    }
+   ]
+  },
+  {
+   "type": "Region",
+   "location": {
+    "start": {
+     "value": 1,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 68,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Disordered",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000256",
+     "source": "SAM",
+     "id": "MobiDB-lite"
+    }
+   ]
+  },
+  {
+   "type": "Region",
+   "location": {
+    "start": {
+     "value": 1133,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 1146,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Linker region that may regulate channel inactivation",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000303",
+     "source": "PubMed",
+     "id": "28183995"
+    }
+   ]
+  },
+  {
+   "type": "Compositional bias",
+   "location": {
+    "start": {
+     "value": 34,
+     "modifier": "EXACT"
+    },
+    "end": {
+     "value": 60,
+     "modifier": "EXACT"
+    }
+   },
+   "description": "Basic and acidic residues",
+   "evidences": [
+    {
+     "evidenceCode": "ECO:0000256",
+     "source": "SAM",
+     "id": "MobiDB-lite"
+    }
+   ]
+  }
+ ],
+ "sequence": {
+  "value": "MADNSPLIREERQRLFRPYTRAMLTAPSAQPAKENGKTEENKDNSRDKGRGANKDRDGSAHPDQALEQGSRLPARMRNIFPAELASTPLEDFDPFYKNKKTFVVVTKAGDIFRFSGEKSLWMLDPFTPIRRVAISTMVQPIFSYFIMITILIHCIFMIMPATQTTYILELVFLSIYTIEVVVKVLARGFILHPFAYLRDPWNWLDFLVTLIGYITLVVDLGHLYALRAFRVLRSWRTVTIVPGWRTIVDALSLSITSLKDLVLLLLFSLFVFAVLGLQIYMGVLTQKCVKHFPADGSWGNFTDERWFNYTSNSSHWYIPDDWIEYPLCGNSSGAGMCPPGYTCLQGYGGNPNYGYTSFDTFGWAFLSVFRLVTLDYWEDLYQLALRSAGPWHILFFIIVVFYGTFCFLNFILAVVVMSYTHMVKRADEEKAAERELKKEKKAASVANNTANGQEQTTIEMNGDEAVVIDNNDQAARQQSDPETPAPSVTQRLTDFLCVWDCCVPWQKLQGAIGAVVLSPFFELFIAVIIVLNITFMALDHHDMNIEFERILRTGNYIFTSIYIVEAVLKIIALSPKFYFKDSWNVFDFIIVVFAILELGLEGVQGLSVFRSFRLLRVFRLAKFWPTLNNFMSVMTKSYGAFVNVMYVMFLLLFIFAIIGMQLFGMNYIDNMERFPDGDLPRWNFTDFLHSFMIVFRALCGEWIESMWDCMLVGDWSCIPFFVAVFFVGNLVILNLLIALLLNNYGSFCTSPTSDEEDSKDEDALAQIVRIFKRFKPNLNAVKLSPMKPDSEDIVESQEIQGNNIADAEDVLAGEFPPDCCCNAFYKCFPSRPARDSSVQRMWSNIRRVCFLLAKNKYFQKFVTAVLVITSVLLALEDIYLPQRPVLVNITLYVDYVLTAFFVIEMIIMLFAVGFKKYFTSKWYWLDFIVVVAYLLNFVLMCAGIEALQTLRLLRVFRLFRPLSKVNGMQVVTSTLVEAVPHIFNVILVGIFFWLVFAIMGVQLFAGKFYKCVDENSTVLSHEITMDRNDCLHENYTWENSPMNFDHVGNAYLSLLQVATFKGWLQIMNDAIDSREVHKQPIRETNIYMYLYFIFFIVFGSFFILKLFVCILIDIFRQQRRKAEGLSATDSRTQLIYRRAVMRTMSAKPVKRIPKPTCHPQSLMYDISVNRKFEYTMMILIILNVAVMAIDHYGQSMEFSEVLDYLNLIFIIIFFVECVIKVSGLRHHYFKDPWNIIDFLYVVLAIAGLMLSDVIEKYFISPTLLRILRILRVGRLLRYFQSARGMRLLLLALRKALRTLFNVSFLLFVIMFVYAVFGMEFFMHIRDAGAIDDVYNFKTFGQSIILLFQLATSAGWDGVYFAIANEEDCRAPDHELGYPGNCGSRALGIAYLVSYLIITCLVVINMYAAVILDYVLEVYEDSKEGLTDDDYDMFFEVWQQFDPEATQYIRYDQLSELLEALQPPLQVQKPNKYKILSMNIPICKDDHIFYKDVLEALVKDVFSRRGSPVEAGDVQAPNVDEAEYKPVSSTLQRQREEYCVRLIQNAWRKHKQQN",
+  "length": 1553,
+  "molWeight": 179116,
+  "crc64": "62CBCDA0A59D61D5",
+  "md5": "70913EA559351824170AA76A09DC046E"
+ },
+ "extraAttributes": {
+  "uniParcId": "UPI0001B9A972"
+ }
+}

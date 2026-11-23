@@ -15,6 +15,7 @@ included under their original licences, all compatible with this project's GPL-3
 | `snapgene/pIB2-SEC13-mEGFP.dna` | TeselaGen tg-oss bio-parsers test data | MIT |
 
 | `uniprot/Q9UKG4.json`, `uniprot/P00533.json` | [UniProtKB](https://www.uniprot.org), REST API, release 2026_03: the fields `src/platform.ts` asks for | CC BY 4.0 |
+| `uniprot/Q62205.json`, `uniprot/D0E0C2.json` | [UniProtKB](https://www.uniprot.org), REST API, release 2026_04: the fields `src/platform.ts` asks for, domains and other regions included | CC BY 4.0 |
 | `uniprot/SLC13A4-BC030689.gb` | ENA/GenBank BC030689, its CDS and sequence only, with UniProt's cross-reference | Public sequence record |
 
 `teselagen-example1.ab1` is an ABI pGEM control read. Aligned to pUC19 it correctly shows

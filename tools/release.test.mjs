@@ -7,7 +7,7 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compareVersions, jobProgress, publishArgs, pullRequestBody, wrap } from "./release.mjs";
+import { compareVersions, jobProgress, openCandidatesProblem, publishArgs, pullRequestBody, wrap } from "./release.mjs";
 import { setVersion } from "./set-version.mjs";
 
 test("versions are compared by number, a pre-release before its release", () => {
@@ -74,6 +74,27 @@ test("publishing makes a release latest, and a candidate stays a pre-release", (
   assert.deepEqual(publishArgs("0.5.0"), ["release", "edit", "v0.5.0", "--draft=false", "--latest"]);
   // GitHub never makes a pre-release latest, so no installed copy is offered a candidate.
   assert.deepEqual(publishArgs("0.5.0-rc.1"), ["release", "edit", "v0.5.0-rc.1", "--draft=false"]);
+});
+
+test("a release waits for every candidate's issue to be closed, and names those still open", () => {
+  const open = [
+    { number: 164, title: "Try 0.6.0-rc.1", url: "https://github.com/o/r/issues/164" },
+    { number: 170, title: "Try 0.6.0-rc.2", url: "https://github.com/o/r/issues/170" }
+  ];
+  const problem = openCandidatesProblem("0.6.0", () => open);
+  assert.match(problem, /before releasing 0\.6\.0/);
+  assert.match(problem, /^ {2}#164 Try 0\.6\.0-rc\.1 \(https:\/\/github\.com\/o\/r\/issues\/164\)$/m);
+  assert.match(problem, /^ {2}#170 Try 0\.6\.0-rc\.2 /m);
+  assert.equal(openCandidatesProblem("0.6.0", () => []), null);
+  // A candidate is tagged whatever is open, and doesn't ask.
+  assert.equal(openCandidatesProblem("0.6.0-rc.2", () => assert.fail("a candidate read the issues")), null);
+});
+
+test("a release stops when the candidates' issues can't be read", () => {
+  const failed = openCandidatesProblem("0.6.0", () => { throw new Error("gh: HTTP 401: Bad credentials"); });
+  assert.match(failed, /^Couldn't read which release-candidate issues are open, so 0\.6\.0 isn't tagged:/);
+  assert.match(failed, /Bad credentials/);
+  assert.match(openCandidatesProblem("0.6.0", () => ({ message: "Not Found" })), /^Couldn't read/);
 });
 
 test("a build's progress counts its finished jobs", () => {

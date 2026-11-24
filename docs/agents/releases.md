@@ -68,6 +68,9 @@ and CI checks that they exist.
   should see. A later candidate's issue covers what changed since the previous candidate,
   plus anything left unticked. Before the release itself, every candidate's issue is
   closed: each item ticked, or its problem moved to an issue of its own.
+  `npm run release:tag` holds to this: it won't tag a release, though it will a
+  candidate, while an issue labelled `release-candidate` is open, and names them. It
+  only reads issues, never closes one, and stops if it can't read them.
   Tagging stays a person's step: an Actions token that could push `v*` tags would get
   round the ruleset that keeps them to admins. `check-version` in
   `.github/scripts/release.mjs` fails a tag that doesn't match the three

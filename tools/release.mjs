@@ -11,7 +11,8 @@
 //     `npm run release -- 0.3.0 --no-push` stops after the commit (npm keeps flags before --).
 //   npm run release:tag
 //     Once that pull request is merged: brings main up to date, checks it is ready to
-//     release (the same check as the release build), pushes the tag v0.3.0 on it and
+//     release (the same check as the release build, and for a release, not a candidate,
+//     that no issue labelled release-candidate is open), pushes the tag v0.3.0 on it and
 //     follows the release from there, as below.
 //   npm run release:follow [0.3.0]
 //     Takes a tagged release the rest of the way, from wherever it is (Ctrl+C leaves it as
@@ -103,6 +104,32 @@ export function jobProgress(jobs) {
 export function publishArgs(version) {
   const args = ["release", "edit", `v${version}`, "--draft=false"];
   return isPrerelease(version) ? args : [...args, "--latest"];
+}
+
+/** The label of each release candidate's "Try <version>" issue of things to check by hand. */
+export const CANDIDATE_LABEL = "release-candidate";
+
+/**
+ * Why `version` can't be tagged while candidates' issues are open, or null. Every
+ * candidate's issue is closed before the release itself, so a release waits for them; a
+ * candidate doesn't, and never asks. `listOpen` gives the open issues labelled
+ * CANDIDATE_LABEL ({ number, title, url }, as gh lists them); a list it can't give stops
+ * the release too, as an unread list isn't an empty one. Issues are only read.
+ */
+export function openCandidatesProblem(version, listOpen) {
+  if (isPrerelease(version)) return null;
+  let issues;
+  try {
+    issues = listOpen();
+    if (!Array.isArray(issues)) throw new Error("gh gave no list of issues.");
+  } catch (e) {
+    return `Couldn't read which ${CANDIDATE_LABEL} issues are open, so ${version} isn't tagged:\n  ${e.message}`;
+  }
+  if (!issues.length) return null;
+  return [
+    `Close every release candidate's issue before releasing ${version}: tick each item, or move its problem to an issue of its own. Still open:`,
+    ...issues.map(i => `  #${i.number} ${i.title} (${i.url})`)
+  ].join("\n");
 }
 
 class Stop extends Error {}
@@ -204,6 +231,9 @@ async function tag() {
   if (notes) problems.push(notes);
   if (problems.length) throw new Stop(`main isn't ready to release ${version}:\n  ${problems.join("\n  ")}`);
   if (tagExists(name)) throw new Stop(`${name} is already tagged: main has no new version to release.`);
+  const candidates = openCandidatesProblem(version, () =>
+    JSON.parse(gh("issue", "list", "--label", CANDIDATE_LABEL, "--state", "open", "--limit", "100", "--json", "number,title,url")));
+  if (candidates) throw new Stop(candidates);
 
   const sha = git("rev-parse", "HEAD");
   const runs = run("gh", ["run", "list", "--commit", sha, "--workflow", "checks.yml", "--json", "status,conclusion,url", "--limit", "1"], { allowFail: true });

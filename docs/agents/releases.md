@@ -60,14 +60,14 @@ and CI checks that they exist.
   candidate without asking. 0.3.0 is why: its crash happened only in a signed build, the one
   thing nothing ran before users had it. Use the candidate for a day with statistics on.
   Whoever prepares a candidate also writes a list of things to try by hand and opens an
-  issue "Try <version>" with it as a task list, linking the release pull request. The list
-  covers only what CI can't check, for what changed since the last release: what runs only
-  in a signed build, native code on systems CI doesn't run, what a person has to look at
-  (dark mode, layout, printing) and fixes for reported bugs (ask the reporter to try
-  again). Each item says what to do and what you should see. A later candidate's issue
-  covers what changed since the previous candidate, plus anything left unticked. Before
-  the release itself, every candidate's issue is closed: each item ticked, or its problem
-  moved to an issue of its own.
+  issue "Try <version>" with it as a task list, labelled `release-candidate` and linking
+  the release pull request. The list covers only what CI can't check, for what changed
+  since the last release: what runs only in a signed build, native code on systems CI
+  doesn't run, what a person has to look at (dark mode, layout, printing) and fixes for
+  reported bugs (ask the reporter to try again). Each item says what to do and what you
+  should see. A later candidate's issue covers what changed since the previous candidate,
+  plus anything left unticked. Before the release itself, every candidate's issue is
+  closed: each item ticked, or its problem moved to an issue of its own.
   Tagging stays a person's step: an Actions token that could push `v*` tags would get
   round the ruleset that keeps them to admins. `check-version` in
   `.github/scripts/release.mjs` fails a tag that doesn't match the three

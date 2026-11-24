@@ -14,6 +14,7 @@ import { programContext } from "./pcrPlan.ts";
 import {
   buildPcrPlanSnapshot,
   DEFAULT_PLAN_SECTIONS,
+  escapeHtml,
   mdText,
   paperForLocale,
   PCR_PLAN_SHEET_CSS,
@@ -604,6 +605,48 @@ test("a hard-to-read digest is said once: with the gel, or among the warnings wi
   const noGel = { ...DEFAULT_PLAN_SECTIONS, gel: false };
   assert.equal(said(pcrPlanHtml(snapshot, meta, noGel)), 1);
   assert.match(pcrPlanMarkdown(snapshot, meta, noGel), /- Selected digest \(BtsI\) has small/);
+});
+
+test("a digest the template cannot run is explained with the gel or among the warnings, without adding a lane", () => {
+  const pad = "ACGT".repeat(25);
+  const sequence = pad + "CATGCATG" + pad + "CATG" + pad;
+  const { input } = buildScenario();
+  const template = { ...input.template, sequence };
+  const forward: PlacedPrimer = { name: "F", start: 150, end: 169, strand: 1, bases: sequence.slice(150, 170) };
+  const reverse: PlacedPrimer = { name: "R", start: 250, end: 269, strand: -1, bases: reverseComplement(sequence.slice(250, 270)) };
+  const product = pcrProduct(sequence, true, forward, reverse);
+  assert.ok(product);
+  const overview = productOverview(product, sequence, true, { enzymeSource: "lab", enzymeFilter: "all", labEnzymes: ["NlaIII"], personalEnzymes: [] });
+  const digest = overview.digests.find(candidate => digestName(candidate) === "NlaIII");
+  assert.ok(digest);
+  const setup = { ...input, template, forward, reverse, product, overview, digest, alignF: alignPrimer(forward, sequence), alignR: alignPrimer(reverse, sequence) };
+  const snapshot = buildPcrPlanSnapshot(setup);
+  const notice = "The template's NlaIII digest isn't shown. The cuts overlap on the two strands, so their fragments can’t be simulated.";
+  assert.deepEqual(snapshot.gel.lanes.map(lane => [lane.what, lane.sizes]), [
+    ["Template, supercoiled", [312]], ["Product, uncut", [120]], ["Product, NlaIII", [62, 58]]
+  ]);
+  assert.equal(snapshot.gel.templateDigestNotice, notice);
+
+  const meta = { title: "Withheld digest", experimentDate: "", notes: "" };
+  const noGel = { ...DEFAULT_PLAN_SECTIONS, gel: false };
+  assert.equal(planWarnings(snapshot, DEFAULT_PLAN_SECTIONS).includes(notice), false);
+  assert.ok(planWarnings(snapshot, noGel).includes(notice));
+  const htmlNotice = escapeHtml(notice);
+  const mdNotice = mdText(notice);
+  const html = pcrPlanHtml(snapshot, meta);
+  const md = pcrPlanMarkdown(snapshot, meta);
+  assert.equal(html.split(htmlNotice).length - 1, 1);
+  assert.equal(md.split(mdNotice).length - 1, 1);
+  assert.ok(html.includes(`<p class="sv-sheet-note">${htmlNotice}</p>`));
+  assert.ok(md.includes(`_${mdNotice}_`));
+  const htmlOff = pcrPlanHtml(snapshot, meta, noGel);
+  const mdOff = pcrPlanMarkdown(snapshot, meta, noGel);
+  assert.equal(htmlOff.split(htmlNotice).length - 1, 1);
+  assert.equal(mdOff.split(mdNotice).length - 1, 1);
+  assert.ok(htmlOff.includes(`<li>${htmlNotice}</li>`));
+  assert.ok(mdOff.includes(`\n- ${mdNotice}\n`));
+  assert.equal(buildPcrPlanSnapshot({ ...setup, digest: null }).gel.templateDigestNotice, null);
+  assert.equal(buildPcrPlanSnapshot({ ...setup, templateKind: "complex" }).gel.templateDigestNotice, null);
 });
 
 test("the supercoiled band is explained only when a lane draws one", () => {

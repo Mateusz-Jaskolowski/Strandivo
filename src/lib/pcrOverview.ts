@@ -65,6 +65,11 @@ export function templateDigestProblem(template: SeqData, kind: TemplateKind, dig
   return templateDigest(template, digest.enzymes, methylation).problem ?? null;
 }
 
+export function templateDigestNotice(template: SeqData, kind: TemplateKind, digest: SuggestedDigest | null, methylation?: DnaMethylation): string | null {
+  const problem = templateDigestProblem(template, kind, digest, methylation);
+  return problem && digest ? `The template's ${digestName(digest)} digest isn't shown. ${problem}` : null;
+}
+
 /** One lane of the PCR product's gel. */
 export interface PcrGelLane {
   /** Whose DNA it holds. */

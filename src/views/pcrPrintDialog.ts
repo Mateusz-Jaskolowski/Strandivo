@@ -12,10 +12,10 @@ import type { DocContext } from "../doc/context.ts";
 import { fmtVolume } from "../lib/pcrMix.ts";
 import {
   DEFAULT_PLAN_SECTIONS,
-  gelLaneNote,
   mixSummaryText,
   paperForLocale,
   pcrPlanGelLayout,
+  pcrPlanGelNotes,
   pcrPlanHtml,
   pcrPlanMarkdown,
   pcrPlanOverviewLayout,
@@ -238,7 +238,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
       ...PRINT_GC_KEY.map(k => h("span", null, h("span", { class: "sv-sheet-gc-swatch", style: { background: PRINT_GC_FILL[k.level] } }), k.label))
     );
 
-  const laneNote = gelLaneNote(snapshot.gel, true);
+  const gelNotes = pcrPlanGelNotes(snapshot.gel, true);
   const buildGelDetails = (): Node[] => [
     h("p", { class: "sv-sheet-note" }, h("strong", null, "Digest: "), snapshot.digest ? `${snapshot.digest.name} — ${snapshot.digestNote}` : snapshot.digestNote),
     h(
@@ -248,7 +248,7 @@ function buildSheetDom(snapshot: PcrPlanSnapshot, initialMeta: PcrPlanMeta, init
         h("li", null, h("span", { class: "sv-sheet-lane-no" }, String(l.number)), h("span", null, l.what), h("span", { class: "sv-sheet-mono" }, l.sizesText))
       )
     ),
-    ...(laneNote ? [h("p", { class: "sv-sheet-note" }, laneNote)] : [])
+    ...gelNotes.map(note => h("p", { class: "sv-sheet-note" }, note))
   ];
 
   const buildFlanksNote = () =>

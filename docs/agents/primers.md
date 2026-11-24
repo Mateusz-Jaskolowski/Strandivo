@@ -191,8 +191,10 @@ and CI checks that they exist.
   theme (`color-scheme: light` on the printed page), keeps its columns on paper (the
   narrow-window rule is screen only), keeps short sections and blank writing lines whole,
   and writes the mix total as the table's last row, as a browser repeats a `tfoot` on
-  each page. A stale program or a hard-to-read digest is said in its section, or among the
-  warnings when that section is left out (`planWarnings`). One preview is open at a time,
+  each page. A stale program, a hard-to-read digest, or a template digest that could not be
+  simulated is explained in its section, or among the warnings when that section is
+  left out (`planWarnings`). The snapshot keeps the dialog's template digest notice
+  without adding a lane to the gel. One preview is open at a time,
   and while Print… or Save as PDF… runs the copy being printed is held still and kept
   until it ends, even if the preview closes; the page title is the plan's meanwhile. Title,
   date and notes are never kept; the sections chosen and the PDF paper are

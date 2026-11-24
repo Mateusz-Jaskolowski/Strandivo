@@ -1071,6 +1071,53 @@ async function main(outDir) {
     await s.click("//button[@data-focus='show-on-map']");
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
 
+    {
+      await s.click("//button[@aria-label='Enzyme library']");
+      await s.click("//button[normalize-space()='My enzymes']");
+      await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
+      await s.exec(`
+        const all = document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-title');
+        if (all.getAttribute('aria-expanded') === 'false') all.click();
+        const search = document.querySelector('[aria-label="Search My enzymes"]');
+        search.value = 'NlaIII';
+        search.dispatchEvent(new Event('input'));
+      `);
+      await s.click("//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='NlaIII']");
+      await s.waitFor("document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme=\"NlaIII\"]')?.checked", 5000);
+      await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
+
+      const pad = "ACGT".repeat(25);
+      const sequence = pad + "CATGCATG" + pad + "CATG" + pad;
+      const reverse = Array.from(sequence.slice(250, 270), base => "TGCA"["ACGT".indexOf(base)]).reverse().join("");
+      const primers = [
+        { id: "gel-f", name: "F", bases: sequence.slice(150, 170), start: 150, end: 169, strand: 1, notes: {}, raw: {} },
+        { id: "gel-r", name: "R", bases: reverse, start: 250, end: 269, strand: -1, notes: {}, raw: {} }
+      ];
+      await s.exec("window.__strandivo.openNew(arguments[0]);", { name: "Withheld digest", sequence, circular: true, description: "", features: [], sources: [], primers });
+      await s.waitFor("window.__strandivo.store?.data.name === 'Withheld digest'", 5000);
+      await s.exec("window.__strandivo.setView('primers');");
+      await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]");
+      await s.waitFor("document.querySelector('.sv-dialog select[aria-label=\"Forward primer\"]')", 5000);
+      await enzymeChoice("Forward primer", "p:gel-f");
+      await enzymeChoice("Reverse primer", "p:gel-r");
+      await s.waitFor("document.querySelector('[aria-label=\"Product enzyme list\"]')", 5000);
+      await enzymeChoice("Product enzyme list", "personal");
+      await s.waitFor("document.querySelector('[aria-label=\"Product enzyme list\"] [data-value=\"personal\"][aria-checked=\"true\"]')", 5000);
+      await enzymeChoice("Product cut-site filter", "all");
+      await s.waitFor("document.querySelector('[aria-label=\"Suggested digest\"]')?.value === 'NlaIII'", 5000);
+      const notice = JSON.stringify("The template's NlaIII digest isn't shown. The cuts overlap on the two strands, so their fragments can’t be simulated.");
+      check("The PCR gel explains why the cut template lane is missing", await s.waitFor(`document.querySelector('.sv-pcr-lanes [role="status"]:not([hidden])')?.textContent === ${notice}`, 5000));
+      await s.click("//button[@data-focus='print-pcr-plan']");
+      check("The notice appears beside the gel in the preview and print copy", await s.waitFor(`Array.from(document.querySelectorAll(':is(.sv-print-stage, .sv-print-sheet) .sv-sheet-note')).filter(note => note.textContent === ${notice}).length === 2`, 5000));
+      await s.click("//input[@data-focus='plan-sec-gel']");
+      check("Leaving the gel out moves the notice to Warnings & notes", await s.waitFor(`Array.from(document.querySelectorAll('.sv-print-stage .sv-sheet-warnings li')).some(note => note.textContent === ${notice}) && !document.querySelector('.sv-print-stage .sv-sheet-gel-svg')`, 5000));
+      await s.click("//button[@data-focus='plan-cancel']");
+      await s.click("//button[@data-focus='show-on-map']");
+      await s.exec("window.__strandivo.closeTab();");
+      await s.click("//button[normalize-space()=\"Don't Save\"]");
+      await s.waitFor("window.__strandivo.store?.data.name !== 'Withheld digest'", 5000);
+    }
+
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");
     await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));

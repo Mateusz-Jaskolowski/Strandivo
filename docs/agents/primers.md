@@ -97,9 +97,9 @@ and CI checks that they exist.
   dialog is drawn again on every change); a circular template cut once gives one fragment
   of its whole length. A digest that can't be simulated on the template (NlaIII's two
   sites in CATGCATG leave their overhangs touching) has no lane, as an enzyme that doesn't
-  cut it has none, so `templateDigestProblem` tells them apart and the overview says why in
-  the Digest dialog's words under the key; it draws no lane or band in its place, and the
-  gate for a lane is the same. Which lanes exist is `pcrGelLanes`, not the view: a circular
+  cut it has none, so `templateDigestProblem` tells them apart. The overview and its gel
+  images say why under the key (`templateDigestNotice`), without drawing a lane or band
+  in its place. Which lanes exist is `pcrGelLanes`, not the view: a circular
   template runs supercoiled, and cut only when the digest cuts it; a linear one runs uncut
   only when its length differs from the product's and cut only in two pieces or more, as a
   lane that would only repeat the one above it is left out. Fragments within the gel's

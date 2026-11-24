@@ -5,7 +5,7 @@ import { h } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, NO_DIGEST, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, templateDigestProblem, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, NO_DIGEST, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, templateDigestNotice, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
 import { methylationNote } from "../lib/methylation.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
@@ -82,6 +82,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   const gelNow = () => {
     const d = pickDigest(data.digests, choice.digest);
     const rows = pcrGelLanes(template, templateKind, product.length, d, data.templateMethylation);
+    const notice = templateDigestNotice(template, templateKind, d, data.templateMethylation);
     // Until a ladder is picked, the gel opens on one that reaches its smallest band. What it
     // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.
     const ladder = currentLadder(ladderReaching(smallestGelBand(rows)));
@@ -91,14 +92,13 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
       labelWidth: 46,
       ariaLabel: `A gel of ${rows.some(r => r.of === "template") ? "the template and " : ""}the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
     };
-    return { d, rows, ladder, shape, lanes: rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })) };
+    return { d, rows, ladder, shape, notice, lanes: rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })) };
   };
   const drawGel = () => {
-    const { d, rows, ladder, shape, lanes } = gelNow();
+    const { d, rows, ladder, shape, notice, lanes } = gelNow();
     leftover.hidden = !rows.some(r => r.of === "template");
-    const problem = templateDigestProblem(template, templateKind, d, data.templateMethylation);
-    withheld.hidden = !problem;
-    withheld.textContent = problem && d ? `The template's ${digestName(d)} digest isn't shown. ${problem}` : "";
+    withheld.hidden = !notice;
+    withheld.textContent = notice ?? "";
     ladderMenu.value = ladder.id;
     gelSummary.textContent = `${d ? digestName(d) : "Uncut only"} · ${ladder.name}`;
     gelHost.replaceChildren(gelSvg(lanes, ladder, shape));
@@ -123,8 +123,10 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     fileName: () => imageFileName(template.name, "PCR product gel", "PCR product"),
     title: () => `Simulated gel of the ${fmt(product.length)} bp PCR product`,
     figure: () => {
-      const { rows, ladder, shape, lanes } = gelNow();
-      return gelFigure(lanes, ladder, shape, [{ lane: "M", text: ladder.name }, ...rows.map((r, i) => ({ lane: String(i + 1), text: `${r.what} · ${laneSizesText(r.sizes)}` }))]);
+      const { rows, ladder, shape, notice, lanes } = gelNow();
+      const key = [{ lane: "M", text: ladder.name }, ...rows.map((r, i) => ({ lane: String(i + 1), text: `${r.what} · ${laneSizesText(r.sizes)}` }))];
+      if (notice) key.push({ lane: "—", text: notice });
+      return gelFigure(lanes, ladder, shape, key);
     }
   });
   const lanes = h(

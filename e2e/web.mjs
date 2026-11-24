@@ -1112,6 +1112,16 @@ async function main(outDir) {
       await s.click("//input[@data-focus='plan-sec-gel']");
       check("Leaving the gel out moves the notice to Warnings & notes", await s.waitFor(`Array.from(document.querySelectorAll('.sv-print-stage .sv-sheet-warnings li')).some(note => note.textContent === ${notice}) && !document.querySelector('.sv-print-stage .sv-sheet-gel-svg')`, 5000));
       await s.click("//button[@data-focus='plan-cancel']");
+      const beforeImage = await s.exec("return window.__e2eDownloads.length;");
+      await s.click("//button[@data-focus='gel-svg']");
+      const imageSaved = await s.waitFor(`window.__e2eDownloads.length === ${beforeImage + 1}`, 5000);
+      const gelLabels = imageSaved ? await s.execAsync(`
+        window.__e2eDownloads.at(-1).blob.text().then(text => {
+          const svg = new DOMParser().parseFromString(text, 'image/svg+xml');
+          done(Array.from(svg.querySelectorAll('text'), label => label.textContent));
+        }, error => done(String(error)));
+      `) : [];
+      check("An exported PCR gel gives the template notice below the lane key", Array.isArray(gelLabels) && gelLabels.at(-1) === JSON.parse(notice) && gelLabels.some(label => label.startsWith("Product, NlaIII · ")) && !gelLabels.some(label => label.startsWith("Template, NlaIII · ")), JSON.stringify(gelLabels));
       await s.click("//button[@data-focus='show-on-map']");
       await s.exec("window.__strandivo.closeTab();");
       await s.click("//button[normalize-space()=\"Don't Save\"]");

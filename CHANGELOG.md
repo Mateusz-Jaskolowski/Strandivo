@@ -16,23 +16,12 @@ with Unreleased's notes and leaves them where they are.
 
 ## Unreleased
 
-Primers have a new inspector and one dialog for adding or editing them, with the
-double-stranded sequence around the primer and draggable ends. The PCR product dialog now
-shows your product on a gel and works out the cycling program and reaction mix from NEB's
-protocols. Edits to bases show a card first, and Strandivo warns when Dam or Dcm
-methylation blocks a cut.
+Primers have a new inspector and one dialog for adding or editing them. The PCR product
+dialog shows your product on a gel, works out the cycling program and reaction mix from
+NEB's protocols and prints a plan for the bench. Edits to bases show a card first,
+Strandivo warns when methylation blocks a cut, UniProt regions show how well they match,
+and maps and gels can be saved as images.
 
-- **Printable PCR plan**: **Print PCR plan…** in the PCR product dialog previews a bench
-  sheet with the primers, product map, simulated gel, cycling program (your edits marked)
-  and reaction mix, with an experiment name, date and notes that are not saved. Choose the
-  sections, then print, save a PDF on A4 or US Letter (in the app), copy it as Markdown for
-  a lab notebook, or save an HTML file that prints offline. The sheet prints on white in any
-  theme. In the PCR product dialog, the product map, gel and program now fold like the
-  reaction mix, and the digest menu offers No digest.
-- **Saving PCR products and sequences with non-standard feature colours**: saving a
-  sequence or opening a PCR product as a new GenBank file no longer fails when a feature
-  carries a colour name the GenBank writer doesn't recognise, such as SnapGene's uncoloured
-  features or capitalised colour names.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"
@@ -156,10 +145,21 @@ methylation blocks a cut.
   follow the polymerase you pick there, and it offers to make it the Tm for the whole
   app. When 5′ tails raise how well the primers anneal, you can use two stages of
   annealing.
+- **Printable PCR plan**: **Print PCR plan…** in the PCR product dialog previews a bench
+  sheet with the primers, product map, simulated gel, cycling program (your edits marked)
+  and reaction mix, with an experiment name, date and notes that are not saved. Choose the
+  sections, then print, save a PDF on A4 or US Letter (in the app), copy it as Markdown for
+  a lab notebook, or save an HTML file that prints offline. The sheet prints on white in any
+  theme. In the PCR product dialog, the product map, gel and program now fold like the
+  reaction mix, and the digest menu offers No digest.
 - **No stray N in a PCR product**: where a primer binds over an N or another ambiguous
   base in your template, the product now has the primer's base there, as it would in the
   tube, instead of keeping the N. Its GC content, the sites found in it and a product
   opened as a new file all follow.
+- **Saving PCR products and sequences with non-standard feature colours**: saving a
+  sequence or opening a PCR product as a new GenBank file no longer fails when a feature
+  carries a colour name the GenBank writer doesn't recognise, such as SnapGene's uncoloured
+  features or capitalised colour names.
 - **Dialogs stay with their file**: a dialog opened for a file, such as Digest, PCR
   product or Design primers, now closes when you switch to another tab or Home, open a
   file or close that file's tab, instead of staying over the next file and acting on the

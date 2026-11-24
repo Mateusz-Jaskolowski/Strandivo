@@ -29,6 +29,8 @@ import { groupLinearCutSites, layoutLinearLabels, maxLinearLabelWidth, type Line
 import { openProteinDialog, proteinAt } from "./proteinDialog.ts";
 import { openEnzymeDialog } from "./enzymeDialog.ts";
 import { openPrimerDialog } from "./primerDialog.ts";
+import { imageButtons } from "./imageExport.ts";
+import { imageFileName } from "../lib/imageExport.ts";
 
 
 interface LabelItem {
@@ -197,6 +199,39 @@ interface Geometry {
   /** Circular map: the radii of what is drawn on the circle, from the ruler to the cut-site ticks. */
   ring?: { inner: number; outer: number };
 }
+
+/**
+ * What drawing the map leaves for the view to work with: its shapes by what they stand
+ * for, the layer the selection is drawn in, its geometry and the name in the middle. A
+ * drawing for an image (`MapView.figure`) is drawn the same way and its record dropped.
+ */
+interface Drawing {
+  shapes: Map<string, Element[]>;
+  sel: SVGGElement | null;
+  geom: Geometry | null;
+  nameEl: SVGTextElement | null;
+  /**
+   * The linear map's counts of crowded cut sites: buttons over the drawing, so they can be
+   * pressed and reached by Tab. An image draws them in its SVG instead.
+   */
+  cutGroups: Map<string, HTMLButtonElement>;
+  /** Drawn for an image, whose background may be transparent and which nothing presses. */
+  image: boolean;
+}
+
+const newDrawing = (image = false): Drawing => ({ shapes: new Map(), sel: null, geom: null, nameEl: null, cutGroups: new Map(), image });
+
+function addShape(out: Drawing, key: string, el: Element) {
+  const list = out.shapes.get(key);
+  if (list) list.push(el);
+  else out.shapes.set(key, [el]);
+}
+
+/** The width of the linear map as an image: the whole sequence, whatever the view's zoom. */
+const LINEAR_IMAGE_WIDTH = 1200;
+
+/** Kept for the visit, so the next image of a map is made the same way. */
+const mapImage = { transparent: false };
 
 /**
  * How far from the drawn sequence, in screen pixels, a press on empty space still places the
@@ -420,6 +455,8 @@ export class MapView {
   private proteinSelect: HTMLSelectElement;
   /** The buttons beside the Cut sites and Regions chips that open their menus. */
   private menuButtons: { cutsites: HTMLButtonElement; regions: HTMLButtonElement };
+  /** Export image, which copies or saves the whole map. */
+  private imageButton: HTMLButtonElement;
   private closeMenu: (() => void) | null = null;
   /** The sequence's name in the middle of a circular map, which a double-click renames. */
   private nameEl: SVGTextElement | null = null;
@@ -449,6 +486,11 @@ export class MapView {
     const cutsMenu = this.chipMenu("Cut site options", h("div", { class: "sv-chip-menu-body" }, this.enzymeControls.el, this.enzymeControls.edit));
     const regionsMenu = this.chipMenu("Region options", h("label", { class: "sv-enzyme-filter" }, h("span", null, "Show"), this.proteinSelect));
     this.menuButtons = { cutsites: cutsMenu.button, regions: regionsMenu.button };
+    const imageBody = this.imageMenuBody();
+    const imageMenu = this.chipMenu("Export image", imageBody.body, imageBody.sync);
+    imageMenu.menu.classList.add("sv-chip-menu-end");
+    imageMenu.button.replaceChildren(iconSvg("download", 14), "Export image", iconSvg("chevronDown", 12));
+    this.imageButton = imageMenu.button;
     const header = h(
       "div",
       { class: "sv-pane-head" },
@@ -459,7 +501,13 @@ export class MapView {
       chip("mapGc", GC_CHIP_LABEL),
       h("div", { class: "sv-chip-group sv-chip-joined" }, chip("cutsites", "Cut sites"), cutsMenu.button, cutsMenu.menu),
       chip("ruler", "Ruler"),
-      h("div", { class: "sv-segmented sv-push" }, this.modeButtons.circular, this.modeButtons.linear)
+      // One group at the row's right end, so they wrap together and Export image's menu opens inside the pane.
+      h(
+        "div",
+        { class: "sv-map-head-end sv-push" },
+        h("div", { class: "sv-segmented" }, this.modeButtons.circular, this.modeButtons.linear),
+        h("div", { class: "sv-chip-group" }, imageMenu.button, imageMenu.menu)
+      )
     );
     this.svgHost = h("div", { class: "sv-map-svg" });
     this.area = h("div", { class: "sv-map-area" }, this.svgHost);
@@ -504,8 +552,11 @@ export class MapView {
     if (v && this.stale) this.render();
   }
 
-  /** A button opening `body` under it; one menu is open at a time, and it closes on Escape or a click outside. */
-  private chipMenu(label: string, body: HTMLElement) {
+  /**
+   * A button opening `body` under it; one menu is open at a time, and it closes on Escape or a click outside.
+   * `onOpen` runs as the menu opens, for a menu whose controls show something other tabs can change.
+   */
+  private chipMenu(label: string, body: HTMLElement, onOpen?: () => void) {
     const menu = h("div", { class: "sv-chip-menu", role: "dialog", "aria-label": label, hidden: true }, body);
     const button = h("button", { type: "button", class: "sv-chip sv-chip-more", "aria-label": label, "aria-haspopup": "dialog", "aria-expanded": "false" }) as HTMLButtonElement;
     const outside = (e: PointerEvent) => {
@@ -527,14 +578,54 @@ export class MapView {
     button.addEventListener("click", () => {
       if (!menu.hidden) return close();
       this.closeMenu?.();
+      onOpen?.();
       menu.hidden = false;
       button.setAttribute("aria-expanded", "true");
       document.addEventListener("pointerdown", outside, true);
       menu.addEventListener("keydown", key);
       this.closeMenu = close;
-      menu.querySelector<HTMLElement>("[role=\"radio\"][aria-checked=\"true\"], select")?.focus();
+      // The keyboard goes into the menu, so Escape closes it: onto the chosen radio or the select, or
+      // in a menu with neither (Export image), its first control.
+      (menu.querySelector<HTMLElement>("[role=\"radio\"][aria-checked=\"true\"], select") ?? menu.querySelector<HTMLElement>("input, button"))?.focus();
     });
     return { button, menu };
+  }
+
+  /**
+   * Under Export image: whether the background is transparent, then Copy image and the saves.
+   * The choice is shared by every open file, so `sync` shows it again whenever the menu opens.
+   */
+  private imageMenuBody(): { body: HTMLElement; sync: () => void } {
+    const transparent = h("input", { type: "checkbox", checked: mapImage.transparent, onchange: (e: Event) => { mapImage.transparent = (e.target as HTMLInputElement).checked; } });
+    const buttons = imageButtons({
+      what: "the map",
+      fileName: () => imageFileName(this.ctx.store.data.name, "map"),
+      title: () => `${this.isLinear() ? "Linear" : "Circular"} map of ${this.ctx.store.data.name}`,
+      figure: () => this.figure(),
+      transparent: () => mapImage.transparent
+    });
+    // Each closes the menu once it has done its part, giving the keyboard back to the button.
+    for (const b of buttons)
+      b.addEventListener("click", () => {
+        this.closeMenu?.();
+        this.imageButton.focus();
+      });
+    return {
+      body: h("div", { class: "sv-chip-menu-body sv-map-image" }, h("label", { class: "sv-check-row" }, transparent, "Transparent background"), ...buttons),
+      sync: () => { transparent.checked = mapImage.transparent; }
+    };
+  }
+
+  /**
+   * The whole map as an image: fitted to what it draws whatever the zoom or scroll, at the
+   * file's rotation and the label size, with what the chips draw and nothing selected or
+   * hovered. The linear map gets a width of its own rather than the window's.
+   */
+  figure(): SVGSVGElement {
+    const d = this.ctx.store.data;
+    if (!d.sequence.length) throw new Error("This sequence is empty.");
+    const out = newDrawing(true);
+    return this.isLinear() ? this.buildLinear(d, out, LINEAR_IMAGE_WIDTH) : this.buildCircular(d, out);
   }
 
   private invalidate() {
@@ -590,17 +681,19 @@ export class MapView {
     regions.hidden = this.proteinSelect.hidden;
     regions.parentElement?.classList.toggle("sv-chip-joined", !regions.hidden);
     if (regions.hidden && regions.getAttribute("aria-expanded") === "true") this.closeMenu?.();
-    this.shapes.clear();
+    this.shapes = new Map();
     this.focused = [];
+    this.imageButton.disabled = !d.sequence.length;
     if (!d.sequence.length) {
       this.svgHost.replaceChildren(h("div", { class: "sv-empty" }, "This sequence is empty. Switch to the Sequence tab and type or paste bases."));
       this.svg = null;
       return;
     }
-    const cutGroupButtons = new Map<string, HTMLButtonElement>();
-    const svg = linear ? this.buildLinear(d, cutGroupButtons) : this.buildCircular(d);
+    const out = newDrawing();
+    const svg = linear ? this.buildLinear(d, out, Math.max(480, (this.area.clientWidth || 900) * o.mapZoom - 40)) : this.buildCircular(d, out);
+    ({ shapes: this.shapes, sel: this.selLayer, geom: this.geom, nameEl: this.nameEl } = out);
     this.svg = svg;
-    this.svgHost.replaceChildren(svg, ...cutGroupButtons.values());
+    this.svgHost.replaceChildren(svg, ...out.cutGroups.values());
     // Zoom enlarges the drawing inside the scrollable area.
     this.svgHost.style.width = linear ? "" : `${o.mapZoom * 100}%`;
     this.svgHost.style.height = linear ? "" : `${o.mapZoom * 100}%`;
@@ -610,7 +703,7 @@ export class MapView {
 
   // ---------- circular ----------
 
-  private buildCircular(d: SeqData): SVGSVGElement {
+  private buildCircular(d: SeqData, out: Drawing): SVGSVGElement {
     const o = this.ctx.options;
     const n = d.sequence.length;
     const rot = o.mapRotation;
@@ -669,7 +762,7 @@ export class MapView {
     const root = s("g");
     const sel = s("g", { class: "sv-map-sel" });
     root.appendChild(sel);
-    this.selLayer = sel;
+    out.sel = sel;
 
     // Backbone and ruler.
     root.appendChild(s("circle", { cx: 0, cy: 0, r: BAND_OUT - BAND / 2, fill: "none", class: "sv-map-backbone" }));
@@ -724,7 +817,7 @@ export class MapView {
         s("title", null, `${f.name} · ${f.type} · ${fmtRange(f.start + 1, f.end + 1)} (${fmt(rangeLength(f, n))} bp)`)
       );
       featureLayer.appendChild(path);
-      this.addShape(`feature:${f.id}`, path);
+      addShape(out, `feature:${f.id}`, path);
       // Regions of the protein: stripes along the CDS's outer edge, cut to its shape.
       const regionRows = layoutRegions(regionsOf(f), o.mapRegions ? o.proteinDetail : "none");
       const room = stripeRoom(Math.max(0, ...regionRows.map(r => r.lane + 1)));
@@ -738,17 +831,25 @@ export class MapView {
           const hair = Math.min((STRIPE_HAIR / (2 * Math.PI * r2)) * 360, sweep * 0.2);
           const stripe = stripeShape(arcShape(ang(piece.start) + hair, ang(piece.start) + sweep - hair, rIn, rOut, 0), clip, f, index, color, mapRegionTitle(region, f));
           regionLayer.appendChild(stripe);
-          this.addShape(`feature:${f.id}:region:${index}`, stripe);
+          addShape(out, `feature:${f.id}:region:${index}`, stripe);
         }
         // Its leader starts at its own stripe, crossing any stripe nearer the edge.
         const range = regionRange(f, region, n);
         if (range) labels.push({ angle: ang(range.start) + rangeLength(range, n) / n * 180, r: rOut, text: region.name, kind: "feature", id: f.id, region: index, color, title: mapRegionTitle(region, f), width: textWidth(region.name, labelFont(400)), y: 0, ly: 0 });
       }
-      // Bases a feature in parts skips (introns): a thin line instead of the band.
-      for (const gap of featureGaps(f, n)) {
+      // Bases a feature in parts skips (introns): a thin line instead of the band. On screen
+      // the band is covered there; an image, whose background may be transparent, cuts it out.
+      const gaps = featureGaps(f, n);
+      if (gaps.length && out.image) {
+        const ring = `M0,${-(r2 + 3)} A${r2 + 3},${r2 + 3} 0 1 1 0,${r2 + 3} A${r2 + 3},${r2 + 3} 0 1 1 0,${-(r2 + 3)} Z M0,${-(r1 - 3)} A${r1 - 3},${r1 - 3} 0 1 1 0,${r1 - 3} A${r1 - 3},${r1 - 3} 0 1 1 0,${-(r1 - 3)} Z`;
+        const holes = gaps.map(gap => arcShape(ang(gap.start), ang(gap.end + 1), r1 - 0.5, r2 + 0.5, 0)).join(" ");
+        defs.appendChild(s("clipPath", { id: `sv-gap-clip-${i}` }, s("path", { d: `${ring} ${holes}`, "clip-rule": "evenodd" })));
+        path.setAttribute("clip-path", `url(#sv-gap-clip-${i})`);
+      }
+      for (const gap of gaps) {
         const g0 = ang(gap.start);
         const g1 = ang(gap.end + 1);
-        featureLayer.appendChild(s("path", { d: arcShape(g0, g1, r1 - 0.5, r2 + 0.5, 0), style: "fill:var(--panel)", "pointer-events": "none" }));
+        if (!out.image) featureLayer.appendChild(s("path", { d: arcShape(g0, g1, r1 - 0.5, r2 + 0.5, 0), style: "fill:var(--panel)", "pointer-events": "none" }));
         featureLayer.appendChild(s("path", { d: arcPath(g0, g1, (r1 + r2) / 2, false), fill: "none", stroke: st.fill, "stroke-width": 2, "pointer-events": "none" }));
       }
       // The name runs along the middle of what its regions' stripes leave of the band.
@@ -785,7 +886,7 @@ export class MapView {
         s("title", null, `${orfTitle(x)} · ${fmtRange(x.start + 1, x.end + 1)}`)
       );
       orfLayer.appendChild(path);
-      this.addShape(`orf:${x.id}`, path);
+      addShape(out, `orf:${x.id}`, path);
     }
     root.appendChild(orfLayer);
 
@@ -813,7 +914,7 @@ export class MapView {
       const own = primerColors(p).color;
       if (own) path.style.setProperty("--pc", own);
       primerLayer.appendChild(path);
-      this.addShape(`primer:${p.id}`, path);
+      addShape(out, `primer:${p.id}`, path);
       let span = a1 - a0;
       if (span <= 0) span += 360;
       const text = shortLabel(p.name);
@@ -831,7 +932,7 @@ export class MapView {
         const unique = c.cuts === 1;
         const tick = s("line", { x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2), class: [unique ? "sv-map-unique" : "", c.methylation?.blocked ? "sv-map-blocked" : ""].join(" ").trim() || undefined });
         cuts.appendChild(tick);
-        this.addShape(`cutsite:${c.id}`, tick);
+        addShape(out, `cutsite:${c.id}`, tick);
         labels.push({
           angle: ((a % 360) + 360) % 360,
           r: tickOut,
@@ -890,12 +991,12 @@ export class MapView {
         const shapeKey = `${l.kind}:${l.id}${l.region === undefined ? "" : `:region:${l.region}`}`;
         const leader = s("polyline", { points: `${P(p0)} ${P(k)} ${f1(x)},${f1(dy)}`, class: `sv-map-leader-${l.region !== undefined ? "region" : l.kind}`, style: colour });
         leaders.appendChild(leader);
-        if (l.kind === "cutsite" || l.region !== undefined) this.addShape(shapeKey, leader);
+        if (l.kind === "cutsite" || l.region !== undefined) addShape(out, shapeKey, leader);
         const gx = x + sgn * 4;
         const chip = l.kind === "feature" && l.region === undefined ? labelChip(l, gx, dy, l.width, labelPx, sgn) : null;
         const mark = chip ?? labelGlyph(l, gx, dy, gs, sgn);
         if (mark) texts.appendChild(mark);
-        if (chip || l.region !== undefined) this.addShape(shapeKey, mark!);
+        if (chip || l.region !== undefined) addShape(out, shapeKey, mark!);
         const tx = chip ? gx + sgn * cp : mark ? gx + sgn * (gs + gg) : gx;
         const t = s(
           "text",
@@ -905,7 +1006,7 @@ export class MapView {
           l.title ? s("title", null, l.title) : null
         );
         texts.appendChild(t);
-        this.addShape(shapeKey, t);
+        addShape(out, shapeKey, t);
         const end = tx + sgn * (l.width + (chip ? cp : 0));
         minX = Math.min(minX, gx, end);
         maxX = Math.max(maxX, gx, end);
@@ -918,32 +1019,31 @@ export class MapView {
     // Name in the middle, inside the ruler's numbers and wrapped to fit (`layoutName`), and
     // renamed by a double-click (`startRename`).
     const fitted = this.fitName(d.name, middle - 4, sans);
-    this.nameEl = s(
+    out.nameEl = s(
       "text",
       { "text-anchor": "middle", "font-size": f1(fitted.size), "font-weight": 600, class: "sv-map-name" },
       fitted.lines.map(l => s("tspan", { x: 0, y: f1(l.y) }, l.text)),
       s("title", null, fitted.cut ? `${d.name} · double-click to rename` : "Double-click to rename")
     );
-    root.appendChild(this.nameEl);
+    root.appendChild(out.nameEl);
     root.appendChild(s("text", { x: 0, y: f1(fitted.lengthY), "text-anchor": "middle", "font-size": LENGTH_SIZE, class: "sv-map-size" }, `${fmt(n)} bp`));
 
     const m = 10;
     const vb = [minX - m, minY - m, maxX - minX + 2 * m, maxY - minY + 2 * m];
     const svg = s("svg", { viewBox: vb.map(f1).join(" "), class: "sv-map-svgel", role: "img", "aria-label": `Circular map of ${d.name}`, "font-family": sans }, root);
-    this.geom = { n, rotation: rot, circular: true, ring };
+    out.geom = { n, rotation: rot, circular: true, ring };
     return svg;
   }
 
   // ---------- linear ----------
 
-  private buildLinear(d: SeqData, cutGroupButtons: Map<string, HTMLButtonElement>): SVGSVGElement {
+  private buildLinear(d: SeqData, out: Drawing, width: number): SVGSVGElement {
     const o = this.ctx.options;
     const n = d.sequence.length;
     const styles = featureStyles(d);
     const sans = fontStack("sans");
     const mono = fontStack("mono");
     const labelPx = 10.5 * (o.labelSize / 8);
-    const width = Math.max(480, (this.area.clientWidth || 900) * o.mapZoom - 40);
     const m = 24;
     const scale = (width - 2 * m) / n;
     const X = (p: number) => m + p * scale;
@@ -1067,7 +1167,7 @@ export class MapView {
     const root = s("g");
     const sel = s("g", { class: "sv-map-sel" });
     root.appendChild(sel);
-    this.selLayer = sel;
+    out.sel = sel;
 
     root.appendChild(s("line", { x1: X(0), y1: baseY, x2: X(n), y2: baseY, class: "sv-map-backbone" }));
     if (o.mapGc) {
@@ -1109,31 +1209,37 @@ export class MapView {
         leaders.appendChild(leader);
         if (group) {
           const height = step - 4;
+          // An image has nothing to press: the count is drawn as the button looks.
+          if (out.image) {
+            // A text takes its parent's baseline (document.css) and WebKit doesn't pass it down through a group, so this one says it.
+            names.appendChild(s("g", { class: "sv-map-cut-count", "font-size": f1(labelPx * CUT_SCALE), "dominant-baseline": "central" }, s("rect", { x: f1(left + 0.5), y: f1(y - height / 2 + 0.5), width: f1(width - 1), height: f1(height - 1), rx: 4 }), s("text", { x: f1(left + width / 2), y: f1(y), "text-anchor": "middle" }, text)));
+            continue;
+          }
           const button = h("button", {
             type: "button", class: "sv-map-cut-group", "data-cut-group": id, "aria-haspopup": "dialog",
             "aria-label": `Show ${fmt(item.sites.length)} cut sites`,
             style: { left: `${left}px`, top: `${y - height / 2}px`, width: `${width}px`, height: `${height}px`, fontSize: `${labelPx * CUT_SCALE}px` },
             onclick: () => this.openCutGroup(item.sites, button)
           }, text);
-          cutGroupButtons.set(id, button);
+          out.cutGroups.set(id, button);
           for (const site of item.sites) {
-            this.addShape(`cutsite:${site.id}`, leader);
-            this.addShape(`cutsite:${site.id}`, button);
+            addShape(out, `cutsite:${site.id}`, leader);
+            addShape(out, `cutsite:${site.id}`, button);
           }
           continue;
         }
         const key = `${kind}:${id}${region === undefined ? "" : `:region:${region}`}`;
-        this.addShape(key, leader);
+        addShape(out, key, leader);
 
         const chip = kind === "feature" && region === undefined ? labelChip(item, left, y, item.textWidth, labelPx, 1) : null;
         const mark = chip ?? (region !== undefined ? labelGlyph(item, left, y, swatch, 1) : null);
         if (mark) {
           names.appendChild(mark);
-          this.addShape(key, mark);
+          addShape(out, key, mark);
         }
         const label = s("text", { x: f1(left + (chip ? cp : mark ? swatchOffset : 0)), y: f1(y), class: labelClass(item), style, "data-kind": kind, "data-id": id, "data-region": region }, text, item.site ? methylMark(item.site, labelPx * CUT_SCALE) : null, s("title", null, item.title));
         names.appendChild(label);
-        this.addShape(key, label);
+        addShape(out, key, label);
       }
     };
     // Features that touch meet: an arrowhead sits in a notch in its neighbour.
@@ -1165,7 +1271,7 @@ export class MapView {
         );
         const path = s("path", { d: dpath, fill: st.fill, class: "sv-map-feature", "data-kind": "feature", "data-id": f.id }, s("title", null, title));
         featureLayer.appendChild(path);
-        this.addShape(`feature:${f.id}`, path);
+        addShape(out, `feature:${f.id}`, path);
         shapes.push(dpath);
       }
       // Regions: stripes along the bottom of the bar, cut to its shape, with names in rows below.
@@ -1180,16 +1286,22 @@ export class MapView {
           const sx2 = Math.max(sx1 + 0.5, X(g.end + 1) - hair);
           const stripe = stripeShape(`M${f1(sx1)},${f1(yIn)} H${f1(sx2)} V${f1(yOut)} H${f1(sx1)} Z`, clip, f, index, regionColor(region), mapRegionTitle(region, f));
           regionLayer.appendChild(stripe);
-          this.addShape(key, stripe);
+          addShape(out, key, stripe);
         }
       }
-      for (const gap of featureGaps(f, n)) {
-        for (const g of rangePieces(gap, n)) {
-          const gx1 = X(g.start);
-          const gx2 = X(g.end + 1);
-          featureLayer.appendChild(s("rect", { x: f1(gx1), y: y - 0.5, width: f1(gx2 - gx1), height: 17, style: "fill:var(--panel)", "pointer-events": "none" }));
-          featureLayer.appendChild(s("line", { x1: f1(gx1), x2: f1(gx2), y1: y + 8, y2: y + 8, stroke: st.fill, "stroke-width": 2, "pointer-events": "none" }));
-        }
+      // On screen the band is covered where the feature skips bases; an image cuts it out.
+      const gaps = featureGaps(f, n).flatMap(gap => rangePieces(gap, n));
+      if (gaps.length && out.image) {
+        const lane = `M${f1(X(0) - 12)},${y - 3} H${f1(X(n) + 12)} V${y + 19} H${f1(X(0) - 12)} Z`;
+        const holes = gaps.map(g => `M${f1(X(g.start))},${y - 0.5} H${f1(X(g.end + 1))} V${y + 16.5} H${f1(X(g.start))} Z`).join(" ");
+        defs.appendChild(s("clipPath", { id: `sv-gap-clip-${i}` }, s("path", { d: `${lane} ${holes}`, "clip-rule": "evenodd" })));
+        for (const band of featureLayer.querySelectorAll(`.sv-map-feature[data-id="${CSS.escape(f.id)}"]`)) band.setAttribute("clip-path", `url(#sv-gap-clip-${i})`);
+      }
+      for (const g of gaps) {
+        const gx1 = X(g.start);
+        const gx2 = X(g.end + 1);
+        if (!out.image) featureLayer.appendChild(s("rect", { x: f1(gx1), y: y - 0.5, width: f1(gx2 - gx1), height: 17, style: "fill:var(--panel)", "pointer-events": "none" }));
+        featureLayer.appendChild(s("line", { x1: f1(gx1), x2: f1(gx2), y1: y + 8, y2: y + 8, stroke: st.fill, "stroke-width": 2, "pointer-events": "none" }));
       }
       if (inline) {
         featureLayer.appendChild(s("text", { x: f1(nameX), y: f1(y + (16 - room) / 2), "text-anchor": "middle", "font-weight": 600, fill: st.text, class: "sv-map-arctext", "data-kind": "feature", "data-id": f.id }, f.name));
@@ -1208,7 +1320,7 @@ export class MapView {
         const dpath = barPath(x1, x2, y, ORF_BAND, { left: x.strand === -1 && a === x.start ? head : 0, right: x.strand === 1 && b === x.end + 1 ? head : 0 }, { left: 0, right: 0 });
         const path = s("path", { d: dpath, class: `sv-map-orf sv-orf-${x.strand === 1 ? "f" : "r"}${x.frame + 1}`, "data-kind": "orf", "data-id": x.id }, s("title", null, `${orfTitle(x)} · ${fmtRange(x.start + 1, x.end + 1)}`));
         orfLayer.appendChild(path);
-        this.addShape(`orf:${x.id}`, path);
+        addShape(out, `orf:${x.id}`, path);
       }
     }
     root.appendChild(orfLayer);
@@ -1227,7 +1339,7 @@ export class MapView {
         }, { left: 0, right: 0 });
         const path = s("path", { d, class: "sv-map-primer", style: own ? `--pc:${own}` : undefined, "data-kind": "primer", "data-id": p.id }, s("title", null, `${p.name} · primer`));
         primerLayer.appendChild(path);
-        this.addShape(`primer:${p.id}`, path);
+        addShape(out, `primer:${p.id}`, path);
       }
     }
     drawNames(primerLayout.labels, primerOrigin, -1);
@@ -1240,7 +1352,8 @@ export class MapView {
       const group = sites.length > 1 ? sites[0].id : undefined;
       const open = group ? (e: MouseEvent) => {
         e.preventDefault();
-        this.openCutGroup(sites, cutGroupButtons.get(group)!);
+        const button = out.cutGroups.get(group);
+        if (button) this.openCutGroup(sites, button);
       } : undefined;
       for (const c of sites) {
         const x = f1(X(c.cut));
@@ -1249,13 +1362,13 @@ export class MapView {
           "data-kind": group ? undefined : "cutsite", "data-id": c.id, "data-cut-group": group, onclick: open, oncontextmenu: open
         }, s("title", null, cutTitle(c)));
         cutLayer.appendChild(tick);
-        this.addShape(`cutsite:${c.id}`, tick);
+        addShape(out, `cutsite:${c.id}`, tick);
       }
     }
     root.appendChild(cutLayer);
 
     const svg = s("svg", { viewBox: `0 0 ${f1(width)} ${f1(height)}`, width: f1(width), height: f1(height), class: "sv-map-svgel", role: "img", "aria-label": `Linear map of ${d.name}`, "font-family": sans }, root);
-    this.geom = { n, rotation: 0, circular: false, x0: m, scale, selTop: 4, selBottom: height - 4 };
+    out.geom = { n, rotation: 0, circular: false, x0: m, scale, selTop: 4, selBottom: height - 4 };
     return svg;
   }
 
@@ -1280,12 +1393,6 @@ export class MapView {
       }, h("span", null, site.enzyme, site.methylation?.blocked ? h("sup", { class: "sv-methyl-mark" }, "m") : null), h("span", { class: "sv-mono sv-dim" }, site.cut === 0 ? "Before base 1" : `After base ${fmt(site.cut)}`));
     });
     dlg.body.append(h("div", { class: "sv-map-cut-site-choices" }, rows));
-  }
-
-  private addShape(key: string, el: Element) {
-    const list = this.shapes.get(key);
-    if (list) list.push(el);
-    else this.shapes.set(key, [el]);
   }
 
   // ---------- selection ----------

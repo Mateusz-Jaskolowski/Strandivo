@@ -29,6 +29,10 @@ methylation blocks a cut.
   a lab notebook, or save an HTML file that prints offline. The sheet prints on white in any
   theme. In the PCR product dialog, the product map, gel and program now fold like the
   reaction mix, and the digest menu offers No digest.
+- **Saving PCR products and sequences with non-standard feature colours**: saving a
+  sequence or opening a PCR product as a new GenBank file no longer fails when a feature
+  carries a colour name the GenBank writer doesn't recognise, such as SnapGene's uncoloured
+  features or capitalised colour names.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"
@@ -83,6 +87,12 @@ methylation blocks a cut.
 - **Protein schematics**: open Details & schematic… in the inspector to copy the figure
   or save it as PNG or SVG, with an optional transparent background. Click the highlighted
   region again to select the whole CDS.
+- **Save a map as an image**: Export image, beside Circular and Linear on the Map tab,
+  copies the whole map or saves it as PNG or SVG, at its rotation and label size and with
+  what you chose to show, however far you have zoomed in, and without the selection. Tick
+  Transparent background to put it on a coloured slide. The PNG is about 3,000 pixels
+  across, and the SVG keeps its text as text, in whatever fonts are installed where you
+  open it.
 - **Save a simulated gel as an image**: copy the gel in the Digest dialog or under a PCR
   product, or save it as PNG or SVG for a slide or your notebook. The image says it is
   simulated and has a key under the gel naming the ladder and what each lane holds: its

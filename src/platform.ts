@@ -704,22 +704,28 @@ export const pickFileKeys = (title: string, extensions: string[]) => pickToOpen(
 /**
  * End-to-end tests catch saves with `window.__strandivoSave`, as WebDriver can't answer the
  * app's save dialog: the place chosen is then the name offered, after "test:", and what is
- * saved there is handed to the hook instead of written.
+ * saved there is handed to the hook instead of written. When the test wants the file written
+ * to disk and opened (e.g. saving a PCR product), it sets `window.__strandivoSavePath` to the
+ * path. It can set it to a function instead, which answers the dialog from the name offered
+ * and the filters, as the PCR plan's PDF checks do to see what was asked, cancel or fail.
  */
 type TestSave = (name: string, contents: string | Uint8Array) => void;
 const testSave = (path?: string): TestSave | undefined => {
   const hook = (window as unknown as { __strandivoSave?: TestSave }).__strandivoSave;
   return hook && (path === undefined || path.startsWith("test:")) ? hook : undefined;
 };
+type TestSavePath = string | ((defaultPath: string, filters: { name: string; extensions: string[] }[]) => string | null | Promise<string | null>);
+const testSavePath = (): TestSavePath | undefined => (window as unknown as { __strandivoSavePath?: TestSavePath }).__strandivoSavePath;
 
 /**
  * Asks where to save; returns null if cancelled. In a browser: the browser's save dialog
  * where it has one, or else a download of the suggested name (src/webFiles.ts).
  */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
-  // End-to-end tests answer for the save dialog, which WebDriver can't reach.
-  const hook = (window as unknown as { __strandivoSavePath?: (defaultPath: string, filters: { name: string; extensions: string[] }[]) => string | null | Promise<string | null> }).__strandivoSavePath;
-  if (hook) return hook(defaultPath, filters);
+  // End-to-end tests answer for the save dialog, which WebDriver can't reach (`testSavePath`).
+  const forced = testSavePath();
+  if (typeof forced === "function") return forced(defaultPath, filters);
+  if (forced) return forced;
   // Or they take the name offered and catch what is saved under it (`testSave`).
   if (testSave()) return `test:${basename(defaultPath)}`;
   if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);

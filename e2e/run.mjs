@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFi
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { checkMapRegionDisplay } from "./mapRegions.mjs";
+import { checkMapImage, standaloneSvg } from "./mapImage.mjs";
 
 const [binary, outDir = "e2e-out"] = process.argv.slice(2);
 if (!binary) {
@@ -56,9 +57,6 @@ async function savedImages(s, scope, labels) {
   const png = Object.entries(saved).find(([name]) => name.endsWith(".png"));
   return { svgName: svg?.[0] ?? "", svg: svg?.[1] ?? "", pngName: png?.[0] ?? "", png: png?.[1] ?? {} };
 }
-
-/** An SVG file that opens as it looks elsewhere: every style its own, nothing only the page understood. */
-const standaloneSvg = svg => /^<\?xml/.test(svg) && /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && / viewBox="/.test(svg) && !/ class="| style="| data-|var\(|color-mix/.test(svg);
 
 async function wd(method, url, body) {
   const res = await fetch(DRIVER + url, {
@@ -1504,7 +1502,27 @@ async function main() {
     const programKept = await keepsFocus("button[data-focus='copy-program']", 400);
     const footerKept = await keepsFocus("button[data-focus='copy-sequence']", 350);
     check("A Settings change redraws the PCR dialog and keeps focus where it was", menuKept && programKept && footerKept, `menu ${menuKept}, program ${programKept}, footer ${footerKept}`);
-    await s.press(ESCAPE);
+    // Save the product via "Open as new file…", including an uncoloured feature like SnapGene's `noColor` (#152).
+    const pcrPath = path.join(mkdtempSync(path.join(tmpdir(), "strandivo-pcr-")), "ampr-product.gb");
+    await s.exec(`${doc} const amp = s.data.features.find(f => f.name === 'AmpR');
+      s.apply({ ...s.data, features: [...s.data.features, { id: 'e2e-nocolor', name: 'uncoloured', type: 'misc_feature', start: amp.start + 10, end: amp.start + 40, strand: 1, color: 'noColor', notes: { color: [] }, raw: { color: 'noColor' } }] }, 'Add uncoloured feature');
+      window.__strandivoSavePath = arguments[0];`, pcrPath);
+    await sleep(200);
+    await s.click("button[data-focus='open-new-file']");
+    const pcrOpened = await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.activeTab() === 1 && window.__strandivo.store.data.sequence.length === arguments[0]", 10000, size);
+    const pcrTabState = await s.exec(`${doc} delete window.__strandivoSavePath; return { len: s.data.sequence.length, circular: s.data.circular, features: s.data.features.map(f => f.name), errorToast: Array.from(document.querySelectorAll('.ps-toast')).map(t => t.textContent).filter(t => /Couldn't save/.test(t)) };`);
+    const pcrFile = existsSync(pcrPath) ? readFileSync(pcrPath, "utf8") : "";
+    check(
+      "Open as new file… saves the PCR product as GenBank and opens it in a new tab",
+      pcrOpened && !pcrTabState.circular && pcrTabState.len === size && pcrTabState.features.includes("AmpR") && pcrTabState.features.includes("uncoloured") && !pcrTabState.errorToast.length && /^LOCUS\b/.test(pcrFile),
+      JSON.stringify({ pcrOpened, ...pcrTabState, fileLen: pcrFile.length })
+    );
+    if ((await s.exec("return window.__strandivo.tabs().length")) > 1) {
+      await s.exec("window.__strandivo.closeTab()");
+      await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+    }
+    await s.exec(`${doc} s.undo();`);
+    if (await s.exec("return !!document.querySelector('.sv-dialog')")) await s.press(ESCAPE);
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");
     await sleep(300);
@@ -2101,6 +2119,10 @@ async function main() {
     check("One undo takes all of them back out again", await s.waitFor(`window.__strandivo.store.data.features.length === ${featuresBefore}`, 5000));
 
     await checkMapRegionDisplay(s, check);
+    await checkMapImage(s, check, async label => {
+      const saved = await savedImages(s, "sv-map-image", [label]);
+      return label.includes("SVG") ? saved.svg : saved.png;
+    });
 
     // --- regions of a protein: a made-up entry for pUC19's AmpR, so no network is needed ---
     const featuresForRegions = await s.exec(`${doc} return s.data.features.length;`);

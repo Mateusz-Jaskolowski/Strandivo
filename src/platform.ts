@@ -704,19 +704,23 @@ export const pickFileKeys = (title: string, extensions: string[]) => pickToOpen(
 /**
  * End-to-end tests catch saves with `window.__strandivoSave`, as WebDriver can't answer the
  * app's save dialog: the place chosen is then the name offered, after "test:", and what is
- * saved there is handed to the hook instead of written.
+ * saved there is handed to the hook instead of written. When the test wants the file written
+ * to disk and opened (e.g. saving a PCR product), it sets `window.__strandivoSavePath`.
  */
 type TestSave = (name: string, contents: string | Uint8Array) => void;
 const testSave = (path?: string): TestSave | undefined => {
   const hook = (window as unknown as { __strandivoSave?: TestSave }).__strandivoSave;
   return hook && (path === undefined || path.startsWith("test:")) ? hook : undefined;
 };
+const testSavePath = (): string | undefined => (window as unknown as { __strandivoSavePath?: string }).__strandivoSavePath;
 
 /**
  * Asks where to save; returns null if cancelled. In a browser: the browser's save dialog
  * where it has one, or else a download of the suggested name (src/webFiles.ts).
  */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
+  const forced = testSavePath();
+  if (forced) return forced;
   if (testSave()) return `test:${basename(defaultPath)}`;
   if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);
   const { save } = await import("@tauri-apps/plugin-dialog");

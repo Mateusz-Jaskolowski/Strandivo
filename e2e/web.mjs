@@ -1072,17 +1072,21 @@ async function main(outDir) {
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
 
     {
-      await s.click("//button[@aria-label='Enzyme library']");
-      await s.click("//button[normalize-space()='My enzymes']");
-      await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
-      await s.exec(`
-        const all = document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-title');
-        if (all.getAttribute('aria-expanded') === 'false') all.click();
-        const search = document.querySelector('[aria-label="Search My enzymes"]');
-        search.value = 'NlaIII';
-        search.dispatchEvent(new Event('input'));
-      `);
-      await s.click("//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='NlaIII']");
+      // NlaIII is in My enzymes for this step only: ticked here and unticked at its end.
+      const tickNlaIII = async () => {
+        await s.click("//button[@aria-label='Enzyme library']");
+        await s.click("//button[normalize-space()='My enzymes']");
+        await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
+        await s.exec(`
+          const all = document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-title');
+          if (all.getAttribute('aria-expanded') === 'false') all.click();
+          const search = document.querySelector('[aria-label="Search My enzymes"]');
+          search.value = 'NlaIII';
+          search.dispatchEvent(new Event('input'));
+        `);
+        await s.click("//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='NlaIII']");
+      };
+      await tickNlaIII();
       await s.waitFor("document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme=\"NlaIII\"]')?.checked", 5000);
       await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
 
@@ -1126,6 +1130,9 @@ async function main(outDir) {
       await s.exec("window.__strandivo.closeTab();");
       await s.click("//button[normalize-space()=\"Don't Save\"]");
       await s.waitFor("window.__strandivo.store?.data.name !== 'Withheld digest'", 5000);
+      await tickNlaIII();
+      check("Unticking NlaIII takes it out of My enzymes again", await s.waitFor("!document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"NlaIII\"]') && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'", 5000));
+      await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     }
 
     // --- the protein schematic's selection and exported images ---

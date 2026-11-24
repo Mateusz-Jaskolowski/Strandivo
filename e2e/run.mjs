@@ -1945,10 +1945,10 @@ async function main() {
         check("Undo restores the primer and its circular document", restored && JSON.stringify(await s.exec(summary)) === JSON.stringify(ringBefore));
         if (restored) await s.click("//div[@aria-label='Topology']//button[normalize-space()='Linear']", "xpath");
       }
-      const halves = JSON.stringify([{ start: 300, end: 365 }, { start: 0, end: 3 }]);
+      const halves = JSON.stringify([[300, 365], [0, 3]]);
       check(
         "Linear keeps a feature or source across the origin as ordered parts, with all its bases",
-        ringLinear?.length === 366 && [...ringLinear.features.slice(0, 2), ringLinear.sources[0]].every(f => JSON.stringify(f.locations) === halves && f.bases === acrossBases) && ringLinear.regions?.[0] === regionNote,
+        ringLinear?.length === 366 && [...ringLinear.features.slice(0, 2), ringLinear.sources[0]].every(f => JSON.stringify(f.locations?.map(({ start, end }) => [start, end])) === halves && f.bases === acrossBases) && ringLinear.regions?.[0] === regionNote,
         JSON.stringify(ringLinear).slice(0, 300)
       );
       const linearPath = path.join(path.dirname(savedPath), "origin-linear.gb");

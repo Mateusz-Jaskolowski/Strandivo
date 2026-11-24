@@ -47,7 +47,8 @@ and maps and gels can be saved as images.
   linear piece, or inside an overhang, no longer counts, and an enzyme such as BcgI that
   cuts on both sides of its site counts each cut, even near an end.
 - **Clearer notes on gels and primers.** When a template's digest can't be simulated, the
-  PCR product dialog now says why under the gel instead of just leaving the lane out.
+  PCR product dialog leaves out its cut lane instead of showing incorrect bands, and says
+  why. The same explanation appears in gel images and the printable PCR plan.
   A string of fragment sizes, each close to the next, no longer merges into one band on
   the gel, and a primer with too few bases to work out a Tm says so, rather than
   claiming it has bases other than A, C, G and T.

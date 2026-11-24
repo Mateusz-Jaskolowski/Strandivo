@@ -165,6 +165,9 @@ and maps and gels can be saved as images.
   file or close that file's tab, instead of staying over the next file and acting on the
   first. Two dialogs open at once now close one at a time, the top one first, when you
   press Esc.
+- **Thanks to JIB** for reporting, from the app, the Export dialog's misplaced Cancel
+  button, the list in Turn features into regions that wouldn't scroll, and the PCR product
+  that wouldn't save.
 
 ## 0.5.0
 

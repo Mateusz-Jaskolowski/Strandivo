@@ -7,6 +7,7 @@ import { h } from "../ui/dom.ts";
 import { s } from "../ui/svg.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { durationText } from "../lib/pcrProgram.ts";
+import { pcrSectionFolded, setPcrSectionFolded } from "../pcrDialogFolds.ts";
 import {
   acceptProgramValue,
   cancelProgramValue,
@@ -29,7 +30,8 @@ export function editableProgram(
   about: HTMLElement,
   notes: HTMLElement | null,
   reset: () => void,
-  copy: (text: string) => void
+  copy: (text: string) => void,
+  onValidChange?: (valid: boolean) => void
 ) {
   const source = h("span", { class: "sv-small sv-dim sv-pcr-source" });
   const modified = h("span", { class: "sv-small sv-prog-modified", hidden: true }, "Modified");
@@ -51,24 +53,48 @@ export function editableProgram(
   const rows = h("div", { class: "sv-prog" });
   const error = h("p", { class: "sv-small sv-text-bad", role: "alert" });
   const stale = draft.original.key !== currentKey;
-  const el = h(
-    "section",
-    { class: "sv-pcr-program", "aria-label": "Cycling program" },
-    h("div", { class: "sv-pcr-head" }, h("h3", { class: "sv-pcr-title" }, "Program"), about, modified, source, resetButton, copyButton),
-    notes,
-    stale
-      ? h(
-          "div",
-          { class: "sv-pcr-strip" },
-          h("span", null, `Your edits are kept from the earlier setup (${draft.original.context}).`),
-          generated
-            ? h("button", { type: "button", class: "sv-btn sv-btn-small", "data-focus": "regenerate-program", onclick: reset }, "Regenerate program")
-            : h("span", null, "There is no program for the current setup.")
-        )
-      : null,
-    rows,
-    error
-  );
+  const staleEl = stale
+    ? h(
+        "div",
+        { class: "sv-pcr-strip" },
+        h("span", null, `Your edits are kept from the earlier setup (${draft.original.context}).`),
+        generated
+          ? h("button", { type: "button", class: "sv-btn sv-btn-small", "data-focus": "regenerate-program", onclick: reset }, "Regenerate program")
+          : h("span", null, "There is no program for the current setup.")
+      )
+    : null;
+  let folded = pcrSectionFolded("program");
+  const head = h("div", { class: "sv-pcr-head" });
+  const el = h("section", { class: "sv-pcr-program", "aria-label": "Cycling program" }, head);
+  const renderShell = () => {
+    const fold = h(
+      "button",
+      {
+        type: "button",
+        class: "sv-fold-link",
+        "data-focus": "pcr-fold-program",
+        "aria-expanded": String(!folded),
+        "aria-label": `${folded ? "Show" : "Hide"} cycling program`,
+        onclick: () => {
+          folded = !folded;
+          setPcrSectionFolded("program", folded);
+          renderShell();
+          if (!folded) build();
+          else status();
+          head.querySelector<HTMLElement>(".sv-fold-link")?.focus();
+        }
+      },
+      iconSvg("chevronDown", 12),
+      folded ? "Show" : "Hide"
+    );
+    head.replaceChildren(
+      h("h3", { class: "sv-pcr-title" }, "Program"),
+      fold,
+      ...(folded ? [modified, source] : [about, modified, source, resetButton, copyButton])
+    );
+    const body = (folded ? [staleEl, error] : [notes, staleEl, rows, error]).filter((n): n is HTMLElement => n !== null);
+    el.replaceChildren(head, ...body);
+  };
   const controls = new Map<string, { input: HTMLInputElement; wrap: HTMLElement }>();
   const views: { line: SVGPolylineElement; steps: ReturnType<typeof programRows>[number]["steps"] }[] = [];
   const state = () => readProgram(draft);
@@ -78,6 +104,7 @@ export function editableProgram(
     modified.hidden = !p.modified;
     resetButton.disabled = !generated || (!p.modified && !stale);
     copyButton.disabled = p.errors.length > 0;
+    onValidChange?.(p.errors.length === 0);
     error.textContent = p.errors.length ? PROGRAM_LIMITS : "";
     for (const [key, { input }] of controls) {
       const kind = key.split(":")[2] as ProgramField;
@@ -205,7 +232,9 @@ export function editableProgram(
     }
   });
   observer.observe(rows);
-  build();
+  renderShell();
+  if (!folded) build();
+  else status();
   const cancelEdit = () => {
     for (const [key, { input }] of controls)
       if (document.activeElement === input && cancelProgramValue(draft, key)) {

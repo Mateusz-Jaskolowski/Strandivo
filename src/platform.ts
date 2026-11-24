@@ -705,22 +705,28 @@ export const pickFileKeys = (title: string, extensions: string[]) => pickToOpen(
  * End-to-end tests catch saves with `window.__strandivoSave`, as WebDriver can't answer the
  * app's save dialog: the place chosen is then the name offered, after "test:", and what is
  * saved there is handed to the hook instead of written. When the test wants the file written
- * to disk and opened (e.g. saving a PCR product), it sets `window.__strandivoSavePath`.
+ * to disk and opened (e.g. saving a PCR product), it sets `window.__strandivoSavePath` to the
+ * path. It can set it to a function instead, which answers the dialog from the name offered
+ * and the filters, as the PCR plan's PDF checks do to see what was asked, cancel or fail.
  */
 type TestSave = (name: string, contents: string | Uint8Array) => void;
 const testSave = (path?: string): TestSave | undefined => {
   const hook = (window as unknown as { __strandivoSave?: TestSave }).__strandivoSave;
   return hook && (path === undefined || path.startsWith("test:")) ? hook : undefined;
 };
-const testSavePath = (): string | undefined => (window as unknown as { __strandivoSavePath?: string }).__strandivoSavePath;
+type TestSavePath = string | ((defaultPath: string, filters: { name: string; extensions: string[] }[]) => string | null | Promise<string | null>);
+const testSavePath = (): TestSavePath | undefined => (window as unknown as { __strandivoSavePath?: TestSavePath }).__strandivoSavePath;
 
 /**
  * Asks where to save; returns null if cancelled. In a browser: the browser's save dialog
  * where it has one, or else a download of the suggested name (src/webFiles.ts).
  */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
+  // End-to-end tests answer for the save dialog, which WebDriver can't reach (`testSavePath`).
   const forced = testSavePath();
+  if (typeof forced === "function") return forced(defaultPath, filters);
   if (forced) return forced;
+  // Or they take the name offered and catch what is saved under it (`testSave`).
   if (testSave()) return `test:${basename(defaultPath)}`;
   if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);
   const { save } = await import("@tauri-apps/plugin-dialog");
@@ -786,6 +792,45 @@ export async function closeWindow(): Promise<void> {
   }
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().close();
+}
+
+/** Paper sizes supported by native desktop PDF export (`src-tauri/src/pdf.rs`). */
+export type PdfPaper = "a4" | "letter";
+
+/**
+ * Opens the system print dialog for this window. On desktop, WKWebView ignores JS
+ * `window.print()`, so the shell calls `WebviewWindow::print()` directly (NSPrintOperation
+ * on macOS, WebKitGTK PrintOperation on Linux, WebView2 `window.print()` on Windows).
+ * End-to-end tests can intercept this with `window.__strandivoPrint`.
+ */
+export async function printWindow(): Promise<void> {
+  const hook = (window as unknown as { __strandivoPrint?: () => Promise<void> | void }).__strandivoPrint;
+  if (hook) {
+    await hook();
+    return;
+  }
+  if (isDesktop) return invoke<void>("print_window");
+  if (typeof window.print !== "function") throw new Error("Printing isn't available in this browser.");
+  window.print();
+}
+
+/** Whether direct Save as PDF is available (desktop shell or E2E hook; browsers print to PDF via the print dialog). */
+export function canSavePdf(): boolean {
+  return isDesktop || typeof (window as unknown as { __strandivoSavePdf?: unknown }).__strandivoSavePdf === "function";
+}
+
+/**
+ * Saves the current window's print layout (`@media print`) directly to a PDF file on desktop.
+ * End-to-end tests can intercept this with `window.__strandivoSavePdf`.
+ */
+export async function saveWindowPdf(path: string, paper: PdfPaper): Promise<void> {
+  const hook = (window as unknown as { __strandivoSavePdf?: (path: string, paper: PdfPaper) => Promise<void> | void }).__strandivoSavePdf;
+  if (hook) {
+    await hook(path, paper);
+    return;
+  }
+  if (!isDesktop) throw new Error("Direct PDF saving is only available in the desktop app; use Print / Save as PDF in a browser.");
+  return invoke<void>("save_window_pdf", { path, paper });
 }
 
 /**

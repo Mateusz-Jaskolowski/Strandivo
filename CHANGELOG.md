@@ -22,6 +22,13 @@ shows your product on a gel and works out the cycling program and reaction mix f
 protocols. Edits to bases show a card first, and Strandivo warns when Dam or Dcm
 methylation blocks a cut.
 
+- **Printable PCR plan**: **Print PCR plan…** in the PCR product dialog previews a bench
+  sheet with the primers, product map, simulated gel, cycling program (your edits marked)
+  and reaction mix, with an experiment name, date and notes that are not saved. Choose the
+  sections, then print, save a PDF on A4 or US Letter (in the app), copy it as Markdown for
+  a lab notebook, or save an HTML file that prints offline. The sheet prints on white in any
+  theme. In the PCR product dialog, the product map, gel and program now fold like the
+  reaction mix, and the digest menu offers No digest.
 - **Saving PCR products and sequences with non-standard feature colours**: saving a
   sequence or opening a PCR product as a new GenBank file no longer fails when a feature
   carries a colour name the GenBank writer doesn't recognise, such as SnapGene's uncoloured

@@ -312,3 +312,24 @@ export function readMixPrefs(raw: unknown): MixPrefs {
     templateVolume: nonNegative(o.templateVolume, MAX_TEMPLATE) ?? MIX_DEFAULTS.templateVolume
   };
 }
+
+/** Effective reaction mix for the current dialog choice and bench preferences, whether the mix section is expanded or collapsed. */
+export function effectivePcrMix(
+  polymerase: string,
+  productLength: number,
+  choice: { reactions: number; optional: readonly string[] },
+  prefs: MixPrefs
+): PcrMix | null {
+  const recipe = mixRecipe(polymerase);
+  if (!recipe) return null;
+  return pcrMix({
+    polymerase,
+    volume: prefs.volume ?? recipe.volumes[0],
+    reactions: choice.reactions,
+    extra: prefs.extra,
+    primerStock: prefs.primerStock,
+    templateVolume: prefs.templateVolume,
+    optional: choice.optional,
+    productLength
+  });
+}

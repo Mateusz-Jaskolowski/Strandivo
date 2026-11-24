@@ -214,6 +214,24 @@ class Session {
     const b64 = await wd("GET", `/session/${this.id}/screenshot`);
     writeFileSync(path.join(this.outDir, `${name}.png`), Buffer.from(b64, "base64"));
   }
+  /** Prints the page as Chrome would to PDF, on paper `width` × `height` cm, and gives its number of pages. */
+  async printedPages(width, height) {
+    const b64 = await wd("POST", `/session/${this.id}/print`, { page: { width, height }, background: true, shrinkToFit: false });
+    const counts = [...Buffer.from(b64, "base64").toString("latin1").matchAll(/\/Count (\d+)/g)].map(m => Number(m[1]));
+    return counts.length ? Math.max(...counts) : 0;
+  }
+  window() {
+    return wd("GET", `/session/${this.id}/window`);
+  }
+  async newTab() {
+    const { handle } = await wd("POST", `/session/${this.id}/window/new`, { type: "tab" });
+    await wd("POST", `/session/${this.id}/window`, { handle });
+    return handle;
+  }
+  async closeTab(back) {
+    await wd("DELETE", `/session/${this.id}/window`);
+    await wd("POST", `/session/${this.id}/window`, { handle: back });
+  }
   end() {
     return wd("DELETE", `/session/${this.id}`).catch(() => {});
   }
@@ -726,6 +744,150 @@ async function main(outDir) {
     await s.click("//*[contains(@class,'ps-modal-buttons')]//button[normalize-space()='Choose files…']");
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
+
+    // --- printable PCR plan: preview, collapsed mix, edited cycling step, and offline HTML export ---
+    await s.exec(`
+      const store = window.__strandivo.store;
+      const d = store.data;
+      const seq = d.sequence.toUpperCase();
+      const rc = s => [...s.toUpperCase()].reverse().map(c => ({ A:'T', T:'A', C:'G', G:'C' }[c] || c)).join('');
+      const primers = [
+        ...d.primers,
+        { id: 'web-pcr-f', name: 'WebPCR-F', start: 100, end: 121, strand: 1, bases: 'gcgcgaattc' + seq.slice(100, 122), notes: {}, raw: {} },
+        { id: 'web-pcr-r', name: 'WebPCR-R', start: 1400, end: 1421, strand: -1, bases: rc(seq.slice(1400, 1422)), notes: {}, raw: {} }
+      ];
+      store.apply({ ...d, primers }, 'Add web PCR primers');
+    `);
+    await s.click("//button[@data-tab='primers']");
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]");
+    await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Forward primer']\")", 5000);
+    await s.exec(`
+      const pick = (label, name) => {
+        const sel = document.querySelector(".sv-dialog select[aria-label='" + label + "']");
+        const opt = Array.from(sel.options).find(o => o.textContent.includes(name));
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      pick('Forward primer', 'WebPCR-F');
+      pick('Reverse primer', 'WebPCR-R');
+    `);
+    await s.waitFor("document.querySelector('[data-focus=\"print-pcr-plan\"]:not(:disabled)')", 5000);
+    // Change mix reactions while open, then collapse; edit cycling step and ladder.
+    await s.click("//section[contains(@class,'sv-pcr-mix')]//button[contains(@class,'sv-fold-link')]");
+    await s.waitFor("document.querySelector('[data-focus=\"mix-reactions\"]')", 3000);
+    await s.exec(`
+      const n = document.querySelector('[data-focus="mix-reactions"]');
+      n.value = '4';
+      n.dispatchEvent(new Event('change', { bubbles: true }));
+    `);
+    await s.click("//section[contains(@class,'sv-pcr-mix')]//button[contains(@class,'sv-fold-link')]");
+    await s.waitFor("!document.querySelector('.sv-mix-table')", 3000);
+    await s.exec(`
+      const t = document.querySelector('[data-focus="program-1:1:temp"]');
+      t.value = '62.5';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      const lad = document.querySelector(".sv-dialog select[aria-label='Ladder']");
+      lad.value = '100bp';
+      lad.dispatchEvent(new Event('change', { bubbles: true }));
+    `);
+    await s.click("//button[@data-focus='print-pcr-plan']");
+    check("Print PCR plan… opens a preview over the PCR dialog", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000));
+    const webPrintUi = await s.exec(`
+      const printLabel = document.querySelector('[data-focus="plan-print"]')?.textContent?.trim() ?? '';
+      const hasDesktopPdf = !!document.querySelector('[data-focus="plan-save-pdf"]');
+      const mapBox = document.querySelector('[data-focus="plan-sec-map"]');
+      mapBox.checked = false;
+      mapBox.dispatchEvent(new Event('change', { bubbles: true }));
+      const gelOnlyOk = !document.querySelector('.sv-print-stage .sv-sheet-map-svg') && !!document.querySelector('.sv-print-stage .sv-sheet-gel-svg');
+      return { printLabel, hasDesktopPdf, gelOnlyOk };
+    `);
+    check(
+      "Browser preview labels Print / Save as PDF… and lets Product map be omitted while keeping Simulated gel",
+      webPrintUi.printLabel === "Print / Save as PDF…" && !webPrintUi.hasDesktopPdf && webPrintUi.gelOnlyOk,
+      JSON.stringify(webPrintUi)
+    );
+    const webBeforeDl = await s.exec("return window.__e2eDownloads.length");
+    await s.exec(`
+      const title = document.querySelector('[data-focus="plan-title"]');
+      title.value = 'Web bench sheet <v1>';
+      title.dispatchEvent(new Event('input', { bubbles: true }));
+      const notes = document.querySelector('[data-focus="plan-notes"]');
+      notes.value = 'First line\\nSecond line with <script>x</script>';
+      notes.dispatchEvent(new Event('input', { bubbles: true }));
+    `);
+    await s.click("//button[@data-focus='plan-save-html']");
+    const htmlSaved = await s.waitFor(`window.__e2eDownloads.length === ${webBeforeDl + 1}`, 5000);
+    const savedHtml = htmlSaved ? await s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));") : "";
+    const savedBody = savedHtml.split("<body>")[1] ?? "";
+    const fullSeq = await s.exec("return window.__strandivo.store.data.sequence;");
+    check(
+      "Save HTML… downloads a self-contained bench sheet honoring section toggles, edited program, collapsed mix, escaped multiline notes, and no full template sequence",
+      htmlSaved &&
+        savedBody.includes("Web bench sheet &lt;v1&gt;") &&
+        savedBody.includes("62.5 °C") &&
+        savedBody.includes("Edited") &&
+        savedBody.includes("4 reactions") &&
+        savedBody.includes("100 bp") &&
+        savedBody.includes("gcgcgaattc") &&
+        !savedBody.includes("sv-sheet-map-svg") &&
+        savedBody.includes("sv-sheet-gel-svg") &&
+        savedBody.includes("First line\nSecond line with &lt;script&gt;x&lt;/script&gt;") &&
+        !savedHtml.includes("<script>x</script>") &&
+        !savedHtml.includes(fullSeq) &&
+        savedBody.includes('class="sv-sheet-date-blank"') &&
+        savedBody.includes('<span class="sv-sheet-head-note">Planning snapshot only') &&
+        savedBody.includes('<span class="sv-sheet-head-note">Plan exported') &&
+        !savedBody.includes("<footer"),
+      savedHtml.slice(0, 260)
+    );
+    // The page that prints and the saved file are built apart (DOM and a string), so their words are compared:
+    // every text, in order, skipping what is hidden.
+    const parity = await s.exec(
+      `const words = root => {
+        const out = [];
+        const walk = n => {
+          if (n.nodeType === 3) {
+            const t = n.textContent.replace(/\\s+/g, ' ').trim();
+            if (t) out.push(t);
+          } else if (n.nodeType === 1 && !n.hidden && n.tagName !== 'STYLE') n.childNodes.forEach(walk);
+        };
+        walk(root);
+        return out.join(' ');
+      };
+      const saved = new DOMParser().parseFromString(arguments[0], 'text/html').querySelector('.sv-sheet');
+      return { live: words(document.querySelector('.sv-print-sheet .sv-sheet')), saved: saved ? words(saved) : '' };`,
+      savedHtml
+    );
+    const firstDiff = [...parity.live].findIndex((c, i) => c !== parity.saved[i]);
+    check(
+      "The page printed and the saved HTML say the same, word for word",
+      parity.live.length > 500 && parity.live === parity.saved,
+      `${parity.live.length} vs ${parity.saved.length} characters; live …${parity.live.slice(Math.max(0, firstDiff - 60), firstDiff + 60)}… saved …${parity.saved.slice(Math.max(0, firstDiff - 60), firstDiff + 60)}…`
+    );
+    // Printed from the preview and from the saved file, on A4 and on US Letter, the plan takes as many pages:
+    // the preview's narrow-window layout once stacked the columns on A4 paper only.
+    const papers = { a4: [21, 29.7], letter: [21.59, 27.94] };
+    const livePages = {};
+    for (const [name, [w, h]] of Object.entries(papers)) livePages[name] = await s.printedPages(w, h);
+    const appTab = await s.window();
+    const blobUrl = await s.exec("return URL.createObjectURL(new Blob([arguments[0]], { type: 'text/html' }));", savedHtml);
+    await s.newTab();
+    await s.go(blobUrl);
+    await s.waitFor("document.querySelector('.sv-sheet')", 5000);
+    const savedPages = {};
+    for (const [name, [w, h]] of Object.entries(papers)) savedPages[name] = await s.printedPages(w, h);
+    await s.closeTab(appTab);
+    await s.exec("URL.revokeObjectURL(arguments[0]);", blobUrl);
+    check(
+      "The plan prints on as many A4 and US Letter pages from the preview as from the saved file",
+      livePages.a4 >= 1 && livePages.letter >= 1 && livePages.a4 === savedPages.a4 && livePages.letter === savedPages.letter,
+      JSON.stringify({ livePages, savedPages })
+    );
+    await s.shot("10-pcr-print-preview");
+    await s.click("//button[@data-focus='plan-cancel']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
+    await s.click("//button[@data-focus='show-on-map']");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
 
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");

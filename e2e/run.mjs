@@ -1856,7 +1856,8 @@ async function main() {
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
 
     // Two entries for one CDS, as for a chimera: Q9AAA1 is its first half, P0DTC2 its second
-    // (the other half of each has every third residue changed), and P00000 fails.
+    // (the other half of each has every third residue changed). Three lookups fail: UniProt
+    // has no P00000, P99999 meets a network error, and X00000 isn't an accession at all.
     await s.exec(`
       const protein = window.__strandivoProtein;
       const changed = (from, to) => [...protein].map((c, i) => (i >= from && i < to && i % 3 === 0 ? (c === "W" ? "Y" : "W") : c)).join("");
@@ -1867,7 +1868,8 @@ async function main() {
       };
       window.__strandivoUniprot = async accession => {
         const e = entries[accession];
-        if (!e) throw new Error("UniProt has no entry " + accession + ".");
+        if (accession === "P00000") return new Response('{"messages":["Resource not found"]}', { status: 404 });
+        if (!e) throw new TypeError("Load failed");
         return { primaryAccession: accession, entryType: "UniProtKB reviewed (Swiss-Prot)", genes: [{ geneName: { value: accession === "Q9AAA1" ? "front" : "back" } }], sequence: { value: e.sequence }, features: e.features };
       };
     `);
@@ -1875,8 +1877,23 @@ async function main() {
     await s.exec(`${doc} const cds = s.data.features.find(f => f.id === window.__strandivoCds); s.select({ range: { start: cds.start, end: cds.end }, focus: { kind: "feature", id: cds.id } });`);
     await s.waitFor("Array.from(document.querySelectorAll('.sv-link')).some(b => b.textContent.includes('Get from UniProt'))", 5000);
     await s.click("//button[contains(., 'Get from UniProt')]", "xpath");
-    await s.exec("const i = document.querySelector('.sv-uniprot-search input'); i.value = 'Q9AAA1, P00000 https://www.uniprot.org/uniprotkb/P0DTC2/entry'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));");
-    check("Several entries can be looked up at once, and one failing keeps the others", await s.waitFor("Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',') === 'All,Q9AAA1 1,P00000 !,P0DTC2 2'.replace(/ /g, '')", 5000), await s.exec("return Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',');"));
+    await s.exec("const i = document.querySelector('.sv-uniprot-search input'); i.value = 'Q9AAA1, P00000 https://www.uniprot.org/uniprotkb/P0DTC2/entry P99999 X00000'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));");
+    check("Several entries can be looked up at once, and those failing keep the others", await s.waitFor("Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',') === 'All,Q9AAA1 1,P00000 failed,P0DTC2 2,P99999 failed,X00000 failed'.replace(/ /g, '')", 5000), await s.exec("return Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',');"));
+    // Each failure names its accession and why, in All (shown after several lookups) and on its entry's button.
+    const failureLine = "accession => Array.from(document.querySelectorAll('.sv-uniprot-head p')).find(p => p.querySelector('strong')?.textContent === accession)?.textContent ?? ''";
+    check("A failed lookup says which accession failed and why", await s.exec(`
+      const line = ${failureLine};
+      const title = accession => Array.from(document.querySelectorAll('.sv-uniprot-refs button')).find(b => b.textContent.startsWith(accession))?.title ?? '';
+      return document.querySelector('.sv-uniprot-refs button[aria-pressed="true"]')?.textContent === 'All' &&
+        /^P00000: not found\\. UniProt has no entry with this accession\\.$/.test(line('P00000')) &&
+        /^P99999: network error\\. UniProt couldn't be reached/.test(line('P99999')) &&
+        /^X00000: not a UniProt accession, so it wasn't looked up/.test(line('X00000')) &&
+        title('P00000') === line('P00000') && title('P99999') === line('P99999') && title('X00000') === line('X00000');
+    `), await s.exec("return document.querySelector('.sv-uniprot-head')?.textContent;"));
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[starts-with(normalize-space(.), 'P99999')]", "xpath");
+    check("A lookup that failed on the network shows why on its entry and can be tried again", await s.waitFor(`(${failureLine})('P99999').startsWith('P99999: network error') && Array.from(document.querySelectorAll('.sv-uniprot-head button')).some(b => b.textContent === 'Try again')`, 3000));
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[starts-with(normalize-space(.), 'X00000')]", "xpath");
+    check("Something that isn't an accession says so, with nothing to try again", await s.waitFor(`(${failureLine})('X00000').startsWith('X00000: not a UniProt accession') && !Array.from(document.querySelectorAll('.sv-uniprot-head button')).some(b => b.textContent === 'Try again')`, 3000));
     await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[normalize-space(.)='All']", "xpath");
     check("Each region shows its identity and how much of it lines up", await s.exec(`
       const row = ${uniprotRow("Q9AAA1", "Front")};

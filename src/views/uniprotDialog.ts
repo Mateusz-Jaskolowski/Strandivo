@@ -19,14 +19,18 @@ import {
   alignmentLines,
   alignProteins,
   describeAlignment,
+  failureOf,
+  failureText,
+  lookupsIn,
   MIN_ALIGNED,
-  parseAccessions,
   parseEntry,
   placeFeatures,
   regionColumns,
   regionIdentity,
   STRONG_IDENTITY,
   translationForMatch,
+  worthRetrying,
+  type LookupFailure,
   type Match,
   type PlacedFeature,
   type ProteinAlignment,
@@ -44,7 +48,10 @@ interface Reference {
   /** What was asked for; UniProt may answer with the entry it was merged into. */
   asked: string;
   status: "loading" | "ok" | "refused" | "failed";
+  /** Why the CDS can't take the entry's regions, when refused. */
   message: string;
+  /** Why the lookup failed, when it did. */
+  failure: LookupFailure | null;
   entry: UniprotEntry | null;
   /** The CDS residues the user limited it to. */
   within: ResidueRange | null;
@@ -101,12 +108,13 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
   });
 
   const keyOf = (ref: Reference) => ref.asked;
-  const nameOf = (ref: Reference) => ref.entry?.accession ?? ref.asked;
+  // What was typed for an accession may be anything, a long link even: shortened to fit the bar.
+  const nameOf = (ref: Reference) => ref.entry?.accession ?? (ref.asked.length > 24 ? `${ref.asked.slice(0, 23)}…` : ref.asked);
   const refOf = (accession: string) => refs.find(r => r.status === "ok" && r.entry?.accession === accession);
   const titleOf = (ref: Reference) => [ref.entry?.title, nameOf(ref)].filter(Boolean).join(" · ");
 
   function submit() {
-    const asked = parseAccessions(input.value);
+    const asked = lookupsIn(input.value);
     if (!asked.length) {
       hint.textContent = "Enter a UniProt accession, such as Q9UKG4, or a link to the entry.";
       hint.hidden = false;
@@ -114,7 +122,23 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
     }
     hint.hidden = true;
     input.value = "";
-    asked.forEach((a, i) => lookUp(a, i === 0));
+    // Several at once are shown together, so one that fails is seen beside the rest.
+    const one = asked.length === 1;
+    if (!one) view = ALL;
+    for (const x of asked) {
+      if (x.accession) lookUp(x.accession, one);
+      else notAnAccession(x.typed, one);
+    }
+    if (!one) update();
+  }
+
+  /** Something typed for an accession that isn't one: never sent, but listed, saying so. */
+  function notAnAccession(typed: string, show: boolean) {
+    if (!refs.some(r => r.asked === typed)) {
+      refs.push({ asked: typed, status: "failed", message: "", failure: { kind: "not an accession" }, entry: null, within: null, alignment: null, match: null, placed: [], ask: 0, limiting: false });
+    }
+    if (show) view = typed;
+    update();
   }
 
   /** Aligns an entry to the CDS, within the user's limit if there is one. Local: no request. */
@@ -148,12 +172,13 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
       return;
     }
     if (!ref) {
-      ref = { asked, status: "loading", message: "", entry: null, within: null, alignment: null, match: null, placed: [], ask: 0, limiting: false };
+      ref = { asked, status: "loading", message: "", failure: null, entry: null, within: null, alignment: null, match: null, placed: [], ask: 0, limiting: false };
       refs.push(ref);
     }
     const it = ref;
     it.status = "loading";
     it.message = "";
+    it.failure = null;
     const ask = ++it.ask;
     if (show) view = keyOf(it);
     update();
@@ -167,7 +192,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
         if (view === keyOf(it)) view = keyOf(twin);
       } else if (!entry) {
         it.status = "failed";
-        it.message = `UniProt has no sequence for ${asked}, so it may have been deleted or merged.`;
+        it.failure = { kind: "no sequence" };
       } else {
         it.entry = entry;
         place(it);
@@ -175,7 +200,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
     } catch (e) {
       if (closed || ask !== it.ask || !refs.includes(it)) return;
       it.status = "failed";
-      it.message = e instanceof Error ? e.message : String(e);
+      it.failure = failureOf(e);
     }
     update();
   }
@@ -244,8 +269,9 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
       button(ALL, ["All"], "Every entry's regions, by where they are on the CDS"),
       ...refs.map(ref => {
         const count = rows.filter(r => r.accession === ref.entry?.accession && ticked.has(r.id)).length;
-        const state = ref.status === "loading" ? "…" : ref.status === "ok" ? (count ? fmt(count) : "") : "!";
-        return button(keyOf(ref), [nameOf(ref), state ? h("span", { class: `sv-uniprot-ref-state${ref.status === "ok" || ref.status === "loading" ? "" : " sv-text-warn"}` }, state) : ""], ref.status === "ok" ? `${titleOf(ref)}${count ? ` · ${plural(count, "region")} ticked` : ""}` : ref.message || titleOf(ref));
+        const state = ref.status === "loading" ? "…" : ref.status === "ok" ? (count ? fmt(count) : "") : ref.status === "failed" ? "failed" : "!";
+        const title = ref.status === "ok" ? `${titleOf(ref)}${count ? ` · ${plural(count, "region")} ticked` : ""}` : ref.failure ? `${ref.asked}: ${failureText(ref.failure)}` : ref.message || titleOf(ref);
+        return button(keyOf(ref), [nameOf(ref), state ? h("span", { class: `sv-uniprot-ref-state${ref.status === "ok" || ref.status === "loading" ? "" : " sv-text-warn"}` }, state) : ""], title);
       })
     );
   }
@@ -254,6 +280,8 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
   function summary(ref: Reference, brief: boolean): (Node | string)[] {
     const title = h("strong", null, titleOf(ref));
     if (ref.status === "loading") return [h("p", { class: "sv-uniprot-message sv-dim" }, `Looking up ${ref.asked}…`)];
+    // Which accession failed, and why, wherever the entry is shown.
+    if (ref.failure) return [h("p", { class: "sv-uniprot-message sv-text-warn" }, h("strong", null, ref.asked), ": ", failureText(ref.failure))];
     if (ref.status !== "ok" || !ref.entry || !ref.match) {
       return [h("p", { class: "sv-uniprot-message sv-text-warn" }, brief ? [title, ": "] : "", ref.message)];
     }
@@ -323,7 +351,7 @@ export function openUniprotDialog(ctx: DocContext, f: SeqFeature) {
       h(
         "div",
         { class: "sv-uniprot-actions" },
-        ref.status === "failed" ? h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => lookUp(ref.asked, true) }, "Try again") : null,
+        ref.failure && worthRetrying(ref.failure) ? h("button", { type: "button", class: "sv-btn sv-btn-small", onclick: () => lookUp(ref.asked, true) }, "Try again") : null,
         ref.status === "ok" || ref.status === "refused" ? limit(ref) : null,
         refs.length > 1 || ref.status !== "ok" ? h("button", { type: "button", class: "sv-link sv-uniprot-remove", onclick: () => remove(ref) }, "Remove from list") : null
       )

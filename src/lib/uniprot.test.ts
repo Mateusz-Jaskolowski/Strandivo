@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { accessionOf, accessionsOf, alignmentLines, alignProteins, CDS_ONLY, describeAlignment, ENTRY_ONLY, PAIR, parseAccession, parseAccessions, parseEntry, placeFeatures, regionColumns, regionIdentity, regionMatch, translationForMatch, wellSupported, withAccession } from "./uniprot.ts";
+import { accessionOf, accessionsOf, alignmentLines, alignProteins, CDS_ONLY, describeAlignment, ENTRY_ONLY, failureOf, failureText, lookupsIn, PAIR, parseAccession, parseAccessions, parseEntry, placeFeatures, regionColumns, regionIdentity, regionMatch, statusFailure, translationForMatch, UniprotLookupError, wellSupported, withAccession, worthRetrying } from "./uniprot.ts";
 
 // The entry as the API gives it, and the protein of an mRNA that UniProt cites for it.
 const fixture = JSON.parse(readFileSync(new URL("../../testdata/uniprot/Q9UKG4.json", import.meta.url), "utf8"));
@@ -36,6 +36,50 @@ test("several accessions can be typed or pasted at once", () => {
   assert.deepEqual(parseAccessions("https://www.uniprot.org/uniprotkb/Q62205/entry https://rest.uniprot.org/uniprotkb/d0e0c2.json q62205"), ["Q62205", "D0E0C2"]);
   assert.deepEqual(parseAccessions("SLC13A4 and P00533-2"), ["P00533-2"]);
   assert.deepEqual(parseAccessions("nothing here"), []);
+});
+
+test("what was typed for an accession but isn't one is kept, to say so", () => {
+  // X00000 has no letter after its first digit, so it is no accession of UniProt's.
+  assert.deepEqual(lookupsIn("Q62205, D0E0C2, X00000"), [
+    { typed: "Q62205", accession: "Q62205" },
+    { typed: "D0E0C2", accession: "D0E0C2" },
+    { typed: "X00000", accession: null }
+  ]);
+  assert.deepEqual(lookupsIn("https://www.uniprot.org/uniprotkb/Q62205/entry; q62205 Scn9a"), [
+    { typed: "Q62205", accession: "Q62205" },
+    { typed: "Scn9a", accession: null }
+  ]);
+  // Words with no digit were never meant as accessions, and each piece is listed once.
+  assert.deepEqual(lookupsIn("UniProt: P00533-2 and P00533-2, X1 X1"), [
+    { typed: "P00533-2", accession: "P00533-2" },
+    { typed: "X1", accession: null }
+  ]);
+  assert.deepEqual(lookupsIn("  nothing here ,, "), []);
+});
+
+test("a failed lookup says which accession and why: not found, network, or other", () => {
+  assert.equal(statusFailure(200), null);
+  assert.deepEqual(statusFailure(404), { kind: "not found" });
+  assert.deepEqual(statusFailure(400), { kind: "not found" });
+  assert.deepEqual(statusFailure(503), { kind: "error", status: 503 });
+  assert.match(failureText({ kind: "not an accession" }), /^not a UniProt accession, so it wasn't looked up/);
+  assert.match(failureText({ kind: "not found" }), /^not found\. UniProt has no entry/);
+  assert.match(failureText({ kind: "no sequence" }), /^not found\. UniProt no longer lists this entry/);
+  assert.match(failureText({ kind: "network" }), /^network error\. UniProt couldn't be reached/);
+  assert.match(failureText({ kind: "error", status: 503 }), /\(503\)/);
+  assert.match(failureText({ kind: "unreadable" }), /answer couldn't be read/);
+  const e = new UniprotLookupError("Q00000", { kind: "not found" });
+  assert.equal(e.message, "Q00000: not found. UniProt has no entry with this accession.");
+  assert.deepEqual(failureOf(e), { kind: "not found" });
+  // Anything else that goes wrong is named by its own message.
+  assert.deepEqual(failureOf(new TypeError("x is undefined")), { kind: "other", message: "x is undefined" });
+  assert.equal(failureText(failureOf("odd")), "couldn't be looked up (odd).");
+  // Trying again helps only where the accession itself isn't the problem.
+  assert.deepEqual(
+    (["not an accession", "not found", "no sequence", "network", "unreadable"] as const).map(kind => worthRetrying({ kind })),
+    [false, false, false, true, true]
+  );
+  assert.equal(worthRetrying({ kind: "error", status: 503 }), true);
 });
 
 test("a /db_xref is read in the ways files write it, and others are kept", () => {

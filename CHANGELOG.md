@@ -34,16 +34,16 @@ methylation blocks a cut.
   don't, and DpnI cuts only the template. Enzyme details lists what Dam, Dcm and CpG
   methylation do to each enzyme.
 - **Check each UniProt region before adding it, and combine several entries**: Get from
-  UniProt now shows, for every region, how alike it is and how much of it lines up
-  ("100% identity · 18 of 22 aligned"), and View alignment shows the entry's residues over
-  your protein's, with differences and gaps marked. Regions that are cut short, have gaps
-  or match poorly start unticked. Look up several entries at once to annotate a fusion or
-  chimera: each region names its entry, regions two entries both place are shown side by
-  side for you to choose, and you can limit an entry to the residues of your protein it
-  came from. Everything ticked goes into the one coding sequence in one step, each region
-  keeping its own entry, and opening the dialog again compares the same entries without
-  adding anything twice. It now also brings in domains, repeats, motifs and other
-  regions, not only membrane annotations.
+  UniProt now shows, for every region, how alike it is and how much of it lines up ("100%
+  identity · 18 of 22 aligned"), and View alignment shows the entry's residues over your
+  protein's, with differences and gaps marked. Regions that are cut short, have gaps or
+  match poorly start unticked. Look up several entries at once to annotate a fusion or
+  chimera: each region names its entry, an entry that can't be looked up says why, regions
+  two entries both place are shown side by side for you to choose, and you can limit an
+  entry to the residues of your protein it came from. Everything ticked goes into the one
+  coding sequence in one step, each region keeping its own entry, and opening the dialog
+  again compares the same entries without adding anything twice. It now also brings in
+  domains, repeats, motifs and other regions, not only membrane annotations.
 - **Turn features into regions in bulk**: scroll through long lists and select or
   deselect all eligible features at once.
 - **A clearer Export dialog**: pick the file format separately, with Cancel and Export

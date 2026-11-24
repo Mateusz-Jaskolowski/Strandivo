@@ -196,8 +196,14 @@ and CI checks that they exist.
   chimera's domains come from more than one protein, so the dialog keeps every entry looked
   up, each with its rows, ticks and an optional limit to residues of the CDS, which the
   user sets where they know a junction; numbers stay the whole CDS's, and a region the
-  limit may cut says so. A failed lookup is one entry's state, never the dialog's. All
-  lists every entry's rows by CDS position. Rows of the same kind from different entries
+  limit may cut says so. A failed lookup is one entry's state, never the dialog's, and
+  never silent: the entry stays listed, named as typed, with why (`LookupFailure`: not
+  found, a network error, or something else), and Try again where that may help. A piece
+  typed with a digit but no accession in it is listed the same way and never sent
+  (`lookupsIn`), as a made-up ID once vanished without a word; several typed at once open
+  All, where every entry's state shows. `window.__strandivoUniprot` stands in for the
+  request alone: it gives the entry's JSON or a `Response`, read as UniProt's would be, and
+  a throw is the network failing. All lists every entry's rows by CDS position. Rows of the same kind from different entries
   that share at least half the longer stretch are rivals, and say so; where both are well
   supported, or the CDS already has a region of that kind there (another entry's, or the
   user's), neither starts ticked, as which homologue a stretch came from is the user's to

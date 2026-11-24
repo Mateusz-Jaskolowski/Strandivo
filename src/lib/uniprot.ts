@@ -45,6 +45,91 @@ export function parseAccession(text: string): string | null {
   return parseAccessions(text.trim())[0] ?? null;
 }
 
+/** One thing to look up: an accession, or what was typed where one was meant (`accession` null). */
+export interface Lookup {
+  typed: string;
+  accession: string | null;
+}
+
+/**
+ * What was typed or pasted, piece by piece: each accession (an ID, or a link to the entry)
+ * once, and each piece that was meant as one but isn't, so the user is told rather than
+ * left wondering. A piece with no digit (a word such as "and", or "UniProt:") was never
+ * meant as one, as every accession has digits.
+ */
+export function lookupsIn(text: string): Lookup[] {
+  const out: Lookup[] = [];
+  for (const typed of text.split(/[\s,;]+/)) {
+    if (!/\d/.test(typed)) continue;
+    const found = parseAccessions(typed);
+    if (!found.length && !out.some(x => x.typed === typed)) out.push({ typed, accession: null });
+    for (const accession of found) if (!out.some(x => x.accession === accession)) out.push({ typed: accession, accession });
+  }
+  return out;
+}
+
+// ---------- lookups that fail ----------
+
+/** Why a lookup gave no entry: not found, no network, or something else. */
+export type LookupFailure =
+  | { kind: "not an accession" }
+  | { kind: "not found" }
+  /** UniProt answered, but with an entry that has no sequence: deleted, or merged away. */
+  | { kind: "no sequence" }
+  | { kind: "network" }
+  | { kind: "error"; status: number }
+  | { kind: "unreadable" }
+  | { kind: "other"; message: string };
+
+/** A lookup that failed: which accession, and why. */
+export class UniprotLookupError extends Error {
+  readonly accession: string;
+  readonly failure: LookupFailure;
+  constructor(accession: string, failure: LookupFailure) {
+    super(`${accession}: ${failureText(failure)}`);
+    this.name = "UniprotLookupError";
+    this.accession = accession;
+    this.failure = failure;
+  }
+}
+
+/** What an answer's HTTP status means for the lookup: null for an entry to read. */
+export function statusFailure(status: number): LookupFailure | null {
+  if (status >= 200 && status < 300) return null;
+  // 400 is UniProt's answer to an ID that isn't one of its accessions.
+  if (status === 400 || status === 404 || status === 410) return { kind: "not found" };
+  return { kind: "error", status };
+}
+
+/** Why a lookup failed, after the accession it was for and a colon. */
+export function failureText(failure: LookupFailure): string {
+  switch (failure.kind) {
+    case "not an accession":
+      return "not a UniProt accession, so it wasn't looked up. Accessions look like P42212 or Q9UKG4.";
+    case "not found":
+      return "not found. UniProt has no entry with this accession.";
+    case "no sequence":
+      return "not found. UniProt no longer lists this entry: it may have been deleted or merged into another.";
+    case "network":
+      return "network error. UniProt couldn't be reached: check your internet connection and try again.";
+    case "error":
+      return `UniProt answered with an error (${failure.status}). Try again later.`;
+    case "unreadable":
+      return "UniProt's answer couldn't be read. Try again later.";
+    case "other":
+      return `couldn't be looked up (${failure.message}).`;
+  }
+}
+
+/** Why a lookup threw, whatever threw it. */
+export function failureOf(e: unknown): LookupFailure {
+  if (e instanceof UniprotLookupError) return e.failure;
+  return { kind: "other", message: e instanceof Error ? e.message : String(e) };
+}
+
+/** Whether looking it up again may help: not when the accession is wrong. */
+export const worthRetrying = (failure: LookupFailure) => failure.kind !== "not an accession" && failure.kind !== "not found" && failure.kind !== "no sequence";
+
 const UNIPROT_XREF = /^(?:UniProt(?:KB)?(?:\/(?:Swiss-Prot|TrEMBL))?|Swiss-?Prot):(.+)$/i;
 const xrefs = (notes: Record<string, unknown> | undefined) => {
   const raw = notes?.db_xref;

@@ -142,3 +142,100 @@ test("the app's own wrapped lines stop short of the 79th column", () => {
     assert.ok(lines.slice(0, -1).every(l => l.length < 79), lines.join("\n"));
   }
 });
+
+// Values with no spaces to wrap at (a protein region's name, kind and numbers) are cut to
+// the width and joined with nothing between the lines. Each line is trimmed when read, so
+// a space at a cut would be lost, and a quote ending a line closes the value.
+
+/** The text of the lines `formatQualifier` writes for a value, read back as a file's table gives it. */
+function readBack(name: string, value: string): string {
+  const record = [
+    "LOCUS       one                       12 bp    DNA     linear   SYN 01-JAN-2026",
+    "FEATURES             Location/Qualifiers",
+    "     CDS             1..12",
+    ...formatQualifier(name, value),
+    "ORIGIN",
+    "        1 atggctagca tg",
+    "//"
+  ].join("\n");
+  return readFeatureTables(record)[0][0].qualifiers[0][1];
+}
+
+/** A protein region as `formatRegion` writes it: name, kind, residues, and where from. */
+const region = (name: string, kind = "Signal peptide") => `${name}|${kind}|1-5|:1-5`;
+
+/** The text cut every 58 characters, wherever that falls: how the lines were cut until now. */
+const everyCharacter = (name: string, value: string) => `/${name}="${value.replace(/"/g, '""')}"`.match(/.{1,58}/g)!;
+
+test("a region's name and kind keep their spaces wherever the qualifier is cut", () => {
+  const a = (n: number) => "A".repeat(n);
+  // The 58th character of the text, which ended a line before, or the 59th, which started the next.
+  for (const value of [
+    region(a(3), `${a(33)} B`),
+    region(`${a(28)} B`),
+    region(`${a(37)} B`),
+    region(`${a(38)} B`),
+    region(`${a(27)} B`),
+    region(`${a(36)}"B" C`)
+  ]) {
+    assert.equal(readBack("strandivo_regions", value), value);
+  }
+});
+
+test("no cut position loses a space or a quote, whatever the name", () => {
+  // Names are trimmed before they are written, so none starts with a space.
+  for (let n = 1; n < 130; n++) {
+    for (const name of [`${"A".repeat(n)} B`, `${"A".repeat(n)}  B`, `${"A".repeat(n)}"B"`, `${"A".repeat(n)} "B" C`, `${"A".repeat(n)}"" B`]) {
+      const value = region(name);
+      assert.equal(readBack("strandivo_regions", value), value, `${n}: ${name}`);
+    }
+  }
+});
+
+test("a cut moves back off a space or between a doubled quote's two, and lines keep to the width", () => {
+  const text = (name: string, kind: string) => formatQualifier("strandivo_regions", region(name, kind)).map(l => l.slice(21));
+  const a = (n: number) => "A".repeat(n);
+  // The kind's space is the 58th character: the line ends before the word that follows it.
+  assert.deepEqual(text(`${a(28)} B`, "Signal peptide"), [`/strandivo_regions="${a(28)} B|Signa`, 'l peptide|1-5|:1-5"']);
+  // The name's space is the 58th and then the 59th.
+  assert.deepEqual(text(`${a(37)} B`, "Signal peptide"), [`/strandivo_regions="${a(36)}`, 'A B|Signal peptide|1-5|:1-5"']);
+  assert.deepEqual(text(`${a(38)} B`, "Signal peptide"), [`/strandivo_regions="${a(37)}`, 'A B|Signal peptide|1-5|:1-5"']);
+  // A quote is written doubled, and its two stay together: they would have been split between the 58th and 59th.
+  assert.deepEqual(text(`${a(37)}"B"`, "Signal peptide"), [`/strandivo_regions="${a(37)}`, '""B""|Signal peptide|1-5|:1-5"']);
+  for (let n = 1; n < 130; n++) {
+    for (const lines of [formatQualifier("strandivo_regions", region(`${"A".repeat(n)} B`)), formatQualifier("strandivo_regions", region(`${"A".repeat(n)}"B"`))]) {
+      assert.ok(lines.every(l => l.length <= 79), lines.join("\n"));
+    }
+  }
+});
+
+test("a run of spaces too long to cut within runs on to a longer line rather than lose one", () => {
+  const value = region(`A${" ".repeat(100)}B`);
+  assert.equal(readBack("strandivo_regions", value), value);
+});
+
+test("a value with no space or quote at a cut is cut as it always was", () => {
+  const same = (name: string, value: string) => assert.deepEqual(formatQualifier(name, value).map(l => l.slice(21)), everyCharacter(name, value), value);
+  // The cut falls inside the word after the kind's space, and then inside a name.
+  same("strandivo_regions", region(`${"A".repeat(27)} B`));
+  same("strandivo_regions", region("CDR1", "Complementarity-determining"));
+  same("strandivo_regions", region("A".repeat(80), "Domain"));
+  same("strandivo_regions", "x".repeat(100));
+  same("translation", "M".repeat(150));
+});
+
+test("a value cut the old way, with its lines joined with nothing between, still reads whole", () => {
+  const value = "Loop|Antigen-binding loop of the nanobody|25-33|:25-33";
+  const old = [
+    "LOCUS       one                       12 bp    DNA     linear   SYN 01-JAN-2026",
+    "FEATURES             Location/Qualifiers",
+    "     CDS             1..12",
+    '                     /strandivo_regions="Loop|Antigen-binding loop of the nanob',
+    '                     ody|25-33|:25-33"',
+    "ORIGIN",
+    "        1 atggctagca tg",
+    "//"
+  ].join("\n");
+  assert.equal(old.split("\n")[3].length, 79);
+  assert.equal(readFeatureTables(old)[0][0].qualifiers[0][1], value);
+});

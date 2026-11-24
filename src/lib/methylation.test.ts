@@ -3,9 +3,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cutCounts, reactionEnzymes, rescanSites, scanSites, selectSites, siteCounts, type EnzymeOptions } from "./enzymes.ts";
+import { cutCounts, reactionCounts, reactionEnzymes, rescanSites, scanSites, selectSites, siteCounts, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { cutSites } from "../doc/analysis.ts";
 import { digestSequence, fragmentSize } from "./gel.ts";
-import type { SeqData } from "./seqdata.ts";
+import { reverseComplement, topStrandLength, type SeqData } from "./seqdata.ts";
 import { canOverlap, cutCountText, enzymeMethylation, hostMethylation, methylationSummary, methylationKey, methylationNote, PCR_DNA, siteMethylation, type DnaMethylation, type SiteMethylation } from "./methylation.ts";
 import { findStrain, strainKey } from "./strains.ts";
 
@@ -226,4 +227,58 @@ test("an enzyme methylation stops cutting stays under a unique-cutter filter onl
   assert.deepEqual(shown(one).map(c => [c.sites, c.cuts, c.methylation?.blocked]), [[1, 0, true]]);
   assert.deepEqual(shown(three), []);
   assert.equal(selectSites(scanSites(three, true, ["BclI"]), { ...o, enzymeFilter: "all" }, { sequence: three, circular: true }).filter(c => c.enzyme === "BclI").length, 3);
+});
+
+// ---------- a linear fragment's own ends ----------
+
+const only = (name: string, enzymeFilter: EnzymeFilter, methylation?: DnaMethylation): EnzymeOptions => ({ enzymeSource: "personal", enzymeFilter, labEnzymes: [], personalEnzymes: [name], methylation });
+const BAM_END = { kind: "5'" as const, bases: "GATC", enzyme: "BamHI" };
+/** A BamHI fragment of 304 stored bases, 300 of them top strand, with a GATC in each overhang and one inside. */
+const bamFragment = (): SeqData => ({
+  ...plasmid("GATC" + "C" + "ACGT".repeat(36) + "AC" + "GATC" + "ACGT".repeat(36) + "G" + "GATC"),
+  circular: false,
+  ends: { left: BAM_END, right: BAM_END }
+});
+
+test("the GATC in each overhang of a fragment is no cut: MboI and DpnI cut it once, as the digest does", () => {
+  const d = bamFragment();
+  const bare: SeqData = { ...d, ends: undefined };
+  assert.deepEqual([d.sequence.length, topStrandLength(d.sequence, d.ends)], [304, 300]);
+  const drawn = (x: SeqData, name: string, dna: DnaMethylation | undefined, filter: EnzymeFilter = "all") => cutSites(x, only(name, filter, dna)).map(c => [c.start, c.cuts, c.sites]);
+  const digest = (x: SeqData, name: string, dna: DnaMethylation) => reactionCounts(x, [name], dna).cuts.get(name) ?? 0;
+  const sites = (cuts: number) => [0, 151, 300].map(start => [start, cuts, 3]);
+  // MboI cuts 0/4 and 300/304 at the ends, which no duplex holds. Unmethylated, that leaves one.
+  assert.deepEqual(drawn(d, "MboI", PCR_DNA), sites(1));
+  assert.deepEqual(drawn(d, "MboI", undefined), sites(1));
+  assert.equal(digest(d, "MboI", PCR_DNA), 1);
+  assert.equal(drawn(d, "MboI", PCR_DNA, "unique").length, 3);
+  // Dam methylation blocks it at all three.
+  assert.deepEqual(drawn(d, "MboI", ASSUMED), sites(0));
+  assert.equal(digest(d, "MboI", ASSUMED), 0);
+  // DpnI cuts the middle of each site, which is in an overhang for the two at the ends, and needs Dam.
+  assert.deepEqual(drawn(d, "DpnI", ASSUMED), sites(1));
+  assert.equal(digest(d, "DpnI", ASSUMED), 1);
+  assert.equal(drawn(d, "DpnI", ASSUMED, "unique").length, 3);
+  assert.deepEqual(drawn(d, "DpnI", PCR_DNA), sites(0));
+  // The same bases with no ends are a plain line, where DpnI cuts all three. The list cached for
+  // the bases is not the other's, whichever comes first.
+  assert.deepEqual(drawn(bare, "DpnI", ASSUMED), sites(3));
+  assert.equal(digest(bare, "DpnI", ASSUMED), 3);
+  assert.deepEqual(drawn(bare, "DpnI", ASSUMED, "unique"), []);
+  assert.deepEqual(drawn(d, "DpnI", ASSUMED), sites(1));
+  assert.equal(drawn(d, "DpnI", ASSUMED, "unique").length, 3);
+});
+
+test("on a line a site Dam blocks is no cut on either strand, and is one where the strain has no Dam", () => {
+  // MboII's GAAGA, blocked with its last A methylated (GAAGATC), and the same read from the other strand.
+  const forward = filler(50) + "GAAGATC" + filler(50);
+  const damMinus = hostMethylation("JM110");
+  for (const [label, bases, strand] of [["forward", forward, true], ["reverse", reverseComplement(forward), false]] as const) {
+    const d: SeqData = { ...plasmid(bases), circular: false };
+    const drawn = (dna: DnaMethylation) => cutSites(d, only("MboII", "all", dna)).map(c => [c.forward, c.cuts, c.sites, !!c.methylation?.blocked]);
+    assert.deepEqual(drawn(ASSUMED), [[strand, 0, 1, true]], label);
+    assert.deepEqual(drawn(damMinus), [[strand, 1, 1, false]], label);
+    assert.equal(reactionCounts(d, ["MboII"], ASSUMED).cuts.get("MboII") ?? 0, 0, label);
+    assert.equal(reactionCounts(d, ["MboII"], damMinus).cuts.get("MboII"), 1, label);
+  }
 });

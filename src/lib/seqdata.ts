@@ -7,7 +7,9 @@
 // Coordinates are 0-based and inclusive, like GenBank's 1-based ranges minus one. On a
 // circular sequence a range may cross the origin, in which case start > end.
 
+import { codingPositions, codonOffset, featurePositions } from "./genetics.ts";
 import { carryRegions } from "./regions.ts";
+import type { DnaMethylation } from "./methylation.ts";
 
 export type Strand = 1 | -1 | 0;
 
@@ -50,6 +52,18 @@ export interface SeqPrimer {
   raw: Record<string, unknown>;
 }
 
+/** A linear DNA end, with any overhang written as top-strand letters. */
+export interface FragmentEnd {
+  kind: "blunt" | "5'" | "3'";
+  bases: string;
+  enzyme?: string;
+}
+
+export interface FragmentEnds {
+  left: FragmentEnd;
+  right: FragmentEnd;
+}
+
 export interface SeqData {
   name: string;
   description: string;
@@ -59,6 +73,54 @@ export interface SeqData {
   primers: SeqPrimer[];
   /** GenBank "source" features: not shown, but kept on their bases through edits and saved. */
   sources: SeqFeature[];
+  /** When present, the sequence includes the bases on both strands' overhangs. */
+  ends?: FragmentEnds;
+  /** How a product's DNA was made, used when no host is given. */
+  methylation?: DnaMethylation;
+}
+
+export const BLUNT_END: FragmentEnd = { kind: "blunt", bases: "" };
+
+const leftBottomOnly = (ends?: FragmentEnds) => ends?.left.kind === "3'" ? ends.left.bases.length : 0;
+const rightBottomOnly = (ends?: FragmentEnds) => ends?.right.kind === "5'" ? ends.right.bases.length : 0;
+
+/** Length of the top strand, excluding bases stored only for the other strand's ends. */
+export function topStrandLength(sequence: string, ends?: FragmentEnds): number {
+  return sequence.length - leftBottomOnly(ends) - rightBottomOnly(ends);
+}
+
+/** The strand used for a plain sequence export. */
+export function topStrandSequence(sequence: string, ends?: FragmentEnds): string {
+  return sequence.slice(leftBottomOnly(ends), sequence.length - rightBottomOnly(ends));
+}
+
+/** Keep the ends only where their overhangs still correspond to the sequence. */
+export function validFragmentEnds(d: Pick<SeqData, "circular" | "sequence" | "ends">, ends = d.ends): FragmentEnds | undefined {
+  if (!ends || d.circular || ends.left.bases.length + ends.right.bases.length >= d.sequence.length) return undefined;
+  const left = d.sequence.slice(0, ends.left.bases.length).toUpperCase() === ends.left.bases ? ends.left : BLUNT_END;
+  const right = d.sequence.slice(d.sequence.length - ends.right.bases.length).toUpperCase() === ends.right.bases ? ends.right : BLUNT_END;
+  return left === BLUNT_END && right === BLUNT_END ? undefined : { left, right };
+}
+
+/** The other strand's view of an end, as the top strand of the reversed fragment. */
+export const reverseEnd = (end: FragmentEnd): FragmentEnd => ({ ...end, bases: reverseComplement(end.bases) });
+
+/** Open at the origin, keeping features as ordered parts if they span both ends. */
+export function linearize(d: SeqData): SeqData {
+  if (!d.circular) return d;
+  const n = d.sequence.length;
+  const split = (f: SeqFeature): SeqFeature => {
+    if (!wraps(f) && !f.locations?.some(wraps)) return f;
+    const locations = (f.locations ?? [f]).flatMap(r => pieces(r, n));
+    return locations.length > 1 ? { ...f, locations } : f;
+  };
+  return { ...d, circular: false, features: d.features.map(split), primers: d.primers.filter(p => !wraps(p)), sources: d.sources.map(split) };
+}
+
+export function withTopology(data: SeqData, circular: boolean): SeqData {
+  if (data.circular === circular) return data;
+  if (!circular) return linearize(data);
+  return { ...data, circular, ...(data.ends ? { ends: undefined } : {}) };
 }
 
 // ---------- ranges ----------
@@ -276,15 +338,73 @@ function mapLocated<T extends Located>(x: T, f: (r: Positioned) => Positioned | 
   return (parts.length > 1 ? { ...rest, ...span, locations: parts } : { ...rest, ...span }) as unknown as T;
 }
 
-/** `onFeatures` maps features and their regions, when they take new bases at an edge (`EdgeSide`) and the rest don't. */
-function mapAnnotations(d: SeqData, f: (r: Positioned) => Positioned | null, nextLength = d.sequence.length, onFeatures = f): Pick<SeqData, "features" | "primers" | "sources"> {
+/**
+ * `onFeatures` maps features and their regions, when they take new bases at an edge (`EdgeSide`) and the rest don't.
+ * `keepFrames` is for cutting a piece out (`clipRange`): a CDS that loses its first bases keeps its codons.
+ */
+function mapAnnotations(d: SeqData, f: (r: Positioned) => Positioned | null, nextLength = d.sequence.length, onFeatures = f, keepFrames = false): Pick<SeqData, "features" | "primers" | "sources"> {
   const all = <T extends Located>(xs: T[]) => xs.map(x => mapLocated(x, f)).filter((x): x is T => !!x);
   const n = d.sequence.length;
   const features = d.features.flatMap(x => {
-    const next = mapLocated(x, onFeatures);
-    return next ? [carryRegions(x, next, n, nextLength, onFeatures)] : [];
+    let next = mapLocated(x, onFeatures);
+    if (!next) return [];
+    // First, as the regions count their residues from the frame it settles.
+    if (keepFrames) next = keepReadingFrame(x, next, n, onFeatures);
+    return [carryRegions(x, next, n, nextLength, onFeatures)];
   });
   return { features, primers: all(d.primers), sources: all(d.sources) };
+}
+
+/**
+ * A CDS cut so that it loses its first bases still pairs the rest into the codons it had,
+ * so its first whole codon moves by as many bases as went (GenBank's /codon_start, as a
+ * partial CDS from a database has one). Its leading bases are counted in the order it reads
+ * them, the last of a reverse one, and are those the cut took, not the distance through any
+ * gap between its parts. `map` is what the cut did to every stretch of bases.
+ */
+function keepReadingFrame<T extends SeqFeature>(before: T, after: T, n: number, map: (r: Positioned) => Positioned | null): T {
+  if (before.type.toUpperCase() !== "CDS") return after;
+  let gone = 0;
+  for (const p of featurePositions(before, n)) {
+    if (map({ start: p, end: p })) break;
+    gone++;
+  }
+  const was = codonOffset(before);
+  const now = (((was - gone) % 3) + 3) % 3;
+  return gone && now !== was ? { ...after, notes: { ...after.notes, codon_start: [String(now + 1)] } } : after;
+}
+
+/** The qualifier a CDS's imported protein is kept under, whatever case a file wrote it in. */
+const translationKey = (notes: Record<string, unknown>) => Object.keys(notes).find(k => k.toLowerCase() === "translation");
+
+/** The bases of a CDS that make whole codons, from its first whole codon, as the strand it reads. */
+function codonBases(f: SeqFeature, sequence: string): string {
+  const top = codingPositions(f, sequence.length).map(p => sequence[p] ?? "").join("").toUpperCase();
+  const read = f.strand === -1 ? complement(top) : top;
+  return read.slice(0, read.length - (read.length % 3));
+}
+
+/**
+ * `after`, a piece cut from `before` or the product of changing it, without the /translation
+ * of any CDS whose codons are no longer the bases they were: that text is the protein of
+ * the bases a database gave it and would say the wrong thing. Nothing takes its place, as
+ * what the new bases make is not what a file said, and Settings (amber suppression) is for
+ * what the app translates, never for a text it read. A CDS matched by id that has the same
+ * whole codons, as after a rotation, a turn round or a cut that took only a partial first
+ * codon or the bases after the last, keeps it.
+ */
+export function withoutStaleTranslations(before: SeqData, after: SeqData): SeqData {
+  const was = new Map(before.features.map(f => [f.id, f]));
+  let dropped = false;
+  const features = after.features.map(f => {
+    const key = f.type.toUpperCase() === "CDS" ? translationKey(f.notes) : undefined;
+    const old = key === undefined ? undefined : was.get(f.id);
+    if (key === undefined || !old || codonBases(old, before.sequence) === codonBases(f, after.sequence)) return f;
+    const { [key]: _stale, ...notes } = f.notes;
+    dropped = true;
+    return { ...f, notes };
+  });
+  return dropped ? { ...after, features } : after;
 }
 
 /**
@@ -299,17 +419,33 @@ export function insertBases(d: SeqData, pos: number, bases: string, side: EdgeSi
   return {
     ...d,
     sequence: d.sequence.slice(0, p) + bases + d.sequence.slice(p),
+    ...(d.ends ? { ends: editedEnds(d, p, p) } : {}),
     ...mapAnnotations(d, x => shiftForInsert(x, p, len), n + len, x => insertAtEdge(x, p, len, n, d.circular, side))
   };
 }
 
 /** Deletes the bases in a range (which may cross the origin). */
 export function deleteRange(d: SeqData, r: Range): SeqData {
+  return deleteBases(d, r, false);
+}
+
+/**
+ * Takes the bases in a range out to cut a piece from a molecule (a digest fragment, a PCR
+ * product, an assembly's trimmed overhang), where a CDS that loses its first bases keeps
+ * the codons it had: its /codon_start moves with them. Not for an edit the user makes,
+ * which is what they typed and what the edit card describes, so `deleteRange` leaves
+ * qualifiers alone.
+ */
+export function clipRange(d: SeqData, r: Range): SeqData {
+  return deleteBases(d, r, true);
+}
+
+function deleteBases(d: SeqData, r: Range, keepFrames: boolean): SeqData {
   const n = d.sequence.length;
   if (!n) return d;
   if (r.start > r.end) {
     // Delete the end part first so the start part's coordinates stay valid.
-    return deleteRange(deleteRange(d, { start: r.start, end: n - 1 }), { start: 0, end: r.end });
+    return deleteBases(deleteBases(d, { start: r.start, end: n - 1 }, keepFrames), { start: 0, end: r.end }, keepFrames);
   }
   const a = Math.max(0, r.start);
   const b = Math.min(n - 1, r.end);
@@ -317,7 +453,8 @@ export function deleteRange(d: SeqData, r: Range): SeqData {
   return {
     ...d,
     sequence: d.sequence.slice(0, a) + d.sequence.slice(b + 1),
-    ...mapAnnotations(d, x => mapThroughDelete(x, a, b, n), n - (b - a + 1))
+    ...(d.ends ? { ends: editedEnds(d, a, b + 1) } : {}),
+    ...mapAnnotations(d, x => mapThroughDelete(x, a, b, n), n - (b - a + 1), undefined, keepFrames)
   };
 }
 
@@ -343,7 +480,7 @@ export function replaceRange(d: SeqData, r: Range, bases: string, side: EdgeSide
     const sequence = across
       ? bases.slice(tail) + d.sequence.slice(r.end + 1, r.start) + bases.slice(0, tail)
       : d.sequence.slice(0, r.start) + bases + d.sequence.slice(r.end + 1);
-    return { data: { ...d, sequence }, inserted: r, caret: r.end + 1 };
+    return { data: { ...d, sequence, ...(d.ends ? { ends: validFragmentEnds({ ...d, sequence }, d.ends) } : {}) }, inserted: r, caret: r.end + 1 };
   }
   if (across) {
     // Turn the sequence so the range starts it, then so the new bases end it, as they always have.
@@ -358,11 +495,23 @@ export function replaceRange(d: SeqData, r: Range, bases: string, side: EdgeSide
     data: {
       ...d,
       sequence: d.sequence.slice(0, a) + bases + d.sequence.slice(b + 1),
+      ...(d.ends ? { ends: editedEnds(d, a, b + 1) } : {}),
       ...mapAnnotations(d, x => mapThroughReplace(x, a, b, bases.length, n), n2, x => mapThroughReplace(x, a, b, bases.length, n, side))
     },
     inserted: { start: a, end: a + bases.length - 1 },
     caret: a + bases.length
   };
+}
+
+/** Only edits within an existing overhang or at its outer boundary replace that end. */
+function editedEnds(d: SeqData, start: number, end: number): FragmentEnds | undefined {
+  if (!d.ends) return undefined;
+  const { left, right } = d.ends;
+  const next = {
+    left: start < Math.max(1, left.bases.length) ? BLUNT_END : left,
+    right: end > d.sequence.length - Math.max(1, right.bases.length) ? BLUNT_END : right
+  };
+  return next.left === BLUNT_END && next.right === BLUNT_END ? undefined : next;
 }
 
 /** The bases a feature covers on the top strand, joining its parts and skipping gaps. */
@@ -440,6 +589,7 @@ export function reverseComplementRange(d: SeqData, r: Range | null): SeqData {
   return {
     ...d,
     sequence: d.sequence.slice(0, a) + reverseComplement(d.sequence.slice(a, b + 1)) + d.sequence.slice(b + 1),
+    ...(d.ends ? { ends: a === 0 && b === n - 1 ? { left: reverseEnd(d.ends.right), right: reverseEnd(d.ends.left) } : editedEnds(d, a, b + 1) } : {}),
     features: d.features.map(turn),
     primers: d.primers.map(turn),
     sources: d.sources.map(turn)

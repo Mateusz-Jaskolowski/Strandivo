@@ -17,8 +17,10 @@ and CI checks that they exist.
   translated. They are numbered in residues of the CDS, so rotating, turning round and
   cloning need no code; only what changes the CDS's length or first base does (`carryRegions`):
   edits (from `mapAnnotations`), moving an end or turning it round in the inspector, and a
-  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). Each region's
-  bases go through an edit as a feature's do, so the rules for replacing bases (`AGENTS.md`)
+  fragment that opens a circle inside it (`unwrap` in `src/lib/cloning.ts`). A cut that
+  takes a CDS's first bases (`clipRange`) moves its `/codon_start` first, so its regions are
+  counted from the frame the gene keeps (`keepReadingFrame` in `src/lib/seqdata.ts`). Each
+  region's bases go through an edit as a feature's do, so the rules for replacing bases (`AGENTS.md`)
   hold for regions too. A base typed or deleted at a time is a third of a residue, which
   rounding to residues would lose every time (three codons typed left everything
   downstream three residues off), so a region left between codons keeps its exact bases
@@ -44,7 +46,11 @@ and CI checks that they exist.
   Kind is descriptive, except signal/transit peptides keep their GenBank types on export;
   it never changes translation or marks a region as varying. Its native dropdown offers
   common categories and a custom value; preserve kinds imported from older files.
-  Region names and custom kinds turn off spelling correction and capitalisation.
+  Region names and custom kinds turn off spelling correction and capitalisation. A name or
+  kind with spaces, such as "Signal peptide", comes back whole from a saved file wherever
+  the qualifier's line is cut: the writer never cuts beside a space or between a doubled
+  quote's two (`AGENTS.md`, GenBank qualifier values), which `src/lib/genbankQualifiers.test.ts`
+  and `src/lib/saving.test.ts` hold.
 - **New region colours** follow a coordinated palette within each CDS, starting with the
   colour nearest its displayed feature colour (`nextRegionColor`). Assign and save the
   colour when a region is added, including a UniProt batch; editing or renaming must not

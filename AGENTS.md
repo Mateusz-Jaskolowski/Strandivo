@@ -97,7 +97,12 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 
 - **Coordinates** are 0-based and inclusive. On a circular sequence a range with
   `start > end` crosses the origin; every function on ranges must handle that. The
-  interface shows positions 1-based.
+  interface shows positions 1-based. A feature in parts on a linear sequence is the
+  exception: its `start` is its first part's and its `end` its last part's, so one that
+  crossed the origin before Make linear, or a file's `join(301..366,1..4)`, has
+  `start > end` while its `locations` are ordered and in range. Its parts are what it
+  covers: don't put its coordinates in order, which would make it a different feature, and
+  write one, in a file or in code, as ordered parts in the order it reads.
 - **Edits** go through `store.apply(next, label, selection?, key?)` with a new `SeqData`;
   never change `store.data` or arrays it holds in place. Steps with the same `key` within
   1.5 s merge into one undo step (typing a note, dragging a primer's or region's end).
@@ -129,13 +134,22 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   purpose stays at once: Delete bases from a right-click or the inspector (which says when
   it shifts a CDS's frame, `deleteAtOnce` in `src/lib/deletion.ts`), picked codons and
   Use read base.
-- **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, with
-  `start`/`end` spanning them; every edit maps each part. GenBank "source" features live in
-  `SeqData.sources`: never shown, but edited along with the sequence and saved.
+- **Features in parts** (exons, SnapGene segments) keep their parts in `locations`, in the
+  order they read, with `start`/`end` the first part's start and the last part's end (which
+  spans them unless they run backwards, see Coordinates); every edit maps each part.
+  GenBank "source" features live in `SeqData.sources`: never shown, but edited along with
+  the sequence and saved.
 - **Reading a CDS** starts at its first whole codon, not its first base: a partial one from a
   database says so with GenBank's `/codon_start`, kept in the feature's notes. Anything that
   translates, numbers residues or maps them back to bases walks `codingPositions`
   (`src/lib/genetics.ts`), never `featurePositions`, which is every base the feature covers.
+  A piece cut from a molecule (a digest fragment, a PCR product, an assembly's trimmed
+  overhang) keeps the codons its CDS had: it is cut with `clipRange` (`src/lib/seqdata.ts`),
+  which moves `/codon_start`, where `deleteRange`, the user's own deletion, leaves it alone
+  (the edit card says what a deletion does to a frame). `withoutStaleTranslations` then drops
+  a `/translation` the file brought once the CDS's whole codons are not the ones it was
+  written for, and nothing replaces it: one made here would follow display settings such as
+  amber suppression and read as if the file had said it.
 - **Where things go**: the app bar holds what is about the app (Home, a tab per open file,
   Report a bug and Send feedback, the primer and enzyme libraries, Settings and, in a
   browser, the menu); the bar under it is the file's own (its five views,
@@ -165,10 +179,23 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   zoom, label size).
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
   base on either strand, written as the top strand, plus each end (blunt, 5′ or 3′
-  overhang). Two ends ligate when kind and bases match; joining writes the shared bases
-  once. The dialog (`src/views/cloningDialog.ts`) takes the open file as the vector and
+  overhang). Two ends ligate when kind and bases match and every base is A, C, G or T (an
+  unknown base is never evidence of a join; Golden Gate refuses such an overhang before
+  matching any); joining writes the shared bases
+  once and maps both pieces' annotations onto them. A digest fragment opened as a
+  document keeps its ends in the sequence model. Lengths shown for the fragment use its
+  top strand, which is also the strand written to FASTA: the dialog's fragment pickers
+  give its range and size with `fragmentExtent`, never the stored length, which adds the
+  bases of a staggered end. GenBank keeps the bases of both
+  ends and stores end and methylation information in comments. The dialog
+  (`src/views/cloningDialog.ts`) takes the open file as the vector and
   other open files (`DocContext.otherSequences`) as inserts; products open as new unsaved
-  tabs (`DocContext.openNew`), which count as edited until saved.
+  tabs (`DocContext.openNew`), which count as edited until saved. Gibson and In-Fusion
+  find an overlap the neighbours already share only up to 200 bases (`OVERLAP_SEARCH_MAX`)
+  and say so when they report none. Golden Gate offers a product only if one circle uses
+  every selected part, and names the parts a circle forms without, one witness found by
+  its bounded search, not a claim about all circles. Pieces that share a name get
+  distinct primer names (`docs/agents/primers.md`).
 - **Selection** changes go through `store.select(…, source)`; `source` names the view that
   made it, so that view can skip scrolling to itself.
   Separate codons can be picked with ⌘/Ctrl in either sequence panel. A selection has
@@ -284,6 +311,16 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   in GenBank COMMENT lines (`src/lib/labinfo.ts`). So does a sequence's name with spaces,
   as the LOCUS line holds them as underscores; it is read back only while that line still
   matches it, so a rename made in another program wins (`src/lib/sequenceName.ts`).
+- **Annotations across the origin** are saved as ordered joins (`partsOut` in
+  `src/doc/convert.ts`): a feature, source or primer with `start > end` is written as
+  `join(301..366,1..4)`, and `complement(join(…))` on the other strand, whether or not its
+  sequence is circular, as `301..4` is no range in GenBank. Parts a file gave are written as
+  they were, in order. Reading is unchanged, so files saved before this with `301..4` still
+  open, and are saved as joins from then on. Both topology controls use the same document action and `withTopology`
+  (`src/lib/seqdata.ts`). Make linear opens the circle with `linearize` so what crossed
+  the origin keeps all its bases as ordered parts. A primer whose site crosses the origin
+  is left out, with a message and Undo; what should become of it is undecided. Make circular changes only the
+  topology and drops the fragment's ends; it does not simulate ligation.
 - **Paths in a browser are keys** (`src/webFiles.ts`), written like paths so the code keeps
   working on strings: `web:<id>/<name>` for a file the browser gave a handle to (kept in
   IndexedDB, so it lasts between visits), `web:<id>/<folder>/<path>` for one in a folder
@@ -507,6 +544,13 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   assumed dam⁺ dcm⁺) and is predicted site by site, from the bases around each; a blocked
   site is still listed and drawn but isn't a cut (`CutSite.cuts` against `sites`), and a
   PCR product is unmethylated. Caches of sites and digests key on `methylationKey`.
+  A cut counts only where the digest makes one (`completeLinearCuts`): both strands'
+  boundaries on the molecule and past a linear fragment's overhangs (`SeqData.ends`). So a
+  site cut at the very end, or inside an overhang, is a site with no cut, and one of an
+  enzyme that cuts both sides (BcgI) counts each cut it makes. `selectSites` counts them
+  that way for the map, the outline and the unique filters, which therefore agree with
+  the Digest dialog (`reactionCounts`); there is still one marker for each recognition, and
+  the cached list also keys on the fragment's valid ends.
   Both lists are kept by the shell (`src-tauri/src/app_data.rs`, which writes only the
   files it names), with browser storage in the web version. A saved list keeps names
   this version doesn't know, leaving them off the map. An unreadable file blocks writes
@@ -581,7 +625,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   (the ruler in `src/views/sequenceView.ts`).
 - **Cut sites** are updated around each edit (`rescanSites` in `src/lib/enzymes.ts`), not
   searched again, so typing stays fast in long sequences. A randomised test compares the
-  result with a full search; keep it passing if you touch either.
+  result with a full search; keep it passing if you touch either. The search is TeselaGen's,
+  which sees an enzyme's cut after its site only and leaves out a site whose cut is off a
+  linear end, so `selectSites` looks again in the stretches by each end for an enzyme that
+  cuts both sides, whose cut before its site may be on the sequence; it never changes what
+  `rescanSites` keeps.
 - **SnapGene files** need fixing up after the generic parser (`src/doc/fileio.ts` with
   `src/lib/snapgene.ts`): it skips primers (whose binding sites, unlike features, are
   0-based), and it keeps a feature's `type="gap"` segments (introns) as parts of it.
@@ -590,7 +638,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   first quote, joined wrapped lines with no space, and wrote values wrapped mid-word with
   quotes not doubled. Features are matched to the file's table by their first and last
   base. Lines join with a space, as GenBank's do, except in `/translation` and the app's
-  own `/strandivo_…` values, which have no spaces and are cut to the width, and in files
+  own `/strandivo_…` values, which have no spaces of their own and are cut to the width,
+  but never beside a space of the value or between the two quotes of a doubled one (a
+  region's name or kind such as "Signal peptide" must come back whole, and reading trims
+  every line and takes a quote ending a line as the value's end), and in files
   the generic writer saved (Strandivo up to 0.4.0-rc.1), whose values it cut mid-word:
   each feature starts with a quoted `/label` and every wrapped line is 79 columns. So our
   writer never fills a wrapped line to the 79th column; keep it that way.

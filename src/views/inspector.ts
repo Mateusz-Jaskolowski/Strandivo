@@ -1368,7 +1368,7 @@ export class Inspector {
         {
           type: "button",
           "aria-pressed": String(d.circular === circular),
-          onclick: () => d.circular !== circular && this.ctx.store.apply({ ...d, circular }, circular ? "Make circular" : "Make linear")
+          onclick: () => this.ctx.setCircular(circular)
         },
         label
       );

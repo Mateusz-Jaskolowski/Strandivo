@@ -3,9 +3,9 @@
 
 // Virtual digests and how their fragments would run on an agarose gel.
 
-import { digest, fragmentLength, type Fragment } from "./cloning.ts";
+import { fragmentDigest, type Fragment } from "./cloning.ts";
 import type { DnaMethylation } from "./methylation.ts";
-import type { Range, SeqData } from "./seqdata.ts";
+import { topStrandLength, type Range, type SeqData } from "./seqdata.ts";
 
 export interface Ladder {
   id: string;
@@ -64,7 +64,7 @@ export function bandY(size: number, ladder: Ladder): number {
  * single-stranded ends.)
  */
 export function fragmentSize(f: Fragment): number {
-  return fragmentLength(f) - (f.left.kind === "3'" ? f.left.bases.length : 0) - (f.right.kind === "5'" ? f.right.bases.length : 0);
+  return topStrandLength(f.data.sequence, f);
 }
 
 /** Where a fragment's top strand lies on its source (0-based, inclusive; may cross the origin). */
@@ -78,6 +78,7 @@ export interface DigestResult {
   fragments: Fragment[];
   /** A circular sequence the enzymes don't cut: it runs as a plasmid, not as a fragment. */
   uncut: boolean;
+  problem?: string;
 }
 
 /**
@@ -85,8 +86,9 @@ export interface DigestResult {
  * whole. Given where the DNA was grown, sites methylation blocks don't cut.
  */
 export function digestSequence(d: SeqData, enzymes: string[], methylation?: DnaMethylation): DigestResult {
-  const fragments = digest(d, enzymes, methylation);
-  if (!fragments.length && d.circular) return { fragments: [], uncut: true };
+  const { fragments, cut, problem } = fragmentDigest(d, enzymes, methylation);
+  if (problem) return { fragments: [], uncut: false, problem };
+  if (!cut && d.circular) return { fragments: [], uncut: true };
   return { fragments: [...fragments].sort((a, b) => fragmentSize(b) - fragmentSize(a)), uncut: false };
 }
 
@@ -99,14 +101,18 @@ export interface Band {
   mass: number;
 }
 
-/** Fragments that run together (within `resolution` of each other's size) make one band. */
+/**
+ * Fragments that run together make one band: those within `resolution` of the band's largest
+ * size, so a run of close sizes (1000, 985, 970, …) doesn't chain into one band. The mean
+ * only places the band.
+ */
 export function bands(sizes: number[], resolution = 0.02): Band[] {
   const order = sizes.map((size, i) => ({ size, i })).sort((a, b) => b.size - a.size);
   const out: Band[] = [];
   for (const { size, i } of order) {
     const last = out[out.length - 1];
-    const prev = last ? sizes[last.fragments[last.fragments.length - 1]] : 0;
-    if (last && (prev - size) / prev <= resolution) {
+    const top = last ? sizes[last.fragments[0]] : 0;
+    if (last && (top - size) / top <= resolution) {
       last.fragments.push(i);
       last.mass += size;
       last.size = last.mass / last.fragments.length;
@@ -135,7 +141,7 @@ export function laneSizesText(sizes: readonly number[], maxListed = KEY_SIZES): 
  * under a gel saved as an image, where nothing can be hovered to ask.
  */
 export function digestLaneText(title: string, enzymes: readonly string[], result: DigestResult, length: number): string {
-  const sizes = result.uncut ? `uncut plasmid, ${INTEGER.format(length)} bp` : laneSizesText(result.fragments.map(fragmentSize));
+  const sizes = result.problem ?? (result.uncut ? `uncut plasmid, ${INTEGER.format(length)} bp` : laneSizesText(result.fragments.map(fragmentSize)));
   return `${title} · ${enzymes.length ? enzymes.join(", ") : "no enzyme"} · ${sizes}`;
 }
 
@@ -143,6 +149,11 @@ export function digestLaneText(title: string, enzymes: readonly string[], result
 export function fragmentName(f: Fragment, sourceName: string): string {
   const ends = `${f.left.enzyme ?? "end"}–${f.right.enzyme ?? "end"}`;
   return `${sourceName || "Fragment"} ${ends} ${INTEGER.format(fragmentSize(f))} bp`;
+}
+
+/** The opened fragment retains the end information used for its gel band and future joins. */
+export function fragmentDocument(f: Fragment, sourceName: string, methylation?: DnaMethylation): SeqData {
+  return { ...f.data, name: fragmentName(f, sourceName), ends: { left: f.left, right: f.right }, methylation: methylation ?? f.data.methylation };
 }
 
 export interface GelLayoutBand {
@@ -244,4 +255,3 @@ export function gelLayout(lanes: readonly GelLayoutLane[], ladder: Ladder, shape
 
   return { width, height, gelX: labelW, gelY: GEL_TOP, gelWidth: width - labelW, gelHeight: gelH, wells, laneLabels, ladderBands, sampleBands };
 }
-

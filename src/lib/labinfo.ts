@@ -14,6 +14,14 @@ export const BLOCK_END = "##Strandivo-Data-END##";
  * (`src/lib/sequenceName.ts`). Not a lab field: the Info tab takes no field by this name.
  */
 export const NAME_KEY = "Name with spaces";
+const ENDS_KEY = "Strandivo fragment ends";
+const METHYLATION_KEY = "Strandivo DNA methylation";
+export const isReservedLabField = (key: string): boolean => key === NAME_KEY || key === ENDS_KEY || key === METHYLATION_KEY;
+
+export interface ProductComments {
+  ends?: string;
+  methylation?: string;
+}
 
 /** Ordered key → value pairs. Empty values are not stored. */
 export type LabFields = [string, string][];
@@ -24,6 +32,7 @@ export interface ParsedComments {
   otherComments: string[];
   /** The sequence's name with its spaces (`NAME_KEY`), if the block keeps it. */
   name?: string;
+  product?: ProductComments;
 }
 
 const escapeValue = (v: string) => v.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n");
@@ -34,6 +43,7 @@ export function parseComments(comments: string[] | undefined): ParsedComments {
   const fields: LabFields = [];
   const otherComments: string[] = [];
   let name: string | undefined;
+  const product: ProductComments = {};
   let inBlock = false;
   for (const raw of comments || []) {
     const line = String(raw);
@@ -55,17 +65,22 @@ export function parseComments(comments: string[] | undefined): ParsedComments {
     const key = t.slice(0, sep).trim();
     const value = unescapeValue(t.slice(sep + 2).trim());
     if (key === NAME_KEY) name = value;
+    else if (key === ENDS_KEY) product.ends = value;
+    else if (key === METHYLATION_KEY) product.methylation = value;
     else if (key) fields.push([key, value]);
   }
-  return name === undefined ? { fields, otherComments } : { fields, otherComments, name };
+  return { fields, otherComments, ...(name === undefined ? {} : { name }), ...(Object.keys(product).length ? { product } : {}) };
 }
 
 /**
  * GenBank COMMENT lines for the given fields (empty values left out), and the sequence's
  * name when the LOCUS line can't hold it (`nameToKeep` in `src/lib/sequenceName.ts`).
  */
-export function formatComments(fields: LabFields, otherComments: string[] = [], name?: string | null): string[] {
-  const filled: LabFields = [...(name ? [[NAME_KEY, name] as [string, string]] : []), ...fields.filter(([k, v]) => k.trim() && v.trim() && k.trim() !== NAME_KEY)];
+export function formatComments(fields: LabFields, otherComments: string[] = [], name?: string | null, product?: ProductComments): string[] {
+  const filled: LabFields = fields.filter(([k, v]) => k.trim() && v.trim() && !isReservedLabField(k.trim()));
+  if (name) filled.unshift([NAME_KEY, name]);
+  if (product?.ends) filled.push([ENDS_KEY, product.ends]);
+  if (product?.methylation) filled.push([METHYLATION_KEY, product.methylation]);
   if (!filled.length) return [...otherComments];
   const width = Math.min(28, Math.max(...filled.map(([k]) => k.trim().length)));
   return [

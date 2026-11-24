@@ -9,7 +9,7 @@ import { gcRuns, type GcLevel } from "./gc.ts";
 import { bands, gelLayout, laneSizesText, type Ladder } from "./gel.ts";
 import type { PcrProduct, PlacedPrimer } from "./pcr.ts";
 import { fmtVolume, mixSource, type MixRole, type PcrMix } from "./pcrMix.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, productLabels, tailSiteFlanks, type PcrGelLane, type productOverview, type SuggestedDigest } from "./pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, pcrGelLanes, productLabels, tailSiteFlanks, templateDigestNotice, type PcrGelLane, type productOverview, type SuggestedDigest } from "./pcrOverview.ts";
 import { durationText } from "./pcrProgram.ts";
 import { readProgram, type ProgramDraft } from "./pcrProgramEdit.ts";
 import { TEMPLATES, type TemplateKind } from "./pcrProtocols.ts";
@@ -195,6 +195,7 @@ export interface PcrPlanSnapshot {
     lanes: PcrPlanGelLane[];
     hasTemplateLanes: boolean;
     ariaLabel: string;
+    templateDigestNotice: string | null;
   };
   program: PcrPlanProgram | null;
   programUnavailableReason: string | null;
@@ -487,7 +488,8 @@ export function buildPcrPlanSnapshot(input: PcrPlanSnapshotInput): PcrPlanSnapsh
       ladder: input.ladder,
       lanes,
       hasTemplateLanes,
-      ariaLabel: gelAriaLabel
+      ariaLabel: gelAriaLabel,
+      templateDigestNotice: templateDigestNotice(input.template, input.templateKind, input.digest, input.overview.templateMethylation)
     },
     program,
     programUnavailableReason: program ? null : (input.programUnavailableReason ?? `No cycling program is available for ${input.polymeraseName}.`),
@@ -500,14 +502,14 @@ export function buildPcrPlanSnapshot(input: PcrPlanSnapshotInput): PcrPlanSnapsh
 }
 
 /**
- * The sheet's warnings for the sections chosen: a stale program or a hard-to-read digest is
- * said in its own section, so it is listed here only when that section is left out.
+ * Warnings that have their own section are listed here only when that section is left out.
  */
 export function planWarnings(snapshot: PcrPlanSnapshot, sections: PcrPlanSections): string[] {
   return [
     ...snapshot.warnings,
     ...(snapshot.programWarning && !sections.program ? [snapshot.programWarning] : []),
-    ...(snapshot.digestWarning && !sections.gel ? [snapshot.digestWarning] : [])
+    ...(snapshot.digestWarning && !sections.gel ? [snapshot.digestWarning] : []),
+    ...(snapshot.gel.templateDigestNotice && !sections.gel ? [snapshot.gel.templateDigestNotice] : [])
   ];
 }
 
@@ -517,11 +519,15 @@ export function planHasSupercoiled(gel: PcrPlanSnapshot["gel"]): boolean {
 }
 
 /** The note under the gel's lane key, or null when no template lane is run. */
-export function gelLaneNote(gel: PcrPlanSnapshot["gel"], drawn: boolean): string | null {
+function gelLaneNote(gel: PcrPlanSnapshot["gel"], drawn: boolean): string | null {
   if (!gel.hasTemplateLanes) return null;
   const carry = "Template carryover runs fainter than the product.";
   if (!planHasSupercoiled(gel)) return carry;
   return drawn ? `${carry.slice(0, -1)}; the dashed band is supercoiled plasmid.` : `${carry} Supercoiled plasmid runs faster than linear DNA.`;
+}
+
+export function pcrPlanGelNotes(gel: PcrPlanSnapshot["gel"], drawn: boolean): string[] {
+  return [gelLaneNote(gel, drawn), gel.templateDigestNotice].filter(note => note !== null);
 }
 
 /** Shared gel layout for both DOM preview/print and offline HTML export. */
@@ -1347,10 +1353,10 @@ export function pcrPlanHtml(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, sectio
           ${PRINT_GC_KEY.map(k => `<span><span class="sv-sheet-gc-swatch" style="background:${PRINT_GC_FILL[k.level]}"></span>${escapeHtml(k.label)}</span>`).join("")}
         </div>`;
 
-  const laneNote = gelLaneNote(snapshot.gel, true);
+  const gelNotes = pcrPlanGelNotes(snapshot.gel, true);
   const gelDetailsHtml = `<p class="sv-sheet-note"><strong>Digest:</strong> ${snapshot.digest ? `${escapeHtml(snapshot.digest.name)} — ` : ""}${escapeHtml(snapshot.digestNote)}</p>
         <ul class="sv-sheet-lanes" aria-label="Expected gel bands">${laneKeyHtml}</ul>
-        ${laneNote ? `<p class="sv-sheet-note">${escapeHtml(laneNote)}</p>` : ""}`;
+        ${gelNotes.map(note => `<p class="sv-sheet-note">${escapeHtml(note)}</p>`).join("")}`;
 
   const gelBoxHtml = `<div class="sv-sheet-gel-box">
         ${pcrPlanGelSvg(snapshot.gel)}
@@ -1575,10 +1581,9 @@ export function pcrPlanMarkdown(snapshot: PcrPlanSnapshot, meta: PcrPlanMeta, se
     for (const l of snapshot.gel.lanes) {
       out.push(`| ${l.number} | ${t(l.what)} | ${t(l.sizesText)} |`);
     }
-    const laneNote = gelLaneNote(snapshot.gel, false);
-    if (laneNote) {
+    for (const note of pcrPlanGelNotes(snapshot.gel, false)) {
       out.push("");
-      out.push(`_${t(laneNote)}_`);
+      out.push(`_${t(note)}_`);
     }
   }
 

@@ -4,9 +4,10 @@
 // Converting between the file parser's sequence JSON (TeselaGen bio-parsers) and the
 // document model. Fields the model doesn't use are kept and written back unchanged.
 
-import { newId, reverseComplement, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
-import { parseComments } from "../lib/labinfo.ts";
-import { nameFromFile } from "../lib/sequenceName.ts";
+import { newId, pieces, reverseComplement, validFragmentEnds, type FragmentEnd, type FragmentEnds, type Range, type SeqData, type SeqFeature, type SeqPrimer, type Strand } from "../lib/seqdata.ts";
+import { formatComments, parseComments, type LabFields } from "../lib/labinfo.ts";
+import { hostMethylation, PCR_DNA, type DnaMethylation } from "../lib/methylation.ts";
+import { nameFromFile, nameToKeep } from "../lib/sequenceName.ts";
 
 export interface LoadedDocument {
   data: SeqData;
@@ -27,7 +28,7 @@ function strandOf(raw: Record<string, unknown>): Strand {
   return 1;
 }
 
-const MODEL_KEYS = new Set(["name", "description", "circular", "sequence", "features", "primers"]);
+const MODEL_KEYS = new Set(["name", "description", "circular", "sequence", "features", "primers", "fragmentEnds"]);
 const EXTRA_ANNOTATION_KEYS = ["parts", "warnings", "assemblyPieces", "lineageAnnotations"] as const;
 
 /**
@@ -89,6 +90,8 @@ function firstStringNote(notes: unknown, key: string): string | undefined {
 
 export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
   const sequence = String(seq.sequence ?? "");
+  const circular = !!seq.circular;
+  const comments = parseComments(Array.isArray(seq.comments) ? seq.comments : undefined);
   const n = sequence.length;
   const features: SeqFeature[] = [];
   const sources: SeqFeature[] = [];
@@ -141,13 +144,15 @@ export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
   return {
     data: {
       // A name with spaces is kept in the comments too, as the LOCUS line can't hold it.
-      name: nameFromFile(String(seq.name ?? "Untitled"), parseComments(Array.isArray(seq.comments) ? seq.comments : undefined).name),
+      name: nameFromFile(String(seq.name ?? "Untitled"), comments.name),
       description: typeof seq.description === "string" ? seq.description : "",
-      circular: !!seq.circular,
+      circular,
       sequence,
       features,
       primers,
-      sources
+      sources,
+      ...(comments.product?.ends ? { ends: readEnds({ sequence, circular }, comments.product.ends) } : {}),
+      ...(comments.product?.methylation ? { methylation: readMethylation(comments.product.methylation) } : {})
     },
     extra,
     wholeSources
@@ -178,6 +183,52 @@ function notesOut(notes: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+/**
+ * The parts a file gets for an annotation: its own when it is in several, else its range. A
+ * part across the origin (`start` after `end`, as the model holds one) is written as the two
+ * it is made of, in order, 301..366 then 1..4, which the writer joins as `join(301..366,1..4)`:
+ * how GenBank and the parser take it, where 301..4 is no range. Parts a file gave are
+ * written as they are, in their order, and an annotation in one piece has none.
+ */
+function partsOut(whole: Range, parts: Range[] | undefined, length: number): Range[] | undefined {
+  const own = parts && parts.length > 1 ? parts : [whole];
+  const written = own.flatMap(r => (r.start > r.end ? pieces(r, length) : [r]));
+  return written.length > 1 ? written.map(r => ({ start: r.start, end: r.end })) : undefined;
+}
+
+/** The parts a primer's file gave it, while its ends are still the file's. */
+function primerParts(p: SeqPrimer): Range[] | undefined {
+  const given = p.raw.locations;
+  if (!Array.isArray(given) || given.length < 2 || !given.every(r => typeof r?.start === "number" && typeof r?.end === "number")) return undefined;
+  return given[0].start === p.start && given[given.length - 1].end === p.end ? given.map(r => ({ start: r.start, end: r.end })) : undefined;
+}
+
+function readEnds(data: Pick<SeqData, "sequence" | "circular">, text: string): SeqData["ends"] {
+  const read = (value: unknown): FragmentEnd | undefined => {
+    if (!Array.isArray(value)) return undefined;
+    const [kind, bases, enzyme] = value;
+    if (kind !== "blunt" && kind !== "5'" && kind !== "3'") return undefined;
+    if (typeof bases !== "string" || (enzyme !== undefined && typeof enzyme !== "string")) return undefined;
+    if (kind === "blunt" ? bases !== "" : !/^[ACGTURYSWKMBDHVN]+$/.test(bases)) return undefined;
+    return { kind, bases, ...(enzyme ? { enzyme } : {}) };
+  };
+  try {
+    const value: unknown = JSON.parse(text);
+    if (!Array.isArray(value) || value.length !== 2) return undefined;
+    const left = read(value[0]);
+    const right = read(value[1]);
+    return left && right ? validFragmentEnds(data, { left, right }) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readMethylation(text: string): DnaMethylation | undefined {
+  if (text === "PCR") return PCR_DNA;
+  if (text.startsWith("Host ") && text.slice(5).trim()) return hostMethylation(text.slice(5));
+  return undefined;
+}
+
 /** Keeps only field values `jsonToGenbank` can write without throwing and returning `false`. */
 function cleanAnnotation(out: Record<string, unknown>, color: unknown, notes: unknown): Record<string, unknown> {
   const validColor = writableColor(color);
@@ -192,10 +243,8 @@ function cleanAnnotation(out: Record<string, unknown>, color: unknown, notes: un
   return out;
 }
 
-const partsOut = (locations: Range[] | undefined) => (locations && locations.length > 1 ? locations.map(l => ({ start: l.start, end: l.end })) : undefined);
-
 /** Sequence JSON for the file writers. */
-export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unknown> {
+export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields): Record<string, unknown> & { sequence: string; fragmentEnds?: FragmentEnds } {
   const n = data.sequence.length;
   const features = data.features.map(f => {
     const out: Record<string, unknown> = {
@@ -211,7 +260,7 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
     };
     if (f.strand === 0) out.arrowheadType = "NONE";
     else if (out.arrowheadType === "NONE") delete out.arrowheadType;
-    const parts = partsOut(f.locations);
+    const parts = partsOut(f, f.locations, n);
     if (parts) out.locations = parts;
     else delete out.locations;
     // No colour means the type's own one, also when the file had another.
@@ -219,10 +268,10 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
   });
   const sources = data.sources.map(f => {
     const whole = doc.wholeSources.includes(f.id);
-    const out: Record<string, unknown> = { ...f.raw, id: f.id, start: whole ? 0 : f.start, end: whole ? Math.max(0, n - 1) : f.end };
+    const out: Record<string, unknown> = { ...f.raw, id: f.id, name: f.name, type: "source", strand: f.strand === -1 ? -1 : 1, forward: f.strand !== -1, start: whole ? 0 : f.start, end: whole ? Math.max(0, n - 1) : f.end };
     if (isRecord(f.raw.notes)) out.notes = notesOut(f.raw.notes);
     else delete out.notes;
-    const parts = whole ? undefined : partsOut(f.locations);
+    const parts = whole ? undefined : partsOut(f, f.locations, n);
     if (parts) out.locations = parts;
     else delete out.locations;
     return cleanAnnotation(out, f.raw.color ?? firstStringNote(f.raw.notes, "color"), f.raw.notes);
@@ -241,6 +290,9 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
       primerBindsOn: "3prime",
       notes: notesOut(p.notes)
     };
+    const parts = partsOut(p, primerParts(p), n);
+    if (parts) out.locations = parts;
+    else delete out.locations;
     // No colour means the default one, also when the file had another.
     return cleanAnnotation(out, p.color, p.notes);
   });
@@ -259,14 +311,24 @@ export function toParsed(doc: LoadedDocument, data: SeqData): Record<string, unk
     });
   }
   const description = oneLine(data.description);
+  const comments = parseComments(Array.isArray(extra.comments) ? extra.comments : undefined);
+  const ends = validFragmentEnds(data);
+  const state = data.methylation;
+  const writeEnd = (e: FragmentEnd) => e.enzyme ? [e.kind, e.bases, e.enzyme] : [e.kind, e.bases];
+  const savedComments = formatComments(fields ?? comments.fields, comments.otherComments, nameToKeep(data.name), {
+    ends: ends ? JSON.stringify([writeEnd(ends.left), writeEnd(ends.right)]) : undefined,
+    methylation: state?.from === "pcr" ? "PCR" : state?.name ? `Host ${state.name}` : undefined
+  });
   return {
     ...extra,
+    ...(savedComments.length || extra.comments ? { comments: savedComments } : {}),
     name: data.name,
     // The GenBank writer prefers the file's own DEFINITION, so set both.
     description,
     definition: description,
     circular: data.circular,
     sequence: data.sequence,
+    ...(ends ? { fragmentEnds: ends } : {}),
     size: n,
     features: [...sources, ...features],
     primers

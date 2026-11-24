@@ -5,9 +5,11 @@
 // fields (storage, verification, …) saved inside the file.
 
 import { h, toast } from "../ui/dom.ts";
-import { detectFromFeatures, dsDnaKilodaltons, gcPercent, NAME_KEY, type LabFields } from "../lib/labinfo.ts";
+import { detectFromFeatures, dsDnaKilodaltons, gcPercent, isReservedLabField, type LabFields } from "../lib/labinfo.ts";
 import { fieldDef, loadSettings } from "../settings.ts";
-import { hostMethylation, methylationSummary } from "../lib/methylation.ts";
+import { methylationSummary, type DnaMethylation } from "../lib/methylation.ts";
+import { topStrandLength, type FragmentEnds } from "../lib/seqdata.ts";
+import { endLabel } from "../lib/cloning.ts";
 import { findStrain, HOST_FIELD } from "../lib/strains.ts";
 import type { Feature } from "../lib/types.ts";
 
@@ -16,6 +18,7 @@ export interface SequenceFacts {
   description: string;
   sequence: string;
   circular: boolean;
+  ends?: FragmentEnds;
   features: Feature[];
   primerCount: number;
 }
@@ -40,6 +43,7 @@ export interface InfoCallbacks {
   rename: (name: string) => void;
   setDescription: (description: string) => void;
   setCircular: (circular: boolean) => void;
+  methylation: (host: string) => DnaMethylation;
   readsOverview: () => ReadsOverview | null;
   openReads: () => void;
   /** Called whenever a lab field changes (the document becomes unsaved). */
@@ -112,7 +116,7 @@ export class InfoPanel {
    */
   private hostNotes(value: string): Node[] {
     const strain = findStrain(value);
-    const notes: Node[] = [h("p", { class: "ps-muted ps-small ps-field-hint" }, methylationSummary(hostMethylation(value)))];
+    const notes: Node[] = [h("p", { class: "ps-muted ps-small ps-field-hint" }, methylationSummary(this.cb.methylation(value)))];
     if (strain?.amber)
       notes.push(
         h(
@@ -245,8 +249,7 @@ export class InfoPanel {
       const input = h("input", { class: "ps-field-input", placeholder: "Field name, e.g. Glycerol stock ID" }) as HTMLInputElement;
       const done = () => {
         const v = input.value.trim();
-        // The file keeps the sequence's name with spaces under that key.
-        if (v && !names.includes(v) && v !== NAME_KEY) {
+        if (v && !names.includes(v) && !isReservedLabField(v)) {
           this.fields.push([v, ""]);
           this.render();
         } else if (v) toast(`“${v}” is already there.`, "info");
@@ -279,7 +282,8 @@ export class InfoPanel {
               h(
                 "dl",
                 { class: "ps-info-facts" },
-                fact("Length", `${fmt(n)} bp`),
+                fact("Length", `${fmt(topStrandLength(f.sequence, f.ends))} bp`),
+                f.ends ? fact("Ends", `${endLabel(f.ends.left)} · ${endLabel(f.ends.right)}`) : null,
                 fact("GC content", `${fmt(gcPercent(f.sequence), 1)}%`),
                 fact("Mass (dsDNA)", `${fmt(dsDnaKilodaltons(n), 0)} kDa`),
                 fact("Features", fmt(features.length)),

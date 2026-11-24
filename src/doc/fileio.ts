@@ -4,6 +4,7 @@
 // Reading and writing sequence files with TeselaGen's parsers.
 
 import { anyToJson, jsonToFasta, jsonToGenbank } from "@teselagen/bio-parsers";
+import { topStrandSequence } from "../lib/seqdata.ts";
 import { parseFastq } from "../lib/fastq.ts";
 import { Buffer as PolyfillBuffer } from "buffer/index.js";
 import { compactChromatogram } from "../lib/chromatogram.ts";
@@ -52,7 +53,7 @@ export async function parseSequenceFile(bytes: Uint8Array, path: string): Promis
     const text = new TextDecoder().decode(bytes);
     if (/^\s*LOCUS\b/.test(text)) {
       const tables = readFeatureTables(text);
-      if (tables.length === sequences.length) sequences.forEach((s, i) => fixQualifiers([listOf(s.features), listOf(s.primers), listOf(s.parts)], tables[i]));
+      if (tables.length === sequences.length) sequences.forEach((s, i) => fixQualifiers([listOf(s.features), listOf(s.primers), listOf(s.parts)], tables[i], !s.circular));
     }
   }
   // The generic parser skips primers stored in SnapGene files.
@@ -94,7 +95,10 @@ export async function parseSequenceFile(bytes: Uint8Array, path: string): Promis
 const listOf = (v: unknown): any[] => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : []);
 
 export function serialize(seq: any, format: SaveFormat): string {
-  if (format === "fasta") return jsonToFasta(seq);
+  if (format === "fasta") {
+    const { fragmentEnds, ...data } = seq;
+    return jsonToFasta(fragmentEnds ? { ...data, sequence: topStrandSequence(data.sequence, fragmentEnds) } : data);
+  }
   // The writer wraps qualifier values mid-word and doesn't double their quotes, so it is
   // handed a short stand-in for each value, which `formatQualifier` then writes.
   const values: string[] = [];

@@ -114,6 +114,27 @@ test("overlapping: complementary primers with the change in the middle", () => {
   assert.equal(alignPrimer(del.reverse, seq).deletions, 6);
 });
 
+test("back-to-back primer arms fit in the bases remaining after a large deletion", () => {
+  const sequence = made(150, 7);
+  const design = designMutagenesis(sequence, true, { start: 15, length: 117, bases: "" }, "back-to-back")!;
+  assert.ok(design.forward.bases.length + design.reverse.bases.length <= 33);
+  assert.equal(product(design, sequence)?.sequence, sequence.slice(132) + sequence.slice(0, 15));
+});
+
+test("primer arms fit in the bases remaining after a large substitution", () => {
+  // The bases a substitution swaps for others are not there to anchor a primer, as a deletion's are not.
+  const sequence = made(150, 7);
+  const swap: Record<string, string> = { A: "T", C: "G", G: "C", T: "A" };
+  const bases = [...sequence.slice(15, 132)].map(b => swap[b]).join("");
+  for (const layout of ["back-to-back", "overlapping"] as const) {
+    const design = designMutagenesis(sequence, true, { start: 15, length: 117, bases }, layout)!;
+    assert.ok(design, layout);
+    assert.deepEqual(design.change, { start: 15, length: 117, bases }, `${layout}: none of it is trimmed`);
+    const arms = design.forward.bases.length - bases.length + (layout === "overlapping" ? 0 : design.reverse.bases.length);
+    assert.ok(arms >= 30 && arms <= 150 - 117, `${layout}: arms of ${arms} bases`);
+  }
+});
+
 test("designed primers pass the primer checks, the change well away from the 3′ end", () => {
   for (const layout of ["back-to-back", "overlapping"] as const) {
     for (const c of [

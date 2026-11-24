@@ -414,6 +414,10 @@ async function main(outDir) {
     await s.waitFor("document.querySelector('[aria-label=\"First vector enzyme\"]')?.value === 'Acc65I'", 5000);
     await enzymeChoice("Cloning enzyme list", "common");
     check("Restriction cloning keeps the selected enzyme through a source change", await s.waitFor("document.querySelector('[aria-label=\"Cloning enzyme list\"]')?.value === 'common' && document.querySelector('[aria-label=\"First vector enzyme\"]')?.value === 'Acc65I'", 5000));
+    await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'Gibson').click();");
+    check("Gibson's note says an added overlap is split only between two PCR pieces", await s.waitFor("document.querySelector('.sv-clone-method-note')?.textContent === \"Pieces join on overlaps they share, or on 20 bases added by PCR primers, split between neighbours when both are PCR pieces.\"", 5000));
+    await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'In-Fusion').click();");
+    check("In-Fusion's note says one PCR piece's primer adds the bases from its neighbour", await s.waitFor("document.querySelector('.sv-clone-method-note')?.textContent === \"Pieces join on overlaps they share, or on 15 bases one PCR piece's primer adds from its neighbour.\"", 5000));
     await s.exec("Array.from(document.querySelectorAll('[aria-label=\"Cloning method\"] button')).find(b => b.textContent === 'Golden Gate').click();");
     check("Golden Gate retains its Type IIS choices", await s.waitFor("(values => values.includes('BsaI') && !values.includes('Acc65I'))(Array.from(document.querySelector('[aria-label=\"Golden Gate enzyme\"]')?.options ?? []).map(o => o.value))", 5000));
     await s.click("//button[contains(@class,'sv-dialog-close')]");
@@ -745,7 +749,185 @@ async function main(outDir) {
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
 
+    const pcrPlanSourceTab = await s.exec("return window.__strandivo.activeTab()");
+    // --- a circle's annotations across the origin: saved as joins, kept whole by Linear ---
+    // Invented bases with a feature on each strand, a primer and a source across the origin,
+    // and a CDS with a region named with a space where its qualifier's line is cut. Each save
+    // is a download here, and a file is opened again by dropping its text.
+    {
+      let seed = 20260;
+      let ringBases = "";
+      for (let i = 0; i < 366; i++) {
+        seed = (seed * 48271) % 2147483647;
+        ringBases += "ACGT"[(seed >>> 12) & 3];
+      }
+      const acrossBases = ringBases.slice(300) + ringBases.slice(0, 4);
+      const annotation = (id, name, type, start, end, strand, notes = {}) => ({ id, name, type, start, end, strand, notes, raw: {} });
+      const regionNote = `${"A".repeat(28)} B|Signal peptide|1-5|:1-5`;
+      const ring = {
+        name: "origin-test",
+        description: "",
+        circular: true,
+        sequence: ringBases,
+        features: [
+          annotation("f-forward", "across", "misc_feature", 300, 3, 1),
+          annotation("f-reverse", "across-reverse", "misc_feature", 300, 3, -1),
+          annotation("f-cds", "regions", "CDS", 10, 60, 1, { strandivo_regions: [regionNote] })
+        ],
+        primers: [{ id: "p-forward", name: "across-F", start: 300, end: 3, strand: 1, bases: acrossBases, notes: {}, raw: {} }],
+        sources: [annotation("s-across", "across", "source", 300, 3, 1)]
+      };
+      // Where the current tab has each annotation, in which parts, and the bases it covers.
+      const summary = `
+        const s = window.__strandivo.store;
+        const covers = f => (f.locations ?? [f]).map(l => l.start <= l.end ? s.data.sequence.slice(l.start, l.end + 1) : s.data.sequence.slice(l.start) + s.data.sequence.slice(0, l.end + 1)).join("");
+        const where = f => ({ name: f.name, start: f.start, end: f.end, strand: f.strand, locations: f.locations ?? null, bases: covers(f) });
+        return { circular: s.data.circular, length: s.data.sequence.length, features: s.data.features.map(where), sources: s.data.sources.map(where),
+          primers: s.data.primers.map(p => ({ name: p.name, start: p.start, end: p.end, bases: p.bases })), regions: s.data.features.find(f => f.name === "regions")?.notes.strandivo_regions ?? null };`;
+      const saved = async count => ((await s.waitFor(`window.__e2eDownloads.length === ${count}`, 5000)) ? s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));") : "");
+      const joined = text => (text.match(/join\(301\.\.366,1\.\.4\)/g) ?? []).length;
+      const first = await s.exec("return window.__strandivo.tabs().length");
+      const downloads = await s.exec("return window.__e2eDownloads.length");
+      await s.exec("window.__strandivo.openNew(arguments[0]);", ring);
+      const ringMade = await s.waitFor("window.__strandivo.store?.data.name === 'origin-test'", 5000);
+      const ringBefore = ringMade ? await s.exec(summary) : null;
+      await s.exec("window.__strandivo.command('save')");
+      const ringText = await saved(downloads + 1);
+      check(
+        "A feature on each strand, a primer and a source across the origin are saved as joins in order",
+        joined(ringText) === 4 && ringText.includes("complement(join(301..366,1..4))") && !/\b301\.\.4\b/.test(ringText),
+        ringText.slice(0, 120)
+      );
+      // Linear, in the Info tab, opens the circle at its origin: what crossed it is in two parts.
+      await s.exec("window.__strandivo.setView('info')");
+      await s.waitFor("document.querySelector('[aria-label=\"Topology\"]')", 5000);
+      await s.click("//div[@aria-label='Topology']//button[normalize-space()='Linear']");
+      const madeLinear = await s.waitFor("window.__strandivo.store.data.circular === false", 5000);
+      const ringLinear = madeLinear ? await s.exec(summary) : null;
+      check("Making the circle linear names the primer it left out and offers Undo", ringLinear?.primers.length === 0 && await s.waitFor("Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)')).some(t => t.textContent.includes('Primer across-F was left out because its site crosses the origin') && t.querySelector('.ps-toast-action')?.textContent === 'Undo')", 2000));
+      const halves = JSON.stringify([[300, 365], [0, 3]]);
+      check(
+        "Linear keeps a feature or source across the origin as ordered parts, with all its bases",
+        ringLinear?.length === 366 && [...ringLinear.features.slice(0, 2), ringLinear.sources[0]].every(f => JSON.stringify(f.locations?.map(({ start, end }) => [start, end])) === halves && f.bases === acrossBases) && ringLinear.regions?.[0] === regionNote,
+        JSON.stringify(ringLinear).slice(0, 300)
+      );
+      await s.exec("window.__strandivo.command('save')");
+      const linearText = await saved(downloads + 2);
+      check("Saved linear, they are still joins in order", joined(linearText) === 3 && !/\b301\.\.4\b/.test(linearText), linearText.slice(0, 120));
+      // Both files, dropped on Home, open as they were saved.
+      await s.exec("window.__strandivo.showHome()");
+      await s.execAsync(drop("origin-ring.gb"), ringText);
+      const ringReopened = (await s.waitFor("window.__strandivo.tabs().includes('origin-ring.gb') && window.__strandivo.store", 15000)) ? await s.exec(summary) : null;
+      check(
+        "The file reopens with each on the same bases, and the region's name with its space",
+        JSON.stringify(ringReopened) === JSON.stringify(ringBefore) && ringReopened?.regions?.[0] === regionNote && ringReopened.features[0].bases === acrossBases,
+        JSON.stringify(ringReopened).slice(0, 300)
+      );
+      await s.exec("window.__strandivo.showHome()");
+      await s.execAsync(drop("origin-ring-linear.gb"), linearText);
+      const linearReopened = (await s.waitFor("window.__strandivo.tabs().includes('origin-ring-linear.gb') && window.__strandivo.store", 15000)) ? await s.exec(summary) : null;
+      check("The linear file reopens with the same parts and bases", JSON.stringify(linearReopened) === JSON.stringify(ringLinear), JSON.stringify(linearReopened).slice(0, 300));
+      for (const tab of [first + 2, first + 1, first]) {
+        await s.exec(`window.__strandivo.showTab(${tab}); window.__strandivo.closeTab();`);
+        await s.waitFor(`window.__strandivo.tabs().length === ${tab}`, 5000);
+      }
+    }
+
+    // --- a gene a digest cuts into keeps its reading frame, and drops its stale translation ---
+    // Invented bases: a CDS with one EcoRI site, whose G starts a codon (EcoRI cuts G^AATTC, so
+    // the right piece begins two bases into that codon), and a reverse CDS the digest leaves
+    // whole. Each has a translation, as a database file brings it. Both tabs are saved, a
+    // download here, so that closing them asks nothing.
+    {
+      const unit = "GCTAACGATTGTCAGGGTCATATTCTGAAA"; // ten codons, no EcoRI site
+      const gene = `ATG${unit.repeat(4)}GAATTC${unit.repeat(5)}TAA`; // 282 bases, the site's G its 124th
+      const whole = `ATG${unit.repeat(3)}TAA`; // 96 bases
+      const revcomp = bases => Array.from(bases, b => "TGCA"["ACGT".indexOf(b)]).reverse().join("");
+      const spacer = "CT".repeat(15);
+      const cds = (id, start, end, strand) => ({ id, name: id, type: "CDS", start, end, strand, notes: { translation: ["MAAAA"] }, raw: {} });
+      const first = await s.exec("return window.__strandivo.tabs().length");
+      const downloads = await s.exec("return window.__e2eDownloads.length");
+      await s.exec("window.__strandivo.openNew(arguments[0]);", {
+        name: "frame-test",
+        description: "",
+        circular: false,
+        sequence: spacer + gene + spacer + revcomp(whole) + spacer,
+        features: [cds("gene", 30, 311, 1), cds("control", 342, 437, -1)],
+        primers: [],
+        sources: []
+      });
+      await s.waitFor("window.__strandivo.store?.data.name === 'frame-test'", 5000);
+      await s.exec("window.__strandivo.command('save')");
+      await s.waitFor(`window.__e2eDownloads.length === ${downloads + 1}`, 5000);
+      await s.exec("window.__strandivo.command('digest')");
+      await s.waitFor("document.querySelector('input[data-enzyme=\"EcoRI\"]')", 5000);
+      await s.click("//input[@data-enzyme='EcoRI']");
+      await s.waitFor("document.querySelector('tr[data-size=\"314\"] button')", 5000);
+      await s.click("//tr[@data-size='314']//button[normalize-space()='Open']");
+      const framed = await s.waitFor(`window.__strandivo.tabs().length === ${first + 2} && window.__strandivo.store?.data.sequence.length === 314`, 5000);
+      const piece = framed
+        ? await s.exec(`
+            const s = window.__strandivo.store;
+            const read = id => { const f = s.data.features.find(x => x.id === id); return f && { start: f.start, end: f.end, bases: s.data.sequence.slice(f.start, f.end + 1), codonStart: f.notes.codon_start ?? null, translation: f.notes.translation ?? null }; };
+            return { gene: read("gene"), control: read("control") };`)
+        : null;
+      check(
+        "A gene a digest cuts into keeps its codons: the 314 bp piece reads on from its first whole one",
+        piece?.gene?.start === 0 && piece.gene.end === 157 && piece.gene.bases === gene.slice(124) && JSON.stringify(piece.gene.codonStart) === '["3"]',
+        JSON.stringify(piece?.gene)
+      );
+      check(
+        "It leaves out the translation the cut made wrong, while a gene left whole keeps its own",
+        piece?.gene?.translation === null && JSON.stringify(piece.control?.translation) === '["MAAAA"]' && piece.control.codonStart === null && piece.control.bases === revcomp(whole),
+        JSON.stringify(piece)
+      );
+      await s.exec("window.__strandivo.command('save')");
+      const text = (await s.waitFor(`window.__e2eDownloads.length === ${downloads + 2}`, 5000)) ? await s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));") : "";
+      const qualifiers = text.match(/\/(?:codon_start|translation)=[^\n]*/g) ?? [];
+      check("Saved as GenBank, the piece writes that frame and only the translation that still fits", qualifiers.length === 2 && /^\/codon_start="?3/.test(qualifiers[0]) && qualifiers[1].startsWith("/translation="), qualifiers.join(" ") || text.slice(0, 120));
+      for (const tab of [first + 1, first]) {
+        await s.exec(`window.__strandivo.showTab(${tab}); window.__strandivo.closeTab();`);
+        await s.waitFor(`window.__strandivo.tabs().length === ${tab}`, 5000);
+      }
+    }
+
+    // --- a site cut at the very end of a linear sequence is no cut, in the outline as in the digest ---
+    // Invented bases: BsaI cuts 7 and 11 bases on from the start of its site, so the second of
+    // two sites, five bases from the end, has its cuts on the last base. The outline's unique
+    // filter counts one cut and keeps the enzyme, and the Digest dialog gives the two fragments
+    // that cut makes. Saved first, a download here, so that closing the tab asks nothing.
+    {
+      const first = await s.exec("return window.__strandivo.tabs().length");
+      const downloads = await s.exec("return window.__e2eDownloads.length");
+      const bases = "AT".repeat(30);
+      await s.exec("window.__strandivo.openNew(arguments[0]);", {
+        name: "end-test",
+        description: "",
+        circular: false,
+        sequence: `${bases}GGTCTC${bases}GGTCTCAAAAA`,
+        features: [],
+        primers: [],
+        sources: []
+      });
+      await s.waitFor("window.__strandivo.store?.data.name === 'end-test'", 5000);
+      await s.exec("window.__strandivo.command('save')");
+      await s.waitFor(`window.__e2eDownloads.length === ${downloads + 1}`, 5000);
+      const chip = await s.waitFor("document.querySelector('.sv-enzyme-chip[data-id=\"BsaI@60\"]')", 5000);
+      const title = chip ? await s.exec("return document.querySelector('.sv-enzyme-chip[data-id=\"BsaI@60\"]').title") : "";
+      check("A site whose cuts fall at the end of a linear sequence isn't counted, so BsaI stays a unique cutter in the outline", chip && title.includes("2 sites · 1 predicted cut"), title);
+      await s.exec("window.__strandivo.command('digest')");
+      await s.waitFor("document.querySelector('input[data-enzyme=\"BsaI\"]')", 5000);
+      await s.click("//input[@data-enzyme='BsaI']");
+      const sizes = (await s.waitFor("document.querySelectorAll('.sv-dialog .sv-digest-table tr[data-size]').length === 2", 5000))
+        ? await s.exec("return Array.from(document.querySelectorAll('.sv-dialog .sv-digest-table tr[data-size]')).map(r => r.dataset.size)")
+        : [];
+      check("The Digest dialog gives the same one cut, as two fragments", JSON.stringify(sizes) === '["70","67"]', JSON.stringify(sizes));
+      await s.exec(`window.__strandivo.showTab(${first}); window.__strandivo.closeTab();`);
+      await s.waitFor(`window.__strandivo.tabs().length === ${first}`, 5000);
+    }
+
     // --- printable PCR plan: preview, collapsed mix, edited cycling step, and offline HTML export ---
+    await s.exec(`window.__strandivo.showTab(${pcrPlanSourceTab});`);
     await s.exec(`
       const store = window.__strandivo.store;
       const d = store.data;
@@ -888,6 +1070,63 @@ async function main(outDir) {
     await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
     await s.click("//button[@data-focus='show-on-map']");
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+
+    {
+      await s.click("//button[@aria-label='Enzyme library']");
+      await s.click("//button[normalize-space()='My enzymes']");
+      await s.waitFor("document.querySelector('[aria-label=\"Search My enzymes\"]')", 5000);
+      await s.exec(`
+        const all = document.querySelector('.sv-personal-enzyme-box-all .sv-personal-enzyme-title');
+        if (all.getAttribute('aria-expanded') === 'false') all.click();
+        const search = document.querySelector('[aria-label="Search My enzymes"]');
+        search.value = 'NlaIII';
+        search.dispatchEvent(new Event('input'));
+      `);
+      await s.click("//*[contains(@class,'sv-personal-enzyme-box-all')]//input[@data-personal-enzyme='NlaIII']");
+      await s.waitFor("document.querySelector('.sv-personal-enzyme-box-selected input[data-personal-enzyme=\"NlaIII\"]')?.checked", 5000);
+      await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
+
+      const pad = "ACGT".repeat(25);
+      const sequence = pad + "CATGCATG" + pad + "CATG" + pad;
+      const reverse = Array.from(sequence.slice(250, 270), base => "TGCA"["ACGT".indexOf(base)]).reverse().join("");
+      const primers = [
+        { id: "gel-f", name: "F", bases: sequence.slice(150, 170), start: 150, end: 169, strand: 1, notes: {}, raw: {} },
+        { id: "gel-r", name: "R", bases: reverse, start: 250, end: 269, strand: -1, notes: {}, raw: {} }
+      ];
+      await s.exec("window.__strandivo.openNew(arguments[0]);", { name: "Withheld digest", sequence, circular: true, description: "", features: [], sources: [], primers });
+      await s.waitFor("window.__strandivo.store?.data.name === 'Withheld digest'", 5000);
+      await s.exec("window.__strandivo.setView('primers');");
+      await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]");
+      await s.waitFor("document.querySelector('.sv-dialog select[aria-label=\"Forward primer\"]')", 5000);
+      await enzymeChoice("Forward primer", "p:gel-f");
+      await enzymeChoice("Reverse primer", "p:gel-r");
+      await s.waitFor("document.querySelector('[aria-label=\"Product enzyme list\"]')", 5000);
+      await enzymeChoice("Product enzyme list", "personal");
+      await s.waitFor("document.querySelector('[aria-label=\"Product enzyme list\"] [data-value=\"personal\"][aria-checked=\"true\"]')", 5000);
+      await enzymeChoice("Product cut-site filter", "all");
+      await s.waitFor("document.querySelector('[aria-label=\"Suggested digest\"]')?.value === 'NlaIII'", 5000);
+      const notice = JSON.stringify("The template's NlaIII digest isn't shown. The cuts overlap on the two strands, so their fragments can’t be simulated.");
+      check("The PCR gel explains why the cut template lane is missing", await s.waitFor(`document.querySelector('.sv-pcr-lanes [role="status"]:not([hidden])')?.textContent === ${notice}`, 5000));
+      await s.click("//button[@data-focus='print-pcr-plan']");
+      check("The notice appears beside the gel in the preview and print copy", await s.waitFor(`Array.from(document.querySelectorAll(':is(.sv-print-stage, .sv-print-sheet) .sv-sheet-note')).filter(note => note.textContent === ${notice}).length === 2`, 5000));
+      await s.click("//input[@data-focus='plan-sec-gel']");
+      check("Leaving the gel out moves the notice to Warnings & notes", await s.waitFor(`Array.from(document.querySelectorAll('.sv-print-stage .sv-sheet-warnings li')).some(note => note.textContent === ${notice}) && !document.querySelector('.sv-print-stage .sv-sheet-gel-svg')`, 5000));
+      await s.click("//button[@data-focus='plan-cancel']");
+      const beforeImage = await s.exec("return window.__e2eDownloads.length;");
+      await s.click("//button[@data-focus='gel-svg']");
+      const imageSaved = await s.waitFor(`window.__e2eDownloads.length === ${beforeImage + 1}`, 5000);
+      const gelLabels = imageSaved ? await s.execAsync(`
+        window.__e2eDownloads.at(-1).blob.text().then(text => {
+          const svg = new DOMParser().parseFromString(text, 'image/svg+xml');
+          done(Array.from(svg.querySelectorAll('text'), label => label.textContent));
+        }, error => done(String(error)));
+      `) : [];
+      check("An exported PCR gel gives the template notice below the lane key", Array.isArray(gelLabels) && gelLabels.at(-1) === JSON.parse(notice) && gelLabels.some(label => label.startsWith("Product, NlaIII · ")) && !gelLabels.some(label => label.startsWith("Template, NlaIII · ")), JSON.stringify(gelLabels));
+      await s.click("//button[@data-focus='show-on-map']");
+      await s.exec("window.__strandivo.closeTab();");
+      await s.click("//button[normalize-space()=\"Don't Save\"]");
+      await s.waitFor("window.__strandivo.store?.data.name !== 'Withheld digest'", 5000);
+    }
 
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");

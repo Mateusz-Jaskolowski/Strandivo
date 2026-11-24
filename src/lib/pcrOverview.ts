@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Analysis of the final, linear PCR product, including tails and primer edits.
-import { blockedSite, cutsBothSides, enzymeName, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { blockedSite, completeLinearCuts, digestSites, enzymeName, extraKey, scanSites, selectSites, sourceEnzymes, type CutSite, type EnzymeOptions, type SiteHit } from "./enzymes.ts";
+import { overlappingCuts } from "./cloning.ts";
 import { methylationKey, PCR_DNA, type DnaMethylation } from "./methylation.ts";
 import { gcProfile, overviewWindow } from "./gc.ts";
 import { digestSequence, fragmentSize, LADDERS, SUPERCOILED_RUNS_AS } from "./gel.ts";
@@ -10,7 +11,7 @@ import { gcPercent } from "./labinfo.ts";
 import { alignPrimer } from "./primerAlign.ts";
 import { PCR_GUIDANCE } from "./pcrGuidance.ts";
 import type { PcrProduct } from "./pcr.ts";
-import type { SeqData } from "./seqdata.ts";
+import { topStrandLength, type SeqData } from "./seqdata.ts";
 import type { TemplateKind } from "./pcrProtocols.ts";
 
 /**
@@ -31,22 +32,42 @@ function templateCutCounts(sequence: string, circular: boolean, members: readonl
 }
 
 /** The last template digested, kept for the reason the counts above are. */
-let digested: { sequence: string; circular: boolean; enzymes: string; sizes: number[] } | null = null;
+let digested: { sequence: string; circular: boolean; enzymes: string; sizes: number[]; problem?: string } | null = null;
+
+function templateDigest(template: SeqData, enzymes: readonly string[], methylation?: DnaMethylation) {
+  const key = `${[...enzymes].sort().join("+")}|${methylationKey(methylation ?? template.methylation)}|${JSON.stringify(template.ends ?? null)}`;
+  if (digested && digested.sequence === template.sequence && digested.circular === template.circular && digested.enzymes === key) return digested;
+  const { fragments, problem } = digestSequence(template, [...enzymes], methylation);
+  return (digested = { sequence: template.sequence, circular: template.circular, enzymes: key, sizes: fragments.map(fragmentSize), problem });
+}
 
 /**
  * The template cut by a digest's enzymes, as top-strand sizes largest first, so a lane of it
  * can run beside the product's. A circular template cut once gives one fragment of its whole
  * length, as the plasmid is only opened up; enzymes that don't cut it at all give none, which
- * is what a site a primer's 5′ tail brought in looks like from here. The template is grown
+ * is what a site a primer's 5′ tail brought in looks like from here, and so does a digest that
+ * can't be simulated (`templateDigestProblem` says which). The template is grown
  * in cells (`methylation`, its file's strain), so Dam or Dcm methylation may block a site
  * the unmethylated product cuts, and DpnI cuts it where it can't cut the product.
  */
 export function templateDigestSizes(template: SeqData, enzymes: readonly string[], methylation?: DnaMethylation): number[] {
-  const key = `${[...enzymes].sort().join("+")}|${methylationKey(methylation)}`;
-  if (digested && digested.sequence === template.sequence && digested.circular === template.circular && digested.enzymes === key) return digested.sizes;
-  const sizes = digestSequence(template, [...enzymes], methylation).fragments.map(fragmentSize);
-  digested = { sequence: template.sequence, circular: template.circular, enzymes: key, sizes };
-  return sizes;
+  return templateDigest(template, enzymes, methylation).sizes;
+}
+
+/**
+ * Why the template has no lane cut by this digest when the digest can't be simulated on it,
+ * as the Digest dialog says, rather than because the enzymes don't cut it: null otherwise,
+ * and where the template isn't in the tube (genomic DNA, cDNA) or no digest is shown, as
+ * `pcrGelLanes` leaves its lanes out. It takes no lane or band in its place.
+ */
+export function templateDigestProblem(template: SeqData, kind: TemplateKind, digest: SuggestedDigest | null, methylation?: DnaMethylation): string | null {
+  if (kind === "complex" || !digest) return null;
+  return templateDigest(template, digest.enzymes, methylation).problem ?? null;
+}
+
+export function templateDigestNotice(template: SeqData, kind: TemplateKind, digest: SuggestedDigest | null, methylation?: DnaMethylation): string | null {
+  const problem = templateDigestProblem(template, kind, digest, methylation);
+  return problem && digest ? `The template's ${digestName(digest)} digest isn't shown. ${problem}` : null;
 }
 
 /** One lane of the PCR product's gel. */
@@ -73,7 +94,7 @@ export interface PcrGelLane {
  * the plasmid is in the cells. For genomic DNA or cDNA it is not, so only the product runs.
  */
 export function pcrGelLanes(template: SeqData, kind: TemplateKind, productLength: number, digest: SuggestedDigest | null, methylation?: DnaMethylation): PcrGelLane[] {
-  const length = template.sequence.length;
+  const length = topStrandLength(template.sequence, template.ends);
   const lanes: PcrGelLane[] = [];
   if (kind !== "complex") {
     if (template.circular) lanes.push({ of: "template", what: "Template, supercoiled", sizes: [length], runsAs: length * SUPERCOILED_RUNS_AS });
@@ -101,7 +122,7 @@ export function productOverview(product: PcrProduct, template: string, circular:
   const hits = scanSites(product.sequence, false, members);
   const unmethylated = { ...options, methylation: PCR_DNA };
   const dna = { sequence: product.sequence, circular: false };
-  const cutting = hits.filter(h => !blockedSite(product.sequence, false, h, PCR_DNA));
+  const cutting = digestSites(product.sequence, false, members).filter(h => !blockedSite(product.sequence, false, h, PCR_DNA));
   const templateCounts = templateCutCounts(template, circular, members);
   const window = overviewWindow(product.length);
   const gc = gcProfile(product.sequence, false, window);
@@ -138,7 +159,7 @@ export function tailSiteFlanks(length: number, sites: SiteHit[]) {
 }
 
 /** Complete cuts only, matching cutsFor in cloning.ts; a Type IIS site alone may not cut. */
-export const completeProductCut = (h: SiteHit, length: number) => Math.min(h.cut, h.bottomCut) > 0 && Math.max(h.cut, h.bottomCut) < length;
+export const completeProductCut = (h: SiteHit, length: number) => completeLinearCuts(h, length).length > 0;
 
 export interface SuggestedDigest {
   enzymes: string[];
@@ -147,11 +168,12 @@ export interface SuggestedDigest {
 }
 /** Top-strand lengths. Reject overlapping overhangs rather than inventing a band. */
 export function productDigestSizes(length: number, hits: SiteHit[]): number[] | null {
-  const cuts = [...new Map(hits.filter(h => completeProductCut(h, length)).map(h => [`${h.cut}:${h.bottomCut}`, h])).values()].sort(
-    (a, b) => Math.min(a.cut, a.bottomCut) - Math.min(b.cut, b.bottomCut)
+  const pairs = hits.flatMap(h => completeLinearCuts(h, length).map(([top, bottom]) => ({ enzyme: h.enzyme, top, bottom })));
+  const cuts = [...new Map(pairs.map(c => [`${c.top}:${c.bottom}`, c])).values()].sort(
+    (a, b) => Math.min(a.top, a.bottom) - Math.min(b.top, b.bottom)
   );
-  if (!cuts.length || cuts.some((c, i) => i > 0 && Math.min(c.cut, c.bottomCut) <= Math.max(cuts[i - 1].cut, cuts[i - 1].bottomCut))) return null;
-  const boundaries = [0, ...cuts.map(c => c.cut), length];
+  if (!cuts.length || overlappingCuts(cuts)) return null;
+  const boundaries = [0, ...cuts.map(c => c.top), length];
   return boundaries
     .slice(1)
     .map((end, i) => end - boundaries[i])
@@ -186,9 +208,7 @@ export function suggestedDigests(length: number, hits: SiteHit[], members: reado
   // Names as the sites carry them, as the drawn sites do: a lab's "ecori" is EcoRI. A name
   // REBASE doesn't list can't be in a hit found by scanning, so it is kept as written.
   const allowed = new Set(members.map(m => enzymeName(m) ?? m));
-  // An enzyme that cuts on both sides of its site is left out: only the cut after it is found,
-  // so its fragments would be one too few (BcgI's 324 + 288 are 290 + 34 + 288).
-  for (const h of hits) if (allowed.has(h.enzyme) && !cutsBothSides(h.enzyme) && completeProductCut(h, length)) byName.set(h.enzyme, [...(byName.get(h.enzyme) ?? []), h]);
+  for (const h of hits) if (allowed.has(h.enzyme) && completeProductCut(h, length)) byName.set(h.enzyme, [...(byName.get(h.enzyme) ?? []), h]);
   // Small patterns are readable; a digest with many sites is still accessible in Digest.
   const names = [...byName]
     .filter(([, sites]) => sites.length <= 3)

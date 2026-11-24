@@ -32,6 +32,7 @@ import { isBrowserKey, shownPath } from "./webFiles.ts";
 import { recentFiles } from "./recent.ts";
 import { basename, dirname, extension, LIBRARY_EXTENSIONS, stripExtension } from "./lib/files.ts";
 import { describeContents, matchesSearch, subfolder, type ConstructInfo } from "./lib/constructs.ts";
+import { topStrandLength } from "./lib/seqdata.ts";
 import { nextTableSort, parseTableSort, sortedBy, type TableSort } from "./lib/tableSort.ts";
 import { sortHeader } from "./ui/sortHead.ts";
 import { parseComments } from "./lib/labinfo.ts";
@@ -67,7 +68,7 @@ async function readConstruct(f: ListedFile, catalog: string): Promise<ConstructI
     const info: ConstructInfo = {
       ...base,
       name: data.name,
-      length: data.sequence.length,
+      length: topStrandLength(data.sequence, data.ends),
       circular: data.circular,
       features: data.features.length,
       contents: describeContents(data.features),

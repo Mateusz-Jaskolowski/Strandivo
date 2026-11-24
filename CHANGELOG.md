@@ -22,6 +22,48 @@ NEB's protocols and prints a plan for the bench. Edits to bases show a card firs
 Strandivo warns when methylation blocks a cut, UniProt regions show how well they match,
 and maps and gels can be saved as images.
 
+- **Cloning simulations check that the pieces form a product.** Golden Gate looks for a
+  complete circular assembly, checks for sites recreated at the joins, and reports when
+  the parts could make different products. Gibson and In-Fusion check the selected
+  fragments against their PCR primers and flag joins with unknown bases. Added insert
+  rows wait for a source, and replacing bases in the vector requires one continuous
+  selection. Restriction cloning asks you to pick a fragment if the insert selection
+  spans a cut or fits more than one fragment.
+- **Clearer cloning reports.** Golden Gate names the parts a circle forms without, and
+  says when only such a circle forms, so no product is offered. When two pieces share no
+  overlap, Gibson and In-Fusion say which sizes they look for (15–200 bases), and pieces
+  with the same name get primers with different names. The vector and insert fragment
+  lists show each fragment's top-strand range and size, so the pieces of a plasmid add up
+  to its length, and the Gibson and In-Fusion notes say what the primers add.
+- **More reliable digests and PCR products.** Digests include both cuts of enzymes such
+  as BcgI, report overlapping cuts, and keep fragment ends in GenBank. Fragment sizes
+  agree with the top strand in FASTA and the PCR gel, and cloning requires every chosen
+  enzyme to cut.
+  PCR applies a change shared by both primers once, keeps annotations across the
+  former origin, and reopens from GenBank as unmethylated. Mutagenesis primers stay
+  within the bases left after a deletion.
+- **Cut counts agree with the digest.** The map, the outline and the unique-cutter
+  filters now count the cuts a digest makes. A site whose cut falls at the very end of a
+  linear piece, or inside an overhang, no longer counts, and an enzyme such as BcgI that
+  cuts on both sides of its site counts each cut, even near an end.
+- **Clearer notes on gels and primers.** When a template's digest can't be simulated, the
+  PCR product dialog leaves out its cut lane instead of showing incorrect bands, and says
+  why. The same explanation appears in gel images and the printable PCR plan.
+  A string of fragment sizes, each close to the next, no longer merges into one band on
+  the gel, and a primer with too few bases to work out a Tm says so, rather than
+  claiming it has bases other than A, C, G and T.
+- **Genes cut by a digest, PCR or cloning keep their reading frame.** A piece that begins
+  partway through a coding sequence now translates from the gene's own codons, as the gene
+  did, instead of from its first base, and saves where its first whole codon starts. A
+  translation that came with the gene in an imported file is left out of a piece whose
+  codons changed, so it isn't saved as if it still fitted.
+- **Features across the origin save and reopen exactly.** A feature, primer or source that
+  crosses the origin of a circular sequence is now saved the standard GenBank way, as two
+  ranges joined in order, and reopens on the same bases. Making the sequence linear keeps
+  such a feature whole, in two ordered parts, where it used to come back shortened. A
+  primer whose site crosses the origin is left out when you make the sequence linear;
+  the message offers Undo. A region named with a space, like "Signal peptide", keeps
+  its space after saving.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"

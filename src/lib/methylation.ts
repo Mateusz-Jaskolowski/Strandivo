@@ -66,6 +66,11 @@ export function hostMethylation(host: string): DnaMethylation {
   return strain ? { dam: strain.dam, dcm: strain.dcm, from: "strain", name: strain.name } : { dam: null, dcm: null, from: "unknown", name: text };
 }
 
+/** A supplied strain describes the DNA after propagation, regardless of how it was made. */
+export function documentMethylation(host: string, made?: DnaMethylation): DnaMethylation {
+  return host.trim() || !made ? hostMethylation(host) : made;
+}
+
 /** The DNA's methylation in a sentence, for the Info tab's strain field. */
 export function methylationSummary(dna: DnaMethylation): string {
   const state = `Dam${dna.dam ? "⁺" : "⁻"} Dcm${dna.dcm ? "⁺" : "⁻"}`;

@@ -3,9 +3,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { checkImport, formatEnzymeLibrary, formatEnzymeTable, newEnzymeStocks, parseEnzymeLibrary, parseEnzymeTable, unknownEnzymes, type LabEnzyme } from "./enzymeLibrary.ts";
-import { cutDrawing, enzymeCut, enzymeName, enzymeRelatives, enzymeSite, enzymeSites, enzymeSuppliers, findCutSites, KNOWN_ENZYMES, MAX_CUT_DISTANCE, rescanSites, scanSites, selectSites, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { cutDrawing, enzymeCut, enzymeName, enzymeRelatives, enzymeSite, enzymeSites, enzymeSuppliers, findCutSites, KNOWN_ENZYMES, MAX_CUT_DISTANCE, reactionCounts, rescanSites, scanSites, selectSites, type CutSite, type EnzymeFilter, type EnzymeOptions } from "./enzymes.ts";
+import { cutSites } from "../doc/analysis.ts";
+import { PCR_DNA } from "./methylation.ts";
 import { REBASE_ENZYMES } from "./rebaseEnzymes.ts";
+import { reverseComplement, type SeqData } from "./seqdata.ts";
 
 const labOptions = (names: readonly string[] = [], enzymeFilter: EnzymeFilter = "all"): EnzymeOptions => ({ enzymeSource: "lab", enzymeFilter, labEnzymes: names, personalEnzymes: [] });
 const commonOptions = (labEnzymes: readonly string[], enzymeFilter: EnzymeFilter): EnzymeOptions => ({ enzymeSource: "common", enzymeFilter, labEnzymes, personalEnzymes: [] });
@@ -231,4 +235,136 @@ test("lab filtering retains both strands and sites crossing a circular origin", 
   const sites = findCutSites(sequence, true, labOptions(["EcoRI", "BsaI"]));
   assert.ok(sites.some(c => c.enzyme === "EcoRI" && c.start > c.end));
   assert.ok(sites.some(c => c.enzyme === "BsaI" && !c.forward));
+});
+
+// ---------- counts at a linear end: the map says what the digest does ----------
+
+const asSeq = (sequence: string, circular = false): SeqData => ({ name: "line", description: "", circular, sequence, features: [], primers: [], sources: [] });
+const digestCuts = (d: SeqData, enzyme: string) => reactionCounts(d, [enzyme], PCR_DNA).cuts.get(enzyme) ?? 0;
+const drawn = (d: SeqData, enzyme: string, filter: EnzymeFilter = "all"): CutSite[] => findCutSites(d.sequence, d.circular, labOptions([enzyme], filter)).filter(c => c.enzyme === enzyme);
+const at = (n: number) => "AT".repeat(n);
+/** 100 bases of AT with a recognition planted at `start`. */
+const plant = (motif: string, start: number) => at(50).slice(0, start) + motif + at(50).slice(start + motif.length);
+const MOTIF = { AjnI: "CCAGG", MmeI: "TCCAAC", AjuI: "GAAATATATATTGG" };
+
+test("the map counts the complete cuts the digest makes, and draws one that lies on the sequence", () => {
+  // REBASE's cuts as boundaries from a site's first base: AjnI ^CCWGG is 0/5, MmeI TCCRAC(20/18)
+  // 26/24 after its site, and AjuI (7/12)GAANNNNNNNTTGG(11/6) −7/−12 before its site and 25/20
+  // after it. On a line of 100 bases a cut is complete only if both boundaries lie within
+  // 1…99, so one at 0 or at 100 leaves no duplex to cut.
+  const cases: [string, keyof typeof MOTIF, boolean, number, { cut: number; bottomCut: number } | null, number][] = [
+    ["AjnI at 0", "AjnI", true, 0, { cut: 0, bottomCut: 5 }, 0],
+    ["AjnI at 1", "AjnI", true, 1, { cut: 1, bottomCut: 6 }, 1],
+    ["AjnI at 90", "AjnI", true, 90, { cut: 90, bottomCut: 95 }, 1],
+    ["AjnI at 95", "AjnI", true, 95, { cut: 95, bottomCut: 100 }, 0],
+    ["MmeI at 73", "MmeI", true, 73, { cut: 99, bottomCut: 97 }, 1],
+    ["MmeI at 74", "MmeI", true, 74, { cut: 100, bottomCut: 98 }, 0],
+    // The search drops it, as its cut is past the end, and no other cut of it is on the line.
+    ["MmeI at 75", "MmeI", true, 75, null, 0],
+    ["AjuI at 12, its cut before the site 5/0", "AjuI", true, 12, { cut: 37, bottomCut: 32 }, 1],
+    ["AjuI at 13, both pairs complete", "AjuI", true, 13, { cut: 38, bottomCut: 33 }, 2],
+    ["AjuI at 74, both pairs complete", "AjuI", true, 74, { cut: 99, bottomCut: 94 }, 2],
+    // Its cut after the site is 100/95, the end itself: only the cut before it, 68/63, is one.
+    ["AjuI at 75", "AjuI", true, 75, { cut: 68, bottomCut: 63 }, 1],
+    // The search drops it, as the cut after the site is 101/96, and the cut before it is 69/64.
+    ["AjuI at 76", "AjuI", true, 76, { cut: 69, bottomCut: 64 }, 1],
+    ["AjuI on the other strand at 5", "AjuI", false, 5, { cut: 31, bottomCut: 26 }, 1],
+    ["AjuI on the other strand at 11", "AjuI", false, 11, { cut: 37, bottomCut: 32 }, 1],
+    ["AjuI on the other strand at 12", "AjuI", false, 12, { cut: 6, bottomCut: 1 }, 2],
+    ["AjuI on the other strand at 70", "AjuI", false, 70, { cut: 64, bottomCut: 59 }, 2]
+  ];
+  for (const [label, enzyme, forward, start, marker, cuts] of cases) {
+    const d = asSeq(plant(forward ? MOTIF[enzyme] : reverseComplement(MOTIF[enzyme]), start));
+    const found = drawn(d, enzyme);
+    assert.equal(digestCuts(d, enzyme), cuts, `${label}: the digest`);
+    if (!marker) {
+      assert.deepEqual(found, [], label);
+      continue;
+    }
+    assert.equal(found.length, 1, label);
+    const [c] = found;
+    assert.deepEqual([c.id, c.start, c.forward, c.cut, c.bottomCut, c.cuts, c.sites], [`${enzyme}@${start}`, start, forward, marker.cut, marker.bottomCut, cuts, 1], label);
+    assert.equal(c.overhang, d.sequence.slice(Math.min(c.cut, c.bottomCut), Math.max(c.cut, c.bottomCut)), `${label}: the bases between its cuts`);
+  }
+});
+
+test("BcgI near a linear end is drawn at the cut that is there, on either strand, and in a plasmid is two cuts", () => {
+  const nearEnd = "AT".repeat(41) + "CGAAAAAAATGC";
+  for (const [label, bases, cut, bottomCut] of [["forward", nearEnd, 72, 70], ["reverse", reverseComplement(nearEnd), 24, 22]] as const) {
+    const d = asSeq(bases);
+    assert.deepEqual(drawn(d, "BcgI").map(c => [c.cut, c.bottomCut, c.cuts, c.sites]), [[cut, bottomCut, 1, 1]], label);
+    assert.equal(digestCuts(d, "BcgI"), 1, label);
+  }
+  // Whole in a plasmid, the one recognition is two cuts, which is what "dual" asks for.
+  const plasmid = asSeq(at(50) + "CGAAAAAAATGC" + at(50), true);
+  assert.deepEqual(drawn(plasmid, "BcgI").map(c => [c.cuts, c.sites]), [[2, 1]]);
+  assert.equal(digestCuts(plasmid, "BcgI"), 2);
+  assert.deepEqual(drawn(plasmid, "BcgI", "unique"), []);
+  assert.equal(drawn(plasmid, "BcgI", "unique2").length, 1);
+});
+
+test("the unique filters count complete cuts, so a site cut at the very end is not one of them", () => {
+  // BsaI GGTCTC(1/5) cuts 7/11 from its first base: the second site's bottom strand falls at the end.
+  const near = asSeq(at(30) + "GGTCTC" + at(30) + "GGTCTC" + "AAAAA");
+  assert.equal(near.sequence.length, 137);
+  assert.deepEqual([reactionCounts(near, ["BsaI"], PCR_DNA).sites.get("BsaI"), digestCuts(near, "BsaI")], [2, 1]);
+  for (const filter of ["unique6", "unique", "unique2", "all"] as const) {
+    assert.deepEqual(drawn(near, "BsaI", filter).map(c => [c.id, c.cuts, c.sites]), [["BsaI@60", 1, 2], ["BsaI@126", 1, 2]], filter);
+  }
+  // Two sites and neither makes a cut: kept only where two cuts or more are asked for.
+  const none = asSeq("ATATA" + "GAGACC" + at(50) + "GGTCTC" + "AAAAA");
+  assert.deepEqual([reactionCounts(none, ["BsaI"], PCR_DNA).sites.get("BsaI"), digestCuts(none, "BsaI")], [2, 0]);
+  for (const [filter, shown] of [["unique6", 0], ["unique", 0], ["unique2", 2], ["all", 2]] as const) assert.equal(drawn(none, "BsaI", filter).length, shown, filter);
+  assert.deepEqual(drawn(none, "BsaI").map(c => [c.start, c.forward, c.cuts, c.sites]), [[5, false, 0, 2], [111, true, 0, 2]]);
+  // A lone one stays, as a lone blocked site does, since its sites alone pass the filter.
+  assert.deepEqual(drawn(asSeq(at(50) + "GGTCTC" + "AAAAA"), "BsaI", "unique").map(c => [c.cuts, c.sites]), [[0, 1]]);
+});
+
+test("for the common enzymes, on either strand and topology, a marker is the search's own hit", () => {
+  const gb = readFileSync(new URL("../../testdata/e2e/pUC19-annotated.gb", import.meta.url), "utf8");
+  const sequence = gb.split("ORIGIN")[1].replace(/[^acgtn]/gi, "").toUpperCase();
+  const byKey = (a: { enzyme: string; start: number; forward: boolean }, b: typeof a) => `${a.enzyme}@${a.start}@${a.forward}`.localeCompare(`${b.enzyme}@${b.start}@${b.forward}`);
+  for (const circular of [true, false]) {
+    const hits = scanSites(sequence, circular, []);
+    const markers = findCutSites(sequence, circular, commonOptions([], "all"));
+    assert.ok(hits.some(h => !h.forward) && hits.some(h => h.forward));
+    // Nothing is moved or left out, whatever its cuts: only the counts and ids are the marker's own.
+    assert.deepEqual(markers.map(({ id, cuts, sites, ...hit }) => hit).sort(byKey), [...hits].sort(byKey));
+  }
+});
+
+test("Unique 6+ cutters never lists an enzyme with a shorter site, however few sites it has", () => {
+  // AluI cuts AGCT: with two sites it was listed at the second.
+  const seq = at(20) + "AGCT" + at(20) + "AGCT" + at(20);
+  assert.deepEqual(findCutSites(seq, false, labOptions(["AluI"], "unique6")), []);
+  assert.equal(findCutSites(seq, false, labOptions(["AluI"], "unique2")).length, 2);
+});
+
+test("the cached list follows edits at the ends, and a change of topology, as a fresh search does", () => {
+  const names = ["AjuI", "BcgI", "BsaI"];
+  const o = labOptions(names);
+  const fresh = (d: SeqData) => selectSites(scanSites(d.sequence, d.circular, names), o, d);
+  const sameAsFresh = (d: SeqData) => {
+    const cached = cutSites(d, o);
+    assert.deepEqual(cached, fresh(d));
+    return cached;
+  };
+  // AjuI at 76 of 100 is drawn at the cut before its site only, as the one after it is past the end.
+  let d = asSeq(plant(MOTIF.AjuI, 76));
+  assert.deepEqual(sameAsFresh(d).map(c => [c.id, c.cut, c.cuts]), [["AjuI@76", 69, 1]]);
+  // Five more bases bring the cut after it onto the sequence: two cuts, drawn where it makes the second.
+  d = asSeq(d.sequence + at(2) + "A");
+  assert.deepEqual(sameAsFresh(d).map(c => [c.id, c.cut, c.cuts]), [["AjuI@76", 101, 2]]);
+  // Bases taken from the start move the site and leave its count.
+  d = asSeq(d.sequence.slice(10));
+  assert.deepEqual(sameAsFresh(d).map(c => [c.id, c.cut, c.cuts]), [["AjuI@66", 91, 2]]);
+  // A BsaI site whose cuts end at the last base is a site that doesn't cut.
+  d = asSeq(d.sequence + "GGTCTC" + "AAAAA");
+  assert.deepEqual(sameAsFresh(d).map(c => [c.id, c.cuts, c.sites]), [["AjuI@66", 2, 1], ["BsaI@95", 0, 1]]);
+  // The same bases as a circle, which has no ends, and the circle edited beside its origin.
+  const ring = asSeq(d.sequence, true);
+  assert.deepEqual(sameAsFresh(ring).map(c => [c.id, c.cuts, c.sites]), [["AjuI@66", 2, 1], ["BsaI@95", 1, 1]]);
+  const turned = asSeq(ring.sequence.slice(0, 5) + "G" + ring.sequence.slice(5), true);
+  assert.deepEqual(sameAsFresh(turned).map(c => [c.id, c.cuts, c.sites]), [["AjuI@67", 2, 1], ["BsaI@96", 1, 1]]);
+  assert.deepEqual(sameAsFresh(asSeq(turned.sequence)).map(c => [c.id, c.cuts, c.sites]), [["AjuI@67", 2, 1], ["BsaI@96", 0, 1]]);
 });

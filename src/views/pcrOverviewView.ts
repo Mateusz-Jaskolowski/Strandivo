@@ -5,7 +5,7 @@ import { h } from "../ui/dom.ts";
 import { iconSvg } from "../ui/icons.ts";
 import { s, textWidth, fontStack } from "../ui/svg.ts";
 import { fmt } from "../ui/format.ts";
-import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, NO_DIGEST, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
+import { CHECK_FLANKS, DISTINCT_DIGEST, digestName, NO_DIGEST, pcrGelLanes, pickDigest, pickSite, productLabels, smallestGelBand, tailSiteFlanks, templateDigestNotice, type LabelCrowd, type PcrGelLane, type productOverview } from "../lib/pcrOverview.ts";
 import { methylationNote } from "../lib/methylation.ts";
 import type { PcrProduct } from "../lib/pcr.ts";
 import { drawGcStrip, gcChipTitle, gcWindowText } from "./gcStrip.ts";
@@ -52,6 +52,8 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   const laneKey = h("ul", { class: "sv-pcr-lane-key sv-small" });
   // About the template's lanes, so it goes with them.
   const leftover = h("p", { class: "sv-small sv-dim" }, "Template left over from the reaction runs far fainter than the product.");
+  // Said where the template's cut lane would be, when the digest can't be simulated on it.
+  const withheld = h("p", { class: "sv-small sv-text-warn", role: "status" });
   const templateLength = template.sequence.length;
   const bandsOf = (sizes: number[]): GelBand[] =>
     bands(sizes).map(b => ({
@@ -80,6 +82,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
   const gelNow = () => {
     const d = pickDigest(data.digests, choice.digest);
     const rows = pcrGelLanes(template, templateKind, product.length, d, data.templateMethylation);
+    const notice = templateDigestNotice(template, templateKind, d, data.templateMethylation);
     // Until a ladder is picked, the gel opens on one that reaches its smallest band. What it
     // runs changes with the digest, so the menu follows; a pick, here or in the Digest dialog, holds.
     const ladder = currentLadder(ladderReaching(smallestGelBand(rows)));
@@ -89,11 +92,13 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
       labelWidth: 46,
       ariaLabel: `A gel of ${rows.some(r => r.of === "template") ? "the template and " : ""}the ${fmt(product.length)} bp product, uncut${d ? ` and cut with ${digestName(d)}` : ""}`
     };
-    return { d, rows, ladder, shape, lanes: rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })) };
+    return { d, rows, ladder, shape, notice, lanes: rows.map((r, i): GelLane => ({ label: String(i + 1), bands: laneBands(r) })) };
   };
   const drawGel = () => {
-    const { d, rows, ladder, shape, lanes } = gelNow();
+    const { d, rows, ladder, shape, notice, lanes } = gelNow();
     leftover.hidden = !rows.some(r => r.of === "template");
+    withheld.hidden = !notice;
+    withheld.textContent = notice ?? "";
     ladderMenu.value = ladder.id;
     gelSummary.textContent = `${d ? digestName(d) : "Uncut only"} · ${ladder.name}`;
     gelHost.replaceChildren(gelSvg(lanes, ladder, shape));
@@ -118,8 +123,10 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     fileName: () => imageFileName(template.name, "PCR product gel", "PCR product"),
     title: () => `Simulated gel of the ${fmt(product.length)} bp PCR product`,
     figure: () => {
-      const { rows, ladder, shape, lanes } = gelNow();
-      return gelFigure(lanes, ladder, shape, [{ lane: "M", text: ladder.name }, ...rows.map((r, i) => ({ lane: String(i + 1), text: `${r.what} · ${laneSizesText(r.sizes)}` }))]);
+      const { rows, ladder, shape, notice, lanes } = gelNow();
+      const key = [{ lane: "M", text: ladder.name }, ...rows.map((r, i) => ({ lane: String(i + 1), text: `${r.what} · ${laneSizesText(r.sizes)}` }))];
+      if (notice) key.push({ lane: "—", text: notice });
+      return gelFigure(lanes, ladder, shape, key);
     }
   });
   const lanes = h(
@@ -128,6 +135,7 @@ export function pcrOverviewView(product: PcrProduct, template: SeqData, template
     h("label", { class: "sv-pcr-lanes-head" }, h("span", { class: "sv-small sv-dim" }, "Ladder"), ladderMenu),
     laneKey,
     leftover,
+    withheld,
     h("div", { class: "sv-gel-export", role: "group", "aria-label": "Export gel" }, ...exportGel)
   );
   const updateDigest = () => {

@@ -46,9 +46,11 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - `src/doc/store.ts` holds the document: immutable `SeqData` snapshots, the selection and
   undo history. Views get a `DocContext` (`src/doc/context.ts`) and subscribe to changes.
 - `src/views/` has one class per part of the window (map, sequence, primers, reads with its
-  canvas trace view, outline, inspector, search). Each builds its own DOM or SVG. One
-  renderer draws every simulated gel (`src/views/gelDraw.ts`): the Digest dialog's lanes
-  and the PCR product's own, with the ladder they share.
+  canvas trace view, outline, inspector, search). Each builds its own DOM or SVG. Every
+  simulated gel is laid out by `gelLayout` (`src/lib/gel.ts`): `src/views/gelDraw.ts` draws
+  the Digest dialog's lanes and the PCR product's own, with the ladder they share, and
+  either gel can also be saved as an image; the printable PCR plan draws the same layout
+  in paper colours (`docs/agents/primers.md` says how).
 - `src/lib/` is pure logic with unit tests: the sequence model and edits
   (`src/lib/seqdata.ts`), primers and Tm, enzymes, primer design, PCR products, primer
   lists, alignment layout, codon effects, construct summaries for Home, cloning simulation
@@ -172,8 +174,9 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   Settings and the libraries (in a browser, which can't open windows reliably, the main
   window shows them over its tabs: `showWindowsInPage`), or lives on Home; the inspector shows only what is
   selected. This keeps windows from getting crowded. On the map, what is drawn is chosen
-  from the chips and the menus beside them (Cut sites, Regions); the floating bar only
-  moves the drawing (rotate, zoom, label size).
+  from the chips and the menus beside them (Cut sites, Regions), and Export image at the
+  end of that row copies or saves it; the floating bar only moves the drawing (rotate,
+  zoom, label size).
 - **Cloning** works on fragments (`src/lib/cloning.ts`): a linear `SeqData` holding every
   base on either strand, written as the top strand, plus each end (blunt, 5′ or 3′
   overhang). Two ends ligate when kind and bases match and every base is A, C, G or T (an
@@ -273,6 +276,23 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   Each tick keeps its own coordinate, and the count opens a list whose rows select
   or pick a single site just as its map label would. Grouping follows the drawing's
   scale, so sites gain individual names as soon as the ticks can be told apart.
+- **Images** of a gel or a map are copied or saved by `src/views/imageExport.ts`, as the
+  protein schematic is: Copy image, Save as PNG… and Save as SVG…. The view draws its
+  figure anew for it, never from the one on screen, so nothing picked, hovered or faded
+  comes along (the map draws into a `Drawing` it then drops, with buttons over the drawing,
+  such as the linear map's counts of crowded cut sites, drawn into the SVG instead);
+  it is drawn off screen in the light theme, fitted to what it covers, and each shape is
+  given its computed style as attributes of its own, so the SVG keeps its text as text, in
+  whatever fonts are installed where it is opened. It was checked in browsers and macOS
+  Quick Look only: editors such as Illustrator, Inkscape and PowerPoint substitute fonts
+  and differ in `dominant-baseline` and `textPath`, so don't promise more until one is tried.
+  The PNG is painted from that SVG shape by shape on a canvas (about 3,000 pixels
+  across, marked with its resolution), as the Content Security Policy loads no image that
+  isn't one of the app's files, and copying has to happen within the click. A view that
+  draws something it can't paint yet (a gradient, a mask, a filter, a nested `<svg>`)
+  adds it there. As its background may be transparent, an image cuts shapes out rather
+  than covering them in the page's colour (the map's introns). The whole map is the image,
+  whatever the zoom: the linear map is drawn 1,200 pixels wide for it.
 - **Sortable tables** use `sortHeader` (`src/ui/sortHead.ts`) and `src/lib/tableSort.ts`,
   each keeping its sort in local storage. A column sorts its useful way first (newest,
   most clones, worst status). Where the table's own order means something, as in the
@@ -326,8 +346,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   `src/themeBoot.ts`, a plain script in `<head>` (a module can run after the first paint),
   sets the theme before anything is drawn; `src/theme.ts` keeps it to Settings and the
   system. CSS follows by itself, but a canvas reads its colours as it draws, so it redraws on
-  `onThemeChanged`. The gel and what is saved or copied as an image (the protein figure)
-  keep their own colours in every theme. `src/lib/themes.test.ts` holds every block it finds
+  `onThemeChanged`. The gel and what is saved or copied as an image (the protein figure, a
+  gel, a map) keep their own colours in every theme. `src/lib/themes.test.ts` holds every block it finds
   to this, with a short list of allowed literals, each with its reason, and every theme's
   text tokens to WCAG AA on their backgrounds: fix a token that fails, never the bar.
 - **Interface text** is plain and short, sentence case, says what happens ("Add reads…",
@@ -362,7 +382,7 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 - `cd crates/seqcore && cargo test --release` for the alignment core, and the same in
   `crates/seqcore-json/` for the JSON it answers with and `crates/seqcore-wasm/` for its
   buffers; `cargo test --lib` in `src-tauri/` for the shell's own (the crash hook, usage
-  events, app data).
+  events, app data, the files PDF export writes).
 - `npm run build:web` builds the browser version into `dist-web`, and `npm run dev:web`
   serves it with live reload; both need `rustup target add wasm32-unknown-unknown` once.
   They build the core first (`tools/build-wasm.mjs`), which fails above 512 KB and runs the
@@ -396,36 +416,42 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   UniProt is asked for real unless the page defines `window.__strandivoUniprot`, which e2e
   tests do, in the app too. A
   right-click menu is drawn in the page there, or handed to `window.__strandivoMenu` if
-  defined, which is how e2e tests pick items (WebDriver can't click native menus).
+  defined, which is how e2e tests pick items (WebDriver can't click native menus). So is
+  what Save as… would write, to `window.__strandivoSave`, as WebDriver can't answer the
+  app's save dialog either (`window.__strandivoSavePath` returns a real path on disk when
+  the test wants the file written and reopened).
 - **Checks** (`.github/workflows/checks.yml`) runs on every pull request and push to
-  `main`, on Linux only, except one that changes only docs, Markdown, the website or
+  `main`, on Linux, with clippy on Windows beside it, as the shell has code only Windows
+  compiles (WebView2's PDF export); macOS's own code compiles only on a Mac, so build there
+  after changing it. It skips a change to only docs, Markdown, the website or
   `CITATION.cff` (its `paths-ignore`; keep the two lists, and the rule above, the same).
   The guide and header checks run apart, on every change
   (`.github/workflows/quick-checks.yml`), as a docs change is what breaks the guide's
-  paths. Checks itself runs tests,
-  type check, clippy, a debug build, then `e2e/run.mjs` clicks through the real app with
-  WebDriver and pushes screenshots and a report to the `e2e-results` branch (for a pull
-  request from a fork, whose token can't push, they are the run's artifact). The branch
-  holds whichever run finished last; two runs racing to push it retry, and a push that
-  still fails is a warning, not a failure. Add an e2e
-  check when you add something users do. It drives the window through `window.__strandivo`:
-  the main window's own actions (open, tabs, Home's folders, `saveSettings`) plus those of
-  the file in the current tab (store, `command()`, adding reads, saving and `saveCheck`
-  without a file dialog). It runs a debug build, where Ctrl+Shift+I opens WebKitGTK's
-  inspector over part of the window for the rest of the run, even sent from a script and
-  cancelled by the page, so it never sends that key; `documentShortcut` in
-  `src/lib/shortcuts.ts` is unit-tested instead. At its end it switches to Dark through
-  `saveSettings` and takes `13-dark-*` screenshots of the map, sequence, reads and a dialog:
-  look at them after a change to colours, as no test sees what reads badly. Then
-  `e2e/web.mjs` clicks through the browser version in
-  headless Chrome with no hooks, so alignment and detection run in the worker, and checks
-  the worker answers after a panic (`trapCore`), then its menu, keys, opening, saving
-  and dropping files, Home's folders, and reads and checks remembered across a reload. It
-  serves the build with the headers it is deployed with, and fails if the Content
-  Security Policy blocked anything along the way. Its file pickers are stood in for with files in the page's private
-  file system, whose handles are real, and then taken away to check Safari's and
-  Firefox's way (a file input, downloads); its screenshots and report go in a `web`
-  folder beside the app's.
+  paths. Checks itself runs tests, type check, clippy, a debug build, then `e2e/run.mjs` clicks
+  through the real app with WebDriver and pushes screenshots and a report to the `e2e-results`
+  branch (for a pull request from a fork, whose token can't push, they are the run's artifact). The
+  branch holds whichever run finished last; two runs racing to push it retry, and a push that still
+  fails is a warning, not a failure. Add an e2e check when you add something users do. It drives
+  the window through `window.__strandivo`: the main window's own actions (open, tabs, Home's
+  folders, `saveSettings`) plus those of the file in the current tab (store, `command()`, adding
+  reads, saving and `saveCheck` without a file dialog). The save dialog, printing and PDF export
+  are stood in for by `window.__strandivoSavePath`, `__strandivoPrint` and `__strandivoSavePdf`
+  (`src/platform.ts`), which check what the page hands over, not the native engines. When
+  `__strandivoSavePath` is set, it answers the save dialog and `__strandivoSave` (above) isn't
+  asked. It runs a debug build, where Ctrl+Shift+I opens WebKitGTK's inspector over part of the
+  window for the rest of the run, even sent from a script and cancelled by the page, so it never
+  sends that key;
+  `documentShortcut` in `src/lib/shortcuts.ts` is unit-tested instead. At its end it switches to
+  Dark through `saveSettings` and takes `13-dark-*` screenshots of the map, sequence, reads and
+  a dialog: look at them after a change to colours, as no test sees what reads badly. Then
+  `e2e/web.mjs` clicks through the browser version in headless Chrome with no hooks, so alignment
+  and detection run in the worker, and checks the worker answers after a panic (`trapCore`), then
+  its menu, keys, opening, saving and dropping files, Home's folders, and reads and checks
+  remembered across a reload. It serves the build with the headers it is deployed with, and fails
+  if the Content Security Policy blocked anything along the way. Its file pickers are stood in for
+  with files in the page's private file system, whose handles are real, and then taken away to
+  check Safari's and Firefox's way (a file input, downloads); its screenshots and report go in a
+  `web` folder beside the app's.
 - Steps run through `.github/scripts/run.sh`, which repeats a failing step's output as an
   annotation, readable with `gh api repos/<owner>/<repo>/check-runs/<job id>/annotations`.
   The manual **Diagnostics** workflow runs any command on any OS and posts its output the
@@ -536,6 +562,10 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
 
 ## Traps
 
+- **Printing from WKWebView** (macOS) must run modally for its window
+  (`runOperationModalForWindow`, as wry's Print… and `src-tauri/src/pdf_macos.rs` do): the
+  blocking `runOperation` wrote blank pages without end in a test program; the likely cause
+  is that the web process draws them while the main thread waits.
 - **Content Security Policy** (`csp` and `devCsp` in `src-tauri/tauri.conf.json`): scripts
   only from the app's own files, so no inline `<script>`, `on…` attributes, `javascript:`
   links or `eval`. Inline styles are allowed, as `style` attributes are used throughout;

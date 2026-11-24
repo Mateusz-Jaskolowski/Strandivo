@@ -13,6 +13,7 @@ import {
   digestName,
   HIGH_GC,
   MAX_LABEL_LANES,
+  NO_DIGEST,
   pcrGelLanes,
   pickDigest,
   pickSite,
@@ -682,4 +683,11 @@ test("a template digest that can't be simulated is told apart from one that does
   assert.equal(templateDigestProblem({ ...single, circular: false }, "plasmid", digest), null);
   assert.equal(templateDigestProblem(template, "plasmid", null), null);
   assert.equal(templateDigestProblem(template, "complex", digest), null);
+});
+
+test("NO_DIGEST explicitly suppresses any suggested digest so the gel shows uncut DNA only", () => {
+  const digests = [digestOf(["ScaI"], [564, 314]), digestOf(["BtsI"], [600, 278])];
+  assert.equal(pickDigest(digests, "")?.enzymes[0], "ScaI");
+  assert.equal(pickDigest(digests, "BtsI")?.enzymes[0], "BtsI");
+  assert.equal(pickDigest(digests, NO_DIGEST), null);
 });

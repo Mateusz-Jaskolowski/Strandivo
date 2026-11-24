@@ -3515,6 +3515,11 @@ checksum = "ff7589a1859b09232522bb9edf076ca7fcf14ded96685d3fa629db73023ffbb7"
 name = "strandivo"
 version = "0.5.0"
 dependencies = [
+ "gtk",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
  "os_info",
  "reqwest",
  "rustls",
@@ -3527,6 +3532,9 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "webkit2gtk",
+ "webview2-com",
+ "windows-core",
 ]
 
 [[package]]

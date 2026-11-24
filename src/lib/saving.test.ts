@@ -21,7 +21,7 @@ import { reactionCounts } from "./enzymes.ts";
 import { translateCodon } from "./genetics.ts";
 import { digestSequence, fragmentDocument, fragmentSize } from "./gel.ts";
 import { documentMethylation, hostMethylation, PCR_DNA } from "./methylation.ts";
-import { pcrProduct, productDocument } from "./pcr.ts";
+import { pcrProduct, productDocument, type PlacedPrimer } from "./pcr.ts";
 
 const root = new URL("../../", import.meta.url);
 const FILES = [
@@ -895,4 +895,112 @@ test("a PCR product is saved in frame, with the translation only while its CDS i
   const changed = await make(site.slice(0, 17) + (site[17] === "A" ? "C" : "A") + site.slice(18));
   assert.equal(changed.features[0].notes.translation, undefined, "a CDS the primer changed");
   assert.equal(changed.features[0].notes.codon_start, undefined);
+});
+
+test("saving a PCR product or sequence handles unparseable feature colours and malformed fields (#152)", async () => {
+  // SnapGene marks uncoloured segments with `color="noColor"`, and GenBank files from other
+  // tools may carry capitalised CSS names, bare hex, whitespace, or non-CSS colour strings.
+  // Any of those made `jsonToGenbank` throw inside `color.rgb(...)` and return `false`,
+  // which surfaced in `saveProduct` as `o.replace is not a function`.
+  const gb = `LOCUS       pTest                     80 bp    DNA     circular SYN 01-JAN-2026
+FEATURES             Location/Qualifiers
+     source          1..80
+                     /color="noColor"
+     CDS             11..70
+                     /label="geneA"
+                     /color="noColor"
+     misc_feature    15..45
+                     /label="capColor"
+                     /color="Red"
+     misc_feature    20..50
+                     /label="bareHex"
+                     /color="336699"
+     misc_feature    25..55
+                     /label="spacedHex"
+                     /color=" #aabbcc "
+     misc_feature    30..60
+                     /label="bogus"
+                     /color="dark red"
+ORIGIN
+        1 atgcatgcat gcatgcatgc atgcatgcat gcatgcatgc atgcatgcat gcatgcatgc
+       61 atgcatgcat gcatgcatgc
+//
+`;
+  const loaded = await reopen(gb, "pTest.gb");
+  // Unparseable colours are dropped on load; normalisable ones are kept in a form the writer accepts.
+  const byName = (d: SeqData) => Object.fromEntries(d.features.map(f => [f.name, f]));
+  assert.equal(byName(loaded.data).geneA.color, undefined);
+  assert.equal(byName(loaded.data).capColor.color, "red");
+  assert.equal(byName(loaded.data).bareHex.color, "#336699");
+  assert.equal(byName(loaded.data).spacedHex.color, "#aabbcc");
+  assert.equal(byName(loaded.data).bogus.color, undefined);
+
+  // Also test values that reach `toParsed` directly without going through `fromParsed`,
+  // including `notes.color: []` (truthy empty array → `color.rgb([])` throws), non-string
+  // `arrowheadType`, non-object `source` notes, and non-array `extra.comments`.
+  const dirty: SeqData = {
+    ...loaded.data,
+    features: [
+      ...loaded.data.features,
+      {
+        id: "f-dirty",
+        name: "dirty",
+        type: "misc_feature",
+        start: 12,
+        end: 40,
+        strand: 1,
+        color: "noColor",
+        notes: { color: [], labelColor: [], note: ["kept"] },
+        raw: { color: "noColor", labelColor: ["#112233"], arrowheadType: 42 }
+      }
+    ],
+    sources: [
+      ...loaded.data.sources,
+      {
+        id: "s-dirty",
+        name: "src",
+        type: "source",
+        start: 0,
+        end: 79,
+        strand: 1,
+        notes: {},
+        raw: { type: "source", color: { int: 1 }, notes: "not-an-object", arrowheadType: 7 }
+      }
+    ]
+  };
+  const seq = dirty.sequence;
+  const f: PlacedPrimer = { name: "F", bases: "GCGC" + seq.slice(5, 25), start: 5, end: 24, strand: 1 };
+  const r: PlacedPrimer = { name: "R", bases: reverseComplement(seq.slice(55, 75)), start: 55, end: 74, strand: -1 };
+  const product = pcrProduct(seq, dirty.circular, f, r)!;
+  const productDoc = productDocument(dirty, product);
+
+  // Exact `saveProduct` pipeline: productDocument → fromParsed → toParsed → serialize.
+  const empty = fromParsed({ name: productDoc.name, sequence: "", circular: false });
+  const written = serialize(toParsed(empty, productDoc), "genbank");
+  assert.match(written, /^LOCUS\b/);
+  const reopened = await reopen(written, "pTest PCR.gb");
+  assert.equal(reopened.data.circular, false);
+  assert.equal(reopened.data.sequence.toUpperCase(), product.sequence.toUpperCase());
+  const back = byName(reopened.data);
+  assert.equal(back.geneA.color, undefined);
+  assert.equal(back.capColor.color, "red");
+  assert.equal(back.bareHex.color, "#336699");
+  assert.equal(back.spacedHex.color, "#aabbcc");
+  assert.equal(back.bogus.color, undefined);
+  assert.deepEqual(back.dirty.notes.note, ["kept"]);
+
+  // Direct document save with malformed `extra.comments` and `extra.parts` also succeeds.
+  const withBadExtra: LoadedDocument = {
+    data: dirty,
+    extra: { comments: "not-an-array", parts: [{ name: "part1", type: "misc_feature", start: 0, end: 10, color: "noColor", notes: { color: [] } }] },
+    wholeSources: []
+  };
+  assert.match(serialize(toParsed(withBadExtra, dirty), "genbank"), /^LOCUS\b/);
+});
+
+test("serialize throws a readable error instead of `replace is not a function` if jsonToGenbank fails", () => {
+  assert.throws(
+    () => serialize({ name: "broken", sequence: "ATGC", features: [null], primers: [] }, "genbank"),
+    /Couldn't format the sequence as GenBank/
+  );
 });

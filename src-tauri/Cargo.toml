@@ -34,6 +34,24 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
 
+# Native webview PDF export (`src/pdf.rs`) reuses the platform webview crates Tauri and wry
+# already bring in, so no PDF engine or crate tree is added; their features are named here
+# rather than left to wry's.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSDictionary", "NSGeometry", "NSObject", "NSString", "NSURL"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSView", "NSWindow"] }
+# WKWebView is an NSView only with objc2-app-kit, which `printOperationWithPrintInfo:` needs.
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "WKWebView", "objc2-app-kit"] }
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows-core = "0.62"
+
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
+webkit2gtk = "=2.0.2"
+gtk = "0.18"
+
 # Thin LTO keeps release builds (and CI minutes) short; the speed difference is negligible here.
 [profile.release]
 lto = "thin"

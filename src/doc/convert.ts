@@ -29,6 +29,64 @@ function strandOf(raw: Record<string, unknown>): Strand {
 }
 
 const MODEL_KEYS = new Set(["name", "description", "circular", "sequence", "features", "primers", "fragmentEnds"]);
+const EXTRA_ANNOTATION_KEYS = ["parts", "warnings", "assemblyPieces", "lineageAnnotations"] as const;
+
+/**
+ * Standard CSS named colours accepted by `color-string` inside `@teselagen/bio-parsers`.
+ * Anything outside this list (such as SnapGene's `"noColor"` or `"none"`) makes `jsonToGenbank`
+ * throw inside `color.rgb(...)` and return `false`.
+ */
+const CSS_COLORS = new Set([
+  "aliceblue", "antiquewhite", "aqua", "aquamarine", "azure", "beige", "bisque", "black", "blanchedalmond",
+  "blue", "blueviolet", "brown", "burlywood", "cadetblue", "chartreuse", "chocolate", "coral", "cornflowerblue",
+  "cornsilk", "crimson", "cyan", "darkblue", "darkcyan", "darkgoldenrod", "darkgray", "darkgreen", "darkgrey",
+  "darkkhaki", "darkmagenta", "darkolivegreen", "darkorange", "darkorchid", "darkred", "darksalmon",
+  "darkseagreen", "darkslateblue", "darkslategray", "darkslategrey", "darkturquoise", "darkviolet", "deeppink",
+  "deepskyblue", "dimgray", "dimgrey", "dodgerblue", "firebrick", "floralwhite", "forestgreen", "fuchsia",
+  "gainsboro", "ghostwhite", "gold", "goldenrod", "gray", "green", "greenyellow", "grey", "honeydew",
+  "hotpink", "indianred", "indigo", "ivory", "khaki", "lavender", "lavenderblush", "lawngreen", "lemonchiffon",
+  "lightblue", "lightcoral", "lightcyan", "lightgoldenrodyellow", "lightgray", "lightgreen", "lightgrey",
+  "lightpink", "lightsalmon", "lightseagreen", "lightskyblue", "lightslategray", "lightslategrey",
+  "lightsteelblue", "lightyellow", "lime", "limegreen", "linen", "magenta", "maroon", "mediumaquamarine",
+  "mediumblue", "mediumorchid", "mediumpurple", "mediumseagreen", "mediumslateblue", "mediumspringgreen",
+  "mediumturquoise", "mediumvioletred", "midnightblue", "mintcream", "mistyrose", "moccasin", "navajowhite",
+  "navy", "oldlace", "olive", "olivedrab", "orange", "orangered", "orchid", "palegoldenrod", "palegreen",
+  "paleturquoise", "palevioletred", "papayawhip", "peachpuff", "peru", "pink", "plum", "powderblue", "purple",
+  "rebeccapurple", "red", "rosybrown", "royalblue", "saddlebrown", "salmon", "sandybrown", "seagreen",
+  "seashell", "sienna", "silver", "skyblue", "slateblue", "slategray", "slategrey", "snow", "springgreen",
+  "steelblue", "tan", "teal", "thistle", "tomato", "transparent", "turquoise", "violet", "wheat", "white",
+  "whitesmoke", "yellow", "yellowgreen"
+]);
+
+const HEX_COLOR = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const BARE_HEX6 = /^[0-9a-f]{6}$/i;
+const RGB_COLOR = /^rgba?\(\s*[+-]?\d+(?=[\s,])\s*(?:,\s*)?[+-]?\d+(?=[\s,])\s*(?:,\s*)?[+-]?\d+\s*(?:[,|/]\s*[+-]?[\d.]+%?\s*)?\)$/;
+const RGB_PCT_COLOR = /^rgba?\(\s*[+-]?[\d.]+%\s*,?\s*[+-]?[\d.]+%\s*,?\s*[+-]?[\d.]+%\s*(?:[,|/]\s*[+-]?[\d.]+%?\s*)?\)$/;
+const HSL_COLOR = /^hsla?\(\s*[+-]?(?:\d{0,3}\.)?\d+(?:deg)?\s*,?\s*[+-]?[\d.]+%\s*,?\s*[+-]?[\d.]+%\s*(?:[,|/]\s*[+-]?(?=\.\d|\d)(?:0|[1-9]\d*)?(?:\.\d*)?(?:[eE][+-]?\d+)?\s*)?\)$/;
+const HWB_COLOR = /^hwb\(\s*[+-]?\d{0,3}(?:\.\d+)?(?:deg)?\s*,\s*[+-]?[\d.]+%\s*,\s*[+-]?[\d.]+%\s*(?:,\s*[+-]?(?=\.\d|\d)(?:0|[1-9]\d*)?(?:\.\d*)?(?:[eE][+-]?\d+)?\s*)?\)$/;
+
+/** Normalises a colour string to one `jsonToGenbank`'s colour parser accepts, or drops it. */
+function writableColor(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const s = value.trim();
+  if (!s) return undefined;
+  if (HEX_COLOR.test(s)) return s;
+  if (BARE_HEX6.test(s)) return `#${s}`;
+  const lower = s.toLowerCase();
+  if (CSS_COLORS.has(lower)) return lower;
+  if (RGB_COLOR.test(lower) || RGB_PCT_COLOR.test(lower) || HSL_COLOR.test(lower) || HWB_COLOR.test(lower)) return lower;
+  return undefined;
+}
+
+const isRecord = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
+
+function firstStringNote(notes: unknown, key: string): string | undefined {
+  if (!isRecord(notes)) return undefined;
+  const v = notes[key];
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return v.find((x): x is string => typeof x === "string" && x.trim().length > 0);
+  return undefined;
+}
 
 export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
   const sequence = String(seq.sequence ?? "");
@@ -47,8 +105,8 @@ export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
       start: clamp(num(raw.start), n),
       end: clamp(num(raw.end), n),
       strand: strandOf(raw),
-      color: typeof raw.color === "string" && raw.color ? raw.color : undefined,
-      notes: (raw.notes as Record<string, unknown>) || {},
+      color: writableColor(raw.color) ?? writableColor(firstStringNote(raw.notes, "color")),
+      notes: isRecord(raw.notes) ? raw.notes : {},
       raw
     };
     const parts = list(raw.locations).map(l => ({ start: clamp(num(l.start), n), end: clamp(num(l.end), n) }));
@@ -76,8 +134,8 @@ export function fromParsed(seq: Record<string, unknown>): LoadedDocument {
       end,
       strand,
       bases: (given || (strand === 1 ? site : reverseComplement(site))).toUpperCase(),
-      color: typeof raw.color === "string" && raw.color ? raw.color : undefined,
-      notes: (raw.notes as Record<string, unknown>) || {},
+      color: writableColor(raw.color) ?? writableColor(firstStringNote(raw.notes, "color")),
+      notes: isRecord(raw.notes) ? raw.notes : {},
       raw
     });
   }
@@ -111,11 +169,14 @@ const oneLine = (s: string) => s.replace(/\s*[\r\n]+\s*/g, " ").trim();
 /**
  * Qualifiers as the GenBank writer takes them: lists of strings. The parser reads numbers
  * (/codon_start=2) as numbers, and the writer stops at the first one, losing it and every
- * qualifier after it.
+ * qualifier after it. `color` and `labelColor` are omitted here because `jsonToGenbank`
+ * copies them straight onto the feature instead of writing them as notes, crashing if they
+ * are arrays (such as `[]`).
  */
 function notesOut(notes: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(notes ?? {})) {
+    if (k === "color" || k === "labelColor") continue;
     const values = Array.isArray(v) ? v : [v];
     out[k] = values.filter(x => x !== null && x !== undefined).map(x => (typeof x === "string" ? x : typeof x === "object" ? JSON.stringify(x) : String(x)));
   }
@@ -168,6 +229,20 @@ function readMethylation(text: string): DnaMethylation | undefined {
   return undefined;
 }
 
+/** Keeps only field values `jsonToGenbank` can write without throwing and returning `false`. */
+function cleanAnnotation(out: Record<string, unknown>, color: unknown, notes: unknown): Record<string, unknown> {
+  const validColor = writableColor(color);
+  if (validColor) out.color = validColor;
+  else delete out.color;
+  const labelColor = typeof out.labelColor === "string" ? out.labelColor.trim() : firstStringNote(notes, "labelColor")?.trim();
+  if (labelColor) out.labelColor = labelColor;
+  else delete out.labelColor;
+  if (typeof out.arrowheadType !== "string" || !out.arrowheadType) delete out.arrowheadType;
+  if (out.name !== undefined && typeof out.name !== "string") out.name = String(out.name);
+  if (out.type !== undefined && typeof out.type !== "string") out.type = String(out.type);
+  return out;
+}
+
 /** Sequence JSON for the file writers. */
 export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields): Record<string, unknown> & { sequence: string; fragmentEnds?: FragmentEnds } {
   const n = data.sequence.length;
@@ -183,24 +258,23 @@ export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields)
       strand: f.strand === -1 ? -1 : 1,
       notes: notesOut(f.notes)
     };
-    // No colour means the type's own one, also when the file had another.
-    if (f.color) out.color = f.color;
-    else delete out.color;
     if (f.strand === 0) out.arrowheadType = "NONE";
     else if (out.arrowheadType === "NONE") delete out.arrowheadType;
     const parts = partsOut(f, f.locations, n);
     if (parts) out.locations = parts;
     else delete out.locations;
-    return out;
+    // No colour means the type's own one, also when the file had another.
+    return cleanAnnotation(out, f.color, f.notes);
   });
   const sources = data.sources.map(f => {
     const whole = doc.wholeSources.includes(f.id);
     const out: Record<string, unknown> = { ...f.raw, id: f.id, name: f.name, type: "source", strand: f.strand === -1 ? -1 : 1, forward: f.strand !== -1, start: whole ? 0 : f.start, end: whole ? Math.max(0, n - 1) : f.end };
-    if (f.raw.notes && typeof f.raw.notes === "object") out.notes = notesOut(f.raw.notes as Record<string, unknown>);
+    if (isRecord(f.raw.notes)) out.notes = notesOut(f.raw.notes);
+    else delete out.notes;
     const parts = whole ? undefined : partsOut(f, f.locations, n);
     if (parts) out.locations = parts;
     else delete out.locations;
-    return out;
+    return cleanAnnotation(out, f.raw.color ?? firstStringNote(f.raw.notes, "color"), f.raw.notes);
   });
   const primers = data.primers.map(p => {
     const out: Record<string, unknown> = {
@@ -216,16 +290,28 @@ export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields)
       primerBindsOn: "3prime",
       notes: notesOut(p.notes)
     };
-    // No colour means the default one, also when the file had another.
-    if (p.color) out.color = p.color;
-    else delete out.color;
     const parts = partsOut(p, primerParts(p), n);
     if (parts) out.locations = parts;
     else delete out.locations;
-    return out;
+    // No colour means the default one, also when the file had another.
+    return cleanAnnotation(out, p.color, p.notes);
   });
+  const extra: Record<string, unknown> = { ...doc.extra };
+  if (extra.comments !== undefined) {
+    if (Array.isArray(extra.comments)) extra.comments = extra.comments.map(c => (typeof c === "string" ? c : String(c)));
+    else delete extra.comments;
+  }
+  for (const key of EXTRA_ANNOTATION_KEYS) {
+    if (extra[key] === undefined) continue;
+    extra[key] = list(extra[key]).map(raw => {
+      const out: Record<string, unknown> = { ...raw };
+      if (isRecord(raw.notes)) out.notes = notesOut(raw.notes);
+      else delete out.notes;
+      return cleanAnnotation(out, raw.color ?? firstStringNote(raw.notes, "color"), raw.notes);
+    });
+  }
   const description = oneLine(data.description);
-  const comments = parseComments(Array.isArray(doc.extra.comments) ? doc.extra.comments : undefined);
+  const comments = parseComments(Array.isArray(extra.comments) ? extra.comments : undefined);
   const ends = validFragmentEnds(data);
   const state = data.methylation;
   const writeEnd = (e: FragmentEnd) => e.enzyme ? [e.kind, e.bases, e.enzyme] : [e.kind, e.bases];
@@ -234,8 +320,8 @@ export function toParsed(doc: LoadedDocument, data: SeqData, fields?: LabFields)
     methylation: state?.from === "pcr" ? "PCR" : state?.name ? `Host ${state.name}` : undefined
   });
   return {
-    ...doc.extra,
-    ...(savedComments.length || doc.extra.comments ? { comments: savedComments } : {}),
+    ...extra,
+    ...(savedComments.length || extra.comments ? { comments: savedComments } : {}),
     name: data.name,
     // The GenBank writer prefers the file's own DEFINITION, so set both.
     description,

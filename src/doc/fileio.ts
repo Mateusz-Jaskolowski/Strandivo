@@ -117,11 +117,16 @@ export function serialize(seq: any, format: SaveFormat): string {
   };
   const swapped = { ...seq, features: listOf(seq.features).map(stand), primers: listOf(seq.primers).map(stand) };
   // By default the writer deletes web addresses from notes and the definition.
-  const text: string = jsonToGenbank(swapped, { doNotMangleOrStripUrls: true });
+  // On an internal error `jsonToGenbank` returns `false` instead of throwing.
+  const text: unknown = jsonToGenbank(swapped, { doNotMangleOrStripUrls: true });
+  if (typeof text !== "string") throw new Error("Couldn't format the sequence as GenBank.");
   const line = new RegExp(`^ {21}/([^\\s=]+)="${mark}(\\d+)${mark}"(\\r?)$`, "gm");
   const out = text.replace(line, (_, name: string, i: string, cr: string) => formatQualifier(name, values[Number(i)]).join(`${cr}\n`) + cr);
   // A stand-in the writer wrapped (a very long name) would be lost: write as it did.
-  return out.includes(mark) ? jsonToGenbank(seq, { doNotMangleOrStripUrls: true }) : out;
+  if (!out.includes(mark)) return out;
+  const plain: unknown = jsonToGenbank(seq, { doNotMangleOrStripUrls: true });
+  if (typeof plain !== "string") throw new Error("Couldn't format the sequence as GenBank.");
+  return plain;
 }
 
 export interface ReadFileData {

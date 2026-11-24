@@ -24,6 +24,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { createServer } from "node:http";
 import path from "node:path";
 import { checkMapRegionDisplay } from "./mapRegions.mjs";
+import { checkMapImage, standaloneSvg } from "./mapImage.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const dist = path.join(root, "dist-web");
@@ -213,12 +214,112 @@ class Session {
     const b64 = await wd("GET", `/session/${this.id}/screenshot`);
     writeFileSync(path.join(this.outDir, `${name}.png`), Buffer.from(b64, "base64"));
   }
+  /** Prints the page as Chrome would to PDF, on paper `width` × `height` cm, and gives its number of pages. */
+  async printedPages(width, height) {
+    const b64 = await wd("POST", `/session/${this.id}/print`, { page: { width, height }, background: true, shrinkToFit: false });
+    const counts = [...Buffer.from(b64, "base64").toString("latin1").matchAll(/\/Count (\d+)/g)].map(m => Number(m[1]));
+    return counts.length ? Math.max(...counts) : 0;
+  }
+  window() {
+    return wd("GET", `/session/${this.id}/window`);
+  }
+  async newTab() {
+    const { handle } = await wd("POST", `/session/${this.id}/window/new`, { type: "tab" });
+    await wd("POST", `/session/${this.id}/window`, { handle });
+    return handle;
+  }
+  async closeTab(back) {
+    await wd("DELETE", `/session/${this.id}/window`);
+    await wd("POST", `/session/${this.id}/window`, { handle: back });
+  }
   end() {
     return wd("DELETE", `/session/${this.id}`).catch(() => {});
   }
 }
 
+/**
+ * Run in the page on a saved PNG's bytes: the resolution its pHYs chunk gives (dots per inch)
+ * and, from its decoded pixels, the corner's alpha, whether the last column and the last row
+ * are opaque, and how many pixels are neither clear nor the white paper. Decoded as the page's
+ * own code can, with no <img> or blob: URL (the Content Security Policy loads no image that
+ * isn't the app's); only this summary goes back over WebDriver. e2e/run.mjs has the same text.
+ */
+const PNG_PIXELS = `async bytes => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let dotsPerInch = null;
+  for (let at = 8; at + 8 <= bytes.length; at += 12 + view.getUint32(at)) {
+    const type = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+    if (type === 'pHYs') { dotsPerInch = bytes[at + 16] === 1 ? view.getUint32(at + 8) * 0.0254 : null; break; }
+    if (type === 'IDAT') break;
+  }
+  const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const g = canvas.getContext('2d');
+  g.drawImage(image, 0, 0);
+  image.close();
+  const { data, width, height } = g.getImageData(0, 0, canvas.width, canvas.height);
+  let lastColumnOpaque = true, lastRowOpaque = true, ink = 0;
+  for (let y = 0; y < height; y++) if (data[((y + 1) * width - 1) * 4 + 3] !== 255) lastColumnOpaque = false;
+  for (let x = 0; x < width; x++) if (data[((height - 1) * width + x) * 4 + 3] !== 255) lastRowOpaque = false;
+  for (let i = 0; i < data.length; i += 4) if (data[i + 3] && (data[i + 3] < 255 || data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255)) ink++;
+  return { dotsPerInch, cornerAlpha: data[3], lastColumnOpaque, lastRowOpaque, ink };
+}`;
+
+/** A saved PNG with at least a twentieth of its pixels inked: a blank one of the right size has none. */
+const inked = png => !!png && png.ink >= 0.05 * png.width * png.height;
+
+/** Opaque to its last pixel: a figure drawn on paper has no clear corner, last column or last row. */
+const opaqueToEdge = png => !!png && png.cornerAlpha === 255 && png.lastColumnOpaque === true && png.lastRowOpaque === true;
+
+/**
+ * Whether a PNG's resolution fits the SVG saved with it, which is the same figure: 96 dpi for
+ * each pixel the SVG is wide, so 96 times the PNG's width over the SVG's. The PNG's width is
+ * the figure's rounded to whole pixels, up to half a pixel off (48 / the SVG's width, in dpi),
+ * and the file keeps whole pixels per metre (0.02 dpi covers that).
+ */
+function resolutionFits(png, svg) {
+  const svgWidth = Number(/<svg\b[^>]*\swidth="([\d.]+)"/.exec(svg)?.[1]);
+  const wanted = (96 * png?.width) / svgWidth;
+  const within = 48 / svgWidth + 0.02;
+  return {
+    ok: typeof png?.dotsPerInch === "number" && Math.abs(png.dotsPerInch - wanted) <= within,
+    detail: `${png?.dotsPerInch?.toFixed(2)} dpi in the file, ${wanted.toFixed(2)} from ${png?.width} px over the SVG's ${svgWidth}, within ${within.toFixed(2)}`
+  };
+}
+
 // ---------- the checks ----------
+
+/**
+ * Clicks Save as SVG… and Save as PNG… inside `scope` (a class), each answered by a file of
+ * the page's private file system named `name`, and gives back what was written: the SVG's
+ * text, and the PNG's size in pixels and whether it says its resolution.
+ * The PNG is decoded in the page too, for the rest of its summary (`PNG_PIXELS`).
+ */
+async function savedImages(s, scope, name, kinds = ["svg", "png"]) {
+  const out = {};
+  for (const kind of kinds) {
+    out[kind] = await s.execAsync(`
+      (async () => {
+        const root = await navigator.storage.getDirectory();
+        window.showSaveFilePicker = async () => root.getFileHandle('${name}.${kind}', { create: true });
+        const button = Array.from(document.querySelectorAll('.${scope} button')).find(b => b.textContent.includes('Save as ${kind.toUpperCase()}'));
+        button.click();
+        for (let i = 0; i < 50; i++) {
+          await new Promise(r => setTimeout(r, 100));
+          const file = await (await root.getFileHandle('${name}.${kind}')).getFile();
+          if (!file.size) continue;
+          if ('${kind}' === 'svg') return file.text();
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const v = new DataView(bytes.buffer);
+          return { png: String.fromCharCode(...bytes.subarray(1, 4)) === 'PNG', width: v.getUint32(16), height: v.getUint32(20), dpi: String.fromCharCode(...bytes.subarray(0, 100)).includes('pHYs'), ...(await (${PNG_PIXELS})(bytes).catch(e => ({ error: String(e) }))) };
+        }
+        return null;
+      })().then(done, e => done(String(e)));`);
+  }
+  return out;
+}
 
 async function main(outDir) {
   mkdirSync(outDir, { recursive: true });
@@ -341,6 +442,12 @@ async function main(outDir) {
     await enzymeChoice("Map cut-site filter", "unique6");
 
     await checkMapRegionDisplay(s, check, { smoke: true });
+    // The map as an image, each save answered by a new file in the page's private file system.
+    let mapSaves = 0;
+    await checkMapImage(s, check, async label => {
+      const kind = label.includes("SVG") ? "svg" : "png";
+      return (await savedImages(s, "sv-map-image", `map ${++mapSaves}`, [kind]))[kind];
+    });
 
     // --- detection, in the worker ---
     await s.exec("window.__strandivo.command('detect-features')");
@@ -458,6 +565,26 @@ async function main(outDir) {
     await s.exec("window.__strandivo.command('save-as')");
     const copied = (await s.waitFor("window.__strandivo.tabs().includes('pUC19-copy.gb')", 5000)) ? await s.exec(fileText, "pUC19-copy.gb") : "";
     check("Save As writes the file chosen in the browser's save dialog, and the tab follows it", /^LOCUS {7}pUC19_from_the_browser/.test(copied), copied.slice(0, 40));
+
+    // --- the Digest dialog's gel as an image, saved through the browser's save dialog ---
+    await s.exec("window.__strandivo.command('digest')");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-digest .sv-gel')", 5000);
+    for (const enzyme of ["EcoRI", "HindIII"]) await s.click(`//*[contains(@class,'sv-dialog')]//input[@data-enzyme='${enzyme}']`);
+    await s.waitFor("document.querySelectorAll('.sv-dialog .sv-digest-row').length === 2", 3000);
+    const gelSaved = await savedImages(s, "sv-dialog-foot", "pUC19 gel");
+    check(
+      "The gel saves as an SVG through the browser's save dialog, styles and key included",
+      standaloneSvg(gelSaved.svg) && gelSaved.svg.includes(">Simulated agarose gel<") && gelSaved.svg.includes(" · EcoRI, HindIII · 2,635 + 51 bp<"),
+      gelSaved.svg.slice(0, 200)
+    );
+    check("And as a sharp PNG that says its resolution", gelSaved.png?.png && Math.max(gelSaved.png.width, gelSaved.png.height) >= 2000 && gelSaved.png.dpi, JSON.stringify(gelSaved.png));
+    // Its pixels, decoded in the page: the gel is painted, the paper reaches the last pixel, and the resolution is the SVG's size.
+    check("The Digest gel's PNG has the gel drawn on it, not only the paper", inked(gelSaved.png), JSON.stringify(gelSaved.png));
+    check("The Digest gel's PNG is opaque to its last column and row, as a gel has no transparent background", opaqueToEdge(gelSaved.png), JSON.stringify(gelSaved.png));
+    const gelFit = resolutionFits(gelSaved.png, gelSaved.svg);
+    check("The Digest gel's PNG says the resolution that sets it at the SVG's size", gelFit.ok, gelFit.detail);
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     check(
       "Recent files keep files with a handle, shown by name",
       await s.exec("window.__strandivo.showHome(); return Array.from(document.querySelectorAll('.sv-home-recent-name')).map(e => e.textContent).includes('pUC19-copy.gb') && Array.from(document.querySelectorAll('.sv-home-recent-dir')).every(e => !e.textContent.includes('web:'));")
@@ -622,6 +749,7 @@ async function main(outDir) {
     if (await s.waitFor("document.querySelector('input.sv-file-input')", 5000)) await s.keys("input.sv-file-input", `${path.join(testdata, "e2e", "pUC19-annotated.gb")}\n${sage}`);
     check("They open matched by name, with the check's read", await s.waitFor(`window.__strandivo.tabs().includes('pUC19-annotated.gb') && window.__strandivo.store && ${readsReady(1)}`, 30000));
 
+    const pcrPlanSourceTab = await s.exec("return window.__strandivo.activeTab()");
     // --- a circle's annotations across the origin: saved as joins, kept whole by Linear ---
     // Invented bases with a feature on each strand, a primer and a source across the origin,
     // and a CDS with a region named with a space where its qualifier's line is cut. Each save
@@ -798,6 +926,151 @@ async function main(outDir) {
       await s.waitFor(`window.__strandivo.tabs().length === ${first}`, 5000);
     }
 
+    // --- printable PCR plan: preview, collapsed mix, edited cycling step, and offline HTML export ---
+    await s.exec(`window.__strandivo.showTab(${pcrPlanSourceTab});`);
+    await s.exec(`
+      const store = window.__strandivo.store;
+      const d = store.data;
+      const seq = d.sequence.toUpperCase();
+      const rc = s => [...s.toUpperCase()].reverse().map(c => ({ A:'T', T:'A', C:'G', G:'C' }[c] || c)).join('');
+      const primers = [
+        ...d.primers,
+        { id: 'web-pcr-f', name: 'WebPCR-F', start: 100, end: 121, strand: 1, bases: 'gcgcgaattc' + seq.slice(100, 122), notes: {}, raw: {} },
+        { id: 'web-pcr-r', name: 'WebPCR-R', start: 1400, end: 1421, strand: -1, bases: rc(seq.slice(1400, 1422)), notes: {}, raw: {} }
+      ];
+      store.apply({ ...d, primers }, 'Add web PCR primers');
+    `);
+    await s.click("//button[@data-tab='primers']");
+    await s.click("//*[contains(@class,'sv-primers-head')]//button[contains(., 'PCR product')]");
+    await s.waitFor("document.querySelector(\".sv-dialog select[aria-label='Forward primer']\")", 5000);
+    await s.exec(`
+      const pick = (label, name) => {
+        const sel = document.querySelector(".sv-dialog select[aria-label='" + label + "']");
+        const opt = Array.from(sel.options).find(o => o.textContent.includes(name));
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      pick('Forward primer', 'WebPCR-F');
+      pick('Reverse primer', 'WebPCR-R');
+    `);
+    await s.waitFor("document.querySelector('[data-focus=\"print-pcr-plan\"]:not(:disabled)')", 5000);
+    // Change mix reactions while open, then collapse; edit cycling step and ladder.
+    await s.click("//section[contains(@class,'sv-pcr-mix')]//button[contains(@class,'sv-fold-link')]");
+    await s.waitFor("document.querySelector('[data-focus=\"mix-reactions\"]')", 3000);
+    await s.exec(`
+      const n = document.querySelector('[data-focus="mix-reactions"]');
+      n.value = '4';
+      n.dispatchEvent(new Event('change', { bubbles: true }));
+    `);
+    await s.click("//section[contains(@class,'sv-pcr-mix')]//button[contains(@class,'sv-fold-link')]");
+    await s.waitFor("!document.querySelector('.sv-mix-table')", 3000);
+    await s.exec(`
+      const t = document.querySelector('[data-focus="program-1:1:temp"]');
+      t.value = '62.5';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      const lad = document.querySelector(".sv-dialog select[aria-label='Ladder']");
+      lad.value = '100bp';
+      lad.dispatchEvent(new Event('change', { bubbles: true }));
+    `);
+    await s.click("//button[@data-focus='print-pcr-plan']");
+    check("Print PCR plan… opens a preview over the PCR dialog", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000));
+    const webPrintUi = await s.exec(`
+      const printLabel = document.querySelector('[data-focus="plan-print"]')?.textContent?.trim() ?? '';
+      const hasDesktopPdf = !!document.querySelector('[data-focus="plan-save-pdf"]');
+      const mapBox = document.querySelector('[data-focus="plan-sec-map"]');
+      mapBox.checked = false;
+      mapBox.dispatchEvent(new Event('change', { bubbles: true }));
+      const gelOnlyOk = !document.querySelector('.sv-print-stage .sv-sheet-map-svg') && !!document.querySelector('.sv-print-stage .sv-sheet-gel-svg');
+      return { printLabel, hasDesktopPdf, gelOnlyOk };
+    `);
+    check(
+      "Browser preview labels Print / Save as PDF… and lets Product map be omitted while keeping Simulated gel",
+      webPrintUi.printLabel === "Print / Save as PDF…" && !webPrintUi.hasDesktopPdf && webPrintUi.gelOnlyOk,
+      JSON.stringify(webPrintUi)
+    );
+    const webBeforeDl = await s.exec("return window.__e2eDownloads.length");
+    await s.exec(`
+      const title = document.querySelector('[data-focus="plan-title"]');
+      title.value = 'Web bench sheet <v1>';
+      title.dispatchEvent(new Event('input', { bubbles: true }));
+      const notes = document.querySelector('[data-focus="plan-notes"]');
+      notes.value = 'First line\\nSecond line with <script>x</script>';
+      notes.dispatchEvent(new Event('input', { bubbles: true }));
+    `);
+    await s.click("//button[@data-focus='plan-save-html']");
+    const htmlSaved = await s.waitFor(`window.__e2eDownloads.length === ${webBeforeDl + 1}`, 5000);
+    const savedHtml = htmlSaved ? await s.execAsync("window.__e2eDownloads.at(-1).blob.text().then(done, e => done(String(e)));") : "";
+    const savedBody = savedHtml.split("<body>")[1] ?? "";
+    const fullSeq = await s.exec("return window.__strandivo.store.data.sequence;");
+    check(
+      "Save HTML… downloads a self-contained bench sheet honoring section toggles, edited program, collapsed mix, escaped multiline notes, and no full template sequence",
+      htmlSaved &&
+        savedBody.includes("Web bench sheet &lt;v1&gt;") &&
+        savedBody.includes("62.5 °C") &&
+        savedBody.includes("Edited") &&
+        savedBody.includes("4 reactions") &&
+        savedBody.includes("100 bp") &&
+        savedBody.includes("gcgcgaattc") &&
+        !savedBody.includes("sv-sheet-map-svg") &&
+        savedBody.includes("sv-sheet-gel-svg") &&
+        savedBody.includes("First line\nSecond line with &lt;script&gt;x&lt;/script&gt;") &&
+        !savedHtml.includes("<script>x</script>") &&
+        !savedHtml.includes(fullSeq) &&
+        savedBody.includes('class="sv-sheet-date-blank"') &&
+        savedBody.includes('<span class="sv-sheet-head-note">Planning snapshot only') &&
+        savedBody.includes('<span class="sv-sheet-head-note">Plan exported') &&
+        !savedBody.includes("<footer"),
+      savedHtml.slice(0, 260)
+    );
+    // The page that prints and the saved file are built apart (DOM and a string), so their words are compared:
+    // every text, in order, skipping what is hidden.
+    const parity = await s.exec(
+      `const words = root => {
+        const out = [];
+        const walk = n => {
+          if (n.nodeType === 3) {
+            const t = n.textContent.replace(/\\s+/g, ' ').trim();
+            if (t) out.push(t);
+          } else if (n.nodeType === 1 && !n.hidden && n.tagName !== 'STYLE') n.childNodes.forEach(walk);
+        };
+        walk(root);
+        return out.join(' ');
+      };
+      const saved = new DOMParser().parseFromString(arguments[0], 'text/html').querySelector('.sv-sheet');
+      return { live: words(document.querySelector('.sv-print-sheet .sv-sheet')), saved: saved ? words(saved) : '' };`,
+      savedHtml
+    );
+    const firstDiff = [...parity.live].findIndex((c, i) => c !== parity.saved[i]);
+    check(
+      "The page printed and the saved HTML say the same, word for word",
+      parity.live.length > 500 && parity.live === parity.saved,
+      `${parity.live.length} vs ${parity.saved.length} characters; live …${parity.live.slice(Math.max(0, firstDiff - 60), firstDiff + 60)}… saved …${parity.saved.slice(Math.max(0, firstDiff - 60), firstDiff + 60)}…`
+    );
+    // Printed from the preview and from the saved file, on A4 and on US Letter, the plan takes as many pages:
+    // the preview's narrow-window layout once stacked the columns on A4 paper only.
+    const papers = { a4: [21, 29.7], letter: [21.59, 27.94] };
+    const livePages = {};
+    for (const [name, [w, h]] of Object.entries(papers)) livePages[name] = await s.printedPages(w, h);
+    const appTab = await s.window();
+    const blobUrl = await s.exec("return URL.createObjectURL(new Blob([arguments[0]], { type: 'text/html' }));", savedHtml);
+    await s.newTab();
+    await s.go(blobUrl);
+    await s.waitFor("document.querySelector('.sv-sheet')", 5000);
+    const savedPages = {};
+    for (const [name, [w, h]] of Object.entries(papers)) savedPages[name] = await s.printedPages(w, h);
+    await s.closeTab(appTab);
+    await s.exec("URL.revokeObjectURL(arguments[0]);", blobUrl);
+    check(
+      "The plan prints on as many A4 and US Letter pages from the preview as from the saved file",
+      livePages.a4 >= 1 && livePages.letter >= 1 && livePages.a4 === savedPages.a4 && livePages.letter === savedPages.letter,
+      JSON.stringify({ livePages, savedPages })
+    );
+    await s.shot("10-pcr-print-preview");
+    await s.click("//button[@data-focus='plan-cancel']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
+    await s.click("//button[@data-focus='show-on-map']");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+
     // --- the protein schematic's selection and exported images ---
     await s.exec("window.__strandivo.showHome()");
     await s.execAsync(drop("protein-regions.gb", "/testdata/library/protein-regions.gb"));
@@ -827,10 +1100,11 @@ async function main(outDir) {
     check("Another region can still be selected from the schematic", await s.waitFor(`${selectedBlock(secondRegion)} && window.__strandivo.store.selection.focus?.region === ${secondRegion}`, 3000));
 
     for (const transparent of [false, true]) {
-      if (transparent) await s.click("//label[normalize-space()='Transparent background']/input");
+      // In the dialog: the map's Export image menu, behind it, has the same controls.
+      if (transparent) await s.click("//*[contains(@class,'sv-dialog')]//label[normalize-space()='Transparent background']/input");
       const before = await s.exec("return window.__e2eDownloads.length");
-      await s.click("//button[normalize-space()='Save as PNG…']");
-      await s.click("//button[normalize-space()='Save as SVG…']");
+      await s.click("//*[contains(@class,'sv-dialog')]//button[normalize-space()='Save as PNG…']");
+      await s.click("//*[contains(@class,'sv-dialog')]//button[normalize-space()='Save as SVG…']");
       const saved = await s.waitFor(`window.__e2eDownloads.length === ${before + 2}`, 5000);
       const files = saved ? await s.execAsync(`
         (async () => {

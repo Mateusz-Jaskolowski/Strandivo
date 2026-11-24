@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFi
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { checkMapRegionDisplay } from "./mapRegions.mjs";
+import { checkMapImage, standaloneSvg } from "./mapImage.mjs";
 
 const [binary, outDir = "e2e-out"] = process.argv.slice(2);
 if (!binary) {
@@ -32,6 +33,29 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function check(name, ok, detail = "") {
   checks.push({ name, ok: !!ok, detail: String(detail) });
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
+}
+
+/**
+ * Clicks the buttons `labels` names inside `scope` (a class) and gives back what they saved,
+ * caught with `window.__strandivoSave` as WebDriver can't answer a save dialog: text as it
+ * is, and a PNG as its size in pixels and whether it says its resolution.
+ * A PNG is decoded in the page too, for the rest of its summary (`PNG_PIXELS`).
+ */
+async function savedImages(s, scope, labels) {
+  await s.exec(`window.__e2eSaved = {}; window.__strandivoSave = (name, contents) => {
+    if (typeof contents === 'string') { window.__e2eSaved[name] = contents; return; }
+    const v = new DataView(contents.buffer, contents.byteOffset);
+    window.__e2eSaved[name] = { png: String.fromCharCode(...contents.subarray(1, 4)) === 'PNG', width: v.getUint32(16), height: v.getUint32(20), dpi: String.fromCharCode(...contents.subarray(0, 100)).includes('pHYs') };
+    const entry = window.__e2eSaved[name];
+    window.__e2ePending = (window.__e2ePending || 0) + 1;
+    (${PNG_PIXELS})(contents).then(more => Object.assign(entry, more), e => { entry.error = String(e); }).then(() => { if (!--window.__e2ePending) delete window.__e2ePending; });
+  };`);
+  for (const label of labels) await s.click(`//*[contains(@class,'${scope}')]//button[contains(., '${label}')]`, "xpath");
+  await s.waitFor(`Object.keys(window.__e2eSaved).length === ${labels.length} && !window.__e2ePending`, 10000);
+  const saved = await s.exec("const out = window.__e2eSaved; delete window.__strandivoSave; delete window.__e2eSaved; return out;");
+  const svg = Object.entries(saved).find(([name]) => name.endsWith(".svg"));
+  const png = Object.entries(saved).find(([name]) => name.endsWith(".png"));
+  return { svgName: svg?.[0] ?? "", svg: svg?.[1] ?? "", pngName: png?.[0] ?? "", png: png?.[1] ?? {} };
 }
 
 async function wd(method, url, body) {
@@ -195,6 +219,58 @@ const CLIPPED_LABELS = `
     return r.width && (r.left < area.left - 1 || r.right > area.right + 1 || r.top < area.top - 1 || r.bottom > area.bottom + 1);
   }).map(t => t.textContent);
 `;
+
+/**
+ * Run in the page on a saved PNG's bytes: the resolution its pHYs chunk gives (dots per inch)
+ * and, from its decoded pixels, the corner's alpha, whether the last column and the last row
+ * are opaque, and how many pixels are neither clear nor the white paper. Decoded as the page's
+ * own code can, with no <img> or blob: URL (the Content Security Policy loads no image that
+ * isn't the app's); only this summary goes back over WebDriver. e2e/web.mjs has the same text.
+ */
+const PNG_PIXELS = `async bytes => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let dotsPerInch = null;
+  for (let at = 8; at + 8 <= bytes.length; at += 12 + view.getUint32(at)) {
+    const type = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+    if (type === 'pHYs') { dotsPerInch = bytes[at + 16] === 1 ? view.getUint32(at + 8) * 0.0254 : null; break; }
+    if (type === 'IDAT') break;
+  }
+  const image = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const g = canvas.getContext('2d');
+  g.drawImage(image, 0, 0);
+  image.close();
+  const { data, width, height } = g.getImageData(0, 0, canvas.width, canvas.height);
+  let lastColumnOpaque = true, lastRowOpaque = true, ink = 0;
+  for (let y = 0; y < height; y++) if (data[((y + 1) * width - 1) * 4 + 3] !== 255) lastColumnOpaque = false;
+  for (let x = 0; x < width; x++) if (data[((height - 1) * width + x) * 4 + 3] !== 255) lastRowOpaque = false;
+  for (let i = 0; i < data.length; i += 4) if (data[i + 3] && (data[i + 3] < 255 || data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255)) ink++;
+  return { dotsPerInch, cornerAlpha: data[3], lastColumnOpaque, lastRowOpaque, ink };
+}`;
+
+/** A saved PNG with at least a twentieth of its pixels inked: a blank one of the right size has none. */
+const inked = png => !!png && png.ink >= 0.05 * png.width * png.height;
+
+/** Opaque to its last pixel: a figure drawn on paper has no clear corner, last column or last row. */
+const opaqueToEdge = png => !!png && png.cornerAlpha === 255 && png.lastColumnOpaque === true && png.lastRowOpaque === true;
+
+/**
+ * Whether a PNG's resolution fits the SVG saved with it, which is the same figure: 96 dpi for
+ * each pixel the SVG is wide, so 96 times the PNG's width over the SVG's. The PNG's width is
+ * the figure's rounded to whole pixels, up to half a pixel off (48 / the SVG's width, in dpi),
+ * and the file keeps whole pixels per metre (0.02 dpi covers that).
+ */
+function resolutionFits(png, svg) {
+  const svgWidth = Number(/<svg\b[^>]*\swidth="([\d.]+)"/.exec(svg)?.[1]);
+  const wanted = (96 * png?.width) / svgWidth;
+  const within = 48 / svgWidth + 0.02;
+  return {
+    ok: typeof png?.dotsPerInch === "number" && Math.abs(png.dotsPerInch - wanted) <= within,
+    detail: `${png?.dotsPerInch?.toFixed(2)} dpi in the file, ${wanted.toFixed(2)} from ${png?.width} px over the SVG's ${svgWidth}, within ${within.toFixed(2)}`
+  };
+}
 
 const doc = `const s = window.__strandivo.store;`;
 const outlineRow = name => `//*[contains(@class,'sv-outline')]//*[contains(@class,'sv-list-row')][.//*[normalize-space(text())='${name}']]`;
@@ -885,6 +961,19 @@ async function main() {
     const reach = await s.exec(`const ys = selector => Array.from(document.querySelectorAll('.sv-pcr-gel ' + selector)).map(b => Number(b.getAttribute('y')));
       return { ladder: document.querySelector(".sv-dialog select[aria-label='Ladder']").value, samples: Math.max(...ys('.sv-gel-band[data-lane]')), ladderLowest: Math.max(...ys('.sv-gel-band:not([data-lane])')) };`);
     check("A short product opens the gel on a ladder that reaches its smallest band", reach.ladder === "1kb-plus" && reach.samples <= reach.ladderLowest, JSON.stringify(reach));
+    // The gel as an image: said to be simulated, the key under it, as nothing can be hovered there.
+    const pcrGel = await savedImages(s, "sv-gel-export", ["Save as SVG", "Save as PNG"]);
+    check(
+      "Under the product's gel, Save as SVG… saves it with the ladder and each lane in a key",
+      standaloneSvg(pcrGel.svg) && pcrGel.svg.includes(">Simulated agarose gel<") && pcrGel.svg.includes(">1 kb Plus ladder<") && pcrGel.svg.includes(">Product, ScaI · 564 + 314 bp<") && pcrGel.svg.includes('fill="#1c2130"') && pcrGel.svgName.endsWith(" PCR product gel.svg"),
+      `${pcrGel.svgName}: ${pcrGel.svg.slice(0, 300)}`
+    );
+    check("And Save as PNG… a sharp PNG that says its resolution", pcrGel.png.png && Math.max(pcrGel.png.width, pcrGel.png.height) >= 2000 && pcrGel.png.dpi, JSON.stringify(pcrGel.png));
+    // Its pixels, decoded in the page: the gel is painted, the paper reaches the last pixel, and the resolution is the SVG's size.
+    check("The product gel's PNG has the gel drawn on it, not only the paper", inked(pcrGel.png), JSON.stringify(pcrGel.png));
+    check("The product gel's PNG is opaque to its last column and row, as a gel has no transparent background", opaqueToEdge(pcrGel.png), JSON.stringify(pcrGel.png));
+    const pcrFit = resolutionFits(pcrGel.png, pcrGel.svg);
+    check("The product gel's PNG says the resolution that sets it at the SVG's size", pcrFit.ok, pcrFit.detail);
     await choose("Ladder", "100 bp ladder");
     check("Another ladder draws the gel beside that one", await s.waitFor("document.querySelector('.sv-pcr-gel .sv-gel-size')?.textContent === '1.517 kb'", 3000));
     // A ladder picked holds for the window, so this is the 1 kb ladder the Digest dialog's checks below start on.
@@ -947,14 +1036,31 @@ async function main() {
     check("Putting both menus back draws the sites it started with", (await s.exec(chipTotal)) === chipsAtStart && /564 \+ 314 bp/.test(await digestText()), `${await s.exec(chipTotal)} sites`);
     // Before any site is clicked, the one described is a site of the digest chosen, whichever that is. Only when
     // the list offers a second digest, so a list with one has nothing to try.
-    const digestOptions = await s.exec("return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Suggested digest'] option\")).map(o => o.value);");
+    const digestOptions = await s.exec("return Array.from(document.querySelectorAll(\".sv-dialog select[aria-label='Suggested digest'] option\")).map(o => o.value).filter(v => v !== '__none__');");
     if (digestOptions.length > 1) {
       const siteDetail = () => s.exec("return document.querySelector('.sv-pcr-site-detail')?.textContent ?? ''");
       await choose("Suggested digest", digestOptions[1]);
       const described = await siteDetail();
       check("With no site clicked, the site described follows the digest chosen", digestOptions[1].split(" + ").some(name => described.startsWith(`${name} · `)), `${digestOptions[1]}: ${described}`);
+      // Choosing "No digest (uncut only)" shows only the uncut template and product lanes.
+      await choose("Suggested digest", "__none__");
+      const uncutOnly = await s.exec("return Array.from(document.querySelectorAll('.sv-pcr-lane-key li')).map(li => li.textContent);");
+      check("Choosing No digest shows uncut DNA lanes only", uncutOnly.length === 2 && /Template, supercoiled/.test(uncutOnly[0]) && /Product, uncut/.test(uncutOnly[1]), JSON.stringify(uncutOnly));
       await choose("Suggested digest", digestOptions[0]);
     }
+    // Product map, simulated gel and cycling program each fold cleanly and reopen.
+    await s.click("button[data-focus='pcr-fold-gel']");
+    check("Simulated gel folds in the PCR dialog", await s.waitFor("!document.querySelector('.sv-pcr-digest') && document.querySelector('[data-focus=\"pcr-fold-gel\"]')?.textContent.trim() === 'Show'", 3000));
+    await s.click("button[data-focus='pcr-fold-gel']");
+    check("Simulated gel reopens in the PCR dialog", await s.waitFor("!!document.querySelector('.sv-pcr-digest')", 3000));
+    await s.click("button[data-focus='pcr-fold-map']");
+    check("Product map folds in the PCR dialog", await s.waitFor("!document.querySelector('.sv-pcr-product-map') && document.querySelector('[data-focus=\"pcr-fold-map\"]')?.textContent.trim() === 'Show'", 3000));
+    await s.click("button[data-focus='pcr-fold-map']");
+    check("Product map reopens in the PCR dialog", await s.waitFor("!!document.querySelector('.sv-pcr-product-map .sv-pcr-gc')", 3000));
+    await s.click("button[data-focus='pcr-fold-program']");
+    check("Cycling program folds in the PCR dialog", await s.waitFor("!document.querySelector('.sv-pcr-program .sv-prog') && document.querySelector('[data-focus=\"pcr-fold-program\"]')?.textContent.trim() === 'Show'", 3000));
+    await s.click("button[data-focus='pcr-fold-program']");
+    check("Cycling program reopens in the PCR dialog", await s.waitFor("!!document.querySelector('.sv-pcr-program .sv-prog-trace')", 3000));
     // Enter accepts a field's value and leaves focus in it, with the dialog open and nothing else taking the key.
     const enterField = '[data-focus="program-1:1:temp"]';
     const enterBefore = await s.exec(`const el = document.querySelector('${enterField}'); const previous = el.value; el.value = String(Number(previous) + 1); el.dispatchEvent(new Event('input')); el.focus(); return previous;`);
@@ -1029,6 +1135,8 @@ async function main() {
       JSON.stringify(phusionMix)
     );
     await redraws(() => choose("Polymerase", "Q5 High-Fidelity"));
+    // Set 5 reactions before folding so Print PCR plan… must capture the collapsed mix settings too.
+    await s.exec("const n = document.querySelector('[data-focus=\"mix-reactions\"]'); n.value = '5'; n.dispatchEvent(new Event('change', { bubbles: true }));");
     // Fold the mix again so its labels do not stay in the dialog for later checks.
     await s.click(".sv-pcr-mix .sv-fold-link");
     check("Folding the reaction mix hides it again", await s.waitFor("!document.querySelector('.sv-mix-table')", 3000));
@@ -1040,6 +1148,265 @@ async function main() {
     await s.exec("delete navigator.clipboard; delete window.__pcrCopied;");
     await s.exec("document.querySelector('.sv-pcr-program').scrollIntoView({block:'center'})");
     await s.shot("04-pcr-edited");
+    // Printable PCR plan: captures edited program, chosen ladder, and collapsed mix without altering the document or PCR dialog.
+    const ladderBeforePrint = await s.exec("const sel = document.querySelector(\".sv-dialog select[aria-label='Ladder']\"); const prev = sel.value; sel.value = '100bp'; sel.dispatchEvent(new Event('change', { bubbles: true })); return prev;");
+    const beforePrintSnap = await s.exec(`${doc} return { seqLen: s.data.sequence.length, primers: s.data.primers.length, dirty: s.dirty, settings: localStorage.getItem('strandivo.settings') };`);
+    // The page's print state and the two kept choices, which only printing, copying or saving writes.
+    const printState = `return {
+      html: document.documentElement.classList.contains('sv-printing'),
+      body: document.body.classList.contains('sv-printing'),
+      mirrors: document.querySelectorAll('.sv-print-sheet').length,
+      dialogs: document.querySelectorAll('.sv-dialog').length,
+      sections: localStorage.getItem('strandivo.pcrPrintSections'),
+      paper: localStorage.getItem('strandivo.pcrPrintPaper'),
+      title: document.title
+    };`;
+    await s.exec("localStorage.removeItem('strandivo.pcrPrintSections'); localStorage.removeItem('strandivo.pcrPrintPaper');");
+    const appTitle = await s.exec("return document.title");
+    // A preview opened and cancelled: everything typed or ticked in it goes, and so do the mirror and both classes.
+    await s.click("button[data-focus='print-pcr-plan']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000);
+    const openedOnce = await s.exec(printState);
+    const second = await s.exec(`
+      const set = (key, value, event = 'input') => { const el = document.querySelector('[data-focus="' + key + '"]'); el.value = value; el.dispatchEvent(new Event(event, { bubbles: true })); };
+      set('plan-title', 'Cancelled plan');
+      set('plan-date', '2026-12-24');
+      set('plan-notes', 'Never kept');
+      set('plan-paper', 'letter', 'change');
+      document.querySelector('[data-focus="plan-sec-gel"]').click();
+      // Focus can leave the preview for the PCR dialog behind it; its button must not open a second preview.
+      document.querySelector('.sv-dialog [data-focus="print-pcr-plan"]').click();
+      return { dialogs: document.querySelectorAll('.sv-dialog').length, mirrors: document.querySelectorAll('.sv-print-sheet').length, focus: document.activeElement?.dataset.focus ?? '' };
+    `);
+    check(
+      "One print preview at a time: the PCR dialog's button focuses the open one",
+      second.dialogs === 2 && second.mirrors === 1 && second.focus === "plan-title",
+      JSON.stringify(second)
+    );
+    await s.click("button[data-focus='plan-cancel']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
+    const cancelledOnly = await s.exec(printState);
+    check(
+      "A preview only opened and cancelled marks the page for printing while open, then leaves no mirror, class, kept choice or title",
+      openedOnce.html && openedOnce.body && openedOnce.mirrors === 1 &&
+        !cancelledOnly.html && !cancelledOnly.body && cancelledOnly.mirrors === 0 &&
+        cancelledOnly.sections === null && cancelledOnly.paper === null && cancelledOnly.title === appTitle,
+      JSON.stringify({ openedOnce, cancelledOnly })
+    );
+    await s.click("button[data-focus='print-pcr-plan']");
+    check("Print PCR plan… opens a preview dialog without closing the PCR product dialog", await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000));
+    const printPreview = await s.exec(`
+      const title = document.querySelector('[data-focus="plan-title"]');
+      const notes = document.querySelector('[data-focus="plan-notes"]');
+      title.value = 'Clone verification #7';
+      title.dispatchEvent(new Event('input', { bubbles: true }));
+      notes.value = 'Line one: fresh polymerase\\nLine two: check gel at 120V';
+      notes.dispatchEvent(new Event('input', { bubbles: true }));
+      const sheet = document.querySelector('.sv-print-stage [data-pcr-sheet]');
+      const mirror = document.querySelector('.sv-print-sheet [data-pcr-sheet]');
+      return {
+        text: sheet.textContent,
+        mirrorNotes: mirror?.querySelector('.sv-sheet-notes-text')?.textContent ?? '',
+        dateBlank: !!sheet.querySelector('.sv-sheet-date-blank'),
+        dateVal: !!sheet.querySelector('.sv-sheet-date-val'),
+        hasGel: !!sheet.querySelector('.sv-sheet-gel-svg'),
+        hasMap: !!sheet.querySelector('.sv-sheet-map-svg'),
+        kicker: sheet.querySelector('.sv-sheet-kicker')?.textContent ?? '',
+        sub: sheet.querySelector('.sv-sheet-sub')?.textContent ?? '',
+        footers: sheet.querySelectorAll('footer').length + (mirror?.querySelectorAll('footer').length ?? 1)
+      };
+    `);
+    check(
+      "Printable PCR plan reflects edited program, chosen ladder, collapsed mix, unset date, and multiline notes",
+      /Clone verification #7/.test(printPreview.text) &&
+        /Edited/.test(printPreview.text) &&
+        /Based on Q5 High-Fidelity DNA Polymerase · NEB M0491 \(edited locally\)/.test(printPreview.text) &&
+        /64 °C/.test(printPreview.text) &&
+        /1 min 30 s/.test(printPreview.text) &&
+        /30 cycles/.test(printPreview.text) &&
+        /100 bp/.test(printPreview.text) &&
+        /5 reactions/.test(printPreview.text) &&
+        /Master mix/.test(printPreview.text) &&
+        printPreview.dateBlank &&
+        !printPreview.dateVal &&
+        printPreview.hasGel &&
+        printPreview.hasMap &&
+        printPreview.mirrorNotes === "Line one: fresh polymerase\nLine two: check gel at 120V",
+      JSON.stringify(printPreview).slice(0, 400)
+    );
+    check(
+      "The plan's header says it is a planning snapshot and when it was exported, and the sheet has no footer to spill onto a page",
+      /Planning snapshot only — not a record that PCR was performed\./.test(printPreview.kicker) &&
+        /Plan exported \d{4}-\d{2}-\d{2} · Strandivo/.test(printPreview.sub) &&
+        printPreview.footers === 0,
+      JSON.stringify({ kicker: printPreview.kicker, sub: printPreview.sub, footers: printPreview.footers })
+    );
+    // Toggling Product map and Simulated gel independently updates both preview and print mirror.
+    const toggledSections = await s.exec(`
+      const gelBox = document.querySelector('[data-focus="plan-sec-gel"]');
+      gelBox.checked = false;
+      gelBox.dispatchEvent(new Event('change', { bubbles: true }));
+      const mapOnly = {
+        previewMap: !!document.querySelector('.sv-print-stage .sv-sheet-map-svg'),
+        previewGel: !!document.querySelector('.sv-print-stage .sv-sheet-gel-svg'),
+        mirrorGel: !!document.querySelector('.sv-print-sheet .sv-sheet-gel-svg')
+      };
+      gelBox.checked = true;
+      gelBox.dispatchEvent(new Event('change', { bubbles: true }));
+      const hasSavePdf = !!document.querySelector('[data-focus="plan-save-pdf"]');
+      return { ...mapOnly, hasSavePdf };
+    `);
+    check(
+      "Print preview lets users toggle Simulated gel off independently and offers Save as PDF… on desktop",
+      toggledSections.previewMap && !toggledSections.previewGel && !toggledSections.mirrorGel && toggledSections.hasSavePdf,
+      JSON.stringify(toggledSections)
+    );
+    const copiedMd = await s.exec(`
+      window.__pcrMd = '';
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => { window.__pcrMd = t; return Promise.resolve(); } } });
+      document.querySelector('[data-focus="plan-copy-md"]').click();
+      return window.__pcrMd;
+    `);
+    await s.exec("delete navigator.clipboard; delete window.__pcrMd;");
+    check("Copy Markdown copies a Markdown bench sheet with edited program and collapsed mix", /# Clone verification \\#7/.test(copiedMd) && /\*\*64 °C\*\*/.test(copiedMd) && /5 reactions/.test(copiedMd), copiedMd.slice(0, 220));
+    // These stand in for the system's print and save dialogs and for the shell's PDF writer: they check what the
+    // page hands over and how it recovers, not that WebKitGTK prints (the shell's own tests cover its file handling).
+    // Toasts leave as they fade, so the ones already there are marked rather than counted.
+    const markToasts = () => s.exec("document.querySelectorAll('.ps-toast').forEach(t => { t.dataset.e2eSeen = '1'; });");
+    const newToasts = () => s.exec("return Array.from(document.querySelectorAll('.ps-toast:not([data-e2e-seen])')).map(t => t.querySelector('.ps-toast-text')?.textContent.trim() ?? '');");
+    const printed = await s.exec(`
+      window.__e2ePrints = [];
+      window.__strandivoPrint = () => {
+        window.__e2ePrints.push({
+          title: document.title,
+          html: document.documentElement.classList.contains('sv-printing'),
+          body: document.body.classList.contains('sv-printing'),
+          mirrorTitle: document.querySelector('.sv-print-sheet .sv-sheet-title')?.textContent ?? '',
+          disabled: document.querySelector('[data-focus="plan-print"]').disabled
+        });
+      };
+      document.querySelector('[data-focus="plan-print"]').click();
+      return window.__e2ePrints;
+    `);
+    const afterPrint = await s.exec(`${printState.replace("return {", "return { enabled: !document.querySelector('[data-focus=\"plan-print\"]').disabled,")}`);
+    await s.exec("delete window.__strandivoPrint; delete window.__e2ePrints;");
+    check(
+      "Print… (frontend hook) prints the mirror under the plan's title, alone, then puts the title back",
+      printed.length === 1 && printed[0].title === "Clone verification #7 — PCR Plan" && printed[0].html && printed[0].body &&
+        printed[0].mirrorTitle === "Clone verification #7" && printed[0].disabled &&
+        afterPrint.title === appTitle && afterPrint.enabled && afterPrint.mirrors === 1,
+      JSON.stringify({ printed, afterPrint })
+    );
+    // Save as PDF… through the save-dialog and PDF hooks: a cancelled dialog does nothing, a failing one says so.
+    await s.exec("localStorage.removeItem('strandivo.pcrPrintSections'); localStorage.removeItem('strandivo.pcrPrintPaper');");
+    await markToasts();
+    const pickerCancelled = await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      window.__e2ePdfCalls = [];
+      window.__strandivoSavePdf = (path, paper) => { window.__e2ePdfCalls.push({ path, paper }); };
+      window.__strandivoSavePath = (name, filters) => { window.__e2eAsked = { name, filters }; return null; };
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => done({ asked: window.__e2eAsked, calls: window.__e2ePdfCalls.length, sections: localStorage.getItem('strandivo.pcrPrintSections') }), 300);
+    `);
+    check(
+      "Save as PDF… (frontend hooks) suggests a name from the title, and a cancelled save dialog saves and keeps nothing",
+      pickerCancelled.asked?.name === "Clone verification #7.pdf" && JSON.stringify(pickerCancelled.asked?.filters) === JSON.stringify([{ name: "PDF", extensions: ["pdf"] }]) &&
+        pickerCancelled.calls === 0 && pickerCancelled.sections === null && (await newToasts()).length === 0,
+      JSON.stringify(pickerCancelled)
+    );
+    await markToasts();
+    await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      window.__strandivoSavePath = () => { throw new Error('Picker broke'); };
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => done(true), 300);
+    `);
+    const pickerFailed = await newToasts();
+    check("A save dialog that fails says so and writes nothing", pickerFailed.some(t => t.includes("Couldn't choose where to save: Picker broke.")) && (await s.exec("return window.__e2ePdfCalls.length")) === 0, JSON.stringify(pickerFailed));
+    await markToasts();
+    const pdfSaved = await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      const paper = document.querySelector('[data-focus="plan-paper"]');
+      paper.value = 'letter';
+      paper.dispatchEvent(new Event('change', { bubbles: true }));
+      let release;
+      window.__strandivoSavePath = () => '/tmp/e2e-plan.pdf';
+      window.__strandivoSavePdf = (path, size) => {
+        window.__e2ePdfCalls.push({
+          path, paper: size, title: document.title,
+          mirrorGel: !!document.querySelector('.sv-print-sheet .sv-sheet-gel-svg'),
+          disabled: [...document.querySelectorAll('[data-focus="plan-print"], [data-focus="plan-save-pdf"]')].every(b => b.disabled)
+        });
+        return new Promise(r => { release = r; });
+      };
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => {
+        // While the PDF is written, a change shows in the preview but not in the page being printed, and Print… waits.
+        const gel = document.querySelector('[data-focus="plan-sec-gel"]');
+        gel.click();
+        window.__strandivoPrint = () => { window.__e2eLatePrint = true; };
+        document.querySelector('[data-focus="plan-print"]').click();
+        const during = {
+          previewGel: !!document.querySelector('.sv-print-stage .sv-sheet-gel-svg'),
+          mirrorGel: !!document.querySelector('.sv-print-sheet .sv-sheet-gel-svg'),
+          latePrint: !!window.__e2eLatePrint
+        };
+        release();
+        setTimeout(() => {
+          const after = {
+            mirrorGel: !!document.querySelector('.sv-print-sheet .sv-sheet-gel-svg'),
+            title: document.title,
+            enabled: ![...document.querySelectorAll('[data-focus="plan-print"], [data-focus="plan-save-pdf"]')].some(b => b.disabled),
+            sections: JSON.parse(localStorage.getItem('strandivo.pcrPrintSections') || 'null'),
+            paper: localStorage.getItem('strandivo.pcrPrintPaper')
+          };
+          gel.click();
+          delete window.__strandivoPrint;
+          done({ calls: window.__e2ePdfCalls, during, after });
+        }, 200);
+      }, 200);
+    `);
+    const pdfCall = pdfSaved.calls[0] ?? {};
+    check(
+      "Save as PDF… (frontend hooks) hands over the path and paper, holds the printed page still and alone, then puts the title back",
+      pdfSaved.calls.length === 1 && pdfCall.path === "/tmp/e2e-plan.pdf" && pdfCall.paper === "letter" && pdfCall.title === "Clone verification #7 — PCR Plan" &&
+        pdfCall.mirrorGel && pdfCall.disabled && !pdfSaved.during.previewGel && pdfSaved.during.mirrorGel && !pdfSaved.during.latePrint &&
+        !pdfSaved.after.mirrorGel && pdfSaved.after.title === appTitle && pdfSaved.after.enabled &&
+        pdfSaved.after.sections?.gel === true && pdfSaved.after.paper === "letter" &&
+        (await newToasts()).includes("Saved the PCR plan as a PDF."),
+      JSON.stringify(pdfSaved)
+    );
+    await markToasts();
+    const pdfFailed = await s.execAsync(`
+      const done = arguments[arguments.length - 1];
+      window.__strandivoSavePdf = () => Promise.reject(new Error('Disk full'));
+      document.querySelector('[data-focus="plan-save-pdf"]').click();
+      setTimeout(() => done({ title: document.title, enabled: !document.querySelector('[data-focus="plan-save-pdf"]').disabled, mirrors: document.querySelectorAll('.sv-print-sheet').length }), 300);
+    `);
+    const pdfFailedToasts = await newToasts();
+    check(
+      "A PDF that can't be written says why and leaves the preview ready to try again",
+      pdfFailedToasts.includes("Couldn't save the PDF: Disk full. Try Print… or Save HTML… instead.") && pdfFailed.title === appTitle && pdfFailed.enabled && pdfFailed.mirrors === 1,
+      JSON.stringify({ pdfFailed, pdfFailedToasts })
+    );
+    await s.exec("delete window.__strandivoSavePdf; delete window.__strandivoSavePath; delete window.__e2ePdfCalls; delete window.__e2eAsked; delete window.__e2eLatePrint; document.querySelectorAll('.ps-toast-close').forEach(b => b.click());");
+    await s.shot("04-pcr-print-preview");
+    await s.click("button[data-focus='plan-cancel']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
+    const afterCancelSnap = await s.exec(`${doc} return { seqLen: s.data.sequence.length, primers: s.data.primers.length, dirty: s.dirty, settings: localStorage.getItem('strandivo.settings'), mirror: !!document.querySelector('.sv-print-sheet'), printing: document.body.classList.contains('sv-printing') || document.documentElement.classList.contains('sv-printing'), title: document.title, editedTemp: document.querySelector('[data-focus="program-1:1:temp"]')?.value };`);
+    check(
+      "Cancelling the print preview cleans up and leaves the PCR dialog, document and settings unchanged",
+      !afterCancelSnap.mirror &&
+        !afterCancelSnap.printing &&
+        afterCancelSnap.title === appTitle &&
+        afterCancelSnap.editedTemp === "64" &&
+        afterCancelSnap.seqLen === beforePrintSnap.seqLen &&
+        afterCancelSnap.primers === beforePrintSnap.primers &&
+        afterCancelSnap.dirty === beforePrintSnap.dirty &&
+        afterCancelSnap.settings === beforePrintSnap.settings,
+      JSON.stringify(afterCancelSnap)
+    );
+    await s.exec(`const sel = document.querySelector(".sv-dialog select[aria-label='Ladder']"); sel.value = ${JSON.stringify(ladderBeforePrint)}; sel.dispatchEvent(new Event('change', { bubbles: true }));`);
     // Another polymerase picked in the dialog gets its own Tms and program, and offers to become the Tm method.
     await choose("Polymerase", "OneTaq, Standard buffer");
     await s.waitFor("/Tms here are for OneTaq/.test(document.querySelector('.sv-dialog')?.textContent)", 5000);
@@ -1110,6 +1477,16 @@ async function main() {
     await redraws(() => choose("Polymerase", "Q5U Hot Start"));
     const noProgram = await s.exec("return document.querySelector('.sv-pcr-result').textContent");
     check("A polymerase with no protocol says there is no program for it", /There is no program for Q5U Hot Start yet\./.test(noProgram) && !(await s.exec("return !!document.querySelector('.sv-pcr-program')")), noProgram.slice(-200));
+    await s.click("button[data-focus='print-pcr-plan']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 2 && document.querySelector('.sv-print-stage [data-pcr-sheet]')", 5000);
+    const missingPrint = await s.exec("const sheet = document.querySelector('.sv-print-stage [data-pcr-sheet]'); return { tables: sheet.querySelectorAll('table').length, text: sheet.textContent };");
+    check(
+      "Printable PCR plan omits empty tables when protocol and mix are unavailable",
+      missingPrint.tables === 1 && /There is no program for Q5U Hot Start yet\./.test(missingPrint.text) && /There is no reaction setup for Q5U Hot Start yet\./.test(missingPrint.text),
+      JSON.stringify(missingPrint).slice(0, 300)
+    );
+    await s.click("button[data-focus='plan-cancel']");
+    await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);
     // And back on OneTaq, as the checks below expect.
     await redraws(() => choose("Polymerase", "OneTaq, Standard buffer"));
     check("The dialog is back on OneTaq with its program and a plasmid", (await s.exec(templateNow)) === "plasmid" && /OneTaq Hot Start DNA Polymerase · NEB M0481/.test(await s.exec("return document.querySelector('.sv-pcr-source')?.textContent ?? ''")), await s.exec(templateNow));
@@ -1125,7 +1502,27 @@ async function main() {
     const programKept = await keepsFocus("button[data-focus='copy-program']", 400);
     const footerKept = await keepsFocus("button[data-focus='copy-sequence']", 350);
     check("A Settings change redraws the PCR dialog and keeps focus where it was", menuKept && programKept && footerKept, `menu ${menuKept}, program ${programKept}, footer ${footerKept}`);
-    await s.press(ESCAPE);
+    // Save the product via "Open as new file…", including an uncoloured feature like SnapGene's `noColor` (#152).
+    const pcrPath = path.join(mkdtempSync(path.join(tmpdir(), "strandivo-pcr-")), "ampr-product.gb");
+    await s.exec(`${doc} const amp = s.data.features.find(f => f.name === 'AmpR');
+      s.apply({ ...s.data, features: [...s.data.features, { id: 'e2e-nocolor', name: 'uncoloured', type: 'misc_feature', start: amp.start + 10, end: amp.start + 40, strand: 1, color: 'noColor', notes: { color: [] }, raw: { color: 'noColor' } }] }, 'Add uncoloured feature');
+      window.__strandivoSavePath = arguments[0];`, pcrPath);
+    await sleep(200);
+    await s.click("button[data-focus='open-new-file']");
+    const pcrOpened = await s.waitFor("window.__strandivo.tabs().length === 2 && window.__strandivo.activeTab() === 1 && window.__strandivo.store.data.sequence.length === arguments[0]", 10000, size);
+    const pcrTabState = await s.exec(`${doc} delete window.__strandivoSavePath; return { len: s.data.sequence.length, circular: s.data.circular, features: s.data.features.map(f => f.name), errorToast: Array.from(document.querySelectorAll('.ps-toast')).map(t => t.textContent).filter(t => /Couldn't save/.test(t)) };`);
+    const pcrFile = existsSync(pcrPath) ? readFileSync(pcrPath, "utf8") : "";
+    check(
+      "Open as new file… saves the PCR product as GenBank and opens it in a new tab",
+      pcrOpened && !pcrTabState.circular && pcrTabState.len === size && pcrTabState.features.includes("AmpR") && pcrTabState.features.includes("uncoloured") && !pcrTabState.errorToast.length && /^LOCUS\b/.test(pcrFile),
+      JSON.stringify({ pcrOpened, ...pcrTabState, fileLen: pcrFile.length })
+    );
+    if ((await s.exec("return window.__strandivo.tabs().length")) > 1) {
+      await s.exec("window.__strandivo.closeTab()");
+      await s.waitFor("window.__strandivo.tabs().length === 1 && window.__strandivo.activeTab() === 0", 5000);
+    }
+    await s.exec(`${doc} s.undo();`);
+    if (await s.exec("return !!document.querySelector('.sv-dialog')")) await s.press(ESCAPE);
     await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await tmMethod("santalucia");
     await sleep(300);
@@ -1778,6 +2175,40 @@ async function main() {
     check("EcoRI and HindIII cut out pUC19's 51 bp MCS piece, the sizes adding up to the plasmid", sizes.length === 2 && sizes[1] === 51 && sizes[0] + sizes[1] === amp.len, `${JSON.stringify(sizes)} of ${amp.len} bp`);
     check("The gel shows a band for each fragment next to the ladder", await s.exec("return document.querySelectorAll('.sv-dialog .sv-gel-pick').length === 2 && document.querySelectorAll('.sv-dialog .sv-gel-band').length > 5"));
     await s.shot("10-digest");
+    // The gel as an image: as it would run, with nothing picked, said to be simulated, and a
+    // key saying what each lane holds.
+    await s.exec("document.querySelector('.sv-dialog .sv-gel-pick').dispatchEvent(new MouseEvent('click', { bubbles: true }))");
+    await s.waitFor("document.querySelector('.sv-dialog .sv-gel-band-on')", 3000);
+    const digestGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG", "Save as PNG"]);
+    check(
+      "The Digest dialog's Save as SVG… saves the gel with its ladder, lanes and a key, nothing picked",
+      standaloneSvg(digestGel.svg) && digestGel.svg.includes(">Simulated agarose gel<") && digestGel.svg.includes(` · EcoRI, HindIII · ${sizes[0].toLocaleString("en")} + ${sizes[1]} bp<`) && digestGel.svg.includes(">10 kb<") && !digestGel.svg.includes("#ffd166") && digestGel.svgName.endsWith(" digest gel.svg"),
+      `${digestGel.svgName}: ${digestGel.svg.slice(0, 300)}`
+    );
+    check("Its Save as PNG… saves a sharp PNG that says its resolution", digestGel.png.png && Math.max(digestGel.png.width, digestGel.png.height) >= 2000 && digestGel.png.dpi, JSON.stringify(digestGel.png));
+    check("The Digest gel's PNG has the gel drawn on it, not only the paper", inked(digestGel.png), JSON.stringify(digestGel.png));
+    check("The Digest gel's PNG is opaque to its last column and row, as a gel has no transparent background", opaqueToEdge(digestGel.png), JSON.stringify(digestGel.png));
+    const digestFit = resolutionFits(digestGel.png, digestGel.svg);
+    check("The Digest gel's PNG says the resolution that sets it at the SVG's size", digestFit.ok, digestFit.detail);
+    // Copy image: one PNG on the clipboard, put there within the click, as a browser lets a page copy only then.
+    // The real clipboard is a getter on Navigator.prototype, so a property of our own shadows it until it is deleted.
+    const copied = await s.exec(`window.__e2eCopied = null;
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write: items => { window.__e2eCopied = Array.from(items); return Promise.resolve(); } } });
+      const button = Array.from(document.querySelectorAll('.sv-dialog-foot button')).find(b => b.textContent.includes('Copy image'));
+      button?.click();
+      const items = window.__e2eCopied;
+      return { found: !!button, inClick: !!items, items: items ? items.length : 0, types: items ? items.map(i => Array.from(i.types)) : [], clipboardItem: typeof ClipboardItem };`);
+    check("Copy image puts one PNG on the clipboard within the click that asked", copied.found && copied.inClick && copied.items === 1 && copied.types[0].includes("image/png"), JSON.stringify(copied));
+    const copiedPng = await s.execAsync(`const done = arguments[arguments.length - 1];
+      const toasts = Array.from(document.querySelectorAll('.ps-toast:not(.ps-toast-out)'), t => t.textContent);
+      const item = window.__e2eCopied && window.__e2eCopied[0];
+      if (!item) return done({ toasts });
+      item.getType('image/png').then(blob => blob.arrayBuffer()).then(buffer => done({ toasts, size: buffer.byteLength, signature: Array.from(new Uint8Array(buffer).slice(0, 8)) }), e => done({ toasts, error: String(e) }));`);
+    check("What it copied starts as a PNG does, and a toast says the gel was copied", JSON.stringify(copiedPng.signature) === "[137,80,78,71,13,10,26,10]" && copiedPng.toasts.some(t => /Copied the gel/.test(t)), JSON.stringify(copiedPng));
+    const clipboard = await s.exec(`delete navigator.clipboard; delete window.__e2eCopied;
+      const real = Object.getOwnPropertyDescriptor(Navigator.prototype, 'clipboard');
+      return { own: Object.prototype.hasOwnProperty.call(navigator, 'clipboard'), real: navigator.clipboard === (real && real.get ? real.get.call(navigator) : undefined), type: typeof navigator.clipboard };`);
+    check("With the stand-in deleted, the page's own clipboard is back", !clipboard.own && clipboard.real, JSON.stringify(clipboard));
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
     check("Done closes the Digest dialog", await s.waitFor("!document.querySelector('.sv-dialog')", 3000));
 
@@ -1939,6 +2370,10 @@ async function main() {
     check("One undo takes all of them back out again", await s.waitFor(`window.__strandivo.store.data.features.length === ${featuresBefore}`, 5000));
 
     await checkMapRegionDisplay(s, check);
+    await checkMapImage(s, check, async label => {
+      const saved = await savedImages(s, "sv-map-image", [label]);
+      return label.includes("SVG") ? saved.svg : saved.png;
+    });
 
     // --- regions of a protein: a made-up entry for pUC19's AmpR, so no network is needed ---
     const featuresForRegions = await s.exec(`${doc} return s.data.features.length;`);
@@ -1951,6 +2386,7 @@ async function main() {
     await s.waitFor("!!document.querySelector('.sv-code')", 5000);
     await s.exec(`
       const protein = document.querySelector('.sv-code').textContent.replace(/[*]+$/, "");
+      window.__strandivoProtein = protein;
       window.__strandivoUniprot = async accession => ({
         primaryAccession: accession,
         entryType: "UniProtKB reviewed (Swiss-Prot)",
@@ -1979,6 +2415,86 @@ async function main() {
     check("An imported region labels both coordinate systems", await s.waitFor("/Construct residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent) && /UniProtKB P62593 · residues 1–23/.test(document.querySelector('.sv-inspector .sv-region-detail')?.textContent)", 3000));
     await s.exec(`${doc} s.undo();`);
     check("One undo takes them back out", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
+
+    // Two entries for one CDS, as for a chimera: Q9AAA1 is its first half, P0DTC2 its second
+    // (the other half of each has every third residue changed). Three lookups fail: UniProt
+    // has no P00000, P99999 meets a network error, and X00000 isn't an accession at all.
+    await s.exec(`
+      const protein = window.__strandivoProtein;
+      const changed = (from, to) => [...protein].map((c, i) => (i >= from && i < to && i % 3 === 0 ? (c === "W" ? "Y" : "W") : c)).join("");
+      const domain = (description, start, end, type = "Domain") => ({ type, description, location: { start: { value: start }, end: { value: end } } });
+      const entries = {
+        Q9AAA1: { sequence: changed(150, protein.length), features: [domain("Front", 30, 140), domain("Back", 160, 260)] },
+        P0DTC2: { sequence: changed(0, 140), features: [domain("Front", 30, 140), domain("Back", 160, 260), domain("Box", 200, 206, "Motif")] }
+      };
+      window.__strandivoUniprot = async accession => {
+        const e = entries[accession];
+        if (accession === "P00000") return new Response('{"messages":["Resource not found"]}', { status: 404 });
+        if (!e) throw new TypeError("Load failed");
+        return { primaryAccession: accession, entryType: "UniProtKB reviewed (Swiss-Prot)", genes: [{ geneName: { value: accession === "Q9AAA1" ? "front" : "back" } }], sequence: { value: e.sequence }, features: e.features };
+      };
+    `);
+    const uniprotRow = (accession, name) => `Array.from(document.querySelectorAll('.sv-dialog .sv-uniprot-row')).find(r => r.querySelector('.sv-uniprot-acc')?.textContent === '${accession}' && r.querySelector('.sv-detect-name').textContent === '${name}')`;
+    await s.exec(`${doc} const cds = s.data.features.find(f => f.id === window.__strandivoCds); s.select({ range: { start: cds.start, end: cds.end }, focus: { kind: "feature", id: cds.id } });`);
+    await s.waitFor("Array.from(document.querySelectorAll('.sv-link')).some(b => b.textContent.includes('Get from UniProt'))", 5000);
+    await s.click("//button[contains(., 'Get from UniProt')]", "xpath");
+    await s.exec("const i = document.querySelector('.sv-uniprot-search input'); i.value = 'Q9AAA1, P00000 https://www.uniprot.org/uniprotkb/P0DTC2/entry P99999 X00000'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));");
+    check("Several entries can be looked up at once, and those failing keep the others", await s.waitFor("Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',') === 'All,Q9AAA1 1,P00000 failed,P0DTC2 2,P99999 failed,X00000 failed'.replace(/ /g, '')", 5000), await s.exec("return Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',');"));
+    // Each failure names its accession and why, in All (shown after several lookups) and on its entry's button.
+    const failureLine = "accession => Array.from(document.querySelectorAll('.sv-uniprot-head p')).find(p => p.querySelector('strong')?.textContent === accession)?.textContent ?? ''";
+    check("A failed lookup says which accession failed and why", await s.exec(`
+      const line = ${failureLine};
+      const title = accession => Array.from(document.querySelectorAll('.sv-uniprot-refs button')).find(b => b.textContent.startsWith(accession))?.title ?? '';
+      return document.querySelector('.sv-uniprot-refs button[aria-pressed="true"]')?.textContent === 'All' &&
+        /^P00000: not found\\. UniProt has no entry with this accession\\.$/.test(line('P00000')) &&
+        /^P99999: network error\\. UniProt couldn't be reached/.test(line('P99999')) &&
+        /^X00000: not a UniProt accession, so it wasn't looked up/.test(line('X00000')) &&
+        title('P00000') === line('P00000') && title('P99999') === line('P99999') && title('X00000') === line('X00000');
+    `), await s.exec("return document.querySelector('.sv-uniprot-head')?.textContent;"));
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[starts-with(normalize-space(.), 'P99999')]", "xpath");
+    check("A lookup that failed on the network shows why on its entry and can be tried again", await s.waitFor(`(${failureLine})('P99999').startsWith('P99999: network error') && Array.from(document.querySelectorAll('.sv-uniprot-head button')).some(b => b.textContent === 'Try again')`, 3000));
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[starts-with(normalize-space(.), 'X00000')]", "xpath");
+    check("Something that isn't an accession says so, with nothing to try again", await s.waitFor(`(${failureLine})('X00000').startsWith('X00000: not a UniProt accession') && !Array.from(document.querySelectorAll('.sv-uniprot-head button')).some(b => b.textContent === 'Try again')`, 3000));
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[normalize-space(.)='All']", "xpath");
+    check("Each region shows its identity and how much of it lines up", await s.exec(`
+      const row = ${uniprotRow("Q9AAA1", "Front")};
+      const scores = Array.from(row.querySelectorAll('.sv-uniprot-score')).map(x => x.textContent);
+      return scores[0] === '100%' && scores[1] === '111 of 111' && row.querySelector('.sv-uniprot-to').textContent === '30–140';
+    `));
+    check("Where two entries place a region, the better one starts ticked and the other says so", await s.exec(`
+      const front = ${uniprotRow("Q9AAA1", "Front")}, back = ${uniprotRow("Q9AAA1", "Back")}, theirs = ${uniprotRow("P0DTC2", "Back")}, box = ${uniprotRow("P0DTC2", "Box")};
+      return front.querySelector('input').checked && !back.querySelector('input').checked && theirs.querySelector('input').checked && box.querySelector('input').checked &&
+        /Low identity/.test(back.querySelector('.sv-uniprot-flags').textContent) && /Also P0DTC2 Back at 160–260 \\(100%\\)/.test(back.querySelector('.sv-uniprot-flags').textContent) &&
+        document.querySelector('.sv-dialog-foot .sv-btn-primary').textContent === 'Add 3 regions';
+    `), await s.exec(`return ${uniprotRow("Q9AAA1", "Back")}?.textContent;`));
+    await s.exec(`${uniprotRow("Q9AAA1", "Back")}.querySelector('.sv-uniprot-view').click();`);
+    check("A region's alignment opens under it, numbered as each protein numbers itself", await s.waitFor(`(() => {
+      const row = ${uniprotRow("Q9AAA1", "Back")};
+      const panel = row && document.getElementById(row.querySelector('.sv-uniprot-view').getAttribute('aria-controls'));
+      return panel && row.querySelector('.sv-uniprot-view').getAttribute('aria-expanded') === 'true' && panel.querySelectorAll('.sv-aln-diff').length > 0 && /^Q9AAA1160/.test(panel.querySelector('.sv-aln-grid').textContent.replace(/\\s/g, ''));
+    })()`, 3000));
+    await s.shot("11-uniprot-two-entries");
+    await s.click("//*[contains(@class,'sv-uniprot-refs')]/button[starts-with(normalize-space(.), 'Q9AAA1')]", "xpath");
+    await s.click("//*[contains(@class,'sv-uniprot-head')]//button[normalize-space(.)='Limit to CDS residues…']", "xpath");
+    await s.exec("document.querySelector('[aria-label=\"Last CDS residue\"]').value = '150';");
+    await s.click("//*[contains(@class,'sv-uniprot-limit')]/button[normalize-space(.)='Apply']", "xpath");
+    check("Limiting an entry to residues of the CDS keeps the CDS's numbers", await s.waitFor(`/limited to 1–150/.test(document.querySelector('.sv-uniprot-head').textContent) && /Not in CDS residues 1–150/.test(${uniprotRow("Q9AAA1", "Back")}.textContent) && ${uniprotRow("Q9AAA1", "Front")}.querySelector('.sv-uniprot-to').textContent === '30–140'`, 3000));
+    await s.click("//*[contains(@class,'sv-uniprot-limit')]/button[normalize-space(.)='Clear']", "xpath");
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[contains(., 'Add ')]", "xpath");
+    const twoEntries = await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds); return { regions: (f.notes.strandivo_regions || []).map(v => v.split('|').slice(0, 4).join('|')), xref: f.notes.db_xref ?? null };`);
+    check("Regions from both entries go on the one CDS, each with its source", JSON.stringify(twoEntries.regions) === JSON.stringify(["Front|Domain|30-140|Q9AAA1:30-140", "Back|Domain|160-260|P0DTC2:160-260", "Box|Motif|200-206|P0DTC2:200-206"]), JSON.stringify(twoEntries));
+    check("Neither entry becomes the chimera's cross-reference", twoEntries.xref === null, JSON.stringify(twoEntries.xref));
+    await s.click("//button[contains(., 'Get from UniProt')]", "xpath");
+    check("Opened again, the entries the CDS used are compared again", await s.waitFor("Array.from(document.querySelectorAll('.sv-uniprot-refs button')).map(b => b.textContent).join(',') === 'All,Q9AAA1,P0DTC2' && document.querySelectorAll('.sv-dialog .sv-uniprot-row').length === 5", 5000));
+    check("What is on the CDS is shown as there, and nothing starts ticked", await s.exec(`
+      const there = Array.from(document.querySelectorAll('.sv-dialog .sv-uniprot-row')).filter(r => /Already on this CDS/.test(r.textContent));
+      return there.length === 3 && there.every(r => r.querySelector('input').checked && r.querySelector('input').disabled) && document.querySelector('.sv-dialog-foot .sv-btn-primary').disabled;
+    `));
+    await s.exec(`${uniprotRow("Q9AAA1", "Back")}.querySelector('input').click();`);
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[contains(., 'Add 1 region')]", "xpath");
+    check("Importing again adds only what was ticked, never twice", await s.exec(`${doc} const f = s.data.features.find(f => f.id === window.__strandivoCds); const v = f.notes.strandivo_regions.map(x => x.split('|').slice(0, 4).join('|')); return v.length === 4 && v.includes("Back|Domain|160-260|Q9AAA1:160-260") && v.includes("Back|Domain|160-260|P0DTC2:160-260");`));
+    await s.exec(`${doc} s.undo(); s.undo();`);
+    check("Each import is one undo step", await s.waitFor("document.querySelectorAll('.sv-map-region').length === 0", 5000));
 
     // A protein remains one CDS while its domains and CDRs are authored and selected.
     const fillProteinRegion = async (name, kind, start, end, parent = "") => {
@@ -3131,6 +3647,30 @@ async function main() {
         await s.click(".sv-dialog input[data-enzyme='EcoRI']");
         await sleep(600);
         await s.shot("13-dark-digest");
+        // An image is drawn from the light theme's colours, so the gel saves as the same SVG from either theme.
+        const themeRead = async want => {
+          await s.waitFor(`document.documentElement.dataset.theme === '${want}'`, 5000);
+          return s.exec("return document.documentElement.dataset.theme");
+        };
+        const inDark = await themeRead("dark");
+        const darkGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG"]);
+        await s.exec("window.__strandivo.saveSettings({ appearance: 'light' })");
+        const inLight = await themeRead("light");
+        const lightGel = await savedImages(s, "sv-dialog-foot", ["Save as SVG"]);
+        await s.exec("window.__strandivo.saveSettings({ appearance: 'dark' })");
+        const backInDark = await themeRead("dark");
+        check("In dark, the Digest dialog's Save as SVG… still saves the whole gel", standaloneSvg(darkGel.svg) && darkGel.svg.includes(">Simulated agarose gel<"), `${darkGel.svgName}: ${darkGel.svg.slice(0, 300)}`);
+        const withoutIds = svg => svg.replace(/sv-export-\d+-/g, "");
+        const [darkText, lightText] = [withoutIds(darkGel.svg), withoutIds(lightGel.svg)];
+        let differAt = 0;
+        while (differAt < darkText.length && darkText[differAt] === lightText[differAt]) differAt++;
+        check(
+          "Saved in dark or in light, the gel is the same SVG, as an image is always drawn in the light theme",
+          inDark === "dark" && inLight === "light" && backInDark === "dark" && darkText.length > 0 && darkText === lightText,
+          `theme read: ${inDark}, then ${inLight}, then ${backInDark}; ${darkText.length} and ${lightText.length} characters${darkText === lightText ? "" : `, they differ at ${differAt}: …${darkText.slice(Math.max(0, differAt - 60), differAt + 60)}… and …${lightText.slice(Math.max(0, differAt - 60), differAt + 60)}…`}`
+        );
+        // The saves' toasts, gone before the next screenshots.
+        await s.waitFor("!Array.from(document.querySelectorAll('.ps-toast')).some(t => /^Saved /.test(t.textContent))", 8000);
         await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space(.)='Done']", "xpath");
       } else check("In dark, Digest opens its dialog", false);
     } else check("The library's parent opens again for the dark screenshots", false);

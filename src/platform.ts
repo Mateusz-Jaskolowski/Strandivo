@@ -12,6 +12,7 @@ import { recordError } from "./feedback.ts";
 import { randomDigits, usageSession, validUsageKey, WEB_USAGE_ENDPOINT, webUsageBody, type UsageEvent } from "./lib/usage.ts";
 import { browserInfo } from "./lib/browser.ts";
 import { basename, OPEN_EXTENSIONS } from "./lib/files.ts";
+import { statusFailure, UniprotLookupError } from "./lib/uniprot.ts";
 import {
   allowFolder as allowFolderKey,
   canPickFolders,
@@ -154,7 +155,8 @@ export async function readFile(path: string): Promise<Uint8Array> {
   return buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf);
 }
 
-const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit,protein_name,gene_names,sequence";
+/** The entry's name and sequence, and the kinds of region `parseEntry` reads (`KINDS` in src/lib/uniprot.ts). */
+const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit,ft_domain,ft_region,ft_repeat,ft_motif,ft_coiled,ft_compbias,ft_propep,ft_peptide,ft_chain,protein_name,gene_names,sequence";
 
 /**
  * An entry from UniProt's REST API, the one thing the app fetches from the internet, and
@@ -162,17 +164,23 @@ const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit
  * supply the entry.
  */
 export async function fetchUniprotEntry(accession: string): Promise<unknown> {
+  // A test stands in for the request: it gives the entry's JSON, or an answer as UniProt
+  // would, and throwing is the network failing.
   const testEntry = (window as unknown as { __strandivoUniprot?: (a: string) => Promise<unknown> }).__strandivoUniprot;
-  if (testEntry) return testEntry(accession);
-  let res: Response;
+  let answer: unknown;
   try {
-    res = await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(accession)}.json?fields=${UNIPROT_FIELDS}`);
+    answer = testEntry ? await testEntry(accession) : await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(accession)}.json?fields=${UNIPROT_FIELDS}`);
   } catch {
-    throw new Error("Couldn't reach UniProt. Check your internet connection and try again.");
+    throw new UniprotLookupError(accession, { kind: "network" });
   }
-  if (res.status === 400 || res.status === 404) throw new Error(`UniProt has no entry ${accession}.`);
-  if (!res.ok) throw new Error(`UniProt didn't answer (error ${res.status}). Try again later.`);
-  return res.json();
+  if (!(answer instanceof Response)) return answer;
+  const failure = statusFailure(answer.status);
+  if (failure) throw new UniprotLookupError(accession, failure);
+  try {
+    return await answer.json();
+  } catch {
+    throw new UniprotLookupError(accession, { kind: "unreadable" });
+  }
 }
 
 export const writeFile = (path: string, contents: string) => invoke<void>("write_file", { path, contents });
@@ -702,10 +710,32 @@ export async function pickFiles(title: string, extensions: string[], keep = fals
 export const pickFileKeys = (title: string, extensions: string[]) => pickToOpen(title, extensions);
 
 /**
+ * End-to-end tests catch saves with `window.__strandivoSave`, as WebDriver can't answer the
+ * app's save dialog: the place chosen is then the name offered, after "test:", and what is
+ * saved there is handed to the hook instead of written. When the test wants the file written
+ * to disk and opened (e.g. saving a PCR product), it sets `window.__strandivoSavePath` to the
+ * path. It can set it to a function instead, which answers the dialog from the name offered
+ * and the filters, as the PCR plan's PDF checks do to see what was asked, cancel or fail.
+ */
+type TestSave = (name: string, contents: string | Uint8Array) => void;
+const testSave = (path?: string): TestSave | undefined => {
+  const hook = (window as unknown as { __strandivoSave?: TestSave }).__strandivoSave;
+  return hook && (path === undefined || path.startsWith("test:")) ? hook : undefined;
+};
+type TestSavePath = string | ((defaultPath: string, filters: { name: string; extensions: string[] }[]) => string | null | Promise<string | null>);
+const testSavePath = (): TestSavePath | undefined => (window as unknown as { __strandivoSavePath?: TestSavePath }).__strandivoSavePath;
+
+/**
  * Asks where to save; returns null if cancelled. In a browser: the browser's save dialog
  * where it has one, or else a download of the suggested name (src/webFiles.ts).
  */
 export async function chooseSavePath(defaultPath: string, filters: { name: string; extensions: string[] }[]): Promise<string | null> {
+  // End-to-end tests answer for the save dialog, which WebDriver can't reach (`testSavePath`).
+  const forced = testSavePath();
+  if (typeof forced === "function") return forced(defaultPath, filters);
+  if (forced) return forced;
+  // Or they take the name offered and catch what is saved under it (`testSave`).
+  if (testSave()) return `test:${basename(defaultPath)}`;
   if (!isDesktop) return pickToSave(basename(defaultPath) || "Untitled", filters);
   const { save } = await import("@tauri-apps/plugin-dialog");
   const p = await save({ defaultPath, filters });
@@ -714,6 +744,8 @@ export async function chooseSavePath(defaultPath: string, filters: { name: strin
 
 /** Saves text: to disk in the app; in a browser over a file it has a handle to, or else as a download. */
 export async function saveText(path: string, contents: string): Promise<void> {
+  const hook = testSave(path);
+  if (hook) return hook(path.slice(5), contents);
   if (isDesktop) return writeFile(path, contents);
   await saveKey(path, contents);
 }
@@ -723,6 +755,8 @@ export async function saveText(path: string, contents: string): Promise<void> {
  * body, not as JSON, with the path in a header, percent-encoded as headers are ASCII.
  */
 export async function saveBytes(path: string, bytes: Uint8Array): Promise<void> {
+  const hook = testSave(path);
+  if (hook) return hook(path.slice(5), bytes);
   if (isDesktop) return invoke<void>("write_bytes", bytes, { headers: { path: encodeURIComponent(path) } });
   await saveKey(path, bytes);
 }
@@ -766,6 +800,45 @@ export async function closeWindow(): Promise<void> {
   }
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().close();
+}
+
+/** Paper sizes supported by native desktop PDF export (`src-tauri/src/pdf.rs`). */
+export type PdfPaper = "a4" | "letter";
+
+/**
+ * Opens the system print dialog for this window. On desktop, WKWebView ignores JS
+ * `window.print()`, so the shell calls `WebviewWindow::print()` directly (NSPrintOperation
+ * on macOS, WebKitGTK PrintOperation on Linux, WebView2 `window.print()` on Windows).
+ * End-to-end tests can intercept this with `window.__strandivoPrint`.
+ */
+export async function printWindow(): Promise<void> {
+  const hook = (window as unknown as { __strandivoPrint?: () => Promise<void> | void }).__strandivoPrint;
+  if (hook) {
+    await hook();
+    return;
+  }
+  if (isDesktop) return invoke<void>("print_window");
+  if (typeof window.print !== "function") throw new Error("Printing isn't available in this browser.");
+  window.print();
+}
+
+/** Whether direct Save as PDF is available (desktop shell or E2E hook; browsers print to PDF via the print dialog). */
+export function canSavePdf(): boolean {
+  return isDesktop || typeof (window as unknown as { __strandivoSavePdf?: unknown }).__strandivoSavePdf === "function";
+}
+
+/**
+ * Saves the current window's print layout (`@media print`) directly to a PDF file on desktop.
+ * End-to-end tests can intercept this with `window.__strandivoSavePdf`.
+ */
+export async function saveWindowPdf(path: string, paper: PdfPaper): Promise<void> {
+  const hook = (window as unknown as { __strandivoSavePdf?: (path: string, paper: PdfPaper) => Promise<void> | void }).__strandivoSavePdf;
+  if (hook) {
+    await hook(path, paper);
+    return;
+  }
+  if (!isDesktop) throw new Error("Direct PDF saving is only available in the desktop app; use Print / Save as PDF in a browser.");
+  return invoke<void>("save_window_pdf", { path, paper });
 }
 
 /**

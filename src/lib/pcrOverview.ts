@@ -228,11 +228,15 @@ export function suggestedDigests(length: number, hits: SiteHit[], members: reado
     .slice(0, 12);
 }
 
+/** Sentinel stored in `ProductViewChoice.digest` when the user explicitly chooses no diagnostic digest (uncut DNA only). */
+export const NO_DIGEST = "__none__";
+
 /** A digest as its menu names it ("ScaI", "AseI + PstI"), which is also how the choice is kept. */
 export const digestName = (d: SuggestedDigest) => d.enzymes.join(" + ");
 
-/** The digest to show: the one chosen before while it is still offered, else the best. */
+/** The digest to show: null if the user explicitly chose `NO_DIGEST`, else the one chosen before while still offered, else the best. */
 export function pickDigest(digests: SuggestedDigest[], chosen: string): SuggestedDigest | null {
+  if (chosen === NO_DIGEST) return null;
   return digests.find(d => digestName(d) === chosen) ?? digests[0] ?? null;
 }
 

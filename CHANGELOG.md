@@ -63,6 +63,17 @@ methylation blocks a cut.
   primer whose site crosses the origin is left out when you make the sequence linear;
   the message offers Undo. A region named with a space, like "Signal peptide", keeps
   its space after saving.
+- **Printable PCR plan**: **Print PCR plan…** in the PCR product dialog previews a bench
+  sheet with the primers, product map, simulated gel, cycling program (your edits marked)
+  and reaction mix, with an experiment name, date and notes that are not saved. Choose the
+  sections, then print, save a PDF on A4 or US Letter (in the app), copy it as Markdown for
+  a lab notebook, or save an HTML file that prints offline. The sheet prints on white in any
+  theme. In the PCR product dialog, the product map, gel and program now fold like the
+  reaction mix, and the digest menu offers No digest.
+- **Saving PCR products and sequences with non-standard feature colours**: saving a
+  sequence or opening a PCR product as a new GenBank file no longer fails when a feature
+  carries a colour name the GenBank writer doesn't recognise, such as SnapGene's uncoloured
+  features or capitalised colour names.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"
@@ -74,6 +85,17 @@ methylation blocks a cut.
   enzyme won't cut. A PCR product is unmethylated, so its digests cut where the template's
   don't, and DpnI cuts only the template. Enzyme details lists what Dam, Dcm and CpG
   methylation do to each enzyme.
+- **Check each UniProt region before adding it, and combine several entries**: Get from
+  UniProt now shows, for every region, how alike it is and how much of it lines up ("100%
+  identity · 18 of 22 aligned"), and View alignment shows the entry's residues over your
+  protein's, with differences and gaps marked. Regions that are cut short, have gaps or
+  match poorly start unticked. Look up several entries at once to annotate a fusion or
+  chimera: each region names its entry, an entry that can't be looked up says why, regions
+  two entries both place are shown side by side for you to choose, and you can limit an
+  entry to the residues of your protein it came from. Everything ticked goes into the one
+  coding sequence in one step, each region keeping its own entry, and opening the dialog
+  again compares the same entries without adding anything twice. It now also brings in
+  domains, repeats, motifs and other regions, not only membrane annotations.
 - **Turn features into regions in bulk**: scroll through long lists and select or
   deselect all eligible features at once.
 - **A clearer Export dialog**: pick the file format separately, with Cancel and Export
@@ -117,6 +139,16 @@ methylation blocks a cut.
 - **Protein schematics**: open Details & schematic… in the inspector to copy the figure
   or save it as PNG or SVG, with an optional transparent background. Click the highlighted
   region again to select the whole CDS.
+- **Save a map as an image**: Export image, beside Circular and Linear on the Map tab,
+  copies the whole map or saves it as PNG or SVG, at its rotation and label size and with
+  what you chose to show, however far you have zoomed in, and without the selection. Tick
+  Transparent background to put it on a coloured slide. The PNG is about 3,000 pixels
+  across, and the SVG keeps its text as text, in whatever fonts are installed where you
+  open it.
+- **Save a simulated gel as an image**: copy the gel in the Digest dialog or under a PCR
+  product, or save it as PNG or SVG for a slide or your notebook. The image says it is
+  simulated and has a key under the gel naming the ladder and what each lane holds: its
+  fragment sizes, or for five or more fragments how many there are and their total length.
 - **Enzyme details**: double-click a cut site, or choose Enzyme details… from its
   right-click menu or the inspector, to see the enzyme's cut drawn on both strands, who
   sells it, its isoschizomers and neoschizomers (Acc65I for KpnI), where it cuts your

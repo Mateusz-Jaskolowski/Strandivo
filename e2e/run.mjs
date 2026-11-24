@@ -1389,7 +1389,7 @@ async function main() {
       pdfFailedToasts.includes("Couldn't save the PDF: Disk full. Try Print… or Save HTML… instead.") && pdfFailed.title === appTitle && pdfFailed.enabled && pdfFailed.mirrors === 1,
       JSON.stringify({ pdfFailed, pdfFailedToasts })
     );
-    await s.exec("delete window.__strandivoSavePdf; delete window.__strandivoSavePath; delete window.__e2ePdfCalls; delete window.__e2eAsked; delete window.__e2eLatePrint;");
+    await s.exec("delete window.__strandivoSavePdf; delete window.__strandivoSavePath; delete window.__e2ePdfCalls; delete window.__e2eAsked; delete window.__e2eLatePrint; document.querySelectorAll('.ps-toast-close').forEach(b => b.click());");
     await s.shot("04-pcr-print-preview");
     await s.click("button[data-focus='plan-cancel']");
     await s.waitFor("document.querySelectorAll('.sv-dialog').length === 1", 3000);

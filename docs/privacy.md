@@ -69,8 +69,9 @@ releases are published. GitHub sees that download as it sees any other, under
 
 When you look up a UniProt entry for a protein's regions, the app queries UniProt
 (`rest.uniprot.org`, run by EMBL-EBI and its partners) for that accession alone, such as
-P42212. Neither your sequence nor your file is sent, and the lookup happens only when you
-ask. UniProt's [privacy notice](https://www.uniprot.org/help/privacy) covers what it
+P42212, and for each further accession you add. Neither your sequence nor your file is
+sent, and the lookup happens only when you ask: when you look up accessions, or open Get
+from UniProt for a protein, which looks up the entries it used before. UniProt's [privacy notice](https://www.uniprot.org/help/privacy) covers what it
 keeps.
 
 ## Sending feedback

@@ -12,6 +12,7 @@ import { recordError } from "./feedback.ts";
 import { randomDigits, usageSession, validUsageKey, WEB_USAGE_ENDPOINT, webUsageBody, type UsageEvent } from "./lib/usage.ts";
 import { browserInfo } from "./lib/browser.ts";
 import { basename, OPEN_EXTENSIONS } from "./lib/files.ts";
+import { statusFailure, UniprotLookupError } from "./lib/uniprot.ts";
 import {
   allowFolder as allowFolderKey,
   canPickFolders,
@@ -154,7 +155,8 @@ export async function readFile(path: string): Promise<Uint8Array> {
   return buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf);
 }
 
-const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit,protein_name,gene_names,sequence";
+/** The entry's name and sequence, and the kinds of region `parseEntry` reads (`KINDS` in src/lib/uniprot.ts). */
+const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit,ft_domain,ft_region,ft_repeat,ft_motif,ft_coiled,ft_compbias,ft_propep,ft_peptide,ft_chain,protein_name,gene_names,sequence";
 
 /**
  * An entry from UniProt's REST API, the one thing the app fetches from the internet, and
@@ -162,17 +164,23 @@ const UNIPROT_FIELDS = "ft_transmem,ft_intramem,ft_topo_dom,ft_signal,ft_transit
  * supply the entry.
  */
 export async function fetchUniprotEntry(accession: string): Promise<unknown> {
+  // A test stands in for the request: it gives the entry's JSON, or an answer as UniProt
+  // would, and throwing is the network failing.
   const testEntry = (window as unknown as { __strandivoUniprot?: (a: string) => Promise<unknown> }).__strandivoUniprot;
-  if (testEntry) return testEntry(accession);
-  let res: Response;
+  let answer: unknown;
   try {
-    res = await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(accession)}.json?fields=${UNIPROT_FIELDS}`);
+    answer = testEntry ? await testEntry(accession) : await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(accession)}.json?fields=${UNIPROT_FIELDS}`);
   } catch {
-    throw new Error("Couldn't reach UniProt. Check your internet connection and try again.");
+    throw new UniprotLookupError(accession, { kind: "network" });
   }
-  if (res.status === 400 || res.status === 404) throw new Error(`UniProt has no entry ${accession}.`);
-  if (!res.ok) throw new Error(`UniProt didn't answer (error ${res.status}). Try again later.`);
-  return res.json();
+  if (!(answer instanceof Response)) return answer;
+  const failure = statusFailure(answer.status);
+  if (failure) throw new UniprotLookupError(accession, failure);
+  try {
+    return await answer.json();
+  } catch {
+    throw new UniprotLookupError(accession, { kind: "unreadable" });
+  }
 }
 
 export const writeFile = (path: string, contents: string) => invoke<void>("write_file", { path, contents });

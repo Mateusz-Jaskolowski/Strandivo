@@ -1131,7 +1131,8 @@ async function main(outDir) {
       await s.click("//button[normalize-space()=\"Don't Save\"]");
       await s.waitFor("window.__strandivo.store?.data.name !== 'Withheld digest'", 5000);
       await tickNlaIII();
-      check("Unticking NlaIII takes it out of My enzymes again", await s.waitFor("!document.querySelector('.sv-personal-enzyme-box-selected [data-personal-enzyme=\"NlaIII\"]') && document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved'", 5000));
+      // My selected enzymes hides its emptied list without redrawing it, so the saved list is read instead.
+      check("Unticking NlaIII takes it out of My enzymes again", await s.waitFor("document.querySelector('.sv-personal-enzyme-tools [role=status]')?.textContent === 'Saved' && document.querySelector('.sv-personal-enzyme-box-all input[data-personal-enzyme=\"NlaIII\"]')?.checked === false && !JSON.parse(localStorage.getItem('strandivo.data.personal-enzymes')).enzymes.includes('NlaIII')", 5000));
       await s.click("//button[@aria-label='Close' and contains(@class,'sv-panel-close')]");
     }
 

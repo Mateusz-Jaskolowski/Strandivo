@@ -379,7 +379,8 @@ when it reads files there; the ones in `docs/agents/` are read when the task nee
   right-click menu is drawn in the page there, or handed to `window.__strandivoMenu` if
   defined, which is how e2e tests pick items (WebDriver can't click native menus). So is
   what Save as… would write, to `window.__strandivoSave`, as WebDriver can't answer the
-  app's save dialog either.
+  app's save dialog either (`window.__strandivoSavePath` returns a real path on disk when
+  the test wants the file written and reopened).
 - **Checks** (`.github/workflows/checks.yml`) runs on every pull request and push to
   `main`, on Linux only, except one that changes only docs, Markdown, the website or
   `CITATION.cff` (its `paths-ignore`; keep the two lists, and the rule above, the same).

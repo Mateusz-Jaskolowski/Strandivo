@@ -22,6 +22,10 @@ shows your product on a gel and works out the cycling program and reaction mix f
 protocols. Edits to bases show a card first, and Strandivo warns when Dam or Dcm
 methylation blocks a cut.
 
+- **Saving PCR products and sequences with non-standard feature colours**: saving a
+  sequence or opening a PCR product as a new GenBank file no longer fails when a feature
+  carries a colour name the GenBank writer doesn't recognise, such as SnapGene's uncoloured
+  features or capitalised colour names.
 - **Sites that methylation blocks**: Strandivo now warns when Dam or Dcm methylation in
   E. coli stops an enzyme cutting, site by site, from the bases around each, as REBASE's
   reports have it. A blocked site stays on the map and in the outline with a small "m"

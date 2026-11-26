@@ -521,6 +521,18 @@ async function main(outDir) {
     );
     await s.shot("05-menu");
     await s.press("\uE00C"); // Escape
+    // Help → What's New…: the notes of the version this page is, built in.
+    await s.click("//button[@aria-label='Menu']");
+    await s.click("//*[contains(@class,'ps-context-menu')]/button[normalize-space()='Help']");
+    await s.click("//*[contains(@class,'ps-context-sub')]//button[normalize-space()=\"What's New…\"]");
+    const pkgVersion = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
+    check(
+      "Help → What's New… shows this version's notes",
+      await s.waitFor(`document.querySelector('.sv-dialog-title')?.textContent === "What's new in Strandivo ${pkgVersion}" && !!document.querySelector('.sv-dialog .sv-whats-new')`, 3000),
+      await s.exec("return document.querySelector('.sv-dialog')?.textContent ?? 'no dialog'")
+    );
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     const CTRL = "\uE009";
     const ALT = "\uE00A";
     await s.exec("document.activeElement?.blur()");

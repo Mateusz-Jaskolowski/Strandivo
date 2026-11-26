@@ -459,6 +459,10 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
       void updates.check(true);
       return;
     }
+    if (id === "whats-new") {
+      void updates.whatsNew();
+      return;
+    }
     if (id === "welcome") {
       void openWelcome(home, true);
       return;
@@ -524,8 +528,8 @@ export function mountMain(root: HTMLElement, initial: (string | null)[]) {
     libraryNames: () => home.listedNames(),
     /** Check for Updates…, as the menu does. */
     checkForUpdates: () => updates.check(true),
-    /** What the main window does at start after an update. */
-    announceUpdate: () => updates.announce(),
+    /** What the main window does at start after an update; its note goes after `hideAfterMs`. */
+    announceUpdate: (hideAfterMs?: number) => updates.announce(hideAfterMs),
     /** Help → Welcome…, as the menu does. */
     openWelcome: () => openWelcome(home, true),
     /** Takes a crash again, as at start: from `window.__strandivoCrash` in e2e. */

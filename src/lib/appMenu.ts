@@ -92,6 +92,7 @@ export const APP_MENU: AppMenuGroup[] = [
       { id: "report-bug", label: "Report a Bug…" },
       "separator",
       { id: "welcome", label: "Welcome to Strandivo…" },
+      { id: "whats-new", label: "What's New…" },
       "separator",
       { id: "website", label: "Strandivo Website" },
       { id: "github", label: "Strandivo on GitHub" }

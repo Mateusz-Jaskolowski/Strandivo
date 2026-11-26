@@ -198,6 +198,9 @@ and maps and gels can be saved as images.
   base in your template, the product now has the primer's base there, as it would in the
   tube, instead of keeping the N. Its GC content, the sites found in it and a product
   opened as a new file all follow.
+- **What's new, whenever you want it**: Help → What's New… shows the notes for the
+  version you have. The message saying Strandivo was updated now goes by itself once you
+  have had a moment to see it.
 - **Saving PCR products and sequences with non-standard feature colours**: saving a
   sequence or opening a PCR product as a new GenBank file no longer fails when a feature
   carries a colour name the GenBank writer doesn't recognise, such as SnapGene's uncoloured

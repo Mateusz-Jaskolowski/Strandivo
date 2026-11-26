@@ -28,8 +28,13 @@ and CI checks that they exist.
   itself and a .deb copy installs the release's .deb (`linux-x86_64-deb` in latest.json,
   which the plugin looks for before `linux-x86_64`) with `pkexec`, so the system asks for a
   password; no .rpm is built, so an .rpm copy is told to download instead. A check says nothing unless it finds something or the user asked; an offer is a
-  strip under the app bar, never a dialog. e2e fakes the shell with
-  `window.__strandivoUpdate`, so it never reaches the server.
+  strip under the app bar, never a dialog. Every message there waits for an answer except
+  "Strandivo was updated to …", which is news, not a question: it goes by itself once it
+  has been in front of the user for 20 seconds, counted only while the window is in front
+  and neither the pointer nor the keyboard is on it, as a time from the start could pass
+  behind another window. So its notes are never lost with it, Help → What's New… shows
+  the copy's own at any time (the browser's too, from the build's version). e2e fakes the
+  shell with `window.__strandivoUpdate`, so it never reaches the server.
 - **Feedback** (Report a bug… and Send feedback… in the app bar, and the same two in the
   Help menu, `src/views/feedbackDialog.ts`): while Strandivo is young they are named
   buttons, not icons, so people see they can report things; a window under 1,000 px wide

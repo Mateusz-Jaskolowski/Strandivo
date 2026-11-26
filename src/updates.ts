@@ -5,7 +5,9 @@
 // few seconds after the main window opens and then at most once a day, or when the user
 // picks Check for Updates…, and offers what it finds in a quiet strip under the app bar,
 // never a dialog. Installing goes through the ordinary quit (src-tauri/src/updates.rs),
-// so unsaved tabs are asked about first, and it never restarts on its own.
+// so unsaved tabs are asked about first, and it never restarts on its own. After an
+// update, the start says so in the same strip, which goes once it has been seen a while;
+// Help → What's New… shows this copy's notes whenever they are wanted.
 
 import { h, toast } from "./ui/dom.ts";
 import { iconSvg } from "./ui/icons.ts";
@@ -23,6 +25,10 @@ const KEY = "strandivo.updates";
 const FIRST_CHECK_MS = 5000;
 /** How often an app left open asks itself whether a day has passed. */
 const RECHECK_MS = 60 * 60 * 1000;
+/** How long "Strandivo was updated to …" stays in front of the user before it goes. */
+const UPDATED_NOTE_MS = 20_000;
+/** How often that time is counted. */
+const NOTE_TICK_MS = 500;
 
 function remembered(): UpdateMemory {
   try {
@@ -47,8 +53,13 @@ export interface Updates {
   el: HTMLElement;
   /** Check now; `asked` = the user picked Check for Updates…, so say when there is none. */
   check(asked: boolean): Promise<void>;
-  /** Says "Strandivo was updated to …" if this start follows an update (run once at start). */
-  announce(): Promise<void>;
+  /**
+   * Says "Strandivo was updated to …" if this start follows an update (run once at start),
+   * until it has been in front of the user for `hideAfterMs` (e2e passes a shorter time).
+   */
+  announce(hideAfterMs?: number): Promise<void>;
+  /** Help → What's New…: this copy's own notes. */
+  whatsNew(): Promise<void>;
   /**
    * In a browser: a file this page needs is gone, as the page was left open across a new
    * deployment, whose files have other names. Offers the reload that fixes it.
@@ -86,9 +97,12 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     el.replaceChildren();
   }
 
-  function show(icon: "download" | "warn", text: string, ...actions: HTMLElement[]) {
-    el.replaceChildren(iconSvg(icon, 16), h("span", { class: "sv-offer-text" }, text), ...actions);
+  /** Puts a message in the strip; returns its text, which is in the strip while it shows. */
+  function show(icon: "download" | "warn", text: string, ...actions: HTMLElement[]): HTMLElement {
+    const shown = h("span", { class: "sv-offer-text" }, text);
+    el.replaceChildren(iconSvg(icon, 16), shown, ...actions);
     el.hidden = false;
+    return shown;
   }
 
   function showOffer() {
@@ -173,7 +187,23 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     if (!held && dueForCheck(remembered(), Date.now(), loadSettings().checkForUpdates)) void check(false);
   };
 
-  async function announce() {
+  /** "Strandivo was updated to …", while the strip shows it. */
+  let updatedNote: HTMLElement | null = null;
+  const noteShowing = () => !!updatedNote && !el.hidden && el.contains(updatedNote);
+
+  /** A version's notes from the copy's own CHANGELOG.md, with no network. */
+  function showOwnNotes(version: string) {
+    const notes = releaseNotesFor(changelog, version);
+    showWhatsNew(version, notes?.summary ? [notes.summary] : []);
+  }
+
+  async function whatsNew() {
+    // Seen now, so the note has nothing more to say.
+    if (noteShowing()) hide();
+    showOwnNotes((await appVersion()) ?? __APP_VERSION__);
+  }
+
+  async function announce(hideAfterMs = UPDATED_NOTE_MS) {
     const version = await appVersion();
     if (!version) return;
     const memory = remembered();
@@ -181,16 +211,28 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     if (!wasUpdated(memory, version)) return;
     track("update_installed");
     if (!el.hidden) return;
-    const notes = releaseNotesFor(changelog, version);
-    show(
+    const note = show(
       "download",
       `Strandivo was updated to ${version}.`,
       button("What's new…", () => {
         hide();
-        showWhatsNew(version, notes?.summary ? [notes.summary] : []);
+        showOwnNotes(version);
       }),
       button("Close", hide)
     );
+    updatedNote = note;
+    // It is news, not a question, so it goes by itself, unlike every other message here.
+    // Its time counts only while the window is in front and neither the pointer nor the
+    // keyboard is on it: timed from the start, it could go by unseen behind another window.
+    let seen = 0;
+    const timer = setInterval(() => {
+      if (updatedNote !== note || !noteShowing()) return clearInterval(timer);
+      const inUse = el.matches(":hover") || el.contains(document.activeElement);
+      if (document.visibilityState === "visible" && document.hasFocus() && !inUse) seen += NOTE_TICK_MS;
+      if (seen < hideAfterMs) return;
+      clearInterval(timer);
+      hide();
+    }, NOTE_TICK_MS);
   }
 
   void takeUpdateFailure().then(why => why && show("warn", why, button("Later", hide)));
@@ -207,5 +249,5 @@ export function startUpdates(until: Promise<unknown> = Promise.resolve()): Updat
     show("download", "Strandivo has been updated. Reload the page to continue.", button("Reload", () => location.reload(), true));
   }
 
-  return { el, check, announce, offerReload };
+  return { el, check, announce, whatsNew, offerReload };
 }

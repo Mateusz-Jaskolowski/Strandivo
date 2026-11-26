@@ -218,7 +218,7 @@ fn menu_action<R: Runtime>(app: &AppHandle<R>, id: &str) {
         "quit" => request_quit(app),
         "close" => close_focused(app),
         "website" | "github" => feedback::open_page(app, id),
-        "home" | "check-updates" | "welcome" | "feedback" | "report-bug" => {
+        "home" | "check-updates" | "welcome" | "whats-new" | "feedback" | "report-bug" => {
             show_main_window(app);
             let _ = app.emit_to(MAIN_LABEL, "menu", id.to_string());
         }
@@ -359,6 +359,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build(app)?;
     let check_updates = MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(app)?;
     let welcome = MenuItemBuilder::with_id("welcome", "Welcome to Strandivo…").build(app)?;
+    let whats_new = MenuItemBuilder::with_id("whats-new", "What's New…").build(app)?;
     let send_feedback = MenuItemBuilder::with_id("feedback", "Send Feedback…").build(app)?;
     let report_bug = MenuItemBuilder::with_id("report-bug", "Report a Bug…").build(app)?;
     let website = MenuItemBuilder::with_id("website", "Strandivo Website").build(app)?;
@@ -465,6 +466,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             .item(&send_feedback)
             .item(&report_bug)
             .separator()
+            .item(&whats_new)
             .item(&website)
             .item(&github)
             .build()?;
@@ -476,6 +478,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .separator()
         .item(&welcome)
         .item(&check_updates)
+        .item(&whats_new)
         .separator()
         .item(&website)
         .item(&github)

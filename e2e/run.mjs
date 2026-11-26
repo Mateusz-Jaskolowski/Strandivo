@@ -3459,6 +3459,35 @@ async function main() {
     await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
     await s.execAsync("const done = arguments[arguments.length - 1]; window.__strandivo.announceUpdate().then(() => done(true), e => done(String(e)));");
     check("It says so only once", await s.exec("return document.querySelector('.sv-update').hidden === true"));
+    // Help → What's New… shows this copy's own notes whenever they are wanted.
+    const whatsNewTitle = "/What's new in Strandivo \\d+\\.\\d+\\.\\d+/.test(document.querySelector('.sv-dialog-title')?.textContent)";
+    await s.exec("window.__strandivo.menu('whats-new')");
+    check("Help → What's New… shows this version's notes", await s.waitFor(`${whatsNewTitle} && !!document.querySelector('.sv-dialog .sv-whats-new')`, 3000), await s.exec("return document.querySelector('.sv-dialog')?.textContent ?? 'no dialog'"));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
+    // The note is news, not a question: it goes by itself once seen, but not while in use.
+    const announceShort = "const done = arguments[arguments.length - 1]; window.__strandivo.announceUpdate(1000).then(() => done(true), e => done(String(e)));";
+    await s.exec("localStorage.setItem('strandivo.updates', JSON.stringify({ shownVersion: '0.0.1' }));");
+    await s.execAsync(announceShort);
+    await s.waitFor(`/was updated/.test(${updateStrip}?.textContent)`, 3000);
+    await s.exec("document.querySelector('.sv-update button').focus()");
+    await sleep(2500);
+    check("The note stays while the keyboard is on it", await s.exec(`return /was updated/.test(${updateStrip}?.textContent)`));
+    await s.exec("document.activeElement?.blur()");
+    if (await s.exec("return document.hasFocus()")) {
+      check("Once it has been seen a while, the note goes by itself", await s.waitFor("document.querySelector('.sv-update').hidden === true", 5000));
+    } else {
+      await sleep(2500);
+      check("The note waits while the window isn't in front (WebDriver's has no focus)", await s.exec(`return /was updated/.test(${updateStrip}?.textContent)`));
+    }
+    // What's New… from the menu shows what the note was about, so it takes the note too.
+    await s.exec("localStorage.setItem('strandivo.updates', JSON.stringify({ shownVersion: '0.0.1' }));");
+    await s.execAsync(announceShort.replace("1000", "60000"));
+    await s.waitFor(`/was updated/.test(${updateStrip}?.textContent)`, 3000);
+    await s.exec("window.__strandivo.menu('whats-new')");
+    check("What's New… from the menu takes the note away", await s.waitFor(`${whatsNewTitle} && document.querySelector('.sv-update').hidden === true`, 3000));
+    await s.click("//*[contains(@class,'sv-dialog-foot')]//button[normalize-space()='Close']", "xpath");
+    await s.waitFor("!document.querySelector('.sv-dialog')", 3000);
     await s.exec("delete window.__strandivoUpdate;");
 
     // --- feedback: through the hook, so CI never files an issue or opens a mail app ---
